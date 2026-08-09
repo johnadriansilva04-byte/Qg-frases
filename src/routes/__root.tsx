@@ -145,6 +145,13 @@ function RootComponent() {
       gtag('config', 'G-64FCC805LH');
     `;
     document.head.appendChild(script2);
+
+    // Google AdSense
+    const script3 = document.createElement('script');
+    script3.async = true;
+    script3.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2783546143377409';
+    script3.crossOrigin = 'anonymous';
+    document.head.appendChild(script3);
   }, []);
 
   return (
