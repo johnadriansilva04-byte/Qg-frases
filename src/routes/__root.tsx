@@ -99,19 +99,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-    ],
-    scripts: [
       {
-        src: "https://www.googletagmanager.com/gtag/js?id=G-64FCC805LH",
-        async: true,
-      },
-      {
-        innerHTML: `
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'G-64FCC805LH');
-        `,
+        rel: "preload",
+        href: "https://www.googletagmanager.com/gtag/js?id=G-64FCC805LH",
+        as: "script",
       },
     ],
   }),
@@ -138,6 +129,23 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    // Google Analytics
+    const script1 = document.createElement('script');
+    script1.async = true;
+    script1.src = 'https://www.googletagmanager.com/gtag/js?id=G-64FCC805LH';
+    document.head.appendChild(script1);
+
+    const script2 = document.createElement('script');
+    script2.innerHTML = `
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-64FCC805LH');
+    `;
+    document.head.appendChild(script2);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
