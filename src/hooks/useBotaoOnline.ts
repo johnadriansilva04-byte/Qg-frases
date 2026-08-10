@@ -25,8 +25,8 @@ interface Sala {
 
 interface Usuario {
   id: string;
-  email?: string;
-  nome?: string;
+  telefone: string;
+  nome: string;
   pontos_soberania: number;
   partidas_jogadas: number;
   partidas_vencidas: number;
@@ -235,7 +235,7 @@ export function useBotaoOnline() {
   }, []);
 
   // Login
-  const login = useCallback(async (email: string, nome?: string) => {
+  const login = useCallback(async (telefone: string, nome: string) => {
     setLoading(true);
     setError(null);
     
@@ -243,7 +243,7 @@ export function useBotaoOnline() {
       const { data, error } = await supabase
         .from('botao_usuarios')
         .upsert({
-          email,
+          telefone,
           nome
         })
         .select()

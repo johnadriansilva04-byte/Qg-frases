@@ -34,7 +34,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   const [screen, setScreen] = useState<Screen>("lobby");
   const [selectedTeam, setSelectedTeam] = useState("fla");
   const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
 
   // Carregar salas ao montar
   useEffect(() => {
@@ -70,28 +70,28 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, [sala, screen]);
 
   const handleLogin = useCallback(async () => {
-    if (email) {
-      await login(email, nome);
+    if (telefone && nome) {
+      await login(telefone, nome);
     }
-  }, [email, nome, login]);
+  }, [telefone, nome, login]);
 
   const handleCriarSala = useCallback(async () => {
-    if (!nome) {
-      alert('Por favor, digite seu nome');
+    if (!nome || !telefone) {
+      alert('Por favor, digite seu nome e telefone');
       return;
     }
     await criarSala(selectedTeam, nome);
     setScreen('aguardando');
-  }, [nome, selectedTeam, criarSala]);
+  }, [nome, telefone, selectedTeam, criarSala]);
 
   const handleEntrarSala = useCallback(async (salaId: string) => {
-    if (!nome) {
-      alert('Por favor, digite seu nome');
+    if (!nome || !telefone) {
+      alert('Por favor, digite seu nome e telefone');
       return;
     }
     await entrarSala(salaId, selectedTeam, nome);
     setScreen('jogo');
-  }, [nome, selectedTeam, entrarSala]);
+  }, [nome, telefone, selectedTeam, entrarSala]);
 
   const handleFimJogada = useCallback((gols: number) => {
     registrarJogada();
@@ -145,18 +145,18 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Email (opcional - para salvar pontos)</label>
+          <label className="block text-sm font-medium mb-2">Telefone (obrigatório - para salvar pontos)</label>
           <div className="flex gap-2">
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
+              type="tel"
+              value={telefone}
+              onChange={(e) => setTelefone(e.target.value)}
+              placeholder="(11) 99999-9999"
               className="flex-1 px-3 py-2 rounded border bg-background"
             />
             <button
               onClick={handleLogin}
-              disabled={loading || !email}
+              disabled={loading || !telefone || !nome}
               className="btn-primary px-4"
             >
               Salvar

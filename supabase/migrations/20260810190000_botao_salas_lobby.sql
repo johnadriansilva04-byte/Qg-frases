@@ -1,6 +1,18 @@
 -- Sistema de Lobby de Salas para Futebol de Botão
 -- Substitui sistema de fila por arquitetura de salas em tempo real
 
+-- Tabela de usuários (login por telefone obrigatório)
+CREATE TABLE public.botao_usuarios (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  telefone TEXT NOT NULL UNIQUE,
+  nome TEXT NOT NULL,
+  pontos_soberania INTEGER NOT NULL DEFAULT 0,
+  partidas_jogadas INTEGER NOT NULL DEFAULT 0,
+  partidas_vencidas INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
 -- Tabela de salas (lobby)
 CREATE TABLE public.botao_salas (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
