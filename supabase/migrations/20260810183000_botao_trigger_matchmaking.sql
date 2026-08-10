@@ -1,8 +1,11 @@
 -- Adicionar trigger de matchmaking automático
 -- Esta migration adiciona o trigger que cria partidas automaticamente quando 2 jogadores estão na fila
 
+-- Dropar função existente para recriar com tipo de retorno correto
+DROP FUNCTION IF EXISTS public.matchmaking_botao();
+
 -- Função para matchmaking automático (atualizada)
-CREATE OR REPLACE FUNCTION public.matchmaking_botao()
+CREATE FUNCTION public.matchmaking_botao()
 RETURNS UUID
 LANGUAGE plpgsql
 AS $$
