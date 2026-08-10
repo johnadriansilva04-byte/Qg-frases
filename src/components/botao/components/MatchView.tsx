@@ -146,26 +146,31 @@ export function MatchView({
         resetPositions(discsRef.current);
         setTimeout(() => setFlash(null), 1200);
         const conceding: Side = goal === "home" ? "away" : "home";
-        endTurn(conceding, next);
+        // Quem sofreu o gol (conceding) recebe o próximo turno
+        simRef.current = false;
+        const left = turnsRef.current - 1;
+        setTurnsLeft(left);
+        if (left <= 0) {
+          finishMatch(next.home, next.away);
+          return;
+        }
+        turnRef.current = conceding;
+        setTurn(conceding);
         return;
       }
       if (!moving || frames > 900) {
-        endTurn(turnRef.current === "home" ? "away" : "home", scoreRef.current);
+        simRef.current = false;
+        const left = turnsRef.current - 1;
+        setTurnsLeft(left);
+        if (left <= 0) {
+          finishMatch(scoreRef.current.home, scoreRef.current.away);
+          return;
+        }
+        turnRef.current = turnRef.current === "home" ? "away" : "home";
+        setTurn(turnRef.current);
         return;
       }
       requestAnimationFrame(loop);
-    };
-
-    const endTurn = (nextSide: Side, currentScore: { home: number; away: number }) => {
-      simRef.current = false;
-      const left = turnsRef.current - 1;
-      setTurnsLeft(left);
-      if (left <= 0) {
-        finishMatch(currentScore.home, currentScore.away);
-        return;
-      }
-      turnRef.current = nextSide;
-      setTurn(nextSide);
     };
 
     requestAnimationFrame(loop);
