@@ -219,9 +219,12 @@ export function validateMove(s: GameState, move: Move, actor: Player): Validatio
   const formed = millsFormedAt(next, move.to, actor).length > 0;
 
   if (formed) {
-    if (move.remove === null) return { ok: false, error: "Moinho formado: escolha uma captura." };
-    const targets = removableTargets(next, opponent(actor));
-    if (!targets.includes(move.remove)) return { ok: false, error: "Captura não permitida." };
+    // Se formou moinho, captura é opcional (o jogo vai esperar a captura depois)
+    // Só valida a captura se ela foi fornecida
+    if (move.remove !== null) {
+      const targets = removableTargets(next, opponent(actor));
+      if (!targets.includes(move.remove)) return { ok: false, error: "Captura não permitida." };
+    }
   } else if (move.remove !== null) {
     return { ok: false, error: "Nenhum moinho formado: captura inválida." };
   }
