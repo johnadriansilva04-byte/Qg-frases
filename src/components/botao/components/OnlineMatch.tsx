@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Volume2 } from "lucide-react";
 import { useBotaoOnline } from "@/hooks/useBotaoOnline";
 import { TEAMS, teamById } from "../data/teams";
 import { MatchView } from "./MatchView";
@@ -35,6 +35,32 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   const [selectedTeam, setSelectedTeam] = useState("fla");
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [golsAnteriores, setGolsAnteriores] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Audio de gol
+  const tocarSomGol = useCallback(() => {
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('/sounds/gol.mp3');
+        audioRef.current.volume = 0.5;
+      }
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+    } catch (e) {
+      console.error('Erro ao tocar som de gol:', e);
+    }
+  }, []);
+
+  // Detectar gol novo
+  useEffect(() => {
+    if (sala && meusGols > golsAnteriores && golsAnteriores > 0) {
+      tocarSomGol();
+    }
+    if (sala) {
+      setGolsAnteriores(meusGols);
+    }
+  }, [sala, meusGols, golsAnteriores, tocarSomGol]);
 
   // Carregar salas ao montar
   useEffect(() => {
@@ -256,56 +282,101 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   if (screen === "jogo" && sala && meuTime) {
     const oponenteTime = sala.jogador1_session === sessionId ? sala.jogador2_time : sala.jogador1_time;
     const oponenteNome = sala.jogador1_session === sessionId ? sala.jogador2_nome : sala.jogador1_nome;
+    const time1 = teamById(sala.jogador1_time);
+    const time2 = teamById(oponenteTime || 'fla');
 
     return (
-      <div>
-        <div className="panel mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Jogadas restantes: {sala.jogadas_restantes}</p>
-              <p className="font-display text-lg">
-                Placar: {sala.jogador1_gols} - {sala.jogador2_gols}
-              </p>
+      <div className="flex flex-col h-screen">
+        {/* Header do placar */}
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 shadow-lg">
+          <div className="max-w-4xl mx-auto">
+            {/* Informações da partida */}
+            <div className="flex justify-between items-center mb-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="bg-gold/20 text-gold px-2 py-1 rounded-full font-semibold">
+                  Jogadas: {sala.jogadas_restantes}
+                </span>
+                {!meuTurno && (
+                  <span className="bg-accent/20 text-accent px-2 py-1 rounded-full animate-pulse">
+                    Aguardando {oponenteNome}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className={`w-4 h-4 ${tempoRestanteTurno && tempoRestanteTurno.segundos < 10 ? 'text-destructive' : ''}`} />
+                <span className={`font-mono font-bold ${tempoRestanteTurno && tempoRestanteTurno.segundos < 10 ? 'text-destructive' : ''}`}>
+                  {tempoRestanteTurno ? formatarTempo(tempoRestanteTurno.segundos) : '--'}
+                </span>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Tempo do turno</p>
-              <p className={`font-display text-2xl ${tempoRestanteTurno && tempoRestanteTurno.segundos < 10 ? 'text-destructive' : ''}`}>
-                <Clock className="inline w-5 h-5 mr-1" />
-                {tempoRestanteTurno ? formatarTempo(tempoRestanteTurno.segundos) : '--'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            {tempoRestanteTurno && (
-              <div 
-                className={`h-full transition-all ${tempoRestanteTurno.segundos < 10 ? 'bg-destructive' : 'bg-gold'}`}
-                style={{ width: `${(tempoRestanteTurno.segundos / tempoRestanteTurno.total) * 100}%` }}
-              />
-            )}
-          </div>
 
-          {!meuTurno && (
-            <p className="text-center text-sm text-muted-foreground mt-2">
-              Aguardando turno do oponente ({oponenteNome})...
-            </p>
-          )}
+            {/* Barra de tempo */}
+            <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden mb-4">
+              {tempoRestanteTurno && (
+                <div 
+                  className={`h-full transition-all duration-1000 ${tempoRestanteTurno.segundos < 10 ? 'bg-destructive' : 'bg-gold'}`}
+                  style={{ width: `${(tempoRestanteTurno.segundos / tempoRestanteTurno.total) * 100}%` }}
+                />
+              )}
+            </div>
+
+            {/* Placar */}
+            <div className="flex items-center justify-between gap-4">
+              {/* Time 1 */}
+              <div className="flex-1 text-center">
+                <div 
+                  className="w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{ backgroundColor: time1.primary, color: time1.secondary }}
+                >
+                  {time1.short}
+                </div>
+                <p className="font-semibold text-sm truncate">{sala.jogador1_nome}</p>
+              </div>
+
+              {/* Placar central */}
+              <div className="flex items-center gap-4 bg-slate-700/50 px-6 py-3 rounded-xl">
+                <span className={`text-4xl font-black ${sala.jogador1_session === sessionId ? 'text-gold' : ''}`}>
+                  {sala.jogador1_gols}
+                </span>
+                <span className="text-2xl text-slate-400">-</span>
+                <span className={`text-4xl font-black ${sala.jogador2_session === sessionId ? 'text-gold' : ''}`}>
+                  {sala.jogador2_gols}
+                </span>
+              </div>
+
+              {/* Time 2 */}
+              <div className="flex-1 text-center">
+                <div 
+                  className="w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{ backgroundColor: time2.primary, color: time2.secondary }}
+                >
+                  {time2.short}
+                </div>
+                <p className="font-semibold text-sm truncate">{sala.jogador2_nome}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <MatchView
-          homeId={sala.jogador1_time}
-          awayId={oponenteTime || 'fla'}
-          userSide={sala.jogador1_session === sessionId ? "home" : "away"}
-          difficulty="amador"
-          turns={sala.jogadas_restantes}
-          knockout={false}
-          stageLabel={`Jogadas: ${sala.jogadas_restantes}`}
-          onFinish={(result) => {
-            const meusGols = sala.jogador1_session === sessionId ? result.homeGoals : result.awayGoals;
-            handleFimJogada(meusGols);
-          }}
-          onQuit={handleSair}
-        />
+        {/* Área do jogo */}
+        <div className="flex-1 overflow-hidden bg-gradient-to-b from-green-800 to-green-900">
+          <div className="h-full max-w-4xl mx-auto p-4">
+            <MatchView
+              homeId={sala.jogador1_time}
+              awayId={oponenteTime || 'fla'}
+              userSide={sala.jogador1_session === sessionId ? "home" : "away"}
+              difficulty="amador"
+              turns={sala.jogadas_restantes}
+              knockout={false}
+              stageLabel=""
+              onFinish={(result) => {
+                const meusGols = sala.jogador1_session === sessionId ? result.homeGoals : result.awayGoals;
+                handleFimJogada(meusGols);
+              }}
+              onQuit={handleSair}
+            />
+          </div>
+        </div>
       </div>
     );
   }
