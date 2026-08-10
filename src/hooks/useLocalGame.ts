@@ -96,7 +96,7 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
 
   // Turno da máquina
   useEffect(() => {
-    if (state.phase === "over" || state.turn === human) return;
+    if (state.phase === "over" || state.turn === human || pendingMove) return;
     setThinking(true);
     const profile = AI_PROFILES[difficulty];
     timer.current = window.setTimeout(
@@ -106,10 +106,36 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
         setAiInfo({ depth: decision.depth, nodes: decision.nodes, elapsedMs: decision.elapsedMs });
         if (!decision.move) return;
         
+        const move = decision.move;
+        
+        // Verifica se o movimento forma moinho
+        const testBoard = [...state.board];
+        if (move.from !== null) testBoard[move.from] = 0;
+        testBoard[move.to] = state.turn;
+        const formed = millsFormedAt(testBoard, move.to, state.turn);
+        
+        // Se formou moinho e não tem captura, IA precisa escolher captura
+        if (formed.length > 0 && move.remove === null) {
+          const targets = removableTargets(testBoard, opponent(state.turn));
+          if (targets.length > 0) {
+            // IA escolhe automaticamente a melhor captura
+            const captureTarget = targets[0] ?? null; // Garante que seja null se undefined
+            const completeMove = { ...move, remove: captureTarget };
+            setState((cur) => {
+              const next = applyMove(cur, completeMove);
+              setLog((l: string[]) => [describeMove(completeMove, cur.turn, cur.ply), ...l].slice(0, 60));
+              setLastMove(completeMove);
+              return next;
+            });
+            return;
+          }
+        }
+        
+        // Movimento normal
         setState((cur) => {
-          const next = applyMove(cur, decision.move);
-          setLog((l: string[]) => [describeMove(decision.move, cur.turn, cur.ply), ...l].slice(0, 60));
-          setLastMove(decision.move);
+          const next = applyMove(cur, move);
+          setLog((l: string[]) => [describeMove(move, cur.turn, cur.ply), ...l].slice(0, 60));
+          setLastMove(move);
           return next;
         });
       },
@@ -120,7 +146,7 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
       if (timer.current) window.clearTimeout(timer.current);
       setThinking(false);
     };
-  }, [difficulty, human, state]);
+  }, [difficulty, human, state, pendingMove]);
 
   const restart = useCallback(() => {
     setState(createInitialState());
