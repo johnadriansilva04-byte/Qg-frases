@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, Trophy, Target } from "lucide-react";
+import { ArrowLeft, Trophy, Target, BookOpen, X } from "lucide-react";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
@@ -8,12 +8,19 @@ import { useTrilhaPhases } from "@/hooks/useTrilhaChampionship";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 
+const TUTORIAL_KEY = "trilha_tutorial_seen";
+
 interface TrilhaGameProps {
   onBack?: () => void;
 }
 
 export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   const [seed, setSeed] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(() => {
+    const seen = localStorage.getItem(TUTORIAL_KEY);
+    return !seen;
+  });
+  const [showRules, setShowRules] = useState(false);
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
 
@@ -26,15 +33,168 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
 
   const difficulty = (currentPhaseConfig?.difficulty || "recruta") as Difficulty;
 
+  const handleStartGame = () => {
+    localStorage.setItem(TUTORIAL_KEY, "true");
+    setShowTutorial(false);
+  };
+
+  const handleShowRules = () => {
+    setShowTutorial(false);
+    setShowRules(true);
+  };
+
+  const handleCloseRules = () => {
+    setShowRules(false);
+    localStorage.setItem(TUTORIAL_KEY, "true");
+  };
+
   return (
-    <TrilhaGameBoard
-      key={`${difficulty}-${seed}-${phases.progress.currentPhase}`}
-      difficulty={difficulty}
-      onReset={() => setSeed((s) => s + 1)}
-      onBack={onBack}
-      phases={phases}
-      currentPhaseConfig={currentPhaseConfig}
-    />
+    <>
+      {showTutorial && <TutorialModal onStart={handleStartGame} onShowRules={handleShowRules} />}
+      {showRules && <RulesModal onClose={handleCloseRules} />}
+      <TrilhaGameBoard
+        key={`${difficulty}-${seed}-${phases.progress.currentPhase}`}
+        difficulty={difficulty}
+        onReset={() => setSeed((s) => s + 1)}
+        onBack={onBack}
+        phases={phases}
+        currentPhaseConfig={currentPhaseConfig}
+      />
+    </>
+  );
+}
+
+function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRules: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-background rounded-lg max-w-lg w-full p-6 shadow-2xl">
+        <div className="text-center mb-6">
+          <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-3xl font-bold mb-2">Bem-vindo à Trilha!</h2>
+          <p className="text-muted-foreground">Jogo de estratégia tática da FEB</p>
+        </div>
+
+        <div className="space-y-4 mb-6">
+          <div className="bg-primary/10 p-4 rounded-lg">
+            <h3 className="font-semibold text-primary mb-2 flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Sistema de Fases
+            </h3>
+            <ul className="text-sm space-y-2 text-muted-foreground">
+              <li>🎯 <strong>Fase 1:</strong> Ganhe 7 jogos consecutivos (Recruta)</li>
+              <li>⚔️ <strong>Fase 2:</strong> Ganhe 10 jogos consecutivos (Sargento)</li>
+              <li>🏆 <strong>Fase 3:</strong> Ganhe 15 jogos consecutivos (General)</li>
+            </ul>
+          </div>
+
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              Ao perder, seu contador de vitórias consecutivas reseta. 
+              Complete todas as fases para se tornar o <strong>Mestre da Trilha</strong>!
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            onClick={onStart}
+            className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+          >
+            Já sei jogar - Começar
+          </button>
+          <button
+            onClick={onShowRules}
+            className="w-full bg-secondary/70 text-foreground px-6 py-3 rounded-lg font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+          >
+            <BookOpen className="h-4 w-4" />
+            Quero aprender as regras
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RulesModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <BookOpen className="h-6 w-6 text-primary" />
+            Como Jogar Trilha
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-2">🎯 Objetivo</h3>
+            <p className="text-muted-foreground">
+              Forme "trilhas" (três peças em linha reta) para capturar peças do inimigo. 
+              Reduza o adversário a 2 peças ou bloqueie todos os movimentos dele para vencer.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-2">📦 Fase de Colocação</h3>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <li>Cada jogador coloca 9 peças, uma por vez</li>
+              <li>Clique em uma interseção vazia para colocar sua peça</li>
+              <li>Forme uma trilha para capturar uma peça inimiga</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-2">♟️ Fase de Movimentação</h3>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <li>Selecione sua peça clicando nela</li>
+              <li>Clique em uma interseção adjacente vazia para mover</li>
+              <li>Quando restar apenas 3 peças, você pode "voar" para qualquer casa vazia</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-2">⚔️ Captura</h3>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <li>Ao formar uma trilha, você deve remover uma peça inimiga</li>
+              <li>Não pode remover peças que estão em trilhas (a menos que todas estejam)</li>
+              <li>Clique na peça inimiga que deseja capturar</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-2">🏆 Condições de Vitória</h3>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <li>Reduzir o adversário a 2 peças</li>
+              <li>Bloquear todos os movimentos do adversário</li>
+            </ul>
+          </section>
+
+          <section className="bg-primary/10 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2 text-primary">💡 Dicas</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm">
+              <li>Tente formar trilhas duplas (duas trilhas ao mesmo tempo)</li>
+              <li>Bloqueie as trilhas do adversário</li>
+              <li>Proteja suas peças em trilhas</li>
+              <li>Planeje seus movimentos com antecedência</li>
+            </ul>
+          </section>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full mt-6 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+        >
+          Entendi! Começar Jogo
+        </button>
+      </div>
+    </div>
   );
 }
 
