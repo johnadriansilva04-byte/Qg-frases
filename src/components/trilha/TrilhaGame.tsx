@@ -1,9 +1,10 @@
 import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trophy, Lock, CheckCircle, XCircle } from "lucide-react";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
+import { useTrilhaChampionship } from "@/hooks/useTrilhaChampionship";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 
@@ -16,13 +17,26 @@ interface TrilhaGameProps {
 export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   const [difficulty, setDifficulty] = useState<Difficulty>("sargento");
   const [seed, setSeed] = useState(0);
+  const [showChampionship, setShowChampionship] = useState(false);
+  const [championshipMode, setChampionshipMode] = useState(false);
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
+  
+  const championship = useTrilhaChampionship();
+
   return (
     <TrilhaGameBoard
-      key={`${difficulty}-${seed}`}
+      key={`${difficulty}-${seed}-${championshipMode}-${currentMatchId}`}
       difficulty={difficulty}
       onDifficulty={(d) => setDifficulty(d)}
       onReset={() => setSeed((s) => s + 1)}
       onBack={onBack}
+      showChampionship={showChampionship}
+      setShowChampionship={setShowChampionship}
+      championship={championship}
+      championshipMode={championshipMode}
+      setChampionshipMode={setChampionshipMode}
+      currentMatchId={currentMatchId}
+      setCurrentMatchId={setCurrentMatchId}
     />
   );
 }
@@ -32,11 +46,25 @@ function TrilhaGameBoard({
   onDifficulty,
   onReset,
   onBack,
+  showChampionship,
+  setShowChampionship,
+  championship,
+  championshipMode,
+  setChampionshipMode,
+  currentMatchId,
+  setCurrentMatchId,
 }: {
   difficulty: Difficulty;
   onDifficulty: (d: Difficulty) => void;
   onReset: () => void;
   onBack?: () => void;
+  showChampionship: boolean;
+  setShowChampionship: (show: boolean) => void;
+  championship: ReturnType<typeof useTrilhaChampionship>;
+  championshipMode: boolean;
+  setChampionshipMode: (mode: boolean) => void;
+  currentMatchId: string | null;
+  setCurrentMatchId: (id: string | null) => void;
 }) {
   const game = useLocalGame(difficulty, 1);
   
@@ -55,12 +83,18 @@ function TrilhaGameBoard({
         result,
         score,
       });
+      
+      // Se estiver em modo campeonato, registrar resultado
+      if (championshipMode && currentMatchId) {
+        championship.completeMatch(currentMatchId, result);
+      }
+      
       setGameEnded(true);
     }
     if (game.state.phase !== "over") {
       setGameEnded(false);
     }
-  }, [game.state.phase, game.state.winner, difficulty, gameEnded]);
+  }, [game.state.phase, game.state.winner, difficulty, gameEnded, championshipMode, currentMatchId, championship]);
   
   const targets = useMemo(() => {
     if (game.state.phase === "placing") {
@@ -152,8 +186,147 @@ function TrilhaGameBoard({
 
   const profile = AI_PROFILES[difficulty];
 
+  const nextMatch = championship.getNextMatch();
+  const canStartChampionship = !championship.championship.started;
+
+  const startChampionshipMatch = () => {
+    if (!championship.championship.started) {
+      championship.startChampionship();
+    }
+    const match = championship.getNextMatch();
+    if (match) {
+      setChampionshipMode(true);
+      setCurrentMatchId(match.id);
+      onDifficulty(match.difficulty);
+      setShowChampionship(false);
+    }
+  };
+
+  const handleChampionshipReset = () => {
+    championship.resetChampionship();
+    setChampionshipMode(false);
+    setCurrentMatchId(null);
+    setShowChampionship(false);
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {showChampionship && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Trophy className="text-yellow-500" />
+                Campeonato da Trilha
+              </h2>
+              <button
+                onClick={() => setShowChampionship(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-6 w-6" />
+              </button>
+            </div>
+
+            {!championship.championship.started ? (
+              <div className="text-center py-8">
+                <p className="text-lg mb-4">Enfrente 7 adversários em sequência!</p>
+                <p className="text-muted-foreground mb-6">
+                  Cada vitória vale pontos. Derrotas encerram o campeonato.
+                </p>
+                <button
+                  onClick={startChampionshipMatch}
+                  className="bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90"
+                >
+                  Iniciar Campeonato
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 p-4 bg-muted rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Progresso</span>
+                    <span className="text-sm text-muted-foreground">
+                      {championship.championship.completed} / {championship.championship.total}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="font-medium">Pontuação</span>
+                    <span className="text-lg font-bold text-yellow-500">
+                      {championship.championship.totalScore}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {championship.championship.matches.map((match, index) => (
+                    <div
+                      key={match.id}
+                      className={`p-4 rounded-lg border ${
+                        match.completed
+                          ? match.result === "victory"
+                            ? "bg-green-500/10 border-green-500/30"
+                            : "bg-red-500/10 border-red-500/30"
+                          : "bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {match.completed ? (
+                            match.result === "victory" ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-red-500" />
+                            )
+                          ) : (
+                            <Lock className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          <div>
+                            <div className="font-medium">{match.opponent}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {AI_PROFILES[match.difficulty].label} · {match.score} pts
+                            </div>
+                          </div>
+                        </div>
+                        {match.completed && match.result === "victory" && (
+                          <span className="text-green-500 font-bold">+{match.score}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {championship.isChampion && (
+                  <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
+                    <Trophy className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
+                    <h3 className="text-xl font-bold text-yellow-500">CAMPEÃO!</h3>
+                    <p className="text-muted-foreground">
+                      Pontuação total: {championship.championship.totalScore}
+                    </p>
+                  </div>
+                )}
+
+                <div className="mt-6 flex gap-2">
+                  {nextMatch && !championship.isChampion && (
+                    <button
+                      onClick={startChampionshipMatch}
+                      className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:bg-primary/90"
+                    >
+                      Próximo Combate
+                    </button>
+                  )}
+                  <button
+                    onClick={handleChampionshipReset}
+                    className="flex-1 bg-secondary text-secondary-foreground px-4 py-2 rounded-lg font-medium hover:bg-secondary/80"
+                  >
+                    Reiniciar Campeonato
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
@@ -163,24 +336,41 @@ function TrilhaGameBoard({
             </p>
           </div>
         </div>
-        {onBack ? (
+        <div className="flex items-center gap-2">
+          {championshipMode && (
+            <div className="bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+              <Trophy className="h-4 w-4" />
+              {championship.championship.totalScore} pts
+            </div>
+          )}
           <button
-            onClick={onBack}
-            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg font-medium transition-colors"
+            onClick={() => setShowChampionship(true)}
+            className="flex items-center gap-2 bg-secondary/70 text-foreground hover:bg-secondary px-4 py-2 rounded-lg font-medium transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Voltar à Cidadela</span>
+            <Trophy className="h-4 w-4" />
+            <span className="hidden sm:inline">Campeonato</span>
           </button>
-        ) : null}
+          {onBack ? (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Voltar à Cidadela</span>
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Campanha</h1>
+            <h1 className="text-2xl font-bold">
+              {championshipMode ? `Combate: ${nextMatch?.opponent || "Finalizado"}` : "Campanha"}
+            </h1>
           </div>
           <div className="flex gap-2">
-            {ORDER.map((d) => (
+            {!championshipMode && ORDER.map((d) => (
               <button
                 key={d}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -217,7 +407,7 @@ function TrilhaGameBoard({
             state={game.state}
             myPlayer={1}
             p1={{ name: "Pracinhas da FEB", slot: 1, subtitle: "Você" }}
-            p2={{ name: `Comando inimigo`, slot: 2, subtitle: profile.label }}
+            p2={{ name: championshipMode ? nextMatch?.opponent || "Adversário" : `Comando inimigo`, slot: 2, subtitle: profile.label }}
             status={status}
             log={game.log}
             awaitingCapture={game.pendingCapture}

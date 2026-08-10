@@ -46,10 +46,10 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
   },
   general: {
     label: "General",
-    depth: 5,
+    depth: 7,
     blunder: 0,
-    timeBudgetMs: 1800,
-    description: "Estado-maior. Planeja campanhas inteiras com poda alfa-beta profunda.",
+    timeBudgetMs: 3000,
+    description: "Estado-maior supremo. Calcula jogadas profundas com precisão letal.",
   },
 };
 
