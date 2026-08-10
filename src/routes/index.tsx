@@ -77,10 +77,10 @@ function Index() {
             QG Frases
           </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Encontre a legenda, frase ou mensagem perfeita em um clique
+            Gerador de frases: encontre a legenda, frase ou mensagem perfeita em um clique
           </p>
           <p className="mt-1 text-xs text-muted-foreground/70">
-            {total.toLocaleString("pt-BR")} combinações de frases disponíveis
+            {total.toLocaleString("pt-BR")} combinações de frases disponíveis para status, Reels e mais
           </p>
         </header>
 

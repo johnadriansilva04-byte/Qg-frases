@@ -118,10 +118,10 @@ function Narrador() {
             📖 Narrador de Histórias
           </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Fale sua história e nós reescrevemos para você
+            Ferramenta para transformar sua fala em texto bonito e bem formatado
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Transforme sua fala em texto bonito e bem formatado
+            Fale sua história, reescreva o texto e deixe tudo perfeito para compartilhar
           </p>
         </header>
 

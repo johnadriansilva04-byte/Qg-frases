@@ -63,8 +63,10 @@ function Biblioteca() {
           </Link>
           <h1 className="texto-marca mt-3 text-3xl font-black md:text-5xl">Biblioteca</h1>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground md:text-base">
-            Você gosta de ler? Escolha um livro abaixo e leve pra casa. Indicações selecionadas por
-            nós.
+            Biblioteca de livros selecionados para quem gosta de ler
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Indicações de motivação, fé, relacionamentos e finanças. Escolha seu próximo livro.
           </p>
           <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
             Contém links de afiliado

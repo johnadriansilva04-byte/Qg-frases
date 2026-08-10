@@ -103,7 +103,10 @@ function Corretor() {
             ✏️ Corretor de Texto
           </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Cole ou digite seu texto aqui para editar e corrigir
+            Ferramenta para editar, corrigir e melhorar seus textos
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Digite, fale ou cole seu texto e deixe tudo perfeito antes de usar
           </p>
         </header>
 

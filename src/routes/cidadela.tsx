@@ -53,10 +53,10 @@ function Cidadela() {
             🏰 Cidadela de Jogos
           </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Conheça nossa cidadela de jogos clássicos
+            Uma cidade de jogos para se divertir e bater recorde
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Entre no mundo dos jogos e divirta-se
+            Jogue clássicos como Trilha, quebre seus recordes e desafie a IA
           </p>
         </header>
 
