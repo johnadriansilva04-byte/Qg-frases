@@ -3,9 +3,13 @@ import { NODE_LABELS } from "@/lib/trilha/board";
 import { AI_PROFILES, chooseMove, type Difficulty } from "@/lib/trilha/ai";
 import {
   applyMove,
+  cloneState,
   createInitialState,
   resign as resignState,
   validateMove,
+  millsFormedAt,
+  opponent,
+  removableTargets,
   type GameState,
   type Move,
   type Player,
@@ -30,6 +34,8 @@ export interface LocalGame {
   restart: () => void;
   resign: () => void;
   aiInfo: { depth: number; nodes: number; elapsedMs: number } | null;
+  pendingCapture: boolean;
+  captureTargets: number[];
 }
 
 /** Partida local contra a máquina; o humano é sempre o slot 1 (FEB). */
@@ -39,10 +45,21 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [thinking, setThinking] = useState(false);
   const [aiInfo, setAiInfo] = useState<LocalGame["aiInfo"]>(null);
+  const [pendingMove, setPendingMove] = useState<Move | null>(null);
   const timer = useRef<number | null>(null);
 
   const commit = useCallback((move: Move) => {
     setState((cur) => {
+      // Se há movimento pendente esperando captura
+      if (pendingMove) {
+        const completeMove = { ...pendingMove, remove: move.remove };
+        const next = applyMove(cur, completeMove);
+        setLog((l: string[]) => [describeMove(completeMove, cur.turn, cur.ply), ...l].slice(0, 60));
+        setLastMove(completeMove);
+        setPendingMove(null);
+        return next;
+      }
+
       // Valida o movimento
       const validation = validateMove(cur, move, cur.turn);
       if (!validation.ok) {
@@ -50,12 +67,32 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
       }
 
       const actor = cur.turn;
+      
+      // Verifica se o movimento forma moinho
+      const testBoard = [...cur.board];
+      if (move.from !== null) testBoard[move.from] = 0;
+      testBoard[move.to] = actor;
+      
+      const formed = millsFormedAt(testBoard, move.to, actor);
+      
+      // Se formou moinho e não tem captura no movimento, espera captura
+      if (formed.length > 0 && move.remove === null) {
+        const partial = cloneState(cur);
+        if (move.from !== null) partial.board[move.from] = 0;
+        partial.board[move.to] = actor;
+        if (move.from === null) partial.hand[actor] = partial.hand[actor] - 1;
+        setPendingMove(move);
+        setLastMove(move);
+        return partial;
+      }
+
+      // Movimento normal ou com captura incluída
       const next = applyMove(cur, move);
       setLog((l: string[]) => [describeMove(move, actor, cur.ply), ...l].slice(0, 60));
       setLastMove(move);
       return next;
     });
-  }, []);
+  }, [pendingMove]);
 
   // Turno da máquina
   useEffect(() => {
@@ -71,7 +108,7 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
         
         setState((cur) => {
           const next = applyMove(cur, decision.move);
-          setLog((l) => [describeMove(decision.move, cur.turn, cur.ply), ...l].slice(0, 60));
+          setLog((l: string[]) => [describeMove(decision.move, cur.turn, cur.ply), ...l].slice(0, 60));
           setLastMove(decision.move);
           return next;
         });
@@ -90,12 +127,16 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
     setLog([]);
     setLastMove(null);
     setAiInfo(null);
+    setPendingMove(null);
   }, []);
 
   const resign = useCallback(() => {
     setState((cur) => resignState(cur, human));
-    setLog((l) => ["Comando brasileiro solicitou cessar-fogo.", ...l]);
+    setLog((l: string[]) => ["Comando brasileiro solicitou cessar-fogo.", ...l]);
+    setPendingMove(null);
   }, [human]);
 
-  return { state, log, lastMove, thinking, commit, restart, resign, aiInfo };
+  const captureTargets = pendingMove ? removableTargets(state.board, opponent(state.turn)) : [];
+
+  return { state, log, lastMove, thinking, commit, restart, resign, aiInfo, pendingCapture: pendingMove !== null, captureTargets };
 }

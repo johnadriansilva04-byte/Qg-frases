@@ -4,7 +4,7 @@ import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
-import { legalDestinations, legalPlacements, removableTargets, canFly, generateMoves, type Player } from "@/lib/trilha/engine";
+import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 
 const ORDER: Difficulty[] = ["recruta", "sargento", "general"];
@@ -73,21 +73,16 @@ function TrilhaGameBoard({
   }, [game.state, selected]);
 
   const captureTargets = useMemo(() => {
-    return new Set<number>();
-  }, []);
-
-  const awaitingCapture = captureTargets.size > 0;
+    return new Set(game.captureTargets);
+  }, [game.captureTargets]);
 
   const handleNodeClick = (node: number) => {
     if (game.thinking || game.state.phase === "over") return;
     
     // Se está esperando captura
-    if (awaitingCapture) {
+    if (game.pendingCapture) {
       if (captureTargets.has(node)) {
-        const lastMove = game.lastMove;
-        if (lastMove) {
-          game.commit({ from: lastMove.from, to: lastMove.to, remove: node });
-        }
+        game.commit({ from: null, to: null, remove: node });
       }
       return;
     }
@@ -136,7 +131,7 @@ function TrilhaGameBoard({
             : "Sua tropa foi reduzida abaixo do mínimo operacional.";
       return `Derrota. ${motive}`;
     }
-    if (awaitingCapture)
+    if (game.pendingCapture)
       return "TRILHA FECHADA! Selecione a peça inimiga a neutralizar.";
     if (game.thinking) return "Rádio em silêncio... o estado-maior inimigo calcula a resposta.";
     if (s.turn !== 1) return "Aguardando o inimigo.";
@@ -149,7 +144,7 @@ function TrilhaGameBoard({
   }, [
     game.state,
     game.thinking,
-    awaitingCapture,
+    game.pendingCapture,
     selected,
   ]);
 
@@ -223,7 +218,7 @@ function TrilhaGameBoard({
             p2={{ name: `Comando inimigo`, slot: 2, subtitle: profile.label }}
             status={status}
             log={game.log}
-            awaitingCapture={awaitingCapture}
+            awaitingCapture={game.pendingCapture}
             onRestart={onReset}
             onResign={game.resign}
           />
