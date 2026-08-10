@@ -2,31 +2,17 @@
 -- Sistema de Lobbies com Múltiplos Blocos
 -- Execute este SQL único no Supabase
 
--- Limpar cache do schema
--- SELECT pg_notify('reload_schema', 'public');
-
 -- Tabela de usuários (login por telefone obrigatório)
--- Se tabela já existe, adiciona coluna telefone
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'botao_usuarios') THEN
-    CREATE TABLE public.botao_usuarios (
-      id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-      telefone TEXT NOT NULL UNIQUE,
-      nome TEXT NOT NULL,
-      pontos_soberania INTEGER NOT NULL DEFAULT 0,
-      partidas_jogadas INTEGER NOT NULL DEFAULT 0,
-      partidas_vencidas INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-    );
-  ELSE
-    -- Se tabela existe mas não tem coluna telefone, adiciona
-    IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'botao_usuarios' AND column_name = 'telefone') THEN
-      ALTER TABLE public.botao_usuarios ADD COLUMN telefone TEXT NOT NULL UNIQUE DEFAULT '';
-    END IF;
-  END IF;
-END $$;
+CREATE TABLE IF NOT EXISTS public.botao_usuarios (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  telefone TEXT NOT NULL UNIQUE,
+  nome TEXT NOT NULL,
+  pontos_soberania INTEGER NOT NULL DEFAULT 0,
+  partidas_jogadas INTEGER NOT NULL DEFAULT 0,
+  partidas_vencidas INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
 
 -- Tabela de Lobbies (salas principais)
 CREATE TABLE IF NOT EXISTS public.botao_lobbies (
