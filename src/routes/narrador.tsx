@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { AdSlot } from "@/components/AdSlot";
 
@@ -180,6 +180,18 @@ function Narrador() {
       <div className="w-full max-w-3xl">
         <AdSlot rotulo="Banner Rodapé / Google AdSense" />
       </div>
+
+      <footer className="my-4 text-center text-xs text-muted-foreground/70">
+        <p>© 2026 QG Frases — Seu mural de frases rápidas.</p>
+        <div className="mt-2 flex justify-center gap-4">
+          <Link to="/privacidade" className="hover:text-primary transition">
+            Privacidade
+          </Link>
+          <Link to="/termos" className="hover:text-primary transition">
+            Termos
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

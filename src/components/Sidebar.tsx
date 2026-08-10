@@ -26,6 +26,13 @@ export function Sidebar() {
           📖 Narrador de Histórias
         </Link>
         <Link
+          to="/cidadela"
+          className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10 transition-colors"
+          activeProps={{ className: "bg-primary/10 text-primary font-semibold" }}
+        >
+          🏰 Cidadela de Jogos
+        </Link>
+        <Link
           to="/biblioteca"
           className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10 transition-colors"
           activeProps={{ className: "bg-primary/10 text-primary font-semibold" }}
