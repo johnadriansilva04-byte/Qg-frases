@@ -50,6 +50,16 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
 
   const commit = useCallback((move: Move) => {
     setState((cur) => {
+      // Se há movimento pendente esperando captura, completa o movimento primeiro
+      if (pendingMove) {
+        const completeMove = { ...pendingMove, remove: move.remove };
+        const next = applyMove(cur, completeMove);
+        setLog((l: string[]) => [describeMove(completeMove, cur.turn, cur.ply), ...l].slice(0, 60));
+        setLastMove(completeMove);
+        setPendingMove(null);
+        return next;
+      }
+
       // Valida o movimento
       const validation = validateMove(cur, move, cur.turn);
       if (!validation.ok) {
@@ -74,16 +84,6 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
         setPendingMove(move);
         setLastMove(move);
         return partial;
-      }
-
-      // Se há movimento pendente esperando captura, completa o movimento
-      if (pendingMove) {
-        const completeMove = { ...pendingMove, remove: move.remove };
-        const next = applyMove(cur, completeMove);
-        setLog((l: string[]) => [describeMove(completeMove, cur.turn, cur.ply), ...l].slice(0, 60));
-        setLastMove(completeMove);
-        setPendingMove(null);
-        return next;
       }
 
       // Movimento normal ou com captura incluída
