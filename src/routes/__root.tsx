@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CookieBanner } from "../components/CookieBanner";
+import { Sidebar } from "../components/Sidebar";
 
 function NotFoundComponent() {
   return (
@@ -126,7 +127,12 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <div className="flex-1">
+            {children}
+          </div>
+        </div>
         <Scripts />
       </body>
     </html>
