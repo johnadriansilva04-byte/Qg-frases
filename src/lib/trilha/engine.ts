@@ -154,6 +154,9 @@ export function generateMoves(s: GameState): Move[] {
     if (from !== null) next[from] = 0;
     next[to] = player;
     if (millsFormedAt(next, to, player).length > 0) {
+      // Adiciona movimento sem captura (para o sistema de duas etapas)
+      moves.push({ from, to, remove: null });
+      // Também adiciona movimentos com cada captura possível
       for (const target of removableTargets(next, foe)) {
         moves.push({ from, to, remove: target });
       }
