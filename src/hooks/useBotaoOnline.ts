@@ -37,22 +37,18 @@ interface Usuario {
 export function useBotaoOnline() {
   const [naFila, setNaFila] = useState(false);
   const [filaId, setFilaId] = useState<string | null>(null);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId] = useState(() => {
+    const existingSession = localStorage.getItem('botao_session_id');
+    if (existingSession) return existingSession;
+    const newSession = crypto.randomUUID();
+    localStorage.setItem('botao_session_id', newSession);
+    return newSession;
+  });
   const [partida, setPartida] = useState<Partida | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Gerar session ID único
-  useEffect(() => {
-    const existingSession = localStorage.getItem('botao_session_id');
-    if (existingSession) {
-      // Se já tem session, usar ele
-    } else {
-      localStorage.setItem('botao_session_id', sessionId);
-    }
-  }, [sessionId]);
 
   // Entrar na fila
   const entrarFila = useCallback(async (timeId: string) => {
