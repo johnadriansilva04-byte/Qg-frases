@@ -200,7 +200,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           />
         )}
 
-        {screen === "online" && <OnlineMatch />}
+        {screen === "online" && <OnlineMatch onBack={() => setScreen("menu")} />}
 
         {screen === "tournament-setup" && (
           <Setup
