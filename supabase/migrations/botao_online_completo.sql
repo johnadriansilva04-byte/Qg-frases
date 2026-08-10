@@ -2,6 +2,9 @@
 -- Sistema de Lobbies com Múltiplos Blocos
 -- Execute este SQL único no Supabase
 
+-- Limpar cache do schema
+-- SELECT pg_notify('reload_schema', 'public');
+
 -- Tabela de usuários (login por telefone obrigatório)
 -- Se tabela já existe, adiciona coluna telefone
 DO $$
@@ -251,3 +254,6 @@ BEGIN
   WHERE id = p_bloco_id;
 END;
 $$;
+
+-- Limpar cache do schema ao final
+NOTIFY pgrst, 'reload schema';
