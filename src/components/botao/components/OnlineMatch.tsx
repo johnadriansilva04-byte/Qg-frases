@@ -70,10 +70,21 @@ export function OnlineMatch() {
 
   const handleFimRodada = useCallback((gols: number) => {
     const novoPlacar = { ...placarRodadas };
+    const golsOponente = partida?.jogador1_session === sessionId ? partida.jogador2_gols : partida.jogador1_gols;
+    
+    // Determina quem ganhou a rodada baseado nos gols
     if (partida?.jogador1_session === sessionId) {
-      novoPlacar.jogador1 += gols > 0 ? 1 : 0;
+      if (gols > golsOponente) {
+        novoPlacar.jogador1 += 1;
+      } else if (golsOponente > gols) {
+        novoPlacar.jogador2 += 1;
+      }
     } else {
-      novoPlacar.jogador2 += gols > 0 ? 1 : 0;
+      if (gols > golsOponente) {
+        novoPlacar.jogador2 += 1;
+      } else if (golsOponente > gols) {
+        novoPlacar.jogador1 += 1;
+      }
     }
     setPlacarRodadas(novoPlacar);
 
