@@ -2,9 +2,21 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
 
-interface Sala {
+interface Lobby {
   id: string;
   created_at: string;
+  nome: string;
+  criador_session: string;
+  criador_nome: string;
+  formato: string;
+  status: string;
+  max_blocos: number;
+}
+
+interface Bloco {
+  id: string;
+  created_at: string;
+  lobby_id: string;
   jogador1_session: string;
   jogador1_nome: string;
   jogador1_time: string;
@@ -41,22 +53,128 @@ export function useBotaoOnline() {
     return newSession;
   });
   
-  const [sala, setSala] = useState<Sala | null>(null);
-  const [salasDisponiveis, setSalasDisponiveis] = useState<Sala[]>([]);
+  const [lobby, setLobby] = useState<Lobby | null>(null);
+  const [lobbiesDisponiveis, setLobbiesDisponiveis] = useState<Lobby[]>([]);
+  const [blocos, setBlocos] = useState<Bloco[]>([]);
+  const [blocoAtual, setBlocoAtual] = useState<Bloco | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Criar sala (jogador 1)
-  const criarSala = useCallback(async (timeId: string, nome: string) => {
+  // Criar lobby
+  const criarLobby = useCallback(async (nome: string, formato: string) => {
     setLoading(true);
     setError(null);
     
     try {
       const { data, error } = await supabase
-        .from('botao_salas')
+        .from('botao_lobbies')
         .insert({
+          nome,
+          criador_session: sessionId,
+          criador_nome: nome,
+          formato,
+          status: 'ativo'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setLobby(data);
+      
+      // Inscrever em realtime para este lobby
+      inscreverLobby(data.id);
+    } catch (err) {
+      setError('Erro ao criar lobby');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId]);
+
+  // Listar lobbies disponíveis
+  const listarLobbies = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error } = await supabase
+        .from('botao_lobbies')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setLobbiesDisponiveis(data || []);
+    } catch (err) {
+      setError('Erro ao listar lobbies');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Entrar em lobby
+  const entrarLobby = useCallback(async (lobbyId: string) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error } = await supabase
+        .from('botao_lobbies')
+        .select('*')
+        .eq('id', lobbyId)
+        .single();
+
+      if (error) throw error;
+      
+      setLobby(data);
+      
+      // Carregar blocos do lobby
+      carregarBlocos(lobbyId);
+      
+      // Inscrever em realtime para este lobby
+      inscreverLobby(lobbyId);
+    } catch (err) {
+      setError('Erro ao entrar no lobby');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Carregar blocos de um lobby
+  const carregarBlocos = useCallback(async (lobbyId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('botao_blocos')
+        .select('*')
+        .eq('lobby_id', lobbyId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setBlocos(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar blocos:', err);
+    }
+  }, []);
+
+  // Criar bloco dentro do lobby
+  const criarBloco = useCallback(async (timeId: string, nome: string) => {
+    if (!lobby) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error } = await supabase
+        .from('botao_blocos')
+        .insert({
+          lobby_id: lobby.id,
           jogador1_session: sessionId,
           jogador1_nome: nome,
           jogador1_time: timeId,
@@ -67,49 +185,24 @@ export function useBotaoOnline() {
 
       if (error) throw error;
       
-      setSala(data);
-      
-      // Inscrever em realtime para esta sala
-      inscreverSala(data.id);
+      setBlocoAtual(data);
+      inscreverBloco(data.id);
     } catch (err) {
-      setError('Erro ao criar sala');
+      setError('Erro ao criar bloco');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [lobby, sessionId]);
 
-  // Listar salas disponíveis
-  const listarSalas = useCallback(async () => {
+  // Entrar em bloco existente
+  const entrarBloco = useCallback(async (blocoId: string, timeId: string, nome: string) => {
     setLoading(true);
     setError(null);
     
     try {
       const { data, error } = await supabase
-        .from('botao_salas')
-        .select('*')
-        .eq('status', 'aguardando')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      setSalasDisponiveis(data || []);
-    } catch (err) {
-      setError('Erro ao listar salas');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Entrar em sala existente (jogador 2)
-  const entrarSala = useCallback(async (salaId: string, timeId: string, nome: string) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const { data, error } = await supabase
-        .from('botao_salas')
+        .from('botao_blocos')
         .update({
           jogador2_session: sessionId,
           jogador2_nome: nome,
@@ -118,43 +211,65 @@ export function useBotaoOnline() {
           turno: 'jogador1',
           timestamp_inicio_turno: new Date().toISOString()
         })
-        .eq('id', salaId)
+        .eq('id', blocoId)
         .select()
         .single();
 
       if (error) throw error;
       
-      setSala(data);
-      
-      // Inscrever em realtime para esta sala
-      inscreverSala(salaId);
+      setBlocoAtual(data);
+      inscreverBloco(blocoId);
     } catch (err) {
-      setError('Erro ao entrar na sala');
+      setError('Erro ao entrar no bloco');
       console.error(err);
     } finally {
       setLoading(false);
     }
   }, [sessionId]);
 
-  // Inscrever em realtime para uma sala
-  const inscreverSala = useCallback((salaId: string) => {
-    // Limpar canal anterior se existir
+  // Inscrever em realtime para um lobby
+  const inscreverLobby = useCallback((lobbyId: string) => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
 
     const channel = supabase
-      .channel(`sala-${salaId}`)
+      .channel(`lobby-${lobbyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'botao_blocos',
+          filter: `lobby_id=eq.${lobbyId}`
+        },
+        () => {
+          carregarBlocos(lobbyId);
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+  }, [carregarBlocos]);
+
+  // Inscrever em realtime para um bloco
+  const inscreverBloco = useCallback((blocoId: string) => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`bloco-${blocoId}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'botao_salas',
-          filter: `id=eq.${salaId}`
+          table: 'botao_blocos',
+          filter: `id=eq.${blocoId}`
         },
         (payload) => {
-          setSala(payload.new as Sala);
+          setBlocoAtual(payload.new as Bloco);
         }
       )
       .subscribe();
@@ -162,76 +277,78 @@ export function useBotaoOnline() {
     channelRef.current = channel;
   }, []);
 
-  // Inscrever em realtime para lista de salas
-  const inscreverListaSalas = useCallback(() => {
+  // Inscrever em realtime para lista de lobbies
+  const inscreverListaLobbies = useCallback(() => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
 
     const channel = supabase
-      .channel('lista-salas')
+      .channel('lista-lobbies')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'botao_salas'
+          table: 'botao_lobbies'
         },
         () => {
-          listarSalas();
+          listarLobbies();
         }
       )
       .subscribe();
 
     channelRef.current = channel;
-  }, [listarSalas]);
+  }, [listarLobbies]);
 
   // Registrar jogada
   const registrarJogada = useCallback(async () => {
-    if (!sala) return;
+    if (!blocoAtual) return;
     
-    await supabase.rpc('registrar_jogada', {
-      p_sala_id: sala.id
+    await supabase.rpc('registrar_jogada_bloco', {
+      p_bloco_id: blocoAtual.id
     });
-  }, [sala]);
+  }, [blocoAtual]);
 
   // Registrar gol
   const registrarGol = useCallback(async (jogador: 'jogador1' | 'jogador2') => {
-    if (!sala) return;
+    if (!blocoAtual) return;
     
-    await supabase.rpc('registrar_gol_sala', {
-      p_sala_id: sala.id,
+    await supabase.rpc('registrar_gol_bloco', {
+      p_bloco_id: blocoAtual.id,
       p_jogador: jogador
     });
-  }, [sala]);
+  }, [blocoAtual]);
 
   // Forçar troca de turno por timeout
   const forcarTrocaTurno = useCallback(async () => {
-    if (!sala) return;
+    if (!blocoAtual) return;
     
-    await supabase.rpc('forcar_troca_turno', {
-      p_sala_id: sala.id
+    await supabase.rpc('forcar_troca_turno_bloco', {
+      p_bloco_id: blocoAtual.id
     });
-  }, [sala]);
+  }, [blocoAtual]);
 
-  // Finalizar sala
-  const finalizarSala = useCallback(async (vencedor: 'jogador1' | 'jogador2' | 'empate') => {
-    if (!sala) return;
+  // Finalizar bloco
+  const finalizarBloco = useCallback(async (vencedor: 'jogador1' | 'jogador2' | 'empate') => {
+    if (!blocoAtual) return;
     
-    await supabase.rpc('finalizar_sala', {
-      p_sala_id: sala.id,
+    await supabase.rpc('finalizar_bloco', {
+      p_bloco_id: blocoAtual.id,
       p_vencedor: vencedor
     });
-  }, [sala]);
+  }, [blocoAtual]);
 
-  // Sair da sala
-  const sairSala = useCallback(() => {
+  // Sair do lobby/bloco
+  const sairLobby = useCallback(() => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
-    setSala(null);
-    setSalasDisponiveis([]);
+    setLobby(null);
+    setBlocos([]);
+    setBlocoAtual(null);
+    setLobbiesDisponiveis([]);
   }, []);
 
   // Login
@@ -269,40 +386,44 @@ export function useBotaoOnline() {
   }, []);
 
   // Determinar se é meu turno
-  const meuTurno = sala ? (
-    (sala.jogador1_session === sessionId && sala.turno === 'jogador1') ||
-    (sala.jogador2_session === sessionId && sala.turno === 'jogador2')
+  const meuTurno = blocoAtual ? (
+    (blocoAtual.jogador1_session === sessionId && blocoAtual.turno === 'jogador1') ||
+    (blocoAtual.jogador2_session === sessionId && blocoAtual.turno === 'jogador2')
   ) : false;
 
   // Determinar meu time
-  const meuTime = sala ? (
-    sala.jogador1_session === sessionId ? sala.jogador1_time : sala.jogador2_time
+  const meuTime = blocoAtual ? (
+    blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador1_time : blocoAtual.jogador2_time
   ) : undefined;
 
   // Determinar meus gols
-  const meusGols = sala ? (
-    sala.jogador1_session === sessionId ? sala.jogador1_gols : sala.jogador2_gols
+  const meusGols = blocoAtual ? (
+    blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador1_gols : blocoAtual.jogador2_gols
   ) : 0;
 
   // Calcular tempo restante do turno
-  const tempoRestanteTurno = sala ? {
-    segundos: sala.tempo_maximo_turno - Math.floor((Date.now() - new Date(sala.timestamp_inicio_turno).getTime()) / 1000),
-    total: sala.tempo_maximo_turno
+  const tempoRestanteTurno = blocoAtual ? {
+    segundos: blocoAtual.tempo_maximo_turno - Math.floor((Date.now() - new Date(blocoAtual.timestamp_inicio_turno).getTime()) / 1000),
+    total: blocoAtual.tempo_maximo_turno
   } : null;
 
   return {
     sessionId,
-    sala,
-    salasDisponiveis,
-    criarSala,
-    listarSalas,
-    entrarSala,
-    inscreverListaSalas,
-    sairSala,
+    lobby,
+    lobbiesDisponiveis,
+    blocos,
+    blocoAtual,
+    criarLobby,
+    listarLobbies,
+    entrarLobby,
+    criarBloco,
+    entrarBloco,
+    inscreverListaLobbies,
+    sairLobby,
     registrarJogada,
     registrarGol,
     forcarTrocaTurno,
-    finalizarSala,
+    finalizarBloco,
     meuTurno,
     meuTime,
     meusGols,
