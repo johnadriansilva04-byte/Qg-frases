@@ -154,7 +154,9 @@ export function generateMoves(s: GameState): Move[] {
     if (from !== null) next[from] = 0;
     next[to] = player;
     if (millsFormedAt(next, to, player).length > 0) {
-      // Quando forma trilha, captura é obrigatória
+      // Quando forma trilha, inclui movimento sem captura (sistema de duas etapas)
+      moves.push({ from, to, remove: null });
+      // Também inclui movimentos com cada captura possível
       for (const target of removableTargets(next, foe)) {
         moves.push({ from, to, remove: target });
       }
@@ -220,10 +222,12 @@ export function validateMove(s: GameState, move: Move, actor: Player): Validatio
   const formed = millsFormedAt(next, move.to, actor).length > 0;
 
   if (formed) {
-    // Se formou moinho, captura é obrigatória
-    if (move.remove === null) return { ok: false, error: "Moinho formado: escolha uma captura." };
-    const targets = removableTargets(next, opponent(actor));
-    if (!targets.includes(move.remove)) return { ok: false, error: "Captura não permitida." };
+    // Se formou moinho, captura é opcional no movimento (sistema de duas etapas)
+    // Só valida a captura se foi fornecida
+    if (move.remove !== null) {
+      const targets = removableTargets(next, opponent(actor));
+      if (!targets.includes(move.remove)) return { ok: false, error: "Captura não permitida." };
+    }
   } else if (move.remove !== null) {
     return { ok: false, error: "Nenhum moinho formado: captura inválida." };
   }
