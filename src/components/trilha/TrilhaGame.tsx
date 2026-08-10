@@ -340,7 +340,7 @@ function TrilhaGameBoard({
       if (captureTargets.has(node)) {
         // Toca som de captura
         playCaptureSound();
-        // Usa o movimento pendente armazenado no estado do hook
+        // Usa o movimento pendente do lastMove
         const from = game.lastMove?.from || null;
         const to = game.lastMove?.to || node;
         game.commit({ from, to, remove: node });
