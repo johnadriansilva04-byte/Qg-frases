@@ -1,131 +1,120 @@
-import { useState, useEffect, useCallback } from "react";
-import type { Difficulty } from "@/lib/trilha/ai";
+import { useState, useCallback } from "react";
 
-export interface ChampionshipMatch {
-  id: string;
-  opponent: string;
-  difficulty: Difficulty;
-  completed: boolean;
-  result: "victory" | "defeat" | "pending";
-  score: number;
+export interface Phase {
+  id: number;
+  name: string;
+  requiredWins: number;
+  difficulty: "recruta" | "sargento" | "general";
 }
 
-export interface ChampionshipData {
-  matches: ChampionshipMatch[];
-  totalScore: number;
-  completed: number;
-  total: number;
-  started: boolean;
-  startedAt: string | null;
-}
-
-const CHAMPIONSHIP_KEY = "trilha_championship";
-const MATCHES_CONFIG: { opponent: string; difficulty: Difficulty; score: number }[] = [
-  { opponent: "Recruta Alemão", difficulty: "recruta", score: 50 },
-  { opponent: "Recruta Italiano", difficulty: "recruta", score: 50 },
-  { opponent: "Sargento Japonês", difficulty: "sargento", score: 100 },
-  { opponent: "Sargento Alemão", difficulty: "sargento", score: 100 },
-  { opponent: "General Italiano", difficulty: "general", score: 200 },
-  { opponent: "General Alemão", difficulty: "general", score: 250 },
-  { opponent: "Marechal Supremo", difficulty: "general", score: 300 },
+const PHASES: Phase[] = [
+  { id: 1, name: "Fase 1: Básico", requiredWins: 7, difficulty: "recruta" },
+  { id: 2, name: "Fase 2: Intermediário", requiredWins: 10, difficulty: "sargento" },
+  { id: 3, name: "Fase 3: Avançado", requiredWins: 15, difficulty: "general" },
 ];
 
-export function useTrilhaChampionship() {
-  const [championship, setChampionship] = useState<ChampionshipData>(() => {
-    const saved = localStorage.getItem(CHAMPIONSHIP_KEY);
+export interface PhaseProgress {
+  currentPhase: number;
+  consecutiveWins: number;
+  totalWins: number;
+  completedPhases: number[];
+  started: boolean;
+}
+
+const PHASE_KEY = "trilha_phases";
+
+export function useTrilhaPhases() {
+  const [progress, setProgress] = useState<PhaseProgress>(() => {
+    const saved = localStorage.getItem(PHASE_KEY);
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch {
-        return getInitialChampionship();
+        return getInitialProgress();
       }
     }
-    return getInitialChampionship();
+    return getInitialProgress();
   });
 
-  function getInitialChampionship(): ChampionshipData {
-    const matches: ChampionshipMatch[] = MATCHES_CONFIG.map((config, index) => ({
-      id: `match-${index}`,
-      opponent: config.opponent,
-      difficulty: config.difficulty,
-      completed: false,
-      result: "pending",
-      score: config.score,
-    }));
-
+  function getInitialProgress(): PhaseProgress {
     return {
-      matches,
-      totalScore: 0,
-      completed: 0,
-      total: matches.length,
+      currentPhase: 1,
+      consecutiveWins: 0,
+      totalWins: 0,
+      completedPhases: [],
       started: false,
-      startedAt: null,
     };
   }
 
-  const saveChampionship = useCallback((data: ChampionshipData) => {
-    localStorage.setItem(CHAMPIONSHIP_KEY, JSON.stringify(data));
-    setChampionship(data);
+  const saveProgress = useCallback((data: PhaseProgress) => {
+    localStorage.setItem(PHASE_KEY, JSON.stringify(data));
+    setProgress(data);
   }, []);
 
-  const startChampionship = useCallback(() => {
-    const data = getInitialChampionship();
+  const startPhases = useCallback(() => {
+    const data = getInitialProgress();
     data.started = true;
-    data.startedAt = new Date().toISOString();
-    saveChampionship(data);
-  }, [saveChampionship]);
+    saveProgress(data);
+  }, [saveProgress]);
 
-  const getNextMatch = useCallback((): ChampionshipMatch | null => {
-    const nextMatch = championship.matches.find((m) => !m.completed);
-    return nextMatch || null;
-  }, [championship.matches]);
+  const recordWin = useCallback(() => {
+    const currentPhaseConfig = PHASES.find((p) => p.id === progress.currentPhase);
+    if (!currentPhaseConfig) return;
 
-  const completeMatch = useCallback(
-    (matchId: string, result: "victory" | "defeat") => {
-      const updatedMatches = championship.matches.map((match) => {
-        if (match.id === matchId) {
-          return {
-            ...match,
-            completed: true,
-            result,
-          };
-        }
-        return match;
-      });
+    let newConsecutiveWins = progress.consecutiveWins + 1;
+    let newCurrentPhase = progress.currentPhase;
+    let newCompletedPhases = [...progress.completedPhases];
 
-      const completed = updatedMatches.filter((m) => m.completed).length;
-      const totalScore = updatedMatches.reduce((sum, match) => {
-        if (match.completed && match.result === "victory") {
-          return sum + match.score;
-        }
-        return sum;
-      }, 0);
+    // Verifica se completou a fase
+    if (newConsecutiveWins >= currentPhaseConfig.requiredWins) {
+      newCompletedPhases.push(progress.currentPhase);
+      
+      // Avança para próxima fase se existir
+      const nextPhase = PHASES.find((p) => p.id === progress.currentPhase + 1);
+      if (nextPhase) {
+        newCurrentPhase = nextPhase.id;
+        newConsecutiveWins = 0;
+      }
+    }
 
-      const updatedData: ChampionshipData = {
-        ...championship,
-        matches: updatedMatches,
-        totalScore,
-        completed,
-      };
+    const updatedData: PhaseProgress = {
+      ...progress,
+      currentPhase: newCurrentPhase,
+      consecutiveWins: newConsecutiveWins,
+      totalWins: progress.totalWins + 1,
+      completedPhases: newCompletedPhases,
+    };
 
-      saveChampionship(updatedData);
-    },
-    [championship, saveChampionship]
-  );
+    saveProgress(updatedData);
+  }, [progress, saveProgress]);
 
-  const resetChampionship = useCallback(() => {
-    localStorage.removeItem(CHAMPIONSHIP_KEY);
-    setChampionship(getInitialChampionship());
+  const recordLoss = useCallback(() => {
+    const updatedData: PhaseProgress = {
+      ...progress,
+      consecutiveWins: 0,
+    };
+    saveProgress(updatedData);
+  }, [progress, saveProgress]);
+
+  const resetPhases = useCallback(() => {
+    localStorage.removeItem(PHASE_KEY);
+    setProgress(getInitialProgress());
   }, []);
 
-  const isChampion = championship.completed === championship.total && championship.totalScore > 0;
+  const getCurrentPhaseConfig = (): Phase | null => {
+    return PHASES.find((p) => p.id === progress.currentPhase) || null;
+  };
+
+  const isAllPhasesComplete = progress.completedPhases.length === PHASES.length;
 
   return {
-    championship,
-    startChampionship,
-    getNextMatch,
-    completeMatch,
-    resetChampionship,
-    isChampion,
+    progress,
+    phases: PHASES,
+    startPhases,
+    recordWin,
+    recordLoss,
+    resetPhases,
+    getCurrentPhaseConfig,
+    isAllPhasesComplete,
   };
 }
