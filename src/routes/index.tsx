@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CATEGORIAS, buscarFrases, fraseAleatoria, totalDeFrases } from "@/data/frases";
 import { AdSlot, AdVideoSlot } from "@/components/AdSlot";
 import { AnuncioPessoal } from "@/components/AnuncioPessoal";
+import { CorretorTexto } from "@/components/CorretorTexto";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +32,7 @@ function Index() {
   const [frase, setFrase] = useState("Carregando frase...");
   const [copiado, setCopiado] = useState(false);
   const [mostrarVideo, setMostrarVideo] = useState(false);
+  const [mostrarCorretor, setMostrarCorretor] = useState(false);
 
   const total = useMemo(() => totalDeFrases(), []);
 
@@ -63,6 +65,10 @@ function Index() {
     } catch {
       setCopiado(false);
     }
+  };
+
+  const handleTextoCorrigido = (textoCorrigido: string) => {
+    setFrase(textoCorrigido);
   };
 
   return (
@@ -143,6 +149,12 @@ function Index() {
           >
             📋 Copiar Frase
           </button>
+          <button
+            onClick={() => setMostrarCorretor(true)}
+            className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/70 px-6 py-3.5 text-sm font-semibold text-foreground transition hover:bg-secondary"
+          >
+            ✏️ Corrigir Texto
+          </button>
         </div>
 
         <div className="h-6 text-center">
@@ -182,6 +194,14 @@ function Index() {
           </Link>
         </div>
       </footer>
+
+      {mostrarCorretor && (
+        <CorretorTexto
+          texto={frase}
+          onTextoCorrigido={handleTextoCorrigido}
+          onClose={() => setMostrarCorretor(false)}
+        />
+      )}
     </div>
   );
 }
