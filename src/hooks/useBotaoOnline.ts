@@ -71,7 +71,7 @@ export function useBotaoOnline() {
       setFilaId(data.id);
       setNaFila(true);
       
-      // Iniciar polling para matchmaking
+      // Iniciar polling para verificar se foi matchado
       iniciarPolling();
     } catch (err) {
       setError('Erro ao entrar na fila');
