@@ -19,6 +19,13 @@ export function Sidebar() {
           ✏️ Corretor de Texto
         </Link>
         <Link
+          to="/narrador"
+          className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10 transition-colors"
+          activeProps={{ className: "bg-primary/10 text-primary font-semibold" }}
+        >
+          📖 Narrador de Histórias
+        </Link>
+        <Link
           to="/biblioteca"
           className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-foreground hover:bg-primary/10 transition-colors"
           activeProps={{ className: "bg-primary/10 text-primary font-semibold" }}
