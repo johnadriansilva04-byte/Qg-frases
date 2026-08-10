@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, Trophy, Target, BookOpen, X } from "lucide-react";
+import { ArrowLeft, Trophy, Target, BookOpen, X, Award } from "lucide-react";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
@@ -21,6 +21,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
     return !seen;
   });
   const [showRules, setShowRules] = useState(false);
+  const [showTrophies, setShowTrophies] = useState(false);
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
 
@@ -52,6 +53,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
     <>
       {showTutorial && <TutorialModal onStart={handleStartGame} onShowRules={handleShowRules} />}
       {showRules && <RulesModal onClose={handleCloseRules} />}
+      {showTrophies && <TrophiesModal onClose={() => setShowTrophies(false)} phases={phases} />}
       <TrilhaGameBoard
         key={`${difficulty}-${seed}-${phases.progress.currentPhase}`}
         difficulty={difficulty}
@@ -59,6 +61,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
         onBack={onBack}
         phases={phases}
         currentPhaseConfig={currentPhaseConfig}
+        onShowTrophies={() => setShowTrophies(true)}
       />
     </>
   );
@@ -198,18 +201,90 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function TrophiesModal({ onClose, phases }: { onClose: () => void; phases: ReturnType<typeof useTrilhaPhases> }) {
+  const nextTrophy = phases.getNextTrophy();
+  const progress = phases.getProgressToNextTrophy();
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Award className="h-6 w-6 text-yellow-500" />
+            Sala de Troféus
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="mb-6 p-4 bg-muted rounded-lg">
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-medium">Próximo Troféu</span>
+            <span className="text-sm text-muted-foreground">
+              {nextTrophy ? nextTrophy.name : "Todos conquistados!"}
+            </span>
+          </div>
+          <div className="w-full bg-secondary rounded-full h-3">
+            <div 
+              className="bg-primary h-3 rounded-full transition-all duration-500" 
+              style={{ width: `${progress.percentage}%` }}
+            />
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            {nextTrophy ? `${progress.current} / ${progress.required}` : "Parabéns!"}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {phases.trophies.map((trophy) => (
+            <div
+              key={trophy.id}
+              className={`p-4 rounded-lg border text-center ${
+                trophy.achieved
+                  ? "bg-yellow-500/10 border-yellow-500/30"
+                  : "bg-muted/50 border-muted opacity-50"
+              }`}
+            >
+              <div className={`text-4xl mb-2 ${trophy.achieved ? "" : "grayscale"}`}>
+                {trophy.icon}
+              </div>
+              <h3 className={`font-semibold ${trophy.color}`}>{trophy.name}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{trophy.description}</p>
+              {trophy.achieved && (
+                <div className="mt-2 text-xs font-medium text-green-500">✓ Conquistado</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Total de vitórias: <span className="font-bold text-foreground">{phases.progress.totalWins}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TrilhaGameBoard({
   difficulty,
   onReset,
   onBack,
   phases,
   currentPhaseConfig,
+  onShowTrophies,
 }: {
   difficulty: Difficulty;
   onReset: () => void;
   onBack?: () => void;
   phases: ReturnType<typeof useTrilhaPhases>;
   currentPhaseConfig: ReturnType<typeof useTrilhaPhases>["getCurrentPhaseConfig"] | null;
+  onShowTrophies: () => void;
 }) {
   const game = useLocalGame(difficulty, 1);
   
@@ -355,6 +430,13 @@ function TrilhaGameBoard({
             <Trophy className="h-4 w-4" />
             {phases.progress.consecutiveWins} / {currentPhaseConfig?.requiredWins || 7}
           </div>
+          <button
+            onClick={onShowTrophies}
+            className="flex items-center gap-2 bg-secondary/70 text-foreground hover:bg-secondary px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            <Award className="h-4 w-4" />
+            <span className="hidden sm:inline">Troféus</span>
+          </button>
           {onBack ? (
             <button
               onClick={onBack}
