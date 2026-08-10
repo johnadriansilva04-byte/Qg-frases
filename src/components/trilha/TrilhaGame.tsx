@@ -4,7 +4,7 @@ import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
-import { legalDestinations, legalPlacements, removableTargets, millsFormedAt, type Player } from "@/lib/trilha/engine";
+import { legalDestinations, legalPlacements, removableTargets, canFly, generateMoves, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 
 const ORDER: Difficulty[] = ["recruta", "sargento", "general"];
@@ -73,31 +73,15 @@ function TrilhaGameBoard({
   }, [game.state, selected]);
 
   const captureTargets = useMemo(() => {
-    if (game.state.phase === "over") return new Set<number>();
-    
-    // Se o jogador (1) acabou de fazer um movimento e o turno ainda é dele (esperando captura)
-    // Verifica se o último movimento formou moinho
-    if (game.state.turn === 1 && game.lastMove && game.lastMove.remove === null) {
-      const { from, to } = game.lastMove;
-      const testBoard = [...game.state.board];
-      if (from !== null) testBoard[from] = 0;
-      testBoard[to] = 1;
-      
-      const formed = millsFormedAt(testBoard, to, 1);
-      if (formed.length > 0) {
-        return new Set(removableTargets(game.state.board, 2));
-      }
-    }
-    
     return new Set<number>();
-  }, [game.state, game.lastMove]);
+  }, []);
 
-  const awaitingCapture = captureTargets.size > 0 && game.state.turn === 1;
+  const awaitingCapture = captureTargets.size > 0;
 
   const handleNodeClick = (node: number) => {
     if (game.thinking || game.state.phase === "over") return;
     
-    // Se está esperando captura (jogador formou moinho)
+    // Se está esperando captura
     if (awaitingCapture) {
       if (captureTargets.has(node)) {
         const lastMove = game.lastMove;
@@ -157,6 +141,8 @@ function TrilhaGameBoard({
     if (game.thinking) return "Rádio em silêncio... o estado-maior inimigo calcula a resposta.";
     if (s.turn !== 1) return "Aguardando o inimigo.";
     if (s.phase === "placing") return `Desdobre um pracinha. Reserva: ${s.hand[1]}.`;
+    const flying = canFly(s, 1);
+    if (flying) return "Esquadrão em voo: salte para qualquer interseção vazia.";
     if (selected === null)
       return "Selecione um pracinha para manobrar.";
     return "Escolha a interseção adjacente de destino.";
