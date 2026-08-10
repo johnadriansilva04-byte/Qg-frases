@@ -4,7 +4,7 @@ import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
-import { legalDestinations, legalPlacements, removableTargets, type Player } from "@/lib/trilha/engine";
+import { legalDestinations, legalPlacements, removableTargets, millsFormedAt, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 
 const ORDER: Difficulty[] = ["recruta", "sargento", "general"];
@@ -74,20 +74,30 @@ function TrilhaGameBoard({
 
   const captureTargets = useMemo(() => {
     if (game.state.phase === "over") return new Set<number>();
-    const lastMove = game.lastMove;
-    if (!lastMove || lastMove.remove !== null) return new Set<number>();
     
-    // Verifica se o último movimento formou um moinho
-    const actor = game.state.turn === 1 ? 2 : 1; // O oponente do turno atual fez o movimento
-    const foe = actor;
-    return new Set(removableTargets(game.state.board, foe));
+    // Se o jogador (1) acabou de fazer um movimento e o turno ainda é dele (esperando captura)
+    // Verifica se o último movimento formou moinho
+    if (game.state.turn === 1 && game.lastMove && game.lastMove.remove === null) {
+      const { from, to } = game.lastMove;
+      const testBoard = [...game.state.board];
+      if (from !== null) testBoard[from] = 0;
+      testBoard[to] = 1;
+      
+      const formed = millsFormedAt(testBoard, to, 1);
+      if (formed.length > 0) {
+        return new Set(removableTargets(game.state.board, 2));
+      }
+    }
+    
+    return new Set<number>();
   }, [game.state, game.lastMove]);
 
-  const awaitingCapture = captureTargets.size > 0;
+  const awaitingCapture = captureTargets.size > 0 && game.state.turn === 1;
 
   const handleNodeClick = (node: number) => {
     if (game.thinking || game.state.phase === "over") return;
     
+    // Se está esperando captura (jogador formou moinho)
     if (awaitingCapture) {
       if (captureTargets.has(node)) {
         const lastMove = game.lastMove;
@@ -98,6 +108,7 @@ function TrilhaGameBoard({
       return;
     }
 
+    // Fase de colocação de peças
     if (game.state.phase === "placing") {
       if (targets.has(node)) {
         game.commit({ from: null, to: node, remove: null });
@@ -105,18 +116,24 @@ function TrilhaGameBoard({
       return;
     }
 
+    // Fase de movimentação - apenas turno do jogador
     if (game.state.turn === 1) {
       if (selected === null) {
+        // Selecionar peça para mover
         if (game.state.board[node] === 1) {
           setSelected(node);
         }
       } else {
+        // Já tem peça selecionada
         if (node === selected) {
+          // Deselecionar
           setSelected(null);
         } else if (targets.has(node)) {
+          // Mover para destino válido
           game.commit({ from: selected, to: node, remove: null });
           setSelected(null);
         } else if (game.state.board[node] === 1) {
+          // Selecionar outra peça própria
           setSelected(node);
         }
       }
