@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2 } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react";
 import { AdSlot } from "@/components/AdSlot";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
+import { BotaoGame } from "@/components/botao/BotaoGame";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -24,10 +25,11 @@ export const Route = createFileRoute("/cidadela")({
   component: Cidadela,
 });
 
-type Game = "trilha" | "dado" | "forca" | "velha" | "snake" | null;
+type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | null;
 
 const GAMES = [
   { id: "trilha" as Game, label: "Trilha", description: "Jogo de estratégia tática", icon: Target, status: "disponível" },
+  { id: "botao" as Game, label: "Futebol de Botão", description: "Campeonato com física realista", icon: Trophy, status: "disponível" },
   { id: "dado" as Game, label: "Dado Virtual", description: "Role o dado da sorte", icon: Dice2, status: "em breve" },
   { id: "forca" as Game, label: "Jogo da Forca", description: "Adivinhe a palavra secreta", icon: Skull, status: "em breve" },
   { id: "velha" as Game, label: "Jogo da Velha", description: "Clássico de estratégia", icon: CircleDot, status: "em breve" },
@@ -39,6 +41,10 @@ function Cidadela() {
 
   if (activeGame === "trilha") {
     return <TrilhaGame onBack={() => setActiveGame(null)} />;
+  }
+
+  if (activeGame === "botao") {
+    return <BotaoGame onBack={() => setActiveGame(null)} />;
   }
 
   return (
