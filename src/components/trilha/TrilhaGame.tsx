@@ -342,7 +342,7 @@ function TrilhaGameBoard({
         playCaptureSound();
         // Usa o movimento pendente do lastMove
         const from = game.lastMove?.from || null;
-        const to = game.lastMove?.to || node;
+        const to = game.lastMove?.to ?? 0; // Usa 0 como fallback se for undefined
         game.commit({ from, to, remove: node });
       }
       return;
