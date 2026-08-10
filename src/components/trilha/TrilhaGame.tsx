@@ -82,7 +82,9 @@ function TrilhaGameBoard({
     // Se está esperando captura
     if (game.pendingCapture) {
       if (captureTargets.has(node)) {
-        game.commit({ from: null, to: null, remove: node });
+        if (game.lastMove) {
+          game.commit({ from: game.lastMove.from, to: game.lastMove.to, remove: node });
+        }
       }
       return;
     }
