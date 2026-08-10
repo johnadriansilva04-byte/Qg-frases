@@ -1,28 +1,26 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { RealtimeChannel } from "@supabase/supabase-js";
 
-interface FilaEntry {
+interface Sala {
   id: string;
-  session_id: string;
-  time_escolhido: string;
-  status: string;
-  criado_em: string;
-}
-
-interface Partida {
-  id: string;
+  created_at: string;
   jogador1_session: string;
+  jogador1_nome: string;
   jogador1_time: string;
-  jogador1_tempo_restante: number;
-  jogador1_gols: number;
-  jogador2_session: string;
-  jogador2_time: string;
-  jogador2_tempo_restante: number;
-  jogador2_gols: number;
-  turno: string;
-  rodada: number;
+  jogador2_session?: string;
+  jogador2_nome?: string;
+  jogador2_time?: string;
   status: string;
+  turno: string;
+  jogadas_restantes: number;
+  timestamp_inicio_turno: string;
+  tempo_maximo_turno: number;
+  jogador1_gols: number;
+  jogador2_gols: number;
+  rodada: number;
   vencedor?: string;
+  finalizada_em?: string;
 }
 
 interface Usuario {
@@ -35,8 +33,6 @@ interface Usuario {
 }
 
 export function useBotaoOnline() {
-  const [naFila, setNaFila] = useState(false);
-  const [filaId, setFilaId] = useState<string | null>(null);
   const [sessionId] = useState(() => {
     const existingSession = localStorage.getItem('botao_session_id');
     if (existingSession) return existingSession;
@@ -44,176 +40,217 @@ export function useBotaoOnline() {
     localStorage.setItem('botao_session_id', newSession);
     return newSession;
   });
-  const [partida, setPartida] = useState<Partida | null>(null);
+  
+  const [sala, setSala] = useState<Sala | null>(null);
+  const [salasDisponiveis, setSalasDisponiveis] = useState<Sala[]>([]);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Entrar na fila
-  const entrarFila = useCallback(async (timeId: string) => {
+  // Criar sala (jogador 1)
+  const criarSala = useCallback(async (timeId: string, nome: string) => {
     setLoading(true);
     setError(null);
     
     try {
       const { data, error } = await supabase
-        .from('botao_fila')
+        .from('botao_salas')
         .insert({
-          session_id: sessionId,
-          time_escolhido: timeId,
-          status: 'esperando'
+          jogador1_session: sessionId,
+          jogador1_nome: nome,
+          jogador1_time: timeId,
+          status: 'aguardando'
         })
         .select()
         .single();
 
       if (error) throw error;
       
-      setFilaId(data.id);
-      setNaFila(true);
+      setSala(data);
       
-      // Iniciar polling para verificar se foi matchado
-      iniciarPolling();
+      // Inscrever em realtime para esta sala
+      inscreverSala(data.id);
     } catch (err) {
-      setError('Erro ao entrar na fila');
+      setError('Erro ao criar sala');
       console.error(err);
     } finally {
       setLoading(false);
     }
   }, [sessionId]);
 
-  // Sair da fila
-  const sairFila = useCallback(async () => {
-    if (filaId) {
-      await supabase
-        .from('botao_fila')
-        .update({ status: 'cancelado' })
-        .eq('id', filaId);
-    }
+  // Listar salas disponíveis
+  const listarSalas = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     
-    setNaFila(false);
-    setFilaId(null);
-    pararPolling();
-  }, [filaId]);
+    try {
+      const { data, error } = await supabase
+        .from('botao_salas')
+        .select('*')
+        .eq('status', 'aguardando')
+        .order('created_at', { ascending: false });
 
-  // Polling para verificar matchmaking
-  const iniciarPolling = useCallback(() => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    
-    pollingRef.current = setInterval(async () => {
-      // Verificar se foi matchado
-      const { data: filaData } = await supabase
-        .from('botao_fila')
-        .select('status')
-        .eq('id', filaId)
-        .single();
-
-      if (filaData?.status === 'em_partida') {
-        // Buscar partida
-        const { data: partidaData } = await supabase
-          .from('botao_partidas')
-          .select('*')
-          .or(`jogador1_session.eq.${sessionId},jogador2_session.eq.${sessionId}`)
-          .eq('status', 'em_andamento')
-          .order('criada_em', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (partidaData) {
-          setPartida(partidaData as Partida);
-          setNaFila(false);
-          pararPolling();
-          iniciarPollingPartida();
-        }
-      }
-    }, 2000);
-  }, [filaId, sessionId]);
-
-  const pararPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
+      if (error) throw error;
+      
+      setSalasDisponiveis(data || []);
+    } catch (err) {
+      setError('Erro ao listar salas');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Polling para atualização da partida
-  const iniciarPollingPartida = useCallback(() => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
+  // Entrar em sala existente (jogador 2)
+  const entrarSala = useCallback(async (salaId: string, timeId: string, nome: string) => {
+    setLoading(true);
+    setError(null);
     
-    pollingRef.current = setInterval(async () => {
-      if (!partida) return;
-
-      const { data: partidaAtualizada } = await supabase
-        .from('botao_partidas')
-        .select('*')
-        .eq('id', partida.id)
+    try {
+      const { data, error } = await supabase
+        .from('botao_salas')
+        .update({
+          jogador2_session: sessionId,
+          jogador2_nome: nome,
+          jogador2_time: timeId,
+          status: 'em_jogo',
+          turno: 'jogador1',
+          timestamp_inicio_turno: new Date().toISOString()
+        })
+        .eq('id', salaId)
+        .select()
         .single();
 
-      if (partidaAtualizada) {
-        setPartida(partidaAtualizada as Partida);
-        
-        if (partidaAtualizada.status === 'finalizada') {
-          pararPolling();
+      if (error) throw error;
+      
+      setSala(data);
+      
+      // Inscrever em realtime para esta sala
+      inscreverSala(salaId);
+    } catch (err) {
+      setError('Erro ao entrar na sala');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId]);
+
+  // Inscrever em realtime para uma sala
+  const inscreverSala = useCallback((salaId: string) => {
+    // Limpar canal anterior se existir
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`sala-${salaId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'botao_salas',
+          filter: `id=eq.${salaId}`
+        },
+        (payload) => {
+          setSala(payload.new as Sala);
         }
-      }
-    }, 1000);
-  }, [partida]);
+      )
+      .subscribe();
 
-  // Atualizar tempo do jogador
-  const atualizarTempo = useCallback(async (tempoGasto: number) => {
-    if (!partida) return;
+    channelRef.current = channel;
+  }, []);
 
-    await supabase.rpc('atualizar_tempo_jogador', {
-      p_partida_id: partida.id,
-      p_session: sessionId,
-      p_tempo_gasto: tempoGasto
+  // Inscrever em realtime para lista de salas
+  const inscreverListaSalas = useCallback(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel('lista-salas')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'botao_salas'
+        },
+        () => {
+          listarSalas();
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+  }, [listarSalas]);
+
+  // Registrar jogada
+  const registrarJogada = useCallback(async () => {
+    if (!sala) return;
+    
+    await supabase.rpc('registrar_jogada', {
+      p_sala_id: sala.id
     });
-  }, [partida, sessionId]);
+  }, [sala]);
 
   // Registrar gol
-  const registrarGol = useCallback(async () => {
-    if (!partida) return;
-
-    await supabase.rpc('registrar_gol', {
-      p_partida_id: partida.id,
-      p_session: sessionId
+  const registrarGol = useCallback(async (jogador: 'jogador1' | 'jogador2') => {
+    if (!sala) return;
+    
+    await supabase.rpc('registrar_gol_sala', {
+      p_sala_id: sala.id,
+      p_jogador: jogador
     });
-  }, [partida, sessionId]);
+  }, [sala]);
 
-  // Finalizar partida
-  const finalizarPartida = useCallback(async (vencedor: 'jogador1' | 'jogador2') => {
-    if (!partida) return;
+  // Forçar troca de turno por timeout
+  const forcarTrocaTurno = useCallback(async () => {
+    if (!sala) return;
+    
+    await supabase.rpc('forcar_troca_turno', {
+      p_sala_id: sala.id
+    });
+  }, [sala]);
 
-    await supabase.rpc('finalizar_partida', {
-      p_partida_id: partida.id,
+  // Finalizar sala
+  const finalizarSala = useCallback(async (vencedor: 'jogador1' | 'jogador2' | 'empate') => {
+    if (!sala) return;
+    
+    await supabase.rpc('finalizar_sala', {
+      p_sala_id: sala.id,
       p_vencedor: vencedor
     });
-  }, [partida]);
+  }, [sala]);
 
-  // Login opcional
+  // Sair da sala
+  const sairSala = useCallback(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setSala(null);
+    setSalasDisponiveis([]);
+  }, []);
+
+  // Login
   const login = useCallback(async (email: string, nome?: string) => {
     setLoading(true);
     setError(null);
-
+    
     try {
-      // Verificar se usuário já existe
-      const { data: existingUser } = await supabase
+      const { data, error } = await supabase
         .from('botao_usuarios')
-        .select('*')
-        .eq('email', email)
+        .upsert({
+          email,
+          nome
+        })
+        .select()
         .single();
-
-      if (existingUser) {
-        setUsuario(existingUser as Usuario);
-      } else {
-        // Criar novo usuário
-        const { data: newUser } = await supabase
-          .from('botao_usuarios')
-          .insert({ email, nome })
-          .select()
-          .single();
-
-        setUsuario(newUser as Usuario);
-      }
+      
+      if (error) throw error;
+      setUsuario(data);
     } catch (err) {
       setError('Erro ao fazer login');
       console.error(err);
@@ -222,53 +259,54 @@ export function useBotaoOnline() {
     }
   }, []);
 
-  // Limpar polling ao desmontar
+  // Cleanup
   useEffect(() => {
     return () => {
-      pararPolling();
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
     };
-  }, [pararPolling]);
+  }, []);
 
-  // Verificar se é meu turno
-  const meuTurno = partida && (
-    (partida.turno === 'jogador1' && partida.jogador1_session === sessionId) ||
-    (partida.turno === 'jogador2' && partida.jogador2_session === sessionId)
-  );
+  // Determinar se é meu turno
+  const meuTurno = sala ? (
+    (sala.jogador1_session === sessionId && sala.turno === 'jogador1') ||
+    (sala.jogador2_session === sessionId && sala.turno === 'jogador2')
+  ) : false;
 
-  // Meu tempo restante
-  const meuTempoRestante = partida && (
-    partida.jogador1_session === sessionId ? partida.jogador1_tempo_restante :
-    partida.jogador2_session === sessionId ? partida.jogador2_tempo_restante :
-    0
-  );
+  // Determinar meu time
+  const meuTime = sala ? (
+    sala.jogador1_session === sessionId ? sala.jogador1_time : sala.jogador2_time
+  ) : undefined;
 
-  // Meus gols
-  const meusGols = partida && (
-    partida.jogador1_session === sessionId ? partida.jogador1_gols :
-    partida.jogador2_session === sessionId ? partida.jogador2_gols :
-    0
-  );
+  // Determinar meus gols
+  const meusGols = sala ? (
+    sala.jogador1_session === sessionId ? sala.jogador1_gols : sala.jogador2_gols
+  ) : 0;
 
-  // Meu time
-  const meuTime = partida && (
-    partida.jogador1_session === sessionId ? partida.jogador1_time :
-    partida.jogador2_session === sessionId ? partida.jogador2_time :
-    null
-  );
+  // Calcular tempo restante do turno
+  const tempoRestanteTurno = sala ? {
+    segundos: sala.tempo_maximo_turno - Math.floor((Date.now() - new Date(sala.timestamp_inicio_turno).getTime()) / 1000),
+    total: sala.tempo_maximo_turno
+  } : null;
 
   return {
     sessionId,
-    naFila,
-    entrarFila,
-    sairFila,
-    partida,
-    meuTurno,
-    meuTempoRestante,
-    meusGols,
-    meuTime,
-    atualizarTempo,
+    sala,
+    salasDisponiveis,
+    criarSala,
+    listarSalas,
+    entrarSala,
+    inscreverListaSalas,
+    sairSala,
+    registrarJogada,
     registrarGol,
-    finalizarPartida,
+    forcarTrocaTurno,
+    finalizarSala,
+    meuTurno,
+    meuTime,
+    meusGols,
+    tempoRestanteTurno,
     usuario,
     login,
     loading,
