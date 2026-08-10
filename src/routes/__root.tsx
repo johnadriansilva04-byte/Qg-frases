@@ -78,14 +78,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "QG Frases | Frases, Legendas e Status" },
+      { title: "QG Frases | Frases de Motivação, Status e Legendas" },
       {
         name: "description",
         content:
-          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique.",
+          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique. Milhões de frases prontas.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { property: "og:description", content: "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique." },
+      { property: "og:url", content: "https://pracinha.online" },
+      { property: "og:image", content: "https://pracinha.online/og-image.png" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { name: "twitter:description", content: "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique." },
     ],
     links: [
       {

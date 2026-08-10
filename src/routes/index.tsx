@@ -7,17 +7,19 @@ import { AnuncioPessoal } from "@/components/AnuncioPessoal";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "QG Frases | Gerador de Frases, Legendas e Status" },
+      { title: "QG Frases | Frases de Motivação, Status e Legendas" },
       {
         name: "description",
         content:
-          "Sorteie frases prontas para Reels, status, versículos bíblicos, cantadas, indiretas e motivação. Copie em um clique, de graça.",
+          "Sorteie frases prontas para Reels, status, versículos bíblicos, cantadas, indiretas e motivação. Copie em um clique, de graça. Milhões de frases prontas.",
       },
-      { property: "og:title", content: "QG Frases | Gerador de Frases" },
+      { property: "og:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
       {
         property: "og:description",
         content: "Milhões de frases para copiar: legendas, versículos, cantadas e motivação.",
       },
+      { property: "og:url", content: "https://pracinha.online" },
+      { property: "og:image", content: "https://pracinha.online/og-image.png" },
     ],
   }),
   component: Index,

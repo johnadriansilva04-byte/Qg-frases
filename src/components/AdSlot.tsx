@@ -9,7 +9,7 @@ export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
   const adSlot = rotulo === "Banner Topo" ? "9981926633" : rotulo === "Banner Rodapé" ? "7935061808" : rotulo;
 
   return (
-    <div className={`w-full ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md`}>
+    <div className={`w-full ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6`}>
       <ins
         className="adsbygoogle block"
         style={{ display: "block" }}
