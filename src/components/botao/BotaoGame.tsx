@@ -93,11 +93,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       t.groupFixtures
         .filter((x) => !x.played && x.stage === fx.stage)
         .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
-      if (t.groupFixtures.every((x) => x.played)) {
-        // rodadas restantes (caso o usuário já tenha acabado)
-        buildKnockout(t);
-        setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
+      
+      // simula todas as rodadas restantes (jogos que o usuário não participa)
+      while (!t.groupFixtures.every((x) => x.played)) {
+        const nextRound = t.groupFixtures.find((x) => !x.played)?.stage;
+        if (!nextRound) break;
+        t.groupFixtures
+          .filter((x) => !x.played && x.stage === nextRound)
+          .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
       }
+      
+      buildKnockout(t);
+      setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
     } else {
       const stage = t.knockout[t.knockout.length - 1]!;
       const fx = stage.fixtures.find((x) => x.id === current.id)!;
