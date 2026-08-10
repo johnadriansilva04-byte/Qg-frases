@@ -80,7 +80,7 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
         const partial = cloneState(cur);
         if (move.from !== null) partial.board[move.from] = 0;
         partial.board[move.to] = actor;
-        if (move.from === null) partial.hand[actor] = partial.hand[actor] - 1;
+        // Não subtrai da mão aqui - isso será feito quando o movimento for completado
         setPendingMove(move);
         setLastMove(move);
         return partial;
