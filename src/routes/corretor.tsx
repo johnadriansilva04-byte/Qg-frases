@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AdSlot } from "@/components/AdSlot";
 
 export const Route = createFileRoute("/corretor")({
@@ -24,6 +24,51 @@ export const Route = createFileRoute("/corretor")({
 
 function Corretor() {
   const [texto, setTexto] = useState("");
+  const [gravando, setGravando] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const iniciarGravacao = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert("Seu navegador não suporta reconhecimento de voz. Tente usar Chrome.");
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: any) => {
+      let textoTranscrito = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          textoTranscrito += event.results[i][0].transcript + ' ';
+        }
+      }
+      setTexto(prev => prev + textoTranscrito);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Erro no reconhecimento de voz:', event.error);
+      setGravando(false);
+    };
+
+    recognition.onend = () => {
+      setGravando(false);
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    setGravando(true);
+  };
+
+  const pararGravacao = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setGravando(false);
+    }
+  };
 
   const copiar = async () => {
     try {
@@ -37,6 +82,14 @@ function Corretor() {
   const limpar = () => {
     setTexto("");
   };
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
@@ -55,12 +108,29 @@ function Corretor() {
         </header>
 
         <div className="mb-6">
-          <textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            className="w-full min-h-[200px] rounded-2xl border border-border bg-background/50 p-4 text-foreground placeholder-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/40 resize-none"
-            placeholder="Cole ou digite seu texto aqui..."
-          />
+          <div className="relative">
+            <textarea
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              className="w-full min-h-[200px] rounded-2xl border border-border bg-background/50 p-4 text-foreground placeholder-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/40 resize-none"
+              placeholder="Cole ou digite seu texto aqui..."
+            />
+            <button
+              onClick={gravando ? pararGravacao : iniciarGravacao}
+              className={`absolute bottom-4 right-4 flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                gravando
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
+            >
+              {gravando ? "🔴 Parar" : "🎤 Falar"}
+            </button>
+          </div>
+          {gravando && (
+            <p className="mt-2 text-xs text-muted-foreground animate-pulse">
+              🎙️ Gravando... Fale agora
+            </p>
+          )}
         </div>
 
         <div className="mb-3 flex flex-col justify-center gap-3 sm:flex-row">
