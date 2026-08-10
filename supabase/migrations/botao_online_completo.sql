@@ -152,18 +152,22 @@ DECLARE
   formato TEXT;
   max_rodadas INTEGER;
 BEGIN
+  -- Decrementar jogadas
   UPDATE public.botao_blocos
   SET jogadas_restantes = jogadas_restantes - 1
   WHERE id = p_bloco_id
   RETURNING jogadas_restantes INTO jogadas;
   
+  -- Alternar turno
   PERFORM public.alternar_turno_bloco(p_bloco_id);
   
+  -- Buscar formato do lobby
   SELECT formato INTO formato
   FROM public.botao_lobbies l
   JOIN public.botao_blocos b ON b.lobby_id = l.id
   WHERE b.id = p_bloco_id;
   
+  -- Calcular máximo de rodadas baseado no formato
   max_rodadas = CASE 
     WHEN formato = 'melhor_de_3' THEN 3
     WHEN formato = 'melhor_de_6' THEN 6
@@ -171,6 +175,7 @@ BEGIN
     ELSE 3
   END;
   
+  -- Verificar se acabaram as jogadas ou se alguém venceu por rodadas
   IF jogadas <= 0 THEN
     UPDATE public.botao_blocos
     SET status = 'finalizado',
