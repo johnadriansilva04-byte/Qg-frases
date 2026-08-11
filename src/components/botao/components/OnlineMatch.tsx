@@ -18,6 +18,7 @@ const STORAGE_KEYS = {
   BLOCO_ID: 'botao_online_bloco_id',
   LOGGED_IN: 'botao_online_logged_in',
   TIME_PERSONALIZADO: 'botao_online_time_personalizado',
+  ABREVIACAO_TIME: 'botao_online_abreviacao_time',
   NUMERO_JOGADOR: 'botao_online_numero_jogador'
 };
 
@@ -55,6 +56,10 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     if (!isLoggedIn) return "login";
     return (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list";
   });
+  
+  // Estado local de loading para operações de login/cadastro
+  const [localLoading, setLocalLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const [nome, setNome] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.NOME) || "";
@@ -70,6 +75,9 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   });
   const [timePersonalizado, setTimePersonalizado] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.TIME_PERSONALIZADO) || "Meu Time";
+  });
+  const [abreviacaoTime, setAbreviacaoTime] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.ABREVIACAO_TIME) || "MTI";
   });
   const [numeroJogador, setNumeroJogador] = useState(() => {
     return parseInt(localStorage.getItem(STORAGE_KEYS.NUMERO_JOGADOR) || "10");
@@ -107,6 +115,10 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
   }, [timePersonalizado]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ABREVIACAO_TIME, abreviacaoTime);
+  }, [abreviacaoTime]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
@@ -193,50 +205,99 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, []);
 
   const handleLogin = useCallback(async () => {
+    console.log('=== INÍCIO HANDLE LOGIN ===');
+    console.log('Telefone:', telefone);
+    console.log('Loading atual:', localLoading);
+    
     if (!telefone) {
       alert('Por favor, digite seu telefone');
+      console.log('Telefone vazio, retornando');
       return;
     }
     
-    // Verificar se já existe usuário com este telefone
-    const { data: existingUser } = await supabase
-      .from('botao_usuarios')
-      .select('*')
-      .eq('telefone', telefone)
-      .single();
+    console.log('Setando loading para true');
+    setLocalLoading(true);
+    setLocalError(null);
     
-    if (existingUser) {
-      // Usuário já existe - fazer login direto
-      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
-      localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
-      localStorage.setItem(STORAGE_KEYS.NOME, existingUser.nome);
-      localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, existingUser.time_personalizado || 'Meu Time');
-      localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, (existingUser.numero_jogador || 10).toString());
-      localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']));
-      localStorage.setItem('botao_online_usuario_id', existingUser.id);
-      setNome(existingUser.nome);
-      setTelefone(telefone);
-      setTimePersonalizado(existingUser.time_personalizado || 'Meu Time');
-      setNumeroJogador(existingUser.numero_jogador || 10);
-      setCores(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']);
-      // Chama onBack para voltar ao menu do BotaoGame
-      if (onBack) onBack();
-    } else {
-      // Novo usuário - ir para tela de cadastro
-      setScreen('cadastro');
+    try {
+      console.log('Verificando telefone no banco:', telefone);
+      console.log('Supabase client:', supabase);
+      
+      // Verificar se já existe usuário com este telefone
+      const { data: existingUser, error: checkError } = await supabase
+        .from('botao_usuarios')
+        .select('*')
+        .eq('telefone', telefone)
+        .maybeSingle(); // maybeSingle retorna null se não encontrar
+      
+      console.log('Resultado da busca:', { existingUser, checkError });
+      
+      if (checkError) {
+        console.error('Erro ao buscar usuário:', checkError);
+        throw checkError;
+      }
+      
+      if (existingUser) {
+        // Usuário já existe - fazer login direto
+        console.log('Usuário encontrado:', existingUser);
+        setLocalError(`Bem-vindo de volta, ${existingUser.nome}! Carregando seus dados...`);
+        
+        localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
+        localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
+        localStorage.setItem(STORAGE_KEYS.NOME, existingUser.nome);
+        localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, existingUser.time_personalizado || 'Meu Time');
+        localStorage.setItem(STORAGE_KEYS.ABREVIACAO_TIME, existingUser.abreviacao_time || 'MTI');
+        localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, (existingUser.numero_jogador || 10).toString());
+        localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']));
+        localStorage.setItem('botao_online_usuario_id', existingUser.id);
+        setNome(existingUser.nome);
+        setTelefone(telefone);
+        setTimePersonalizado(existingUser.time_personalizado || 'Meu Time');
+        setAbreviacaoTime(existingUser.abreviacao_time || 'MTI');
+        setNumeroJogador(existingUser.numero_jogador || 10);
+        setCores(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']);
+        
+        console.log('Dados salvos no localStorage');
+        console.log('Chamando onBack em 1 segundo');
+        
+        // Chama onBack para voltar ao menu do BotaoGame após um breve delay
+        setTimeout(() => {
+          console.log('Executando onBack');
+          if (onBack) onBack();
+        }, 1000);
+      } else {
+        // Novo usuário - ir para tela de cadastro
+        console.log('Usuário não encontrado, indo para cadastro');
+        setLocalError('Este número não tem cadastro. Você será redirecionado para criar sua conta.');
+        setTimeout(() => {
+          console.log('Mudando para tela de cadastro');
+          setScreen('cadastro');
+          setLocalError(null);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Erro no login:', err);
+      setLocalError('Erro ao fazer login. Tente novamente.');
+    } finally {
+      console.log('Setando loading para false');
+      setLocalLoading(false);
     }
-  }, [telefone, nome, login]);
+    
+    console.log('=== FIM HANDLE LOGIN ===');
+  }, [telefone, onBack]);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
     localStorage.removeItem(STORAGE_KEYS.TELEFONE);
     localStorage.removeItem(STORAGE_KEYS.NOME);
     localStorage.removeItem(STORAGE_KEYS.TIME_PERSONALIZADO);
+    localStorage.removeItem(STORAGE_KEYS.ABREVIACAO_TIME);
     localStorage.removeItem(STORAGE_KEYS.NUMERO_JOGADOR);
     localStorage.removeItem(STORAGE_KEYS.CORES);
     setTelefone('');
     setNome('');
     setTimePersonalizado('Meu Time');
+    setAbreviacaoTime('MTI');
     setNumeroJogador(10);
     setCores(['#FF0000', '#00FF00', '#0000FF']);
     setScreen('login');
@@ -248,34 +309,50 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
       alert('Por favor, digite o nome do seu time');
       return;
     }
+    if (!abreviacaoTime || abreviacaoTime.length !== 3) {
+      alert('Por favor, digite a abreviação do seu time (3 letras)');
+      return;
+    }
     if (cores.length !== 3 || new Set(cores).size !== 3) {
       alert('Por favor, escolha 3 cores diferentes');
       return;
     }
-    // Usa o nome do time como nome do usuário
-    const nomeUsuario = timePersonalizado;
-    await login(telefone, nomeUsuario, timePersonalizado, numeroJogador, cores);
-    localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
-    localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
-    localStorage.setItem(STORAGE_KEYS.NOME, nomeUsuario);
-    localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
-    localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
-    localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(cores));
     
-    // Buscar usuário criado para salvar o ID
-    const { data: createdUser } = await supabase
-      .from('botao_usuarios')
-      .select('id')
-      .eq('telefone', telefone)
-      .single();
+    setLocalLoading(true);
+    setLocalError(null);
     
-    if (createdUser) {
-      localStorage.setItem('botao_online_usuario_id', createdUser.id);
+    try {
+      // Usa o nome do time como nome do usuário
+      const nomeUsuario = timePersonalizado;
+      await login(telefone, nomeUsuario, timePersonalizado, abreviacaoTime, numeroJogador, cores);
+      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
+      localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
+      localStorage.setItem(STORAGE_KEYS.NOME, nomeUsuario);
+      localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
+      localStorage.setItem(STORAGE_KEYS.ABREVIACAO_TIME, abreviacaoTime);
+      localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
+      localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(cores));
+      
+      // Buscar usuário criado para salvar o ID
+      const { data: createdUser } = await supabase
+        .from('botao_usuarios')
+        .select('id')
+        .eq('telefone', telefone)
+        .single();
+      
+      if (createdUser) {
+        localStorage.setItem('botao_online_usuario_id', createdUser.id);
+      }
+      
+      // Chama onBack para voltar ao menu do BotaoGame
+      if (onBack) onBack();
+    } catch (err) {
+      setLocalError('Erro ao criar conta. Tente novamente.');
+      console.error(err);
+    } finally {
+      setLocalLoading(false);
     }
-    
-    // Chama onBack para voltar ao menu do BotaoGame
-    if (onBack) onBack();
-  }, [telefone, timePersonalizado, numeroJogador, cores, login]);
+  }, [telefone, timePersonalizado, abreviacaoTime, numeroJogador, cores, login, onBack]);
 
   // Função para escolher cor que não conflita com o oponente
   const getCorDisponivel = useCallback((coresOponente?: string[]) => {
@@ -355,7 +432,13 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
           </p>
           <p className="text-sm text-muted-foreground">
             <Lock className="inline w-4 h-4 mr-1" />
-            Seu telefone é seu identificador único
+            Digite seu telefone para verificar se já tem cadastro
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            ✓ Se tiver cadastro: entra automaticamente com seu time
+          </p>
+          <p className="text-xs text-muted-foreground">
+            ✓ Se não tiver: abre tela para criar seu time personalizado
           </p>
         </div>
 
@@ -372,15 +455,15 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
 
         <button
           onClick={handleLogin}
-          disabled={loading || !telefone}
+          disabled={localLoading || !telefone}
           className="btn-primary w-full"
         >
-          {loading ? 'Entrando...' : 'Entrar'}
+          {localLoading ? 'Verificando...' : 'Verificar Cadastro'}
         </button>
 
-        {error && (
-          <div className="mt-4 p-3 bg-destructive/10 rounded-lg text-destructive">
-            {error}
+        {localError && (
+          <div className={`mt-4 p-3 rounded-lg ${localError.includes('Bem-vindo') || localError.includes('redirecionado') ? 'bg-green-500/10 text-green-500' : 'bg-destructive/10 text-destructive'}`}>
+            {localError}
           </div>
         )}
       </div>
@@ -417,6 +500,24 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
             placeholder="Ex: Flamengo, Corinthians, Meu Time..."
             className="w-full px-3 py-2 rounded border bg-background"
           />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Abreviação (3 letras)</label>
+          <input
+            type="text"
+            maxLength={3}
+            value={abreviacaoTime}
+            onChange={(e) => {
+              const value = e.target.value.toUpperCase();
+              setAbreviacaoTime(value);
+            }}
+            placeholder="Ex: FLA, COR, MTI"
+            className="w-full px-3 py-2 rounded border bg-background"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Use 3 letras para identificar seu time no placar
+          </p>
         </div>
 
         <div className="mb-4">
@@ -457,15 +558,15 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
 
         <button
           onClick={handleCadastro}
-          disabled={loading || !nome || !timePersonalizado || cores.length !== 3 || new Set(cores).size !== 3}
+          disabled={localLoading || !nome || !timePersonalizado || cores.length !== 3 || new Set(cores).size !== 3}
           className="btn-primary w-full"
         >
-          {loading ? 'Criando...' : 'Cadastrar'}
+          {localLoading ? 'Criando...' : 'Cadastrar'}
         </button>
 
-        {error && (
+        {localError && (
           <div className="mt-4 p-3 bg-destructive/10 rounded-lg text-destructive">
-            {error}
+            {localError}
           </div>
         )}
       </div>

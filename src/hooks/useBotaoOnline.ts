@@ -40,6 +40,9 @@ interface Usuario {
   telefone: string;
   nome: string;
   cores?: string[];
+  time_personalizado?: string;
+  abreviacao_time?: string;
+  numero_jogador?: number;
   pontos_soberania: number;
   partidas_jogadas: number;
   partidas_vencidas: number;
@@ -399,7 +402,7 @@ export function useBotaoOnline() {
   }, []);
 
   // Login
-  const login = useCallback(async (telefone: string, nome: string, time_personalizado?: string, numero_jogador?: number, cores?: string[]) => {
+  const login = useCallback(async (telefone: string, nome: string, time_personalizado?: string, abreviacao_time?: string, numero_jogador?: number, cores?: string[]) => {
     setLoading(true);
     setError(null);
 
@@ -410,6 +413,7 @@ export function useBotaoOnline() {
           telefone,
           nome,
           time_personalizado: time_personalizado || "Meu Time",
+          abreviacao_time: abreviacao_time || "MTI",
           numero_jogador: numero_jogador || 10,
           cores: cores || ['#FF0000', '#00FF00', '#0000FF']
         })

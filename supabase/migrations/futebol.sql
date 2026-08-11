@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   nome TEXT NOT NULL,
   cores TEXT[] NOT NULL DEFAULT ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[],
   time_personalizado TEXT NOT NULL DEFAULT 'Meu Time',
+  abreviacao_time TEXT NOT NULL DEFAULT 'MTI',
   numero_jogador INTEGER NOT NULL DEFAULT 10,
   pontos_soberania INTEGER NOT NULL DEFAULT 0,
   partidas_jogadas INTEGER NOT NULL DEFAULT 0,

@@ -13,7 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as CidadelaRouteImport } from './routes/cidadela'
 import { Route as CorretorRouteImport } from './routes/corretor'
-import { Route as NarradorRouteImport } from './routes/narrador'
+import { Route as GeradorRouteImport } from './routes/gerador'
+import { Route as NoticiasRouteImport } from './routes/noticias'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
 
@@ -37,9 +38,14 @@ const CorretorRoute = CorretorRouteImport.update({
   path: '/corretor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const NarradorRoute = NarradorRouteImport.update({
-  id: '/narrador',
-  path: '/narrador',
+const GeradorRoute = GeradorRouteImport.update({
+  id: '/gerador',
+  path: '/gerador',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NoticiasRoute = NoticiasRouteImport.update({
+  id: '/noticias',
+  path: '/noticias',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
@@ -58,7 +64,8 @@ export interface FileRoutesByFullPath {
   '/biblioteca': typeof BibliotecaRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
-  '/narrador': typeof NarradorRoute
+  '/gerador': typeof GeradorRoute
+  '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
 }
@@ -67,7 +74,8 @@ export interface FileRoutesByTo {
   '/biblioteca': typeof BibliotecaRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
-  '/narrador': typeof NarradorRoute
+  '/gerador': typeof GeradorRoute
+  '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
 }
@@ -77,7 +85,8 @@ export interface FileRoutesById {
   '/biblioteca': typeof BibliotecaRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
-  '/narrador': typeof NarradorRoute
+  '/gerador': typeof GeradorRoute
+  '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
 }
@@ -88,7 +97,8 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/cidadela'
     | '/corretor'
-    | '/narrador'
+    | '/gerador'
+    | '/noticias'
     | '/privacidade'
     | '/termos'
   fileRoutesByTo: FileRoutesByTo
@@ -97,7 +107,8 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/cidadela'
     | '/corretor'
-    | '/narrador'
+    | '/gerador'
+    | '/noticias'
     | '/privacidade'
     | '/termos'
   id:
@@ -106,7 +117,8 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/cidadela'
     | '/corretor'
-    | '/narrador'
+    | '/gerador'
+    | '/noticias'
     | '/privacidade'
     | '/termos'
   fileRoutesById: FileRoutesById
@@ -116,7 +128,8 @@ export interface RootRouteChildren {
   BibliotecaRoute: typeof BibliotecaRoute
   CidadelaRoute: typeof CidadelaRoute
   CorretorRoute: typeof CorretorRoute
-  NarradorRoute: typeof NarradorRoute
+  GeradorRoute: typeof GeradorRoute
+  NoticiasRoute: typeof NoticiasRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
 }
@@ -151,11 +164,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/narrador': {
-      id: '/narrador'
-      path: '/narrador'
-      fullPath: '/narrador'
-      preLoaderRoute: typeof NarradorRouteImport
+    '/gerador': {
+      id: '/gerador'
+      path: '/gerador'
+      fullPath: '/gerador'
+      preLoaderRoute: typeof GeradorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/noticias': {
+      id: '/noticias'
+      path: '/noticias'
+      fullPath: '/noticias'
+      preLoaderRoute: typeof NoticiasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacidade': {
@@ -180,7 +200,8 @@ const rootRouteChildren: RootRouteChildren = {
   BibliotecaRoute: BibliotecaRoute,
   CidadelaRoute: CidadelaRoute,
   CorretorRoute: CorretorRoute,
-  NarradorRoute: NarradorRoute,
+  GeradorRoute: GeradorRoute,
+  NoticiasRoute: NoticiasRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,
 }

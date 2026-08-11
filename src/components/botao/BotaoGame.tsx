@@ -35,7 +35,11 @@ interface BotaoGameProps {
 }
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
-  const [screen, setScreen] = useState<Screen>("login");
+  const [screen, setScreen] = useState<Screen>(() => {
+    // Verificar se o usuário já está logado
+    const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
+    return isLoggedIn ? "menu" : "login";
+  });
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
 
@@ -51,18 +55,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {
     const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
+    const abreviacao = localStorage.getItem('botao_online_abreviacao_time') || "MTI";
     const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
     const numero = localStorage.getItem('botao_online_numero_jogador') || "10";
     const usuarioId = localStorage.getItem('botao_online_usuario_id');
     
     // Salvar time personalizado no banco de dados se ainda não foi salvo
     if (usuarioId && timeNome !== "Meu Time") {
-      salvarTimePersonalizado(usuarioId, timeNome, timeNome.substring(0, 3).toUpperCase(), cores);
+      salvarTimePersonalizado(usuarioId, timeNome, abreviacao, cores);
     }
     
     return {
       nome: timeNome,
-      short: timeNome.substring(0, 3).toUpperCase(),
+      short: abreviacao,
       primary: cores[0],
       secondary: cores[1],
       numero: parseInt(numero)
@@ -255,7 +260,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                 </button>
               )}
             </div>
-            <OnlineMatch onBack={() => setScreen("menu")} />
+            <OnlineMatch onBack={() => {
+              // Verificar se o login foi bem-sucedido antes de mudar a tela
+              const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
+              if (isLoggedIn) {
+                setScreen("menu");
+              }
+            }} />
           </div>
         )}
 
