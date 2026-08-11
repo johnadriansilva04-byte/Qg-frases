@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } from "lucide-react";
-import { TEAMS, teamById, createCustomTeam, type Team } from "./data/teams";
+import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
 import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, type Progress } from "./storage";
+import { salvarTimePersonalizado } from "@/lib/times.functions";
 import {
   advanceKnockout,
   applyResult,
@@ -35,12 +36,29 @@ interface BotaoGameProps {
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [screen, setScreen] = useState<Screen>("menu");
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
+  const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
+
+  // Carregar times do banco de dados ao montar
+  useEffect(() => {
+    getAllTeams().then(teams => {
+      if (teams.length > 0) {
+        setAllTeams(teams);
+      }
+    });
+  }, []);
 
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {
     const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
     const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
     const numero = localStorage.getItem('botao_online_numero_jogador') || "10";
+    const usuarioId = localStorage.getItem('botao_online_usuario_id');
+    
+    // Salvar time personalizado no banco de dados se ainda não foi salvo
+    if (usuarioId && timeNome !== "Meu Time") {
+      salvarTimePersonalizado(usuarioId, timeNome, timeNome.substring(0, 3).toUpperCase(), cores);
+    }
+    
     return {
       nome: timeNome,
       short: timeNome.substring(0, 3).toUpperCase(),
@@ -515,12 +533,12 @@ function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; o
         </p>
         {tour.phase === "fim" ? (
           <p className="mt-2 font-display text-2xl">
-            Campeão: <TeamBadge team={teamById(tour.champion!)} />
+            Campeão: <TeamBadge team={teamByIdSync(tour.champion!)} />
           </p>
         ) : next ? (
           <>
             <p className="mt-2 font-display text-2xl">
-              {teamById(next.homeId).short} vs {teamById(next.awayId).short}
+              {teamByIdSync(next.homeId).short} vs {teamByIdSync(next.awayId).short}
             </p>
             <p className="text-sm text-muted-foreground">{next.stage}</p>
             <button onClick={onPlay} className="btn-primary mt-4 w-full sm:w-auto">
@@ -575,7 +593,7 @@ function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; o
                 {k.fixtures.map((f) => (
                   <li key={f.id} className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate">
-                      {teamById(f.homeId).short} x {teamById(f.awayId).short}
+                      {teamByIdSync(f.homeId).short} x {teamByIdSync(f.awayId).short}
                     </span>
                     <span className="shrink-0 font-mono text-muted-foreground">
                       {f.result
@@ -640,7 +658,7 @@ function TrophyRoom({ progress, onBack }: { progress: Progress; onBack: () => vo
           <ul className="space-y-2 text-sm">
             {progress.trophies.map((t, i) => (
               <li key={i} className="flex items-center justify-between gap-3">
-                <TeamBadge team={teamById(t.teamId)} size="sm" />
+                <TeamBadge team={teamByIdSync(t.teamId)} size="sm" />
                 <span className="shrink-0 text-muted-foreground">
                   {DIFFICULTIES.find((d) => d.id === t.difficulty)?.label} ·{" "}
                   {new Date(t.date).toLocaleDateString("pt-BR")}

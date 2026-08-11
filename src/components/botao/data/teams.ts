@@ -1,3 +1,5 @@
+import { buscarTodosTimes, buscarTimePorId, type TimeDB } from "@/lib/times.functions";
+
 export type Team = {
   id: string;
   name: string;
@@ -11,6 +13,7 @@ export type Team = {
   power: number;
 };
 
+// Times locais como fallback
 export const TEAMS: Team[] = [
   { id: "fla", name: "Rubro-Negro Carioca", short: "RNC", city: "Rio de Janeiro", primary: "#c8102e", secondary: "#111111", power: 88 },
   { id: "pal", name: "Alviverde Paulista", short: "ALP", city: "São Paulo", primary: "#0b7a3b", secondary: "#f2f2f2", power: 87 },
@@ -46,7 +49,40 @@ export const TEAMS: Team[] = [
   { id: "abc", name: "Alvinegro Potiguar", short: "ALP2", city: "Natal", primary: "#111111", secondary: "#ffffff", power: 58 },
 ];
 
-export function teamById(id: string): Team {
+// Cache de times do banco de dados
+let cachedTeams: Team[] | null = null;
+
+async function loadTeamsFromDB(): Promise<Team[]> {
+  if (cachedTeams) return cachedTeams;
+  
+  try {
+    const timesDB = await buscarTodosTimes();
+    cachedTeams = timesDB.map((t) => ({
+      id: t.id,
+      name: t.nome,
+      short: t.abreviacao,
+      city: t.pais,
+      primary: t.cores[0] || '#000000',
+      secondary: t.cores[1] || '#ffffff',
+      power: 75, // Poder padrão, pode ser ajustado no futuro
+    }));
+    return cachedTeams;
+  } catch (error) {
+    console.error('Erro ao carregar times do banco:', error);
+    return TEAMS;
+  }
+}
+
+export async function getAllTeams(): Promise<Team[]> {
+  return await loadTeamsFromDB();
+}
+
+export async function teamById(id: string): Promise<Team> {
+  const teams = await loadTeamsFromDB();
+  return teams.find((t) => t.id === id) ?? teams[0]!;
+}
+
+export function teamByIdSync(id: string): Team {
   return TEAMS.find((t) => t.id === id) ?? TEAMS[0]!;
 }
 
