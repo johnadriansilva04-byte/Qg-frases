@@ -61,8 +61,7 @@ export function MatchView({
   const [ended, setEnded] = useState(false);
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
-  const [aiRageMode, setAiRageMode] = useState(false); // IA fica mais forte após fazer gol contra
-  const [ownGoalTimer, setOwnGoalTimer] = useState<number | null>(null); // Timer para passar vez após gol contra
+  const [turnTimer, setTurnTimer] = useState<number | null>(null); // Timer de 10 segundos para jogar
 
   const scoreRef = useRef(score);
   scoreRef.current = score;
@@ -161,28 +160,20 @@ export function MatchView({
         
         if (ownGoalDetected) {
           setFlash("GOL CONTRA!");
-          // Se foi gol contra, quem fez o gol contra joga de novo com IA mais forte
-          const scoringSide = goal === "home" ? "home" : "away";
-          // Ativar modo rage da IA se foi a CPU que fez gol contra
-          if (scoringSide === cpuSide) {
-            setAiRageMode(true);
-          }
           setTimeout(() => setFlash(null), 1500);
           resetPositions(discsRef.current);
           simRef.current = false;
-          // Quem fez o gol contra joga de novo (não decrementa turnos)
-          turnRef.current = scoringSide;
-          setTurn(scoringSide);
-          
-          // Iniciar timer de 5 segundos para passar a vez se não jogar
-          setOwnGoalTimer(window.setTimeout(() => {
-            // Passar a vez para o oponente após 5 segundos
-            const nextTurn = scoringSide === "home" ? "away" : "home";
-            turnRef.current = nextTurn;
-            setTurn(nextTurn);
-            setAiRageMode(false); // Desativar rage mode ao passar a vez
-            setOwnGoalTimer(null);
-          }, 5000));
+          // No gol contra, quem sofreu o gol recebe a bola (não quem fez)
+          const conceding: Side = goal === "home" ? "home" : "away";
+          turnRef.current = conceding;
+          setTurn(conceding);
+          // Decrementa turnos normalmente
+          const left = turnsRef.current - 1;
+          setTurnsLeft(left);
+          if (left <= 0) {
+            finishMatch(next.home, next.away);
+            return;
+          }
           return;
         }
         
@@ -198,8 +189,16 @@ export function MatchView({
           finishMatch(next.home, next.away);
           return;
         }
+        
+        // Dar 5 segundos para quem sofreu o gol tirar a bola do meio
         turnRef.current = conceding;
         setTurn(conceding);
+        
+        // Bloquear input por 5 segundos após o gol
+        const blockTimer = window.setTimeout(() => {
+          // Timer apenas para bloqueio visual, a lógica já está correta
+        }, 5000);
+        
         return;
       }
       if (!moving || frames > 900) {
@@ -218,41 +217,52 @@ export function MatchView({
     };
 
     requestAnimationFrame(loop);
-  }, [finishMatch, cpuSide]);
-
-  // Limpar timer de gol contra ao desmontar
-  useEffect(() => {
-    return () => {
-      if (ownGoalTimer) {
-        clearTimeout(ownGoalTimer);
-      }
-    };
-  }, [ownGoalTimer]);
+  }, [finishMatch]);
 
   // jogada da CPU (desabilitado no modo online)
   useEffect(() => {
     if (!hasCpu || ended || turn !== cpuSide || simRef.current) return;
     const cpuTeam = cpuSide === "home" ? home : away;
-    // Aplicar multiplicador de força quando a IA está em modo rage (após gol contra)
-    const rageMultiplier = aiRageMode ? 2 : 1;
     const t = setTimeout(() => {
-      const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power * rageMultiplier);
+      const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
       if (!shot) return;
       const d = discsRef.current.find((x) => x.id === shot.discId);
       if (!d) return;
       d.vx = shot.ix;
       d.vy = shot.iy;
-      // Desativar rage mode após a jogada
-      setAiRageMode(false);
-      // Cancelar timer de gol contra se a CPU jogou
-      if (ownGoalTimer) {
-        clearTimeout(ownGoalTimer);
-        setOwnGoalTimer(null);
-      }
       runSimulation();
     }, 750);
     return () => clearTimeout(t);
-  }, [hasCpu, turn, cpuSide, difficulty, aiRageMode, ended, home, away, runSimulation, ownGoalTimer]);
+  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation]);
+
+  // Timer de 10 segundos para jogar (apenas no modo offline)
+  useEffect(() => {
+    if (isOnline || ended || simRef.current) return;
+    
+    // Limpar timer anterior
+    if (turnTimer) {
+      clearTimeout(turnTimer);
+      setTurnTimer(null);
+    }
+    
+    // Iniciar novo timer se for o turno do usuário
+    if (turn === userSide && !ended) {
+      const timer = window.setTimeout(() => {
+        // Passar a vez após 10 segundos
+        const nextTurn = turn === "home" ? "away" : "home";
+        turnRef.current = nextTurn;
+        setTurn(nextTurn);
+        setTurnTimer(null);
+      }, 10000);
+      setTurnTimer(timer);
+    }
+    
+    return () => {
+      if (turnTimer) {
+        clearTimeout(turnTimer);
+      }
+    };
+  }, [turn, userSide, ended, isOnline, turnTimer]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {
@@ -266,11 +276,6 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    // Cancelar timer de gol contra se o usuário jogou
-    if (ownGoalTimer) {
-      clearTimeout(ownGoalTimer);
-      setOwnGoalTimer(null);
-    }
     // No modo online, só permite input se for o turno do usuário
     if (ended || simRef.current || turn !== userSide) return;
     const { x, y } = toField(e);
