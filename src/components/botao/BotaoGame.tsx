@@ -367,7 +367,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 /* ================= sub-telas ================= */
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="botao-root min-h-screen py-5">{children}</div>;
+  return <div className="botao-root min-h-screen py-5 relative">{children}</div>;
 }
 
 function Header({

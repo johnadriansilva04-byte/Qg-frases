@@ -16,7 +16,7 @@ export function UserMenu({ perfil, onLogin, onLogout }: Props) {
   return (
     <div className="fixed top-4 right-4 z-50">
       {isLoggedIn ? (
-        <div className="panel flex items-center gap-3 p-3">
+        <div className="panel flex items-center gap-3 p-3 shadow-lg">
           <div className="flex items-center gap-2">
             <User className="size-5" />
             <div className="text-sm">
@@ -35,7 +35,7 @@ export function UserMenu({ perfil, onLogin, onLogout }: Props) {
       ) : (
         <button
           onClick={onLogin}
-          className="btn-primary flex items-center gap-2 px-4 py-2"
+          className="btn-primary flex items-center gap-2 px-4 py-2 shadow-lg"
         >
           <User className="size-4" />
           Login
