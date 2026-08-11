@@ -105,6 +105,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const persist = (p: Progress) => {
     setProgress(p);
     saveProgress(p);
+    // Salvar no Supabase se o usuário estiver logado
+    if (perfil?.user_id) {
+      saveProgressToSupabase(perfil.user_id, p);
+    }
   };
 
   const handleLogout = async () => {
@@ -117,8 +121,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setToast("Você saiu da conta.");
   };
 
-  const aoLogar = (p?: Perfil) => {
+  const aoLogar = async (p?: Perfil) => {
     if (p) aplicarPerfil(p);
+    // Carregar progresso do Supabase se o usuário estiver logado
+    if (p?.user_id) {
+      const supabaseProgress = await loadProgressFromSupabase(p.user_id);
+      setProgress(supabaseProgress);
+      saveProgress(supabaseProgress);
+    }
     setScreen("menu");
     setToast("Bem-vindo de volta!");
   };
