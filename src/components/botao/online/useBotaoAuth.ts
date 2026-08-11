@@ -10,25 +10,56 @@ export function useBotaoAuth() {
 
   useEffect(() => {
     let vivo = true;
+    let syncInProgress = false; // Flag para evitar chamadas simultâneas
 
     const sync = async (u: User | null) => {
-      if (!vivo) return;
-      setUser(u);
-      if (!u) {
-        setPerfil(null);
-        limparCache();
-        setCarregando(false);
+      // Guarda para evitar chamadas simultâneas
+      if (syncInProgress) {
+        console.log('Sync já em progresso, ignorando chamada');
         return;
       }
-      const p = await buscarPerfil(u.id);
+      
       if (!vivo) return;
-      if (p) cachePerfil(p);
-      else limparCache();
-      setPerfil(p);
-      setCarregando(false);
+      
+      syncInProgress = true;
+      
+      try {
+        setUser(u);
+        if (!u) {
+          setPerfil(null);
+          limparCache();
+          setCarregando(false);
+          return;
+        }
+        
+        console.log('Buscando perfil para usuário:', u.id);
+        const p = await buscarPerfil(u.id);
+        
+        if (!vivo) return;
+        
+        if (p) {
+          console.log('Perfil encontrado:', p.id);
+          cachePerfil(p);
+        } else {
+          console.log('Perfil não encontrado para usuário:', u.id);
+          limparCache();
+        }
+        
+        setPerfil(p);
+        setCarregando(false);
+      } catch (error) {
+        console.error('Erro no sync de autenticação:', error);
+        if (vivo) {
+          setCarregando(false);
+        }
+      } finally {
+        syncInProgress = false;
+      }
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event, session?.user?.id);
+      // Ignorar eventos que não precisam de sync completo
       if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
       void sync(session?.user ?? null);
     });

@@ -3,7 +3,6 @@ import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } fro
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
 import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, type Progress } from "./storage";
-import { salvarTimePersonalizado } from "@/lib/times.functions";
 import {
   advanceKnockout,
   applyResult,
@@ -56,7 +55,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         setAllTeams(teams);
       }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {
@@ -64,12 +63,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const abreviacao = localStorage.getItem('botao_online_abreviacao_time') || "MTI";
     const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
     const numero = localStorage.getItem('botao_online_numero_jogador') || "10";
-    const usuarioId = localStorage.getItem('botao_online_usuario_id');
-    
-    // Salvar time personalizado no banco de dados se ainda não foi salvo
-    if (usuarioId && timeNome !== "Meu Time") {
-      salvarTimePersonalizado(usuarioId, timeNome, abreviacao, cores);
-    }
     
     return {
       nome: timeNome,
@@ -78,18 +71,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       secondary: cores[1],
       numero: parseInt(numero)
     };
-  }, [perfil]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // quem está logado joga com o próprio time por padrão
-  useEffect(() => {
-    if (perfil) {
-      // Recarregar time personalizado quando perfil mudar
-      const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
-      const abreviacao = localStorage.getItem('botao_online_abreviacao_time') || "MTI";
-      const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
-      // O time personalizado já é carregado via customTeamData
-    }
-  }, [perfil]);
+  // Nota: O time personalizado é carregado automaticamente via customTeamData useMemo
+  // que depende dos dados do localStorage, que são atualizados pelo useBotaoAuth
 
   const userTeam = useMemo(() => {
     return createCustomTeam(

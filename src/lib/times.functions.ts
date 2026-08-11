@@ -1,7 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
-const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'];
+import { supabase } from "@/integrations/supabase/client";
 
 export interface TimeDB {
   id: string;
@@ -16,10 +13,7 @@ export interface TimeDB {
 }
 
 export async function buscarTodosTimes(): Promise<TimeDB[]> {
-  if (!supabaseUrl || !supabaseAnonKey) return [];
-  
   try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { data, error } = await supabase
       .from('botao_times')
       .select('*')
@@ -34,10 +28,7 @@ export async function buscarTodosTimes(): Promise<TimeDB[]> {
 }
 
 export async function buscarTimePorId(id: string): Promise<TimeDB | null> {
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-  
   try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { data, error } = await supabase
       .from('botao_times')
       .select('*')
@@ -58,10 +49,24 @@ export async function salvarTimePersonalizado(
   abreviacao: string,
   cores: string[]
 ): Promise<TimeDB | null> {
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-  
   try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    // Verificar se o usuário existe antes de criar o time
+    const { data: usuario, error: usuarioError } = await supabase
+      .from('botao_usuarios')
+      .select('user_id')
+      .eq('user_id', usuarioId)
+      .maybeSingle();
+    
+    if (usuarioError) {
+      console.error('Erro ao verificar usuário:', usuarioError);
+      return null;
+    }
+    
+    if (!usuario) {
+      console.error('Usuário não encontrado:', usuarioId);
+      return null;
+    }
+    
     const id = `custom-${usuarioId}`;
     
     const { data, error } = await supabase
@@ -88,10 +93,7 @@ export async function salvarTimePersonalizado(
 }
 
 export async function buscarTimesPorPais(pais: string): Promise<TimeDB[]> {
-  if (!supabaseUrl || !supabaseAnonKey) return [];
-  
   try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { data, error } = await supabase
       .from('botao_times')
       .select('*')

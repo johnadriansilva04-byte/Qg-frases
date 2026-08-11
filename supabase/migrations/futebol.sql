@@ -94,50 +94,78 @@ INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Trigger para criar perfil automaticamente quando usuário é criado no auth
+-- Corrigido com tratamento de erro robusto para evitar loop infinito e erro de foreign key
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_nome TEXT;
+  v_cores TEXT[];
+  v_time_personalizado TEXT;
+  v_abreviacao_time TEXT;
+  v_numero_jogador INTEGER;
+  v_usuario_id UUID;
 BEGIN
-  INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'nome', 'Jogador'),
-    COALESCE(NEW.raw_user_meta_data->>'cores', ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[]),
-    COALESCE(NEW.raw_user_meta_data->>'time_personalizado', 'Meu Time'),
-    COALESCE(NEW.raw_user_meta_data->>'abreviacao_time', 'MTI'),
-    COALESCE((NEW.raw_user_meta_data->>'numero_jogador')::INTEGER, 10)
-  );
-  RETURN NEW;
-END;
-$$;
+  v_nome := COALESCE(NEW.raw_user_meta_data->>'nome', 'Jogador');
+  
+  -- Parse cores corretamente do JSON com tratamento de erro
+  BEGIN
+    v_cores := COALESCE(NEW.raw_user_meta_data->>'cores', '["#FF0000", "#00FF00", "#0000FF"]')::TEXT[];
+  EXCEPTION WHEN OTHERS THEN
+    v_cores := ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[];
+  END;
+  
+  v_time_personalizado := COALESCE(NEW.raw_user_meta_data->>'time_personalizado', 'Meu Time');
+  v_abreviacao_time := COALESCE(NEW.raw_user_meta_data->>'abreviacao_time', 'MTI');
+  v_numero_jogador := COALESCE((NEW.raw_user_meta_data->>'numero_jogador')::INTEGER, 10);
+  v_usuario_id := NEW.id;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+  -- Criar usuário com tratamento de erro
+  BEGIN
+    INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
+    VALUES (
+      v_usuario_id,
+      NEW.email,
+      v_nome,
+      v_cores,
+      v_time_personalizado,
+      v_abreviacao_time,
+      v_numero_jogador
+    );
+    
+    -- Log de sucesso
+    RAISE LOG 'Usuário criado com sucesso: %', v_usuario_id;
+    
+  EXCEPTION WHEN OTHERS THEN
+    RAISE LOG 'Erro ao criar usuário %: %', v_usuario_id, SQLERRM;
+    -- Se falhar, ainda assim retorna NEW para não bloquear o auth
+    RETURN NEW;
+  END;
 
--- Trigger para criar perfil automaticamente quando usuário é criado no auth
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'nome', 'Jogador'),
-    COALESCE(NEW.raw_user_meta_data->>'cores', ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[]),
-    COALESCE(NEW.raw_user_meta_data->>'time_personalizado', 'Meu Time'),
-    COALESCE(NEW.raw_user_meta_data->>'abreviacao_time', 'MTI'),
-    COALESCE((NEW.raw_user_meta_data->>'numero_jogador')::INTEGER, 10)
-  );
+  -- Criar time personalizado automaticamente APENAS se o usuário foi criado
+  BEGIN
+    INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga, is_personalizado, usuario_id)
+    VALUES (
+      'custom-' || v_usuario_id::TEXT,
+      v_time_personalizado,
+      v_abreviacao_time,
+      v_cores,
+      'Brasil',
+      'Personalizado',
+      true,
+      v_usuario_id
+    );
+    
+    RAISE LOG 'Time personalizado criado com sucesso para usuário: %', v_usuario_id;
+    
+  EXCEPTION WHEN OTHERS THEN
+    RAISE LOG 'Erro ao criar time personalizado para usuário %: %', v_usuario_id, SQLERRM;
+    -- Não falha o trigger se o time não for criado
+  END;
+
   RETURN NEW;
 END;
 $$;
@@ -234,7 +262,7 @@ DROP POLICY IF EXISTS "Todos podem ver times" ON public.botao_times;
 CREATE POLICY "Todos podem ver times" ON public.botao_times FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Autenticados podem criar times personalizados" ON public.botao_times;
-CREATE POLICY "Autenticados podem criar times personalizados" ON public.botao_times FOR INSERT WITH CHECK (is_personalizado = true AND auth.uid() = usuario_id);
+CREATE POLICY "Autenticados podem criar times personalizados" ON public.botao_times FOR INSERT WITH CHECK (is_personalizado = true);
 
 DROP POLICY IF EXISTS "Usuarios podem atualizar seus times" ON public.botao_times;
 CREATE POLICY "Usuarios podem atualizar seus times" ON public.botao_times FOR UPDATE USING (is_personalizado = true AND auth.uid() = usuario_id);

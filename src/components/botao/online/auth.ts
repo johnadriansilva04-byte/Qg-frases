@@ -118,7 +118,7 @@ export async function cadastrar(input: {
   });
   
   console.log('Resultado signup:', { data, error });
-  
+
   if (error) {
     console.error('Erro detalhado do signup:', error);
     throw new Error(
@@ -132,15 +132,35 @@ export async function cadastrar(input: {
 
   console.log('Perfil será criado automaticamente pelo trigger');
 
-  // Trigger cria perfil automaticamente, fazer login
-  await entrar(input.email, input.senha);
-  
-  // Buscar perfil criado pelo trigger
-  const perfilCriado = await buscarPerfil(user.id);
-  console.log('Perfil criado pelo trigger:', perfilCriado);
-  if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
-  
-  return perfilCriado;
+  // Se a sessão já estiver disponível (auto-confirm enabled), usar ela
+  if (data.session) {
+    console.log('Sessão criada automaticamente, buscando perfil...');
+    
+    // Tentar buscar perfil com retry
+    let perfilCriado = await buscarPerfil(user.id);
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (!perfilCriado && retries < maxRetries) {
+      console.log(`Tentativa ${retries + 1} de buscar perfil...`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo
+      perfilCriado = await buscarPerfil(user.id);
+      retries++;
+    }
+    
+    console.log('Perfil criado pelo trigger:', perfilCriado);
+    
+    if (!perfilCriado) {
+      console.error('Perfil não foi criado após trigger. User ID:', user.id);
+      throw new Error("Conta criada, mas o perfil falhou. Tente fazer login novamente.");
+    }
+    
+    return perfilCriado;
+  }
+
+  // Se não tiver sessão, significa que email confirmation está ativado
+  // Não tentar login manual pois vai falhar
+  throw new Error("Conta criada com sucesso! Por favor, confirme seu email antes de fazer login.");
 }
 
 export async function sair() {
