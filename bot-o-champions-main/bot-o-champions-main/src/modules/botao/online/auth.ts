@@ -78,22 +78,35 @@ export function limparCache() {
 }
 
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
-  const { data } = await supabase.from("botao_usuarios").select("*").eq("id", userId).maybeSingle();
+  console.log("🔍 BUSCAR PERFIL - USER ID:", userId);
+  console.log("🗂️  TABELA: botao_usuarios");
+  const { data, error } = await supabase.from("botao_usuarios").select("*").eq("id", userId).maybeSingle();
+  console.log("📊 RESULTADO BUSCA:", { data, error });
   return (data as Perfil | null) ?? null;
 }
 
 export async function entrar(email: string, senha: string) {
+  console.log("🔐 TENTANDO LOGIN:", email);
   const { data, error } = await supabase.auth.signInWithPassword({
     email: email,
     password: senha,
   });
-  if (error) throw new Error("E-mail ou senha incorretos.");
+  if (error) {
+    console.error("❌ ERRO LOGIN:", error);
+    throw new Error("E-mail ou senha incorretos.");
+  }
+  
+  console.log("✅ LOGIN SUCESSO, USER ID:", data.user?.id);
   
   // Verificar se o usuário tem perfil, se não tiver, criar um básico
   const user = data.user;
   if (user) {
+    console.log("🔍 BUSCANDO PERFIL PARA USER ID:", user.id);
     const perfilExistente = await buscarPerfil(user.id);
+    console.log("📋 PERFIL ENCONTRADO:", perfilExistente);
+    
     if (!perfilExistente) {
+      console.log("⚠️ PERFIL NÃO ENCONTRADO, CRIANDO PERFIL BÁSICO");
       // Criar perfil básico com valores padrão
       const { data: novoPerfil, error: perr } = await supabase
         .from("botao_usuarios")
@@ -109,7 +122,9 @@ export async function entrar(email: string, senha: string) {
         .select("*")
         .maybeSingle();
       if (perr) {
-        console.error("Erro ao criar perfil básico:", perr);
+        console.error("❌ ERRO AO CRIAR PERFIL BÁSICO:", perr);
+      } else {
+        console.log("✅ PERFIL BÁSICO CRIADO:", novoPerfil);
       }
     }
   }
@@ -124,8 +139,12 @@ export async function cadastrar(input: {
   numero: number;
   cores: string[];
 }) {
+  console.log("📝 TENTANDO CADASTRO:", input.email);
   const erro = validarCadastro(input);
-  if (erro) throw new Error(erro);
+  if (erro) {
+    console.error("❌ ERRO VALIDAÇÃO:", erro);
+    throw new Error(erro);
+  }
 
   const { data, error } = await supabase.auth.signUp({
     email: input.email,
@@ -133,6 +152,7 @@ export async function cadastrar(input: {
     options: { emailRedirectTo: window.location.origin },
   });
   if (error) {
+    console.error("❌ ERRO SUPABASE AUTH:", error);
     throw new Error(
       error.message.toLowerCase().includes("already")
         ? "Já existe uma conta com esse e-mail. Faça login."
@@ -140,9 +160,15 @@ export async function cadastrar(input: {
     );
   }
   const user = data.user;
-  if (!user) throw new Error("Não foi possível criar a conta.");
+  if (!user) {
+    console.error("❌ USER NULL APÓS CADASTRO");
+    throw new Error("Não foi possível criar a conta.");
+  }
+
+  console.log("✅ USUÁRIO CRIADO NO SUPABASE AUTH, ID:", user.id);
 
   // Criar perfil
+  console.log("📋 CRIANDO PERFIL NA TABELA botao_usuarios");
   const { data: perfil, error: perr } = await supabase
     .from("botao_usuarios")
     .insert({
@@ -157,14 +183,19 @@ export async function cadastrar(input: {
     .select("*")
     .maybeSingle();
   
+  console.log("📊 RESULTADO INSERT PERFIL:", { perfil, error: perr });
+  
   if (perr || !perfil) {
+    console.log("⚠️ FALHOU AO CRIAR PERFIL, TENTANDO LOGIN AUTOMÁTICO");
     // Se falhar ao criar perfil, fazer login automático e o perfil será criado na função entrar
     await entrar(input.email, input.senha);
     const perfilCriado = await buscarPerfil(user.id);
+    console.log("📋 PERFIL CRIADO APÓS LOGIN:", perfilCriado);
     if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
     return perfilCriado;
   }
   
+  console.log("✅ PERFIL CRIADO COM SUCESSO, FAZENDO LOGIN AUTOMÁTICO");
   // Fazer login automático após cadastro bem-sucedido
   await entrar(input.email, input.senha);
   
