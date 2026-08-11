@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CookieBanner } from "../components/CookieBanner";
 import { Sidebar } from "../components/Sidebar";
+import { AdSlot } from "../components/AdSlot";
 
 function NotFoundComponent() {
   return (
@@ -168,8 +169,15 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Banner no topo */}
+      <AdSlot rotulo="Banner Topo" altura="min-h-[90px]" />
+      
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      
+      {/* Banner no rodapé */}
+      <AdSlot rotulo="Banner Rodapé" altura="min-h-[90px]" />
+      
       <CookieBanner />
     </QueryClientProvider>
   );
