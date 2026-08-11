@@ -72,10 +72,10 @@ INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga) VALUES
 ('por', 'Porto', 'POR', ARRAY['#003893', '#FFFFFF', '#000000']::TEXT[], 'Portugal', 'Primeira Liga')
 ON CONFLICT (id) DO NOTHING;
 
--- Tabela de usuários (login por telefone obrigatório)
+-- Tabela de usuários (login por email obrigatório)
 CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  telefone TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE,
   nome TEXT NOT NULL,
   cores TEXT[] NOT NULL DEFAULT ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[],
   time_personalizado TEXT NOT NULL DEFAULT 'Meu Time',
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS public.botao_blocos (
 CREATE INDEX IF NOT EXISTS idx_botao_times_pais ON public.botao_times(pais);
 CREATE INDEX IF NOT EXISTS idx_botao_times_liga ON public.botao_times(liga);
 CREATE INDEX IF NOT EXISTS idx_botao_times_usuario ON public.botao_times(usuario_id);
-CREATE INDEX IF NOT EXISTS idx_botao_usuarios_telefone ON public.botao_usuarios(telefone);
+CREATE INDEX IF NOT EXISTS idx_botao_usuarios_email ON public.botao_usuarios(email);
 CREATE INDEX IF NOT EXISTS idx_botao_lobbies_status ON public.botao_lobbies(status);
 CREATE INDEX IF NOT EXISTS idx_botao_lobbies_criador ON public.botao_lobbies(criador_session);
 CREATE INDEX IF NOT EXISTS idx_botao_blocos_lobby ON public.botao_blocos(lobby_id);
