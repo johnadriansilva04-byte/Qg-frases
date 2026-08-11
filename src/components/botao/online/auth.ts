@@ -32,7 +32,9 @@ export const STORAGE_KEYS = {
 /** Validação simples de email */
 export const validarEmail = (email: string) => {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(email);
+  const valido = re.test(email);
+  console.log('Validando email:', email, 'Resultado:', valido);
+  return valido;
 };
 
 export function validarCadastro(input: {

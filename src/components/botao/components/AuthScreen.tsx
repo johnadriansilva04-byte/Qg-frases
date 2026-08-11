@@ -20,6 +20,9 @@ export function AuthScreen({ onPronto }: Props) {
   const [cooldown, setCooldown] = useState(0);
 
   const submit = async () => {
+    console.log('Modo atual:', modo);
+    console.log('Email digitado:', email);
+    
     if (cooldown > 0) {
       setErro(`Aguarde ${cooldown} segundos antes de tentar novamente.`);
       return;
@@ -29,15 +32,18 @@ export function AuthScreen({ onPronto }: Props) {
     setCarregando(true);
     try {
       if (modo === "login") {
+        console.log('Chamando função entrar com:', email);
         await entrar(email, senha);
         onPronto();
       } else {
+        console.log('Chamando função cadastrar com:', { email, nome, time });
         const p = await cadastrar({ email, senha, nome, time, abreviacao, numero, cores });
         cachePerfil(p);
         onPronto(p);
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";
+      console.error('Erro no submit:', errorMessage);
       
       // Melhorar mensagem para email rate limit
       const friendlyMessage = errorMessage.includes("email rate limit")
