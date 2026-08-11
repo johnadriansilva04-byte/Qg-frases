@@ -3,8 +3,7 @@ import { registerCustomTeam, unregisterCustomTeam } from "../data/teams";
 
 export type Perfil = {
   id: string;
-  user_id: string;
-  telefone: string;
+  email: string;
   nome: string;
   cores: string[];
   time_personalizado: string;
@@ -20,7 +19,7 @@ export const CORES_PADRAO = ["#c8102e", "#111111", "#ffd65a"];
 export const STORAGE_KEYS = {
   LOGGED_IN: "botao_online_logged_in",
   PERFIL_ID: "botao_online_usuario_id",
-  TELEFONE: "botao_online_telefone",
+  EMAIL: "botao_online_email",
   NOME: "botao_online_nome",
   TIME: "botao_online_time_personalizado",
   ABREVIACAO: "botao_online_abreviacao_time",
@@ -30,13 +29,8 @@ export const STORAGE_KEYS = {
   BLOCO_ID: "botao_online_bloco_id",
 } as const;
 
-export const somenteDigitos = (v: string) => v.replace(/\D/g, "");
-
-/** Telefone vira um e-mail sintético interno; o login do usuário é telefone + senha. */
-export const telefoneParaEmail = (telefone: string) => `botao${somenteDigitos(telefone)}@botao.app`;
-
 export function validarCadastro(input: {
-  telefone: string;
+  email: string;
   senha: string;
   nome: string;
   time: string;
@@ -44,8 +38,8 @@ export function validarCadastro(input: {
   numero: number;
   cores: string[];
 }): string | null {
-  const tel = somenteDigitos(input.telefone);
-  if (tel.length < 10 || tel.length > 13) return "Telefone inválido (use DDD + número).";
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(input.email)) return "E-mail inválido.";
   if (input.senha.length < 6 || input.senha.length > 72) return "A senha precisa ter entre 6 e 72 caracteres.";
   if (!input.nome.trim() || input.nome.trim().length > 40) return "Informe um nome de até 40 caracteres.";
   if (!input.time.trim() || input.time.trim().length > 30) return "Informe um nome de time de até 30 caracteres.";
@@ -61,7 +55,7 @@ export function cachePerfil(p: Perfil) {
   const ls = window.localStorage;
   ls.setItem(STORAGE_KEYS.LOGGED_IN, "true");
   ls.setItem(STORAGE_KEYS.PERFIL_ID, p.id);
-  ls.setItem(STORAGE_KEYS.TELEFONE, p.telefone);
+  ls.setItem(STORAGE_KEYS.EMAIL, p.email);
   ls.setItem(STORAGE_KEYS.NOME, p.nome);
   ls.setItem(STORAGE_KEYS.TIME, p.time_personalizado);
   ls.setItem(STORAGE_KEYS.ABREVIACAO, p.abreviacao_time);
@@ -84,20 +78,45 @@ export function limparCache() {
 }
 
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
-  const { data } = await supabase.from("botao_perfis").select("*").eq("user_id", userId).maybeSingle();
+  const { data } = await supabase.from("botao_usuarios").select("*").eq("id", userId).maybeSingle();
   return (data as Perfil | null) ?? null;
 }
 
-export async function entrar(telefone: string, senha: string) {
-  const { error } = await supabase.auth.signInWithPassword({
-    email: telefoneParaEmail(telefone),
+export async function entrar(email: string, senha: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email,
     password: senha,
   });
-  if (error) throw new Error("Telefone ou senha incorretos.");
+  if (error) throw new Error("E-mail ou senha incorretos.");
+  
+  // Verificar se o usuário tem perfil, se não tiver, criar um básico
+  const user = data.user;
+  if (user) {
+    const perfilExistente = await buscarPerfil(user.id);
+    if (!perfilExistente) {
+      // Criar perfil básico com valores padrão
+      const { data: novoPerfil, error: perr } = await supabase
+        .from("botao_usuarios")
+        .insert({
+          id: user.id,
+          email: email,
+          nome: "Jogador",
+          cores: CORES_PADRAO,
+          time_personalizado: "Meu Time",
+          abreviacao_time: "MTI",
+          numero_jogador: 10,
+        })
+        .select("*")
+        .maybeSingle();
+      if (perr) {
+        console.error("Erro ao criar perfil básico:", perr);
+      }
+    }
+  }
 }
 
 export async function cadastrar(input: {
-  telefone: string;
+  email: string;
   senha: string;
   nome: string;
   time: string;
@@ -109,25 +128,26 @@ export async function cadastrar(input: {
   if (erro) throw new Error(erro);
 
   const { data, error } = await supabase.auth.signUp({
-    email: telefoneParaEmail(input.telefone),
+    email: input.email,
     password: input.senha,
     options: { emailRedirectTo: window.location.origin },
   });
   if (error) {
     throw new Error(
       error.message.toLowerCase().includes("already")
-        ? "Já existe uma conta com esse telefone. Faça login."
+        ? "Já existe uma conta com esse e-mail. Faça login."
         : "Não foi possível criar a conta. Tente de novo.",
     );
   }
   const user = data.user;
   if (!user) throw new Error("Não foi possível criar a conta.");
 
+  // Criar perfil
   const { data: perfil, error: perr } = await supabase
-    .from("botao_perfis")
+    .from("botao_usuarios")
     .insert({
-      user_id: user.id,
-      telefone: somenteDigitos(input.telefone),
+      id: user.id,
+      email: input.email,
       nome: input.nome.trim(),
       cores: input.cores,
       time_personalizado: input.time.trim(),
@@ -136,7 +156,18 @@ export async function cadastrar(input: {
     })
     .select("*")
     .maybeSingle();
-  if (perr || !perfil) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
+  
+  if (perr || !perfil) {
+    // Se falhar ao criar perfil, fazer login automático e o perfil será criado na função entrar
+    await entrar(input.email, input.senha);
+    const perfilCriado = await buscarPerfil(user.id);
+    if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
+    return perfilCriado;
+  }
+  
+  // Fazer login automático após cadastro bem-sucedido
+  await entrar(input.email, input.senha);
+  
   return perfil as Perfil;
 }
 
