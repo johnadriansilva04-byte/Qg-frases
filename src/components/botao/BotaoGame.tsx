@@ -89,6 +89,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (t.phase === "grupos") {
       const fx = t.groupFixtures.find((x) => x.id === current.id)!;
       applyResult(t, fx, r);
+      
       // simula os outros jogos da mesma rodada
       t.groupFixtures
         .filter((x) => !x.played && x.stage === fx.stage)
@@ -110,13 +111,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const fx = stage.fixtures.find((x) => x.id === current.id)!;
       fx.played = true;
       fx.result = r;
+      
+      // simula os outros jogos da mesma fase
       stage.fixtures
         .filter((x) => !x.played)
         .forEach((x) => {
           x.played = true;
           x.result = simulateMatch(x.homeId, x.awayId, t.difficulty, true);
         });
+      
       advanceKnockout(t);
+      
       // se o usuário caiu, roda o resto do torneio
       while (t.phase === "mata-mata" && !nextUserFixture(t)) {
         const st = t.knockout[t.knockout.length - 1]!;
@@ -128,6 +133,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         });
         advanceKnockout(t);
       }
+      
       if (t.phase === "fim" && t.champion === t.userTeamId) {
         const titles = { ...progress.titles, [t.difficulty]: progress.titles[t.difficulty] + 1 };
         persist({
