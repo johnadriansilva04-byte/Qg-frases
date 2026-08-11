@@ -1,23 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CATEGORIAS, buscarFrases, fraseAleatoria, totalDeFrases } from "@/data/frases";
-import { AdSlot, AdVideoSlot } from "@/components/AdSlot";
-import { AnuncioPessoal } from "@/components/AnuncioPessoal";
+import { BookOpen, Gamepad2, Sparkles, Zap, Cpu, Globe, Rocket, Star, Shield, Heart, Target } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { title: "Cidadela do Pracinha | Jogos e Utilidades" },
       {
         name: "description",
-        content:
-          "Sorteie frases prontas para Reels, status, versículos bíblicos, cantadas, indiretas e motivação. Copie em um clique, de graça. Milhões de frases prontas.",
+        content: "Entre na Cidadela do Pracinha: jogos clássicos, biblioteca de livros e ferramentas de texto em um só lugar.",
       },
-      { property: "og:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { property: "og:title", content: "Cidadela do Pracinha | Jogos e Utilidades" },
       {
-        property: "og:description",
-        content: "Milhões de frases para copiar: legendas, versículos, cantadas e motivação.",
-      },
+        property: "og:description", content: "Jogos, livros e ferramentas de texto em um só lugar." },
       { property: "og:url", content: "https://pracinha.online" },
       { property: "og:image", content: "https://pracinha.online/og-image.png" },
     ],
@@ -25,155 +19,143 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+const FEATURES = [
+  { icon: Zap, title: "Rápido", desc: "Tudo carrega instantaneamente" },
+  { icon: Shield, title: "Seguro", desc: "Seus dados protegidos" },
+  { icon: Heart, title: "Grátis", desc: "Sem custos escondidos" },
+  { icon: Target, title: "Focado", desc: "Design pensado para você" },
+];
+
+const SECTIONS = [
+  {
+    icon: Gamepad2,
+    title: "Cidadela de Jogos",
+    description: "Trilha, Futebol de Botão e muito mais. Jogue clássicos e quebre recordes.",
+    link: "/cidadela",
+    color: "from-purple-500 to-pink-500",
+    bgColor: "bg-purple-500/10",
+  },
+  {
+    icon: BookOpen,
+    title: "Biblioteca",
+    description: "Livros selecionados de motivação, fé e desenvolvimento pessoal.",
+    link: "/biblioteca",
+    color: "from-blue-500 to-cyan-500",
+    bgColor: "bg-blue-500/10",
+  },
+  {
+    icon: Sparkles,
+    title: "Gerador de Texto",
+    description: "Frases prontas, correção de texto e muito mais. Crie conteúdo em segundos.",
+    link: "/gerador",
+    color: "from-green-500 to-emerald-500",
+    bgColor: "bg-green-500/10",
+  },
+];
+
 function Index() {
-  const [categoria, setCategoria] = useState<string>("biblia");
-  const [busca, setBusca] = useState("");
-  const [frase, setFrase] = useState("Carregando frase...");
-  const [copiado, setCopiado] = useState(false);
-  const [mostrarVideo, setMostrarVideo] = useState(false);
-
-  const total = useMemo(() => totalDeFrases(), []);
-
-  const sortear = useCallback(
-    (catId = categoria, termo = busca) => {
-      if (termo.trim()) {
-        const achadas = buscarFrases(termo);
-        setFrase(
-          achadas.length > 0
-            ? (achadas[Math.floor(Math.random() * achadas.length)] as string)
-            : 'Nenhuma frase encontrada. Tente palavras como "Deus", "foco" ou "amor".',
-        );
-        return;
-      }
-      setFrase(fraseAleatoria(catId));
-    },
-    [categoria, busca],
-  );
-
-  useEffect(() => {
-    setFrase(fraseAleatoria("biblia"));
-  }, []);
-
-  const copiar = async () => {
-    try {
-      await navigator.clipboard.writeText(frase);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2200);
-      setTimeout(() => setMostrarVideo(true), 1000);
-    } catch {
-      setCopiado(false);
-    }
-  };
-
   return (
-    <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
-      <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
-        <header className="mb-6 text-center">
-          <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
-            QG Frases
-          </h1>
-          <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Gerador de frases: encontre a legenda, frase ou mensagem perfeita em um clique
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
-            {total.toLocaleString("pt-BR")} combinações de frases disponíveis para status, Reels e mais
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
+      {/* Efeito de grade cyberpunk */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.3)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)]" />
+
+      {/* Efeito de luz neon */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-4 md:p-8">
+        {/* Header */}
+        <header className="text-center mb-12 md:mb-16">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center animate-spin-slow">
+              <Cpu className="w-6 h-6" />
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tight bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
+              CIDADELA DO PRACINHA
+            </h1>
+          </div>
+          <p className="text-lg md:text-xl text-slate-300 mb-2">Jogos e Utilidades</p>
+          <p className="text-sm text-slate-400 max-w-2xl mx-auto">
+            Entre em um universo digital onde jogos, conhecimento e criatividade se encontram.
+            Explore, crie e divirta-se em um só lugar.
           </p>
         </header>
 
-        <div className="relative mb-6">
-          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-primary">
-            🔍
-          </span>
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => {
-              setBusca(e.target.value);
-              sortear(categoria, e.target.value);
-            }}
-            placeholder="Digite o que precisa (ex: Deus, praia, motivação, amor)..."
-            aria-label="Buscar frase"
-            className="w-full rounded-2xl border border-border bg-background/60 py-3.5 pl-11 pr-4 text-sm text-foreground placeholder-muted-foreground/70 shadow-inner transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/40 md:text-base"
-          />
-        </div>
-
-        <div className="mb-6 flex flex-wrap justify-center gap-2">
-          {CATEGORIAS.map((c) => {
-            const ativo = c.id === categoria && !busca.trim();
+        {/* Seções principais */}
+        <div className="grid gap-6 md:gap-8 w-full max-w-5xl mb-12 md:mb-16">
+          {SECTIONS.map((section, index) => {
+            const Icon = section.icon;
             return (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setCategoria(c.id);
-                  setBusca("");
-                  sortear(c.id, "");
-                }}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition md:text-sm ${
-                  ativo
-                    ? "botao-marca shadow-md"
-                    : "border border-border bg-secondary/60 text-muted-foreground hover:text-foreground"
-                }`}
+              <Link
+                key={section.title}
+                to={section.link}
+                className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900/50 backdrop-blur-sm p-6 md:p-8 transition-all hover:scale-[1.02] hover:border-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/20"
               >
-                {c.emoji} {c.nome}
-              </button>
+                <div className={`absolute inset-0 bg-gradient-to-r ${section.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
+                <div className="relative flex items-start gap-4 md:gap-6">
+                  <div className={`p-3 md:p-4 rounded-xl ${section.bgColor} group-hover:scale-110 transition-transform`}>
+                    <Icon className={`w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r ${section.color} bg-clip-text text-transparent`} />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl md:text-2xl font-bold mb-2 group-hover:text-purple-400 transition-colors">
+                      {section.title}
+                    </h2>
+                    <p className="text-sm md:text-base text-slate-400 group-hover:text-slate-300 transition-colors">
+                      {section.description}
+                    </p>
+                  </div>
+                  <div className="flex items-center">
+                    <Rocket className="w-5 h-5 text-slate-500 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                  </div>
+                </div>
+              </Link>
             );
           })}
         </div>
 
-        <div className="mb-6 flex min-h-[150px] flex-col items-center justify-center rounded-2xl border border-border bg-background/50 p-6 text-center shadow-inner">
-          <p className="max-w-xl text-lg font-medium leading-relaxed text-foreground md:text-2xl">
-            {frase}
-          </p>
+        {/* Features */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mb-12">
+          {FEATURES.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <div key={feature.title} className="flex flex-col items-center text-center p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
+                <Icon className="w-6 h-6 text-purple-400 mb-2" />
+                <h3 className="font-semibold text-sm mb-1">{feature.title}</h3>
+                <p className="text-xs text-slate-400">{feature.desc}</p>
+              </div>
+            );
+          })}
         </div>
 
-        <div className="mb-3 flex flex-col justify-center gap-3 sm:flex-row">
-          <button
-            onClick={() => sortear()}
-            className="botao-marca flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold shadow-lg"
-          >
-            🎲 Sortear Outra
-          </button>
-          <button
-            onClick={copiar}
-            className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/70 px-6 py-3.5 text-sm font-semibold text-foreground transition hover:bg-secondary"
-          >
-            📋 Copiar Frase
-          </button>
+        {/* Stats */}
+        <div className="flex items-center gap-8 text-sm text-slate-400 mb-8">
+          <div className="flex items-center gap-2">
+            <Star className="w-4 h-4 text-yellow-400" />
+            <span>+50.000 usuários</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-cyan-400" />
+            <span>Brasil e mundo</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-pink-400" />
+            <span>Atualizado diariamente</span>
+          </div>
         </div>
 
-        <div className="h-6 text-center">
-          <span
-            className={`text-xs font-medium text-success transition-opacity duration-300 md:text-sm ${
-              copiado ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            ✓ Frase copiada para a área de transferência!
-          </span>
-        </div>
-
-        <div className="mt-4 space-y-4 border-t border-border pt-4">
-          <AnuncioPessoal indice={0} />
-          {mostrarVideo && <AdVideoSlot />}
-        </div>
-
-        <nav className="mt-6 text-center">
-          <Link to="/biblioteca" className="text-sm font-semibold text-primary hover:underline">
-            📚 Ir para a Biblioteca de livros →
-          </Link>
-        </nav>
-      </main>
-
-      <footer className="my-4 text-center text-xs text-muted-foreground/70">
-        <p>© 2026 QG Frases — Seu mural de frases rápidas.</p>
-        <div className="mt-2 flex justify-center gap-4">
-          <Link to="/privacidade" className="hover:text-primary transition">
-            Privacidade
-          </Link>
-          <Link to="/termos" className="hover:text-primary transition">
-            Termos
-          </Link>
-        </div>
-      </footer>
+        {/* Footer */}
+        <footer className="text-center text-xs text-slate-500">
+          <p>© 2026 Cidadela do Pracinha — Seu universo digital</p>
+          <div className="mt-2 flex justify-center gap-4">
+            <Link to="/privacidade" className="hover:text-purple-400 transition">
+              Privacidade
+            </Link>
+            <Link to="/termos" className="hover:text-purple-400 transition">
+              Termos
+            </Link>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
