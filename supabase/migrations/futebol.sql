@@ -75,6 +75,7 @@ ON CONFLICT (id) DO NOTHING;
 -- Tabela de usuários (login por email obrigatório)
 CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE,
   email TEXT NOT NULL UNIQUE,
   nome TEXT NOT NULL,
   cores TEXT[] NOT NULL DEFAULT ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[],
@@ -91,18 +92,6 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   -- Constraint para garantir que as 3 cores sejam únicas por usuário
   CONSTRAINT check_cores_unicas CHECK (array_length(cores, 1) = 3 AND cores[1] IS DISTINCT FROM cores[2] AND cores[2] IS DISTINCT FROM cores[3] AND cores[1] IS DISTINCT FROM cores[3])
 );
-
--- Adicionar campo user_id se não existir
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'botao_usuarios' 
-    AND column_name = 'user_id'
-  ) THEN
-    ALTER TABLE public.botao_usuarios ADD COLUMN user_id UUID UNIQUE;
-  END IF;
-END $$;
 
 -- Trigger para criar perfil automaticamente quando usuário é criado no auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
