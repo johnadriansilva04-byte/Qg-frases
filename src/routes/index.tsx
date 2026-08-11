@@ -67,10 +67,6 @@ function Index() {
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
-      <div className="w-full max-w-3xl">
-        <AdSlot rotulo="Banner Topo / Google AdSense" />
-      </div>
-
       <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
         <header className="mb-6 text-center">
           <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
@@ -166,10 +162,6 @@ function Index() {
           </Link>
         </nav>
       </main>
-
-      <div className="w-full max-w-3xl">
-        <AdSlot rotulo="Banner Rodapé / Google AdSense" />
-      </div>
 
       <footer className="my-4 text-center text-xs text-muted-foreground/70">
         <p>© 2026 QG Frases — Seu mural de frases rápidas.</p>

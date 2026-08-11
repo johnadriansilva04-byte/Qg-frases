@@ -125,12 +125,18 @@ export const entrarBloco = createServerFn({ method: "POST" })
   });
 
 export const loginUsuario = createServerFn({ method: "POST" })
-  .validator((data: { telefone: string; nome: string }) => data)
-  .handler(async ({ telefone, nome }): Promise<Usuario> => {
+  .validator((data: { telefone: string; nome: string; time_personalizado?: string; numero_jogador?: number; cores?: string[] }) => data)
+  .handler(async ({ telefone, nome, time_personalizado, numero_jogador, cores }): Promise<Usuario> => {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("botao_usuarios")
-      .upsert({ telefone, nome })
+      .upsert({
+        telefone,
+        nome,
+        time_personalizado: time_personalizado || "Meu Time",
+        numero_jogador: numero_jogador || 10,
+        cores: cores || ['#FF0000', '#00FF00', '#0000FF']
+      })
       .select()
       .single();
 

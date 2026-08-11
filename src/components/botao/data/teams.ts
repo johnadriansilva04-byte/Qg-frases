@@ -49,3 +49,14 @@ export const TEAMS: Team[] = [
 export function teamById(id: string): Team {
   return TEAMS.find((t) => t.id === id) ?? TEAMS[0]!;
 }
+
+export function createCustomTeam(
+  id: string,
+  name: string,
+  short: string,
+  primary: string,
+  secondary: string,
+  power: number = 75
+): Team {
+  return { id, name, short, city: "Personalizado", primary, secondary, power };
+}

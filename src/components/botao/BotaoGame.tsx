@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe } from "lucide-react";
-import { TEAMS, teamById } from "./data/teams";
+import { TEAMS, teamById, createCustomTeam, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
 import {
   advanceKnockout,
@@ -35,8 +35,33 @@ interface BotaoGameProps {
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [screen, setScreen] = useState<Screen>("menu");
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
-  const [userTeam, setUserTeam] = useState("fla");
-  const [rivalTeam, setRivalTeam] = useState("pal");
+
+  // Carregar time personalizado do usuário
+  const customTeamData = useMemo(() => {
+    const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
+    const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
+    const numero = localStorage.getItem('botao_online_numero_jogador') || "10";
+    return {
+      nome: timeNome,
+      short: timeNome.substring(0, 3).toUpperCase(),
+      primary: cores[0],
+      secondary: cores[1],
+      numero: parseInt(numero)
+    };
+  }, []);
+
+  const userTeam = useMemo(() => {
+    return createCustomTeam(
+      'custom',
+      customTeamData.nome,
+      customTeamData.short,
+      customTeamData.primary,
+      customTeamData.secondary,
+      75
+    );
+  }, [customTeamData]);
+
+  const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
   const [tour, setTour] = useState<Tournament | null>(null);
   const [current, setCurrent] = useState<Fixture | null>(null);
@@ -56,7 +81,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- amistoso ---------- */
   const finishFriendly = (r: MatchResult) => {
-    const userIsHome = r.homeId === userTeam;
+    const userIsHome = r.homeId === userTeam.id;
     const gf = userIsHome ? r.homeGoals : r.awayGoals;
     const ga = userIsHome ? r.awayGoals : r.homeGoals;
     const f = { ...progress.friendlies };
@@ -70,7 +95,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- torneio ---------- */
   const startTournament = () => {
-    setTour(createTournament(userTeam, difficulty));
+    setTour(createTournament(userTeam.id, difficulty));
     setScreen("hub");
   };
 
@@ -152,8 +177,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- telas ---------- */
   if (screen === "friendly-match" || screen === "tournament-match") {
-    const f = screen === "friendly-match" ? { homeId: userTeam, awayId: rivalTeam, stage: "Amistoso" } : current!;
-    const userSide = f.homeId === userTeam ? "home" : "away";
+    const f = screen === "friendly-match" ? { homeId: userTeam.id, awayId: rivalTeam, stage: "Amistoso" } : current!;
+    const userSide = f.homeId === userTeam.id ? "home" : "away";
     const knockout = screen === "tournament-match" && (tour?.phase ?? "") === "mata-mata";
     return (
       <Shell>
@@ -193,9 +218,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         {screen === "friendly-setup" && (
           <Setup
             title="Amistoso"
-            subtitle="Escolha seu time, o adversário e o nível. Bola no centro."
+            subtitle="Seu time personalizado vs adversário. Escolha o nível e o oponente."
             userTeam={userTeam}
-            setUserTeam={setUserTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
             difficulty={difficulty}
@@ -214,7 +238,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             title="Torneio"
             subtitle="32 times, 8 grupos, mata-mata até a final. Três títulos liberam o próximo nível."
             userTeam={userTeam}
-            setUserTeam={setUserTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
             difficulty={difficulty}
@@ -350,8 +373,7 @@ function MenuCard({
 function Setup(props: {
   title: string;
   subtitle: string;
-  userTeam: string;
-  setUserTeam: (v: string) => void;
+  userTeam: Team;
   rivalTeam: string;
   setRivalTeam: (v: string) => void;
   difficulty: Difficulty;
@@ -365,7 +387,6 @@ function Setup(props: {
     title,
     subtitle,
     userTeam,
-    setUserTeam,
     rivalTeam,
     setRivalTeam,
     difficulty,
@@ -378,8 +399,7 @@ function Setup(props: {
 
   const sorteio = () => {
     const s = shuffle(TEAMS);
-    setUserTeam(s[0]!.id);
-    setRivalTeam(s[1]!.id);
+    setRivalTeam(s[0]!.id);
   };
 
   return (
@@ -419,9 +439,15 @@ function Setup(props: {
         </div>
       </div>
 
-      <TeamPicker label="Seu time" value={userTeam} onChange={setUserTeam} exclude={showRival ? rivalTeam : undefined} />
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-2">Seu Time</label>
+        <div className="flex items-center gap-3 p-3 bg-accent/10 rounded-lg">
+          <TeamBadge team={userTeam} size="sm" />
+          <span className="font-display text-lg">{userTeam.name}</span>
+        </div>
+      </div>
       {showRival && (
-        <TeamPicker label="Adversário" value={rivalTeam} onChange={setRivalTeam} exclude={userTeam} />
+        <TeamPicker label="Adversário" value={rivalTeam} onChange={setRivalTeam} exclude={userTeam.id} />
       )}
 
       <div className="flex gap-3">

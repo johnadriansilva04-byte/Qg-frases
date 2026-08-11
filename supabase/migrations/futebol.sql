@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   telefone TEXT NOT NULL UNIQUE,
   nome TEXT NOT NULL,
+  cores TEXT[] NOT NULL DEFAULT ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[],
   pontos_soberania INTEGER NOT NULL DEFAULT 0,
   partidas_jogadas INTEGER NOT NULL DEFAULT 0,
   partidas_vencidas INTEGER NOT NULL DEFAULT 0,

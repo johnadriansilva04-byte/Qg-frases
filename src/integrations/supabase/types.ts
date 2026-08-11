@@ -64,6 +64,9 @@ export type Database = {
           id: string
           telefone: string
           nome: string
+          cores: string[]
+          time_personalizado: string
+          numero_jogador: number
           pontos_soberania: number
           partidas_jogadas: number
           partidas_vencidas: number
@@ -74,6 +77,9 @@ export type Database = {
           id?: string
           telefone: string
           nome: string
+          cores?: string[]
+          time_personalizado?: string
+          numero_jogador?: number
           pontos_soberania?: number
           partidas_jogadas?: number
           partidas_vencidas?: number
@@ -84,6 +90,9 @@ export type Database = {
           id?: string
           telefone?: string
           nome?: string
+          cores?: string[]
+          time_personalizado?: string
+          numero_jogador?: number
           pontos_soberania?: number
           partidas_jogadas?: number
           partidas_vencidas?: number

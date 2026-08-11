@@ -52,10 +52,6 @@ function Biblioteca() {
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
-      <div className="w-full max-w-5xl">
-        <AdSlot rotulo="Banner Topo / Google AdSense" />
-      </div>
-
       <main className="painel w-full max-w-5xl rounded-3xl p-5 shadow-2xl md:p-8">
         <header className="mb-8 text-center">
           <Link to="/" className="text-xs font-semibold text-muted-foreground hover:text-primary">
@@ -133,10 +129,6 @@ function Biblioteca() {
           </div>
         )}
       </main>
-
-      <div className="w-full max-w-5xl">
-        <AdSlot rotulo="Banner Rodapé / Google AdSense" />
-      </div>
 
       <footer className="my-4 text-center text-xs text-muted-foreground/70">
         <p>© 2026 QG Frases — Biblioteca de indicações.</p>

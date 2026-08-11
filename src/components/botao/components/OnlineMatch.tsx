@@ -2,11 +2,9 @@ import { useEffect, useState, useCallback } from "react";
 import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2, LogOut, User, Lock } from "lucide-react";
 import { useBotaoOnline } from "@/hooks/useBotaoOnline";
 import { supabase } from "@/integrations/supabase/client";
-import { teamById } from "../data/teams";
 import { MatchView } from "./MatchView";
-import { TeamPicker } from "./TeamPicker";
 
-type Screen = "login" | "config-time" | "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
+type Screen = "login" | "cadastro" | "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
 
 // Chaves para persistência no localStorage
 const STORAGE_KEYS = {
@@ -14,14 +12,13 @@ const STORAGE_KEYS = {
   NOME: 'botao_online_nome',
   TELEFONE: 'botao_online_telefone',
   NOME_SALA: 'botao_online_nome_sala',
-  TIME: 'botao_online_time',
+  CORES: 'botao_online_cores',
   FORMATO: 'botao_online_formato',
   LOBBY_ID: 'botao_online_lobby_id',
   BLOCO_ID: 'botao_online_bloco_id',
   LOGGED_IN: 'botao_online_logged_in',
-  TIME_CONFIGURED: 'botao_online_time_configured',
-  TIME_NOME: 'botao_online_time_nome',
-  TIME_COR: 'botao_online_time_cor'
+  TIME_PERSONALIZADO: 'botao_online_time_personalizado',
+  NUMERO_JOGADOR: 'botao_online_numero_jogador'
 };
 
 export function OnlineMatch({ onBack }: { onBack?: () => void }) {
@@ -55,16 +52,10 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   // Carregar estado persistido
   const [screen, setScreen] = useState<Screen>(() => {
     const isLoggedIn = localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === 'true';
-    const timeConfigured = localStorage.getItem(STORAGE_KEYS.TIME_CONFIGURED) === 'true';
-    
     if (!isLoggedIn) return "login";
-    if (!timeConfigured) return "config-time";
     return (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list";
   });
-  
-  const [selectedTeam, setSelectedTeam] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.TIME) || "fla";
-  });
+
   const [nome, setNome] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.NOME) || "";
   });
@@ -77,23 +68,21 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   const [formato, setFormato] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.FORMATO) || "melhor_de_3";
   });
-  
-  // Configuração de time personalizado
-  const [timeNome, setTimeNome] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.TIME_NOME) || "";
+  const [timePersonalizado, setTimePersonalizado] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.TIME_PERSONALIZADO) || "Meu Time";
   });
-  const [timeCor, setTimeCor] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.TIME_COR) || "#FF0000";
+  const [numeroJogador, setNumeroJogador] = useState(() => {
+    return parseInt(localStorage.getItem(STORAGE_KEYS.NUMERO_JOGADOR) || "10");
+  });
+  const [cores, setCores] = useState<string[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.CORES);
+    return saved ? JSON.parse(saved) : ['#FF0000', '#00FF00', '#0000FF'];
   });
 
   // Persistir estado quando mudar
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SCREEN, screen);
   }, [screen]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TIME, selectedTeam);
-  }, [selectedTeam]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.NOME, nome);
@@ -112,12 +101,16 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, [formato]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TIME_NOME, timeNome);
-  }, [timeNome]);
+    localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(cores));
+  }, [cores]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TIME_COR, timeCor);
-  }, [timeCor]);
+    localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
+  }, [timePersonalizado]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
+  }, [numeroJogador]);
 
   // Persistir lobby/bloco IDs
   useEffect(() => {
@@ -213,31 +206,19 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
       .single();
     
     if (existingUser) {
-      // Usuário já existe - fazer login
+      // Usuário já existe - fazer login direto
       localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
       localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
       localStorage.setItem(STORAGE_KEYS.NOME, existingUser.nome);
       setNome(existingUser.nome);
       setTelefone(telefone);
-      
-      // Verificar se time já foi configurado
-      const timeConfigured = localStorage.getItem(STORAGE_KEYS.TIME_CONFIGURED) === 'true';
-      if (!timeConfigured) {
-        setScreen('config-time');
-      } else {
-        setScreen('lobby-list');
-      }
+      setTimePersonalizado(existingUser.time_personalizado || 'Meu Time');
+      setNumeroJogador(existingUser.numero_jogador || 10);
+      setCores(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']);
+      setScreen('lobby-list');
     } else {
-      // Novo usuário - pedir nome
-      if (!nome) {
-        alert('Por favor, digite seu nome para criar conta');
-        return;
-      }
-      await login(telefone, nome);
-      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
-      localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
-      localStorage.setItem(STORAGE_KEYS.NOME, nome);
-      setScreen('config-time');
+      // Novo usuário - ir para tela de cadastro
+      setScreen('cadastro');
     }
   }, [telefone, nome, login]);
 
@@ -245,22 +226,51 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
     localStorage.removeItem(STORAGE_KEYS.TELEFONE);
     localStorage.removeItem(STORAGE_KEYS.NOME);
+    localStorage.removeItem(STORAGE_KEYS.TIME_PERSONALIZADO);
+    localStorage.removeItem(STORAGE_KEYS.NUMERO_JOGADOR);
+    localStorage.removeItem(STORAGE_KEYS.CORES);
     setTelefone('');
     setNome('');
+    setTimePersonalizado('Meu Time');
+    setNumeroJogador(10);
+    setCores(['#FF0000', '#00FF00', '#0000FF']);
     setScreen('login');
     sairLobby();
   }, [sairLobby]);
 
-  const handleSalvarTime = useCallback(() => {
-    if (!timeNome) {
+  const handleCadastro = useCallback(async () => {
+    if (!nome) {
+      alert('Por favor, digite seu nome');
+      return;
+    }
+    if (!timePersonalizado) {
       alert('Por favor, digite o nome do seu time');
       return;
     }
-    localStorage.setItem(STORAGE_KEYS.TIME_CONFIGURED, 'true');
-    localStorage.setItem(STORAGE_KEYS.TIME_NOME, timeNome);
-    localStorage.setItem(STORAGE_KEYS.TIME_COR, timeCor);
+    if (cores.length !== 3 || new Set(cores).size !== 3) {
+      alert('Por favor, escolha 3 cores diferentes');
+      return;
+    }
+    await login(telefone, nome, timePersonalizado, numeroJogador, cores);
+    localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
+    localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
+    localStorage.setItem(STORAGE_KEYS.NOME, nome);
+    localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
+    localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
+    localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(cores));
     setScreen('lobby-list');
-  }, [timeNome, timeCor]);
+  }, [telefone, nome, timePersonalizado, numeroJogador, cores, login]);
+
+  // Função para escolher cor que não conflita com o oponente
+  const getCorDisponivel = useCallback((coresOponente?: string[]) => {
+    if (!coresOponente || coresOponente.length === 0) {
+      return cores[0]; // Retorna a primeira cor preferida
+    }
+    
+    // Tenta encontrar uma cor que não está nas cores do oponente
+    const corDisponivel = cores.find(cor => !coresOponente.includes(cor));
+    return corDisponivel || cores[0]; // Se todas conflitam, usa a primeira
+  }, [cores]);
 
   const handleCriarLobby = useCallback(async () => {
     if (!nomeSala) {
@@ -277,14 +287,20 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, [entrarLobby]);
 
   const handleCriarBloco = useCallback(async () => {
-    await criarBloco(selectedTeam, nome);
+    // Usar a primeira cor preferida
+    const corEscolhida = cores[0] || '#FF0000';
+    await criarBloco(corEscolhida, nome);
     setScreen('aguardando');
-  }, [nome, selectedTeam, criarBloco]);
+  }, [nome, cores, criarBloco]);
 
   const handleEntrarBloco = useCallback(async (blocoId: string) => {
-    await entrarBloco(blocoId, selectedTeam, nome);
+    // Verificar cor do oponente e escolher uma disponível
+    const bloco = blocos.find(b => b.id === blocoId);
+    const coresOponente = bloco?.jogador1_time ? [bloco.jogador1_time] : [];
+    const corEscolhida = getCorDisponivel(coresOponente) || '#00FF00';
+    await entrarBloco(blocoId, corEscolhida, nome);
     setScreen('jogo');
-  }, [nome, selectedTeam, entrarBloco]);
+  }, [nome, cores, blocos, getCorDisponivel, entrarBloco]);
 
   const handleFimJogada = useCallback((gols: number) => {
     registrarJogada();
@@ -338,17 +354,6 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Nome (apenas para novos usuários)</label>
-          <input
-            type="text"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Seu nome"
-            className="w-full px-3 py-2 rounded border bg-background"
-          />
-        </div>
-
         <button
           onClick={handleLogin}
           disabled={loading || !telefone}
@@ -366,81 +371,95 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     );
   }
 
-  // Tela de Configuração de Time
-  if (screen === "config-time") {
+  // Tela de Cadastro (apenas para novos usuários)
+  if (screen === "cadastro") {
     return (
       <div className="panel">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display text-2xl">Configurar Seu Time</h2>
-          <button onClick={handleLogout} className="btn-ghost text-destructive">
-            <LogOut className="w-5 h-5 mr-2" />
-            Sair
+          <h2 className="font-display text-2xl">Criar Seu Time</h2>
+          <button onClick={() => setScreen('login')} className="btn-ghost">
+            <ArrowLeft className="w-5 h-5" />
           </button>
         </div>
 
         <div className="mb-6 p-4 bg-accent/10 rounded-lg">
           <p className="text-sm text-muted-foreground">
             <Gamepad2 className="inline w-4 h-4 mr-1" />
-            Personalize seu time para jogar online
+            Crie seu time personalizado com 3 cores únicas!
           </p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Seu Nome</label>
+          <input
+            type="text"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Seu nome"
+            className="w-full px-3 py-2 rounded border bg-background"
+          />
         </div>
 
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Nome do Time</label>
           <input
             type="text"
-            value={timeNome}
-            onChange={(e) => setTimeNome(e.target.value)}
-            placeholder="Ex: Meu Time FC"
+            value={timePersonalizado}
+            onChange={(e) => setTimePersonalizado(e.target.value)}
+            placeholder="Ex: Flamengo, Corinthians, Meu Time..."
             className="w-full px-3 py-2 rounded border bg-background"
           />
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Cor do Time (cor do botão)</label>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="color"
-              value={timeCor}
-              onChange={(e) => setTimeCor(e.target.value)}
-              className="w-16 h-10 rounded cursor-pointer"
-            />
-            <input
-              type="text"
-              value={timeCor}
-              onChange={(e) => setTimeCor(e.target.value)}
-              placeholder="#FF0000"
-              className="flex-1 px-3 py-2 rounded border bg-background"
-            />
-          </div>
-          <div className="flex gap-2">
-            {['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'].map(cor => (
-              <button
-                key={cor}
-                onClick={() => setTimeCor(cor)}
-                className={`w-8 h-8 rounded border-2 ${timeCor === cor ? 'border-foreground' : 'border-transparent'}`}
-                style={{ backgroundColor: cor }}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Escolha um time base (opcional)</label>
-          <TeamPicker
-            label=""
-            value={selectedTeam}
-            onChange={setSelectedTeam}
+          <label className="block text-sm font-medium mb-2">Seu Número</label>
+          <input
+            type="number"
+            min="1"
+            max="99"
+            value={numeroJogador}
+            onChange={(e) => setNumeroJogador(parseInt(e.target.value) || 10)}
+            className="w-full px-3 py-2 rounded border bg-background"
           />
         </div>
 
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Escolha 3 Cores Únicas</label>
+          <div className="grid grid-cols-3 gap-2">
+            {cores.map((cor, index) => (
+              <div key={index} className="flex flex-col items-center">
+                <input
+                  type="color"
+                  value={cor}
+                  onChange={(e) => {
+                    const novasCores = [...cores];
+                    novasCores[index] = e.target.value;
+                    setCores(novasCores);
+                  }}
+                  className="w-full h-12 rounded cursor-pointer border"
+                />
+                <span className="text-xs text-muted-foreground mt-1">Cor {index + 1}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            As 3 cores devem ser diferentes entre si e únicas no sistema.
+          </p>
+        </div>
+
         <button
-          onClick={handleSalvarTime}
-          disabled={!timeNome}
+          onClick={handleCadastro}
+          disabled={loading || !nome || !timePersonalizado || cores.length !== 3 || new Set(cores).size !== 3}
           className="btn-primary w-full"
         >
-          Salvar e Continuar
+          {loading ? 'Criando...' : 'Cadastrar'}
         </button>
+
+        {error && (
+          <div className="mt-4 p-3 bg-destructive/10 rounded-lg text-destructive">
+            {error}
+          </div>
+        )}
       </div>
     );
   }
@@ -463,18 +482,36 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
         </div>
 
         <div className="mb-4 p-3 bg-accent/10 rounded-lg">
-          <p className="text-sm text-muted-foreground mb-2">
-            <User className="inline w-4 h-4 mr-1" />
-            Logado como: <span className="font-medium">{nome}</span>
-          </p>
-          <p className="text-sm text-muted-foreground mb-2">
-            <Users className="inline w-4 h-4 mr-1" />
-            Sistema de lobbies com múltiplos blocos
-          </p>
-          <p className="text-sm text-muted-foreground">
-            <Gamepad2 className="inline w-4 h-4 mr-1" />
-            Melhor de 3, 6 ou 9 rodadas
-          </p>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="inline w-4 h-4" />
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="text-sm font-medium bg-transparent border-b border-border focus:border-primary focus:outline-none px-1"
+                  placeholder="Nome do seu time"
+                />
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">
+                <Users className="inline w-4 h-4 mr-1" />
+                Sistema de lobbies com múltiplos blocos
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <Gamepad2 className="inline w-4 h-4 mr-1" />
+                Melhor de 3, 6 ou 9 rodadas
+              </p>
+            </div>
+            <div className="flex flex-col items-center gap-2 ml-4">
+              <span className="text-xs text-muted-foreground">Suas cores:</span>
+              <div className="flex gap-1">
+                {cores.map((cor, i) => (
+                  <div key={i} className="w-5 h-5 rounded border-2" style={{ backgroundColor: cor }} />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mb-4">
@@ -500,12 +537,6 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
             <option value="melhor_de_9">Melhor de 9</option>
           </select>
         </div>
-
-        <TeamPicker
-          label="Escolha seu time"
-          value={selectedTeam}
-          onChange={setSelectedTeam}
-        />
 
         <button
           onClick={handleCriarLobby}
@@ -608,17 +639,22 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
                     bloco.status === 'aguardando' ? 'bg-card' : 'bg-muted'
                   }`}
                 >
-                  <div>
-                    <p className="font-medium">{bloco.jogador1_nome}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Time: <TeamBadge team={teamById(bloco.jogador1_time)} size="sm" />
-                      {bloco.status === 'aguardando' && (
-                        <span className="ml-2 text-accent">vs Aguardando...</span>
-                      )}
-                      {bloco.status === 'em_jogo' && (
-                        <span className="ml-2 text-destructive">Em jogo</span>
-                      )}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-8 h-8 rounded-full border-2"
+                      style={{ backgroundColor: bloco.jogador1_time || '#FF0000' }}
+                    />
+                    <div>
+                      <p className="font-medium">{bloco.jogador1_nome}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {bloco.status === 'aguardando' && (
+                          <span className="text-accent">vs Aguardando...</span>
+                        )}
+                        {bloco.status === 'em_jogo' && (
+                          <span className="text-destructive">Em jogo</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                   {bloco.status === 'aguardando' && (
                     <button
@@ -654,8 +690,13 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
         <h2 className="font-display text-2xl mb-2">Aguardando Oponente...</h2>
         <p className="text-muted-foreground mb-4">Sala criada com sucesso</p>
         <p className="text-sm text-muted-foreground mb-4">
-          Time: <TeamBadge team={teamById(selectedTeam)} size="sm" />
+          Time: <span className="font-medium">{nome}</span>
         </p>
+        <div className="flex justify-center gap-2 mb-4">
+          {cores.map((cor, i) => (
+            <div key={i} className="w-6 h-6 rounded border-2" style={{ backgroundColor: cor }} />
+          ))}
+        </div>
         <button
           onClick={handleSair}
           className="btn-ghost"
@@ -668,14 +709,15 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }
 
   if (screen === "jogo" && blocoAtual && meuTime) {
-    const oponenteTime = blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador2_time : blocoAtual.jogador1_time;
-    const userSide = blocoAtual.jogador1_session === sessionId ? "home" : "away";
+    const souJogador1 = blocoAtual.jogador1_session === sessionId;
+    const oponenteTime = souJogador1 ? blocoAtual.jogador2_time : blocoAtual.jogador1_time;
+    const userSide = souJogador1 ? "home" : "away";
 
     return (
       <div className="h-screen">
         <MatchView
-          homeId={blocoAtual.jogador1_time}
-          awayId={oponenteTime || 'fla'}
+          homeId={souJogador1 ? blocoAtual.jogador1_time : (blocoAtual.jogador2_time || '#FF0000')}
+          awayId={oponenteTime || '#00FF00'}
           userSide={userSide}
           difficulty="amador"
           turns={blocoAtual.jogadas_restantes}
@@ -683,7 +725,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
           stageLabel={`Rodada ${blocoAtual.rodada} - ${meuTurno ? 'Seu turno' : 'Aguardando oponente'}`}
           isOnline={true}
           onFinish={(result) => {
-            const meusGols = blocoAtual.jogador1_session === sessionId ? result.homeGoals : result.awayGoals;
+            const meusGols = souJogador1 ? result.homeGoals : result.awayGoals;
             handleFimJogada(meusGols);
           }}
           onQuit={handleSair}
@@ -726,12 +768,4 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }
 
   return null;
-}
-
-function TeamBadge({ team, size }: { team: ReturnType<typeof teamById>; size?: "sm" | "md" }) {
-  return (
-    <div className={`inline-flex items-center gap-2 px-2 py-1 rounded ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ backgroundColor: team.primary, color: team.secondary }}>
-      <span className="font-bold">{team.short}</span>
-    </div>
-  );
 }

@@ -20,9 +20,9 @@ interface Bloco {
   jogador1_session: string;
   jogador1_nome: string;
   jogador1_time: string;
-  jogador2_session?: string;
-  jogador2_nome?: string;
-  jogador2_time?: string;
+  jogador2_session: string | null;
+  jogador2_nome: string | null;
+  jogador2_time: string | null;
   status: string;
   turno: string;
   jogadas_restantes: number;
@@ -31,14 +31,15 @@ interface Bloco {
   jogador1_gols: number;
   jogador2_gols: number;
   rodada: number;
-  vencedor?: string;
-  finalizada_em?: string;
+  vencedor: string | null;
+  finalizada_em: string | null;
 }
 
 interface Usuario {
   id: string;
   telefone: string;
   nome: string;
+  cores?: string[];
   pontos_soberania: number;
   partidas_jogadas: number;
   partidas_vencidas: number;
@@ -201,6 +202,28 @@ export function useBotaoOnline() {
     setError(null);
     
     try {
+      // Primeiro, verificar se o bloco ainda está aguardando
+      const { data: blocoExistente, error: checkError } = await supabase
+        .from('botao_blocos')
+        .select('*')
+        .eq('id', blocoId)
+        .single();
+
+      if (checkError) throw checkError;
+      
+      if (!blocoExistente) {
+        throw new Error('Bloco não encontrado');
+      }
+      
+      if (blocoExistente.status !== 'aguardando') {
+        throw new Error('Este bloco já está em jogo ou finalizado');
+      }
+      
+      if (blocoExistente.jogador1_session === sessionId) {
+        throw new Error('Você já é o jogador 1 deste bloco');
+      }
+
+      // Atualizar bloco com jogador 2
       const { data, error } = await supabase
         .from('botao_blocos')
         .update({
@@ -219,8 +242,8 @@ export function useBotaoOnline() {
       
       setBlocoAtual(data);
       inscreverBloco(blocoId);
-    } catch (err) {
-      setError('Erro ao entrar no bloco');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao entrar no bloco');
       console.error(err);
     } finally {
       setLoading(false);
@@ -331,7 +354,7 @@ export function useBotaoOnline() {
     
     await supabase.rpc('registrar_jogada_bloco', {
       p_bloco_id: blocoAtual.id
-    });
+    } as any);
   }, [blocoAtual]);
 
   // Registrar gol
@@ -341,7 +364,7 @@ export function useBotaoOnline() {
     await supabase.rpc('registrar_gol_bloco', {
       p_bloco_id: blocoAtual.id,
       p_jogador: jogador
-    });
+    } as any);
   }, [blocoAtual]);
 
   // Forçar troca de turno por timeout
@@ -350,7 +373,7 @@ export function useBotaoOnline() {
     
     await supabase.rpc('forcar_troca_turno_bloco', {
       p_bloco_id: blocoAtual.id
-    });
+    } as any);
   }, [blocoAtual]);
 
   // Finalizar bloco
@@ -360,7 +383,7 @@ export function useBotaoOnline() {
     await supabase.rpc('finalizar_bloco', {
       p_bloco_id: blocoAtual.id,
       p_vencedor: vencedor
-    });
+    } as any);
   }, [blocoAtual]);
 
   // Sair do lobby/bloco
@@ -376,20 +399,23 @@ export function useBotaoOnline() {
   }, []);
 
   // Login
-  const login = useCallback(async (telefone: string, nome: string) => {
+  const login = useCallback(async (telefone: string, nome: string, time_personalizado?: string, numero_jogador?: number, cores?: string[]) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const { data, error } = await supabase
         .from('botao_usuarios')
         .upsert({
           telefone,
-          nome
+          nome,
+          time_personalizado: time_personalizado || "Meu Time",
+          numero_jogador: numero_jogador || 10,
+          cores: cores || ['#FF0000', '#00FF00', '#0000FF']
         })
         .select()
         .single();
-      
+
       if (error) throw error;
       setUsuario(data);
     } catch (err) {
