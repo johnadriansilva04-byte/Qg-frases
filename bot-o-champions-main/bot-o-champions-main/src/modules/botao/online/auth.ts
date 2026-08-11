@@ -147,18 +147,22 @@ export async function cadastrar(input: {
     throw new Error(erro);
   }
 
+  const metadata = {
+    nome: input.nome.trim(),
+    time_personalizado: input.time.trim(),
+    abreviacao_time: input.abreviacao.trim().toUpperCase(),
+    numero_jogador: input.numero,
+    cores: input.cores,
+  };
+  
+  console.log("📦 METADATA ENVIADO:", metadata);
+
   const { data, error } = await supabase.auth.signUp({
     email: input.email,
     password: input.senha,
     options: {
       emailRedirectTo: window.location.origin,
-      data: {
-        nome: input.nome.trim(),
-        time_personalizado: input.time.trim(),
-        abreviacao_time: input.abreviacao.trim().toUpperCase(),
-        numero_jogador: input.numero,
-        cores: input.cores,
-      },
+      data: metadata,
     },
   });
   if (error) {
@@ -176,7 +180,11 @@ export async function cadastrar(input: {
   }
 
   console.log("✅ USUÁRIO CRIADO NO SUPABASE AUTH, ID:", user.id);
+  console.log("👤 USER METADATA:", user.user_metadata);
   console.log("📋 PERFIL SERÁ CRIADO AUTOMATICAMENTE PELO TRIGGER");
+
+  // Esperar um momento para o trigger executar
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
   // Trigger cria perfil automaticamente, fazer login
   await entrar(input.email, input.senha);
@@ -184,7 +192,10 @@ export async function cadastrar(input: {
   // Buscar perfil criado pelo trigger
   const perfilCriado = await buscarPerfil(user.id);
   console.log("📋 PERFIL CRIADO PELO TRIGGER:", perfilCriado);
-  if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
+  if (!perfilCriado) {
+    console.error("❌ PERFIL NÃO CRIADO PELO TRIGGER");
+    throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
+  }
   
   return perfilCriado;
 }
