@@ -50,12 +50,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   // Carregar times do banco de dados ao montar
   useEffect(() => {
+    let mounted = true;
     getAllTeams().then(teams => {
-      if (teams.length > 0) {
+      if (mounted && teams.length > 0) {
         setAllTeams(teams);
       }
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { mounted = false; };
+  }, []);
 
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {

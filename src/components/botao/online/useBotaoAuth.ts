@@ -11,6 +11,7 @@ export function useBotaoAuth() {
   useEffect(() => {
     let vivo = true;
     let syncInProgress = false; // Flag para evitar chamadas simultâneas
+    let lastUserId: string | null = null; // Rastrear o último usuário sync
 
     const sync = async (u: User | null) => {
       // Guarda para evitar chamadas simultâneas
@@ -19,9 +20,17 @@ export function useBotaoAuth() {
         return;
       }
       
+      // Evitar sync se o usuário é o mesmo
+      const currentUserId = u?.id ?? null;
+      if (currentUserId === lastUserId && lastUserId !== null) {
+        console.log('Usuário é o mesmo, ignorando sync');
+        return;
+      }
+      
       if (!vivo) return;
       
       syncInProgress = true;
+      lastUserId = currentUserId;
       
       try {
         setUser(u);
