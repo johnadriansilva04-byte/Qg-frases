@@ -14,6 +14,7 @@ type Props = {
   stageLabel: string;
   onFinish: (result: MatchResult) => void;
   onQuit: () => void;
+  isOnline?: boolean; // Nova prop para indicar modo online
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -28,10 +29,13 @@ export function MatchView({
   stageLabel,
   onFinish,
   onQuit,
+  isOnline = false,
 }: Props) {
   const home = teamById(homeId);
   const away = teamById(awayId);
   const cpuSide: Side = userSide === "home" ? "away" : "home";
+  // No modo online, não há CPU - ambos os lados são jogadores reais
+  const hasCpu = !isOnline;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -176,9 +180,9 @@ export function MatchView({
     requestAnimationFrame(loop);
   }, [finishMatch]);
 
-  // jogada da CPU
+  // jogada da CPU (desabilitado no modo online)
   useEffect(() => {
-    if (ended || turn !== cpuSide || simRef.current) return;
+    if (!hasCpu || ended || turn !== cpuSide || simRef.current) return;
     const cpuTeam = cpuSide === "home" ? home : away;
     const t = setTimeout(() => {
       const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
@@ -190,7 +194,7 @@ export function MatchView({
       runSimulation();
     }, 750);
     return () => clearTimeout(t);
-  }, [turn, cpuSide, difficulty, ended, home, away, runSimulation]);
+  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {
@@ -204,6 +208,7 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // No modo online, só permite input se for o turno do usuário
     if (ended || simRef.current || turn !== userSide) return;
     const { x, y } = toField(e);
     const hit = discsRef.current
@@ -304,6 +309,8 @@ export function MatchView({
             <>
               Sua vez, <span className="text-foreground">{userTeam.short}</span> — arraste um botão pra trás e solte.
             </>
+          ) : isOnline ? (
+            "Aguardando o oponente..."
           ) : (
             "A CPU está pensando..."
           )}
