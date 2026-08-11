@@ -210,12 +210,17 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
       localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
       localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
       localStorage.setItem(STORAGE_KEYS.NOME, existingUser.nome);
+      localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, existingUser.time_personalizado || 'Meu Time');
+      localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, (existingUser.numero_jogador || 10).toString());
+      localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']));
+      localStorage.setItem('botao_online_usuario_id', existingUser.id);
       setNome(existingUser.nome);
       setTelefone(telefone);
       setTimePersonalizado(existingUser.time_personalizado || 'Meu Time');
       setNumeroJogador(existingUser.numero_jogador || 10);
       setCores(existingUser.cores || ['#FF0000', '#00FF00', '#0000FF']);
-      setScreen('lobby-list');
+      // Chama onBack para voltar ao menu do BotaoGame
+      if (onBack) onBack();
     } else {
       // Novo usuário - ir para tela de cadastro
       setScreen('cadastro');
@@ -256,7 +261,20 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
     localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
     localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(cores));
-    setScreen('lobby-list');
+    
+    // Buscar usuário criado para salvar o ID
+    const { data: createdUser } = await supabase
+      .from('botao_usuarios')
+      .select('id')
+      .eq('telefone', telefone)
+      .single();
+    
+    if (createdUser) {
+      localStorage.setItem('botao_online_usuario_id', createdUser.id);
+    }
+    
+    // Chama onBack para voltar ao menu do BotaoGame
+    if (onBack) onBack();
   }, [telefone, timePersonalizado, numeroJogador, cores, login]);
 
   // Função para escolher cor que não conflita com o oponente

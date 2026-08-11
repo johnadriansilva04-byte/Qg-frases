@@ -20,6 +20,7 @@ import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { OnlineMatch } from "./components/OnlineMatch";
 
 type Screen =
+  | "login"
   | "menu"
   | "friendly-setup"
   | "friendly-match"
@@ -34,9 +35,17 @@ interface BotaoGameProps {
 }
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
-  const [screen, setScreen] = useState<Screen>("menu");
+  const [screen, setScreen] = useState<Screen>("login");
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
+
+  // Verificar se usuário já está logado ao montar
+  useEffect(() => {
+    const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
+    if (isLoggedIn) {
+      setScreen('menu');
+    }
+  }, []);
 
   // Carregar times do banco de dados ao montar
   useEffect(() => {
@@ -243,7 +252,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   return (
     <Shell>
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
-        <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
+        {screen === "login" && (
+          <div className="panel">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-2xl">Entrar no Futebol de Botão</h2>
+              {onBack && (
+                <button onClick={onBack} className="btn-ghost">
+                  Voltar
+                </button>
+              )}
+            </div>
+            <OnlineMatch onBack={() => setScreen("menu")} />
+          </div>
+        )}
+
+        {screen !== "login" && (
+          <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
+        )}
 
         {screen === "menu" && (
           <Menu
