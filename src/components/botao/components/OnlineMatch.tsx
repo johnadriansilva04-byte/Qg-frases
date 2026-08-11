@@ -1,11 +1,23 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Volume2, Gamepad2 } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2 } from "lucide-react";
 import { useBotaoOnline } from "@/hooks/useBotaoOnline";
-import { TEAMS, teamById } from "../data/teams";
+import { teamById } from "../data/teams";
 import { MatchView } from "./MatchView";
 import { TeamPicker } from "./TeamPicker";
 
 type Screen = "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
+
+// Chaves para persistência no localStorage
+const STORAGE_KEYS = {
+  SCREEN: 'botao_online_screen',
+  NOME: 'botao_online_nome',
+  TELEFONE: 'botao_online_telefone',
+  NOME_SALA: 'botao_online_nome_sala',
+  TIME: 'botao_online_time',
+  FORMATO: 'botao_online_formato',
+  LOBBY_ID: 'botao_online_lobby_id',
+  BLOCO_ID: 'botao_online_bloco_id'
+};
 
 export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   const {
@@ -35,44 +47,90 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     error
   } = useBotaoOnline();
 
-  const [screen, setScreen] = useState<Screen>("lobby-list");
-  const [selectedTeam, setSelectedTeam] = useState("fla");
-  const [nome, setNome] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [nomeSala, setNomeSala] = useState("");
-  const [formato, setFormato] = useState("melhor_de_3");
-  const [golsAnteriores, setGolsAnteriores] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Carregar estado persistido
+  const [screen, setScreen] = useState<Screen>(() => {
+    return (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list";
+  });
+  const [selectedTeam, setSelectedTeam] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.TIME) || "fla";
+  });
+  const [nome, setNome] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.NOME) || "";
+  });
+  const [telefone, setTelefone] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.TELEFONE) || "";
+  });
+  const [nomeSala, setNomeSala] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.NOME_SALA) || "";
+  });
+  const [formato, setFormato] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.FORMATO) || "melhor_de_3";
+  });
 
-  // Audio de gol
-  const tocarSomGol = useCallback(() => {
-    try {
-      if (!audioRef.current) {
-        audioRef.current = new Audio('/sounds/gol.mp3');
-        audioRef.current.volume = 0.5;
-      }
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
-    } catch (e) {
-      console.error('Erro ao tocar som de gol:', e);
-    }
-  }, []);
-
-  // Detectar gol novo
+  // Persistir estado quando mudar
   useEffect(() => {
-    if (blocoAtual && meusGols > golsAnteriores && golsAnteriores > 0) {
-      tocarSomGol();
+    localStorage.setItem(STORAGE_KEYS.SCREEN, screen);
+  }, [screen]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.TIME, selectedTeam);
+  }, [selectedTeam]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.NOME, nome);
+  }, [nome]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
+  }, [telefone]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.NOME_SALA, nomeSala);
+  }, [nomeSala]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.FORMATO, formato);
+  }, [formato]);
+
+  // Persistir lobby/bloco IDs
+  useEffect(() => {
+    if (lobby) {
+      localStorage.setItem(STORAGE_KEYS.LOBBY_ID, lobby.id);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.LOBBY_ID);
     }
+  }, [lobby]);
+
+  useEffect(() => {
     if (blocoAtual) {
-      setGolsAnteriores(meusGols);
+      localStorage.setItem(STORAGE_KEYS.BLOCO_ID, blocoAtual.id);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.BLOCO_ID);
     }
-  }, [blocoAtual, meusGols, golsAnteriores, tocarSomGol]);
+  }, [blocoAtual]);
+
+  // Restaurar sessão ao montar
+  useEffect(() => {
+    const savedLobbyId = localStorage.getItem(STORAGE_KEYS.LOBBY_ID);
+    const savedBlocoId = localStorage.getItem(STORAGE_KEYS.BLOCO_ID);
+    const savedScreen = localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen;
+
+    if (savedScreen && savedScreen !== "lobby-list") {
+      setScreen(savedScreen);
+    }
+
+    if (savedLobbyId) {
+      entrarLobby(savedLobbyId);
+    }
+  }, [entrarLobby]);
 
   // Carregar lobbies ao montar
   useEffect(() => {
-    listarLobbies();
-    inscreverListaLobbies();
-  }, [listarLobbies, inscreverListaLobbies]);
+    if (screen === "lobby-list") {
+      listarLobbies();
+      inscreverListaLobbies();
+    }
+  }, [screen, listarLobbies, inscreverListaLobbies]);
 
   // Verificar se bloco mudou para em_jogo
   useEffect(() => {
@@ -94,12 +152,25 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     return () => clearInterval(interval);
   }, [blocoAtual, meuTurno, tempoRestanteTurno, forcarTrocaTurno]);
 
-  // Verificar fim de jogo
+  // Verificar fim de jogo e auto-destruir
   useEffect(() => {
     if (blocoAtual && blocoAtual.status === 'finalizado' && screen === 'jogo') {
       setScreen('resultado');
+      // Auto-destruir lobby após mostrar resultado
+      setTimeout(() => {
+        limparPersistencia();
+        sairLobby();
+        setScreen('lobby-list');
+      }, 5000);
     }
-  }, [blocoAtual, screen]);
+  }, [blocoAtual, screen, sairLobby]);
+
+  // Limpar persistência
+  const limparPersistencia = useCallback(() => {
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+  }, []);
 
   const handleLogin = useCallback(async () => {
     if (telefone && nome) {
@@ -406,114 +477,25 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
 
   if (screen === "jogo" && blocoAtual && meuTime) {
     const oponenteTime = blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador2_time : blocoAtual.jogador1_time;
-    const oponenteNome = blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador2_nome : blocoAtual.jogador1_nome;
-    const time1 = teamById(blocoAtual.jogador1_time);
-    const time2 = teamById(oponenteTime || 'fla');
-    const isPlayer1 = blocoAtual.jogador1_session === sessionId;
+    const userSide = blocoAtual.jogador1_session === sessionId ? "home" : "away";
 
     return (
-      <div className="flex flex-col h-screen">
-        {/* Header do placar - Versus melhorado */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-4 shadow-2xl border-b-4 border-gold">
-          <div className="max-w-5xl mx-auto">
-            {/* Indicador de turno */}
-            <div className="flex justify-center mb-4">
-              <div className={`px-6 py-2 rounded-full font-bold text-sm ${meuTurno ? 'bg-gold text-slate-900 animate-pulse' : 'bg-slate-700 text-slate-300'}`}>
-                {meuTurno ? '⚽ SEU TURNO' : `⏳ Aguardando ${oponenteNome}`}
-              </div>
-            </div>
-
-            {/* Versus - Placar */}
-            <div className="flex items-center justify-center gap-6 mb-4">
-              {/* Time 1 */}
-              <div className="flex-1 max-w-[200px]">
-                <div 
-                  className="w-20 h-20 mx-auto mb-2 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg border-4"
-                  style={{ backgroundColor: time1.primary, color: time1.secondary, borderColor: isPlayer1 ? '#FFD700' : 'transparent' }}
-                >
-                  {time1.short}
-                </div>
-                <p className="font-bold text-center text-sm truncate">{blocoAtual.jogador1_nome}</p>
-                <p className="text-xs text-center text-slate-400">{isPlayer1 ? '(Você)' : '(Oponente)'}</p>
-              </div>
-
-              {/* Placar central */}
-              <div className="flex items-center gap-4 bg-slate-700/80 px-8 py-4 rounded-2xl shadow-xl border-2 border-slate-600">
-                <span className={`text-5xl font-black ${isPlayer1 ? 'text-gold' : 'text-white'}`}>
-                  {blocoAtual.jogador1_gols}
-                </span>
-                <div className="flex flex-col items-center">
-                  <span className="text-3xl font-bold text-gold">VS</span>
-                  <span className="text-xs text-slate-400">Rodada {blocoAtual.rodada}</span>
-                </div>
-                <span className={`text-5xl font-black ${!isPlayer1 ? 'text-gold' : 'text-white'}`}>
-                  {blocoAtual.jogador2_gols}
-                </span>
-              </div>
-
-              {/* Time 2 */}
-              <div className="flex-1 max-w-[200px]">
-                <div 
-                  className="w-20 h-20 mx-auto mb-2 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg border-4"
-                  style={{ backgroundColor: time2.primary, color: time2.secondary, borderColor: !isPlayer1 ? '#FFD700' : 'transparent' }}
-                >
-                  {time2.short}
-                </div>
-                <p className="font-bold text-center text-sm truncate">{blocoAtual.jogador2_nome}</p>
-                <p className="text-xs text-center text-slate-400">{!isPlayer1 ? '(Você)' : '(Oponente)'}</p>
-              </div>
-            </div>
-
-            {/* Informações da partida */}
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-3">
-                <span className="bg-gold/20 text-gold px-3 py-1 rounded-full font-semibold border border-gold/30">
-                  Jogadas: {blocoAtual.jogadas_restantes}
-                </span>
-                <span className="bg-slate-700 px-3 py-1 rounded-full text-slate-300">
-                  Formato: {lobby?.formato?.replace('_', ' ')}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className={`w-5 h-5 ${tempoRestanteTurno && tempoRestanteTurno.segundos < 10 ? 'text-destructive animate-pulse' : 'text-gold'}`} />
-                <span className={`font-mono font-bold text-lg ${tempoRestanteTurno && tempoRestanteTurno.segundos < 10 ? 'text-destructive' : 'text-gold'}`}>
-                  {tempoRestanteTurno ? formatarTempo(tempoRestanteTurno.segundos) : '--'}
-                </span>
-              </div>
-            </div>
-
-            {/* Barra de tempo */}
-            <div className="w-full h-3 bg-slate-700 rounded-full overflow-hidden mt-4 border border-slate-600">
-              {tempoRestanteTurno && (
-                <div 
-                  className={`h-full transition-all duration-1000 ${tempoRestanteTurno.segundos < 10 ? 'bg-destructive animate-pulse' : 'bg-gradient-to-r from-gold to-yellow-400'}`}
-                  style={{ width: `${(tempoRestanteTurno.segundos / tempoRestanteTurno.total) * 100}%` }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Área do jogo - usando o mesmo layout do amistoso */}
-        <div className="flex-1 overflow-hidden">
-          <div className="h-full max-w-5xl mx-auto px-3 pb-8">
-            <MatchView
-              homeId={blocoAtual.jogador1_time}
-              awayId={oponenteTime || 'fla'}
-              userSide={blocoAtual.jogador1_session === sessionId ? "home" : "away"}
-              difficulty="amador"
-              turns={blocoAtual.jogadas_restantes}
-              knockout={false}
-              stageLabel={`Rodada ${blocoAtual.rodada}`}
-              isOnline={true}
-              onFinish={(result) => {
-                const meusGols = blocoAtual.jogador1_session === sessionId ? result.homeGoals : result.awayGoals;
-                handleFimJogada(meusGols);
-              }}
-              onQuit={handleSair}
-            />
-          </div>
-        </div>
+      <div className="h-screen">
+        <MatchView
+          homeId={blocoAtual.jogador1_time}
+          awayId={oponenteTime || 'fla'}
+          userSide={userSide}
+          difficulty="amador"
+          turns={blocoAtual.jogadas_restantes}
+          knockout={false}
+          stageLabel={`Rodada ${blocoAtual.rodada} - ${meuTurno ? 'Seu turno' : 'Aguardando oponente'}`}
+          isOnline={true}
+          onFinish={(result) => {
+            const meusGols = blocoAtual.jogador1_session === sessionId ? result.homeGoals : result.awayGoals;
+            handleFimJogada(meusGols);
+          }}
+          onQuit={handleSair}
+        />
       </div>
     );
   }
