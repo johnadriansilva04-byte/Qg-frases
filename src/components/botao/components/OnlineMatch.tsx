@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
-import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2 } from "lucide-react";
+import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2, LogOut, User, Lock } from "lucide-react";
 import { useBotaoOnline } from "@/hooks/useBotaoOnline";
+import { supabase } from "@/integrations/supabase/client";
 import { teamById } from "../data/teams";
 import { MatchView } from "./MatchView";
 import { TeamPicker } from "./TeamPicker";
 
-type Screen = "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
+type Screen = "login" | "config-time" | "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
 
 // Chaves para persistência no localStorage
 const STORAGE_KEYS = {
@@ -16,7 +17,11 @@ const STORAGE_KEYS = {
   TIME: 'botao_online_time',
   FORMATO: 'botao_online_formato',
   LOBBY_ID: 'botao_online_lobby_id',
-  BLOCO_ID: 'botao_online_bloco_id'
+  BLOCO_ID: 'botao_online_bloco_id',
+  LOGGED_IN: 'botao_online_logged_in',
+  TIME_CONFIGURED: 'botao_online_time_configured',
+  TIME_NOME: 'botao_online_time_nome',
+  TIME_COR: 'botao_online_time_cor'
 };
 
 export function OnlineMatch({ onBack }: { onBack?: () => void }) {
@@ -49,8 +54,14 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
 
   // Carregar estado persistido
   const [screen, setScreen] = useState<Screen>(() => {
+    const isLoggedIn = localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === 'true';
+    const timeConfigured = localStorage.getItem(STORAGE_KEYS.TIME_CONFIGURED) === 'true';
+    
+    if (!isLoggedIn) return "login";
+    if (!timeConfigured) return "config-time";
     return (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list";
   });
+  
   const [selectedTeam, setSelectedTeam] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.TIME) || "fla";
   });
@@ -65,6 +76,14 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   });
   const [formato, setFormato] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.FORMATO) || "melhor_de_3";
+  });
+  
+  // Configuração de time personalizado
+  const [timeNome, setTimeNome] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.TIME_NOME) || "";
+  });
+  const [timeCor, setTimeCor] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.TIME_COR) || "#FF0000";
   });
 
   // Persistir estado quando mudar
@@ -91,6 +110,14 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.FORMATO, formato);
   }, [formato]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.TIME_NOME, timeNome);
+  }, [timeNome]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.TIME_COR, timeCor);
+  }, [timeCor]);
 
   // Persistir lobby/bloco IDs
   useEffect(() => {
@@ -173,23 +200,76 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, []);
 
   const handleLogin = useCallback(async () => {
-    if (telefone && nome) {
+    if (!telefone) {
+      alert('Por favor, digite seu telefone');
+      return;
+    }
+    
+    // Verificar se já existe usuário com este telefone
+    const { data: existingUser } = await supabase
+      .from('botao_usuarios')
+      .select('*')
+      .eq('telefone', telefone)
+      .single();
+    
+    if (existingUser) {
+      // Usuário já existe - fazer login
+      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
+      localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
+      localStorage.setItem(STORAGE_KEYS.NOME, existingUser.nome);
+      setNome(existingUser.nome);
+      setTelefone(telefone);
+      
+      // Verificar se time já foi configurado
+      const timeConfigured = localStorage.getItem(STORAGE_KEYS.TIME_CONFIGURED) === 'true';
+      if (!timeConfigured) {
+        setScreen('config-time');
+      } else {
+        setScreen('lobby-list');
+      }
+    } else {
+      // Novo usuário - pedir nome
+      if (!nome) {
+        alert('Por favor, digite seu nome para criar conta');
+        return;
+      }
       await login(telefone, nome);
+      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
+      localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
+      localStorage.setItem(STORAGE_KEYS.NOME, nome);
+      setScreen('config-time');
     }
   }, [telefone, nome, login]);
 
-  const handleCriarLobby = useCallback(async () => {
-    if (!nome || !telefone) {
-      alert('Por favor, digite seu nome e telefone');
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
+    localStorage.removeItem(STORAGE_KEYS.TELEFONE);
+    localStorage.removeItem(STORAGE_KEYS.NOME);
+    setTelefone('');
+    setNome('');
+    setScreen('login');
+    sairLobby();
+  }, [sairLobby]);
+
+  const handleSalvarTime = useCallback(() => {
+    if (!timeNome) {
+      alert('Por favor, digite o nome do seu time');
       return;
     }
+    localStorage.setItem(STORAGE_KEYS.TIME_CONFIGURED, 'true');
+    localStorage.setItem(STORAGE_KEYS.TIME_NOME, timeNome);
+    localStorage.setItem(STORAGE_KEYS.TIME_COR, timeCor);
+    setScreen('lobby-list');
+  }, [timeNome, timeCor]);
+
+  const handleCriarLobby = useCallback(async () => {
     if (!nomeSala) {
       alert('Por favor, digite o nome da sala');
       return;
     }
     await criarLobby(nomeSala, formato);
     setScreen('lobby-view');
-  }, [nome, telefone, nomeSala, formato, criarLobby]);
+  }, [nomeSala, formato, criarLobby]);
 
   const handleEntrarLobby = useCallback(async (lobbyId: string) => {
     await entrarLobby(lobbyId);
@@ -197,22 +277,14 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, [entrarLobby]);
 
   const handleCriarBloco = useCallback(async () => {
-    if (!nome || !telefone) {
-      alert('Por favor, digite seu nome e telefone');
-      return;
-    }
     await criarBloco(selectedTeam, nome);
     setScreen('aguardando');
-  }, [nome, telefone, selectedTeam, criarBloco]);
+  }, [nome, selectedTeam, criarBloco]);
 
   const handleEntrarBloco = useCallback(async (blocoId: string) => {
-    if (!nome || !telefone) {
-      alert('Por favor, digite seu nome e telefone');
-      return;
-    }
     await entrarBloco(blocoId, selectedTeam, nome);
     setScreen('jogo');
-  }, [nome, telefone, selectedTeam, entrarBloco]);
+  }, [nome, selectedTeam, entrarBloco]);
 
   const handleFimJogada = useCallback((gols: number) => {
     registrarJogada();
@@ -231,11 +303,12 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
     return `${segundos}s`;
   };
 
-  if (screen === "lobby-list") {
+  // Tela de Login
+  if (screen === "login") {
     return (
       <div className="panel">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-2xl">Lobbies Online</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-display text-2xl">Entrar na Conta</h2>
           {onBack && (
             <button onClick={onBack} className="btn-ghost">
               <ArrowLeft className="w-5 h-5" />
@@ -243,7 +316,157 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
           )}
         </div>
 
+        <div className="mb-6 p-4 bg-accent/10 rounded-lg">
+          <p className="text-sm text-muted-foreground mb-2">
+            <User className="inline w-4 h-4 mr-1" />
+            Sistema de contas por telefone
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <Lock className="inline w-4 h-4 mr-1" />
+            Seu telefone é seu identificador único
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Telefone (obrigatório)</label>
+          <input
+            type="tel"
+            value={telefone}
+            onChange={(e) => setTelefone(e.target.value)}
+            placeholder="(11) 99999-9999"
+            className="w-full px-3 py-2 rounded border bg-background"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Nome (apenas para novos usuários)</label>
+          <input
+            type="text"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Seu nome"
+            className="w-full px-3 py-2 rounded border bg-background"
+          />
+        </div>
+
+        <button
+          onClick={handleLogin}
+          disabled={loading || !telefone}
+          className="btn-primary w-full"
+        >
+          {loading ? 'Entrando...' : 'Entrar'}
+        </button>
+
+        {error && (
+          <div className="mt-4 p-3 bg-destructive/10 rounded-lg text-destructive">
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Tela de Configuração de Time
+  if (screen === "config-time") {
+    return (
+      <div className="panel">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-display text-2xl">Configurar Seu Time</h2>
+          <button onClick={handleLogout} className="btn-ghost text-destructive">
+            <LogOut className="w-5 h-5 mr-2" />
+            Sair
+          </button>
+        </div>
+
+        <div className="mb-6 p-4 bg-accent/10 rounded-lg">
+          <p className="text-sm text-muted-foreground">
+            <Gamepad2 className="inline w-4 h-4 mr-1" />
+            Personalize seu time para jogar online
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Nome do Time</label>
+          <input
+            type="text"
+            value={timeNome}
+            onChange={(e) => setTimeNome(e.target.value)}
+            placeholder="Ex: Meu Time FC"
+            className="w-full px-3 py-2 rounded border bg-background"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Cor do Time (cor do botão)</label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="color"
+              value={timeCor}
+              onChange={(e) => setTimeCor(e.target.value)}
+              className="w-16 h-10 rounded cursor-pointer"
+            />
+            <input
+              type="text"
+              value={timeCor}
+              onChange={(e) => setTimeCor(e.target.value)}
+              placeholder="#FF0000"
+              className="flex-1 px-3 py-2 rounded border bg-background"
+            />
+          </div>
+          <div className="flex gap-2">
+            {['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'].map(cor => (
+              <button
+                key={cor}
+                onClick={() => setTimeCor(cor)}
+                className={`w-8 h-8 rounded border-2 ${timeCor === cor ? 'border-foreground' : 'border-transparent'}`}
+                style={{ backgroundColor: cor }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Escolha um time base (opcional)</label>
+          <TeamPicker
+            label=""
+            value={selectedTeam}
+            onChange={setSelectedTeam}
+          />
+        </div>
+
+        <button
+          onClick={handleSalvarTime}
+          disabled={!timeNome}
+          className="btn-primary w-full"
+        >
+          Salvar e Continuar
+        </button>
+      </div>
+    );
+  }
+
+  if (screen === "lobby-list") {
+    return (
+      <div className="panel">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-2xl">Lobbies Online</h2>
+          <div className="flex gap-2">
+            <button onClick={handleLogout} className="btn-ghost text-destructive" title="Sair da conta">
+              <LogOut className="w-5 h-5" />
+            </button>
+            {onBack && (
+              <button onClick={onBack} className="btn-ghost">
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="mb-4 p-3 bg-accent/10 rounded-lg">
+          <p className="text-sm text-muted-foreground mb-2">
+            <User className="inline w-4 h-4 mr-1" />
+            Logado como: <span className="font-medium">{nome}</span>
+          </p>
           <p className="text-sm text-muted-foreground mb-2">
             <Users className="inline w-4 h-4 mr-1" />
             Sistema de lobbies com múltiplos blocos
@@ -252,37 +475,6 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
             <Gamepad2 className="inline w-4 h-4 mr-1" />
             Melhor de 3, 6 ou 9 rodadas
           </p>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Seu nome</label>
-          <input
-            type="text"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Digite seu nome"
-            className="w-full px-3 py-2 rounded border bg-background"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Telefone (obrigatório)</label>
-          <div className="flex gap-2">
-            <input
-              type="tel"
-              value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
-              placeholder="(11) 99999-9999"
-              className="flex-1 px-3 py-2 rounded border bg-background"
-            />
-            <button
-              onClick={handleLogin}
-              disabled={loading || !telefone || !nome}
-              className="btn-primary px-4"
-            >
-              Salvar
-            </button>
-          </div>
         </div>
 
         <div className="mb-4">
@@ -317,7 +509,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
 
         <button
           onClick={handleCriarLobby}
-          disabled={loading || !nome || !telefone || !nomeSala}
+          disabled={loading || !nomeSala}
           className="btn-primary w-full mt-4"
         >
           <Plus className="inline w-4 h-4 mr-2" />
@@ -345,7 +537,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
                   </div>
                   <button
                     onClick={() => handleEntrarLobby(lobby.id)}
-                    disabled={loading || !nome || !telefone}
+                    disabled={loading}
                     className="btn-primary px-3 py-1 text-sm"
                   >
                     <DoorOpen className="inline w-4 h-4 mr-1" />
@@ -394,7 +586,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
 
         <button
           onClick={handleCriarBloco}
-          disabled={loading || !nome || !telefone}
+          disabled={loading}
           className="btn-primary w-full mb-4"
         >
           <Plus className="inline w-4 h-4 mr-2" />
@@ -431,7 +623,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
                   {bloco.status === 'aguardando' && (
                     <button
                       onClick={() => handleEntrarBloco(bloco.id)}
-                      disabled={loading || !nome || !telefone}
+                      disabled={loading}
                       className="btn-primary px-3 py-1 text-sm"
                     >
                       <DoorOpen className="inline w-4 h-4 mr-1" />
