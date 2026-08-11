@@ -63,16 +63,16 @@ export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
   return (
     <div 
       ref={adRef} 
-      className={`w-full min-w-[300px] ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6`}
-      style={{ display: 'block', minWidth: '300px' }}
+      className={`w-full max-w-[728px] ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6 mx-auto`}
+      style={{ display: 'block', maxWidth: '728px', maxHeight: '90px' }}
     >
       <ins
         className="adsbygoogle block"
-        style={{ display: "block", minWidth: "300px" }}
+        style={{ display: "block" }}
         data-ad-client="ca-pub-2783546143377409"
         data-ad-slot={adSlot}
-        data-ad-format="auto"
-        data-full-width-responsive="true"
+        data-ad-format="horizontal"
+        data-full-width-responsive="false"
       />
     </div>
   );
