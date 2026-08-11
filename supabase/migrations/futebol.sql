@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   pontos_soberania INTEGER NOT NULL DEFAULT 0,
   partidas_jogadas INTEGER NOT NULL DEFAULT 0,
   partidas_vencidas INTEGER NOT NULL DEFAULT 0,
+  progresso_caminpanha JSONB NOT NULL DEFAULT '{"titles":{"amador":0,"profissional":0,"lenda":0},"trophies":[],"friendlies":{"w":0,"d":0,"l":0}}',
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
 

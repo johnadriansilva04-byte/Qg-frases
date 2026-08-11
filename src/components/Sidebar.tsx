@@ -1,90 +1,87 @@
 import { useState, useEffect } from "react";
-import { Newspaper, TrendingUp, Clock, Sparkles, X, ChevronRight } from "lucide-react";
+import { Newspaper, X, ExternalLink, Clock } from "lucide-react";
 import { AdSlot } from "./AdSlot";
 
 interface NewsItem {
   id: string;
   title: string;
-  summary: string;
-  time: string;
-  category: string;
-  isAd?: boolean;
+  description: string;
+  link: string;
+  pubDate: string;
+  source: string;
 }
 
-const MOCK_NEWS: NewsItem[] = [
-  {
-    id: "1",
-    title: "Novos jogos adicionados à Cidadela",
-    summary: "Trilha e Futebol de Botão agora disponíveis para jogar online com amigos.",
-    time: "2 min atrás",
-    category: "Jogos",
-  },
-  {
-    id: "2",
-    title: "Biblioteca atualizada com novos livros",
-    summary: "Confira as novas indicações de motivação e desenvolvimento pessoal.",
-    time: "15 min atrás",
-    category: "Livros",
-  },
-  {
-    id: "3",
-    title: "Gerador de frases melhorado",
-    summary: "Agora com mais categorias e busca inteligente para encontrar a frase perfeita.",
-    time: "1 hora atrás",
-    category: "Atualizações",
-  },
-  {
-    id: "4",
-    title: "Dica do dia: Use cores únicas",
-    summary: "No Futebol de Botão, escolha 3 cores diferentes para seu time personalizado.",
-    time: "2 horas atrás",
-    category: "Dicas",
-  },
-  {
-    id: "5",
-    title: "Recorde quebrado!",
-    summary: "Jogador alcança 100 vitórias consecutivas no modo amistoso.",
-    time: "3 horas atrás",
-    category: "Jogos",
-  },
-  {
-    id: "6",
-    title: "Novo recurso de time personalizado",
-    summary: "Crie seu próprio time com nome, número e cores únicas no cadastro.",
-    time: "4 horas atrás",
-    category: "Atualizações",
-  },
-  {
-    id: "7",
-    title: "Torneio expandido para 32 times",
-    summary: "Agora com 8 grupos e fase de mata-mata completa com oitavas de final.",
-    time: "5 horas atrás",
-    category: "Jogos",
-  },
-  {
-    id: "8",
-    title: "Design cyberpunk implementado",
-    summary: "Nova interface futurista na página principal da Cidadela do Pracinha.",
-    time: "6 horas atrás",
-    category: "Atualizações",
-  },
+const RSS_FEEDS = [
+  'https://g1.globo.com/rss/g1/',
+  'https://rss.uol.com.br/feed/noticias.xml',
+  'https://feeds.folha.uol.com.br/rss/news.xml',
 ];
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [news, setNews] = useState<NewsItem[]>(MOCK_NEWS);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Simula atualização automática de notícias
+  // Busca notícias reais via RSS
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNews(prev => {
-        const shuffled = [...prev].sort(() => Math.random() - 0.5);
-        return shuffled;
-      });
-    }, 30000); // Atualiza a cada 30 segundos
+    const fetchNews = async () => {
+      try {
+        setLoading(true);
+        const allNews: NewsItem[] = [];
+
+        for (const feedUrl of RSS_FEEDS) {
+          try {
+            // Usa rss2json API para converter RSS para JSON e evitar CORS
+            const response = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`);
+            const data = await response.json();
+
+            if (data.status === 'ok' && data.items) {
+              const items = data.items.slice(0, 5).map((item: any, index: number) => ({
+                id: `${feedUrl}-${index}`,
+                title: item.title,
+                description: item.description?.replace(/<[^>]*>/g, '').substring(0, 150) || '',
+                link: item.link,
+                pubDate: item.pubDate,
+                source: data.feed?.title || 'Notícias',
+              }));
+              allNews.push(...items);
+            }
+          } catch (error) {
+            console.error('Erro ao buscar feed:', feedUrl, error);
+          }
+        }
+
+        // Embaralha e limita a 10 notícias
+        const shuffled = allNews.sort(() => Math.random() - 0.5).slice(0, 10);
+        setNews(shuffled);
+      } catch (error) {
+        console.error('Erro ao buscar notícias:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNews();
+
+    // Atualiza a cada 5 minutos
+    const interval = setInterval(fetchNews, 300000);
 
     return () => clearInterval(interval);
   }, []);
+
+  const formatTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
+
+      if (diff < 60) return `${diff} min atrás`;
+      if (diff < 1440) return `${Math.floor(diff / 60)}h atrás`;
+      return `${Math.floor(diff / 1440)}d atrás`;
+    } catch {
+      return '';
+    }
+  };
 
   return (
     <>
@@ -126,80 +123,67 @@ export function Sidebar() {
           </div>
 
           {/* Lista de notícias */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {news.map((item) => (
-              <div
-                key={item.id}
-                className="p-3 rounded-xl border border-border bg-background/50 hover:border-primary/50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-shrink-0 mt-1">
-                    {item.category === "Jogos" && <TrendingUp className="w-4 h-4 text-purple-400" />}
-                    {item.category === "Livros" && <Sparkles className="w-4 h-4 text-blue-400" />}
-                    {item.category === "Atualizações" && <Newspaper className="w-4 h-4 text-green-400" />}
-                    {item.category === "Dicas" && <Clock className="w-4 h-4 text-yellow-400" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-foreground mb-1 line-clamp-2">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                      {item.summary}
-                    </p>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        {item.category}
-                      </span>
-                      <span>{item.time}</span>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="mt-2 text-sm text-muted-foreground">Carregando notícias...</p>
+              </div>
+            ) : news.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground">Nenhuma notícia disponível</p>
+              </div>
+            ) : (
+              news.map((item, index) => (
+                <div key={item.id}>
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-3 rounded-xl border border-border bg-background/50 hover:border-primary/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="flex-shrink-0 mt-1">
+                        <Newspaper className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-foreground mb-1 line-clamp-2">
+                          {item.title}
+                        </h3>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                            {item.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                            {item.source}
+                          </span>
+                          {item.pubDate && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {formatTime(item.pubDate)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                     </div>
+                  </a>
+
+                  {/* AdSense entre cada notícia */}
+                  <div className="my-3">
+                    <AdSlot rotulo={`Anúncio ${index + 1}`} altura="min-h-[100px]" />
                   </div>
                 </div>
-              </div>
-            ))}
-
-            {/* Anúncios integrados */}
-            <div className="my-4">
-              <AdSlot rotulo="Anúncio Lateral" altura="min-h-[250px]" />
-            </div>
-
-            {/* Segundo bloco de anúncios */}
-            <div className="my-4">
-              <AdSlot rotulo="Anúncio Lateral 2" altura="min-h-[250px]" />
-            </div>
-
-            {/* Mais notícias */}
-            {news.slice(0, 3).map((item) => (
-              <div
-                key={`${item.id}-repeat`}
-                className="p-3 rounded-xl border border-border bg-background/50 hover:border-primary/50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-shrink-0 mt-1">
-                    <Newspaper className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-foreground mb-1 line-clamp-2">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                      {item.summary}
-                    </p>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        {item.category}
-                      </span>
-                      <span>{item.time}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Footer */}
           <div className="p-4 border-t border-border">
             <div className="text-xs text-muted-foreground text-center">
-              <p>Atualizado automaticamente</p>
+              <p>Notícias em tempo real</p>
               <p className="mt-1">© 2026 Cidadela do Pracinha</p>
             </div>
           </div>

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe } from "lucide-react";
+import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } from "lucide-react";
 import { TEAMS, teamById, createCustomTeam, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
+import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, type Progress } from "./storage";
 import {
   advanceKnockout,
   applyResult,
@@ -13,7 +14,6 @@ import {
   sortTable,
   winnerOf,
 } from "./tournament";
-import { isUnlocked, loadProgress, saveProgress, type Progress } from "./storage";
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { OnlineMatch } from "./components/OnlineMatch";
@@ -77,6 +77,30 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const persist = (p: Progress) => {
     setProgress(p);
     saveProgress(p);
+  };
+
+  const handleDeleteCampaign = async () => {
+    if (!confirm("Tem certeza que deseja excluir toda a campanha? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    // Excluir progresso local
+    deleteProgressLocal();
+
+    // Excluir progresso do Supabase (se usuário estiver logado)
+    const telefone = localStorage.getItem('botao_online_telefone');
+    if (telefone) {
+      await deleteProgressFromSupabase(telefone);
+    }
+
+    // Resetar estado do torneio
+    setTour(null);
+    setCurrent(null);
+
+    // Resetar progresso local
+    setProgress(loadProgress());
+
+    setToast("Campanha excluída com sucesso!");
   };
 
   /* ---------- amistoso ---------- */
@@ -212,6 +236,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onTrophies={() => setScreen("trophies")}
             hasTour={!!tour && tour.phase !== "fim"}
             onResume={() => setScreen("hub")}
+            onDeleteCampaign={handleDeleteCampaign}
           />
         )}
 
@@ -300,6 +325,7 @@ function Menu({
   onTrophies,
   hasTour,
   onResume,
+  onDeleteCampaign,
 }: {
   progress: Progress;
   onFriendly: () => void;
@@ -308,6 +334,7 @@ function Menu({
   onTrophies: () => void;
   hasTour: boolean;
   onResume: () => void;
+  onDeleteCampaign: () => void;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -343,6 +370,15 @@ function Menu({
           onClick={onResume}
         />
       )}
+      {hasTour && (
+        <MenuCard
+          icon={<Trash2 className="size-5 text-destructive" />}
+          title="Excluir campanha"
+          desc="Apaga todo o progresso da campanha atual. Não pode desfazer."
+          onClick={onDeleteCampaign}
+          destructive
+        />
+      )}
     </div>
   );
 }
@@ -352,19 +388,24 @@ function MenuCard({
   title,
   desc,
   onClick,
+  destructive,
 }: {
   icon: React.ReactNode;
   title: string;
   desc: string;
   onClick: () => void;
+  destructive?: boolean;
 }) {
   return (
-    <button onClick={onClick} className="panel group text-left">
-      <span className="mb-3 flex items-center gap-2 text-accent-foreground">{icon}</span>
+    <button 
+      onClick={onClick} 
+      className={`panel group text-left ${destructive ? 'border-destructive/50 hover:border-destructive' : ''}`}
+    >
+      <span className={`mb-3 flex items-center gap-2 ${destructive ? 'text-destructive' : 'text-accent-foreground'}`}>{icon}</span>
       <span className="block font-display text-2xl">{title}</span>
       <span className="mt-1 block text-sm text-muted-foreground">{desc}</span>
-      <span className="mt-4 block font-display text-xs tracking-[0.2em] text-accent-foreground uppercase">
-        Entrar →
+      <span className={`mt-4 block font-display text-xs tracking-[0.2em} uppercase ${destructive ? 'text-destructive' : 'text-accent-foreground'}`}>
+        {destructive ? 'Excluir →' : 'Entrar →'}
       </span>
     </button>
   );
