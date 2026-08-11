@@ -2,6 +2,27 @@
 -- Sistema de Lobbies com Múltiplos Blocos
 -- Execute este SQL único no Supabase
 
+-- Tabela de usuários (login por email obrigatório)
+CREATE TABLE IF NOT EXISTS public.botao_usuarios (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE,
+  nome TEXT NOT NULL,
+  cores TEXT[] NOT NULL DEFAULT ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[],
+  time_personalizado TEXT NOT NULL DEFAULT 'Meu Time',
+  abreviacao_time TEXT NOT NULL DEFAULT 'MTI',
+  numero_jogador INTEGER NOT NULL DEFAULT 10,
+  pontos_soberania INTEGER NOT NULL DEFAULT 0,
+  partidas_jogadas INTEGER NOT NULL DEFAULT 0,
+  partidas_vencidas INTEGER NOT NULL DEFAULT 0,
+  progresso_caminpanha JSONB NOT NULL DEFAULT '{"titles":{"amador":0,"profissional":0,"lenda":0},"trophies":[],"friendlies":{"w":0,"d":0,"l":0}}',
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+
+  -- Constraint para garantir que as 3 cores sejam únicas por usuário
+  CONSTRAINT check_cores_unicas CHECK (array_length(cores, 1) = 3 AND cores[1] IS DISTINCT FROM cores[2] AND cores[2] IS DISTINCT FROM cores[3] AND cores[1] IS DISTINCT FROM cores[3])
+);
+
 -- Tabela de times
 CREATE TABLE IF NOT EXISTS public.botao_times (
   id TEXT NOT NULL PRIMARY KEY,
@@ -11,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.botao_times (
   pais TEXT NOT NULL,
   liga TEXT NOT NULL,
   is_personalizado BOOLEAN NOT NULL DEFAULT false,
-  usuario_id UUID REFERENCES public.botao_usuarios(id) ON DELETE CASCADE,
+  usuario_id UUID REFERENCES public.botao_usuarios(user_id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
@@ -72,26 +93,32 @@ INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga) VALUES
 ('por', 'Porto', 'POR', ARRAY['#003893', '#FFFFFF', '#000000']::TEXT[], 'Portugal', 'Primeira Liga')
 ON CONFLICT (id) DO NOTHING;
 
--- Tabela de usuários (login por email obrigatório)
-CREATE TABLE IF NOT EXISTS public.botao_usuarios (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL UNIQUE,
-  email TEXT NOT NULL UNIQUE,
-  nome TEXT NOT NULL,
-  cores TEXT[] NOT NULL DEFAULT ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[],
-  time_personalizado TEXT NOT NULL DEFAULT 'Meu Time',
-  abreviacao_time TEXT NOT NULL DEFAULT 'MTI',
-  numero_jogador INTEGER NOT NULL DEFAULT 10,
-  pontos_soberania INTEGER NOT NULL DEFAULT 0,
-  partidas_jogadas INTEGER NOT NULL DEFAULT 0,
-  partidas_vencidas INTEGER NOT NULL DEFAULT 0,
-  progresso_caminpanha JSONB NOT NULL DEFAULT '{"titles":{"amador":0,"profissional":0,"lenda":0},"trophies":[],"friendlies":{"w":0,"d":0,"l":0}}',
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+-- Trigger para criar perfil automaticamente quando usuário é criado no auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'nome', 'Jogador'),
+    COALESCE(NEW.raw_user_meta_data->>'cores', ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[]),
+    COALESCE(NEW.raw_user_meta_data->>'time_personalizado', 'Meu Time'),
+    COALESCE(NEW.raw_user_meta_data->>'abreviacao_time', 'MTI'),
+    COALESCE((NEW.raw_user_meta_data->>'numero_jogador')::INTEGER, 10)
+  );
+  RETURN NEW;
+END;
+$$;
 
-  -- Constraint para garantir que as 3 cores sejam únicas por usuário
-  CONSTRAINT check_cores_unicas CHECK (array_length(cores, 1) = 3 AND cores[1] IS DISTINCT FROM cores[2] AND cores[2] IS DISTINCT FROM cores[3] AND cores[1] IS DISTINCT FROM cores[3])
-);
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Trigger para criar perfil automaticamente quando usuário é criado no auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
