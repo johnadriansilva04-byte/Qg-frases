@@ -62,6 +62,7 @@ export function MatchView({
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
   const [aiRageMode, setAiRageMode] = useState(false); // IA fica mais forte após fazer gol contra
+  const [ownGoalTimer, setOwnGoalTimer] = useState<number | null>(null); // Timer para passar vez após gol contra
 
   const scoreRef = useRef(score);
   scoreRef.current = score;
@@ -172,6 +173,16 @@ export function MatchView({
           // Quem fez o gol contra joga de novo (não decrementa turnos)
           turnRef.current = scoringSide;
           setTurn(scoringSide);
+          
+          // Iniciar timer de 5 segundos para passar a vez se não jogar
+          setOwnGoalTimer(window.setTimeout(() => {
+            // Passar a vez para o oponente após 5 segundos
+            const nextTurn = scoringSide === "home" ? "away" : "home";
+            turnRef.current = nextTurn;
+            setTurn(nextTurn);
+            setAiRageMode(false); // Desativar rage mode ao passar a vez
+            setOwnGoalTimer(null);
+          }, 5000));
           return;
         }
         
@@ -209,6 +220,15 @@ export function MatchView({
     requestAnimationFrame(loop);
   }, [finishMatch, cpuSide]);
 
+  // Limpar timer de gol contra ao desmontar
+  useEffect(() => {
+    return () => {
+      if (ownGoalTimer) {
+        clearTimeout(ownGoalTimer);
+      }
+    };
+  }, [ownGoalTimer]);
+
   // jogada da CPU (desabilitado no modo online)
   useEffect(() => {
     if (!hasCpu || ended || turn !== cpuSide || simRef.current) return;
@@ -224,10 +244,15 @@ export function MatchView({
       d.vy = shot.iy;
       // Desativar rage mode após a jogada
       setAiRageMode(false);
+      // Cancelar timer de gol contra se a CPU jogou
+      if (ownGoalTimer) {
+        clearTimeout(ownGoalTimer);
+        setOwnGoalTimer(null);
+      }
       runSimulation();
     }, 750);
     return () => clearTimeout(t);
-  }, [hasCpu, turn, cpuSide, difficulty, aiRageMode, ended, home, away, runSimulation]);
+  }, [hasCpu, turn, cpuSide, difficulty, aiRageMode, ended, home, away, runSimulation, ownGoalTimer]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {
@@ -241,6 +266,11 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // Cancelar timer de gol contra se o usuário jogou
+    if (ownGoalTimer) {
+      clearTimeout(ownGoalTimer);
+      setOwnGoalTimer(null);
+    }
     // No modo online, só permite input se for o turno do usuário
     if (ended || simRef.current || turn !== userSide) return;
     const { x, y } = toField(e);
