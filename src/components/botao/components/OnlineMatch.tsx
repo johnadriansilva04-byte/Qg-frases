@@ -494,9 +494,9 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
           </div>
         </div>
 
-        {/* Área do jogo */}
-        <div className="flex-1 overflow-hidden bg-gradient-to-b from-green-800 via-green-700 to-green-900">
-          <div className="h-full max-w-5xl mx-auto p-4">
+        {/* Área do jogo - usando o mesmo layout do amistoso */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full max-w-5xl mx-auto px-3 pb-8">
             <MatchView
               homeId={blocoAtual.jogador1_time}
               awayId={oponenteTime || 'fla'}
@@ -504,7 +504,7 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
               difficulty="amador"
               turns={blocoAtual.jogadas_restantes}
               knockout={false}
-              stageLabel=""
+              stageLabel={`Rodada ${blocoAtual.rodada}`}
               isOnline={true}
               onFinish={(result) => {
                 const meusGols = blocoAtual.jogador1_session === sessionId ? result.homeGoals : result.awayGoals;
