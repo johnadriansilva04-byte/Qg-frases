@@ -4,10 +4,9 @@ import { cadastrar, cachePerfil, entrar, CORES_PADRAO, type Perfil } from "../on
 
 type Props = {
   onPronto: (p?: Perfil) => void;
-  onPular?: () => void;
 };
 
-export function AuthScreen({ onPronto, onPular }: Props) {
+export function AuthScreen({ onPronto }: Props) {
   const [modo, setModo] = useState<"login" | "cadastro">("login");
   const [telefone, setTelefone] = useState("");
   const [senha, setSenha] = useState("");
@@ -131,11 +130,6 @@ export function AuthScreen({ onPronto, onPular }: Props) {
         >
           {modo === "login" ? "Não tenho conta" : "Já tenho conta"}
         </button>
-        {onPular && (
-          <button className="btn-ghost" onClick={onPular}>
-            Jogar offline
-          </button>
-        )}
       </div>
     </div>
   );

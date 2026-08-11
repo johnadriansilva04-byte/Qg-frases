@@ -274,7 +274,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-        <AuthScreen onPronto={aoLogar} onPular={() => setScreen("menu")} />
+        <AuthScreen onPronto={aoLogar} />
       </Shell>
     );
   }
