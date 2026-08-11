@@ -97,16 +97,27 @@ export async function cadastrar(input: {
   const erro = validarCadastro(input);
   if (erro) throw new Error(erro);
 
+  const email = telefoneParaEmail(input.telefone);
+  console.log('Tentando criar conta:', { email, telefone: input.telefone });
+
   const { data, error } = await supabase.auth.signUp({
-    email: telefoneParaEmail(input.telefone),
+    email: email,
     password: input.senha,
-    options: { emailRedirectTo: window.location.origin },
+    options: { 
+      emailRedirectTo: window.location.origin,
+      data: { phone: input.telefone },
+      emailConfirm: true // Auto-confirmar email para emails sintéticos
+    },
   });
+  
+  console.log('Resultado signup:', { data, error });
+  
   if (error) {
+    console.error('Erro detalhado do signup:', error);
     throw new Error(
       error.message.toLowerCase().includes("already")
         ? "Já existe uma conta com esse telefone. Faça login."
-        : "Não foi possível criar a conta. Tente de novo.",
+        : `Erro ao criar conta: ${error.message}`,
     );
   }
   const user = data.user;
