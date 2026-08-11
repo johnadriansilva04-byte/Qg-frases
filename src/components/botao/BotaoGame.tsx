@@ -39,14 +39,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
 
-  // Verificar se usuário já está logado ao montar
-  useEffect(() => {
-    const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
-    if (isLoggedIn) {
-      setScreen('menu');
-    }
-  }, []);
-
   // Carregar times do banco de dados ao montar
   useEffect(() => {
     getAllTeams().then(teams => {
@@ -146,7 +138,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- torneio ---------- */
   const startTournament = () => {
-    setTour(createTournament(userTeam.id, difficulty));
+    setTour(createTournament(userTeam.id, difficulty, userTeam));
     setScreen("hub");
   };
 
@@ -244,6 +236,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           stageLabel={f.stage}
           onFinish={screen === "friendly-match" ? finishFriendly : finishTournamentMatch}
           onQuit={() => setScreen(screen === "friendly-match" ? "menu" : "hub")}
+          customTeam={userTeam}
         />
       </Shell>
     );
@@ -316,7 +309,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           />
         )}
 
-        {screen === "hub" && tour && <Hub tour={tour} onPlay={playNext} onExit={() => setScreen("menu")} />}
+        {screen === "hub" && tour && <Hub tour={tour} userTeam={userTeam} onPlay={playNext} onExit={() => setScreen("menu")} />}
 
         {screen === "trophies" && <TrophyRoom progress={progress} onBack={() => setScreen("menu")} />}
       </div>
@@ -546,9 +539,15 @@ function Setup(props: {
   );
 }
 
-function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; onExit: () => void }) {
+function Hub({ tour, userTeam, onPlay, onExit }: { tour: Tournament; userTeam: Team; onPlay: () => void; onExit: () => void }) {
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const stage = tour.knockout[tour.knockout.length - 1];
+
+  // Função auxiliar para buscar time, usando o time personalizado do usuário se necessário
+  const getTeam = (teamId: string): Team => {
+    if (teamId === userTeam.id) return userTeam;
+    return teamByIdSync(teamId);
+  };
 
   return (
     <div className="space-y-6">
@@ -558,12 +557,12 @@ function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; o
         </p>
         {tour.phase === "fim" ? (
           <p className="mt-2 font-display text-2xl">
-            Campeão: <TeamBadge team={teamByIdSync(tour.champion!)} />
+            Campeão: <TeamBadge team={getTeam(tour.champion!)} />
           </p>
         ) : next ? (
           <>
             <p className="mt-2 font-display text-2xl">
-              {teamByIdSync(next.homeId).short} vs {teamByIdSync(next.awayId).short}
+              {getTeam(next.homeId).short} vs {getTeam(next.awayId).short}
             </p>
             <p className="text-sm text-muted-foreground">{next.stage}</p>
             <button onClick={onPlay} className="btn-primary mt-4 w-full sm:w-auto">
@@ -594,7 +593,7 @@ function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; o
                     <tr key={r.teamId} className={r.teamId === tour.userTeamId ? "text-accent-foreground" : ""}>
                       <td className="py-1">
                         <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                          <TeamBadge team={teamById(r.teamId)} size="sm" />
+                          <TeamBadge team={getTeam(r.teamId)} size="sm" />
                         </span>
                       </td>
                       <td className="text-center">{r.p}</td>
@@ -618,7 +617,7 @@ function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; o
                 {k.fixtures.map((f) => (
                   <li key={f.id} className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate">
-                      {teamByIdSync(f.homeId).short} x {teamByIdSync(f.awayId).short}
+                      {getTeam(f.homeId).short} x {getTeam(f.awayId).short}
                     </span>
                     <span className="shrink-0 font-mono text-muted-foreground">
                       {f.result
@@ -632,7 +631,7 @@ function Hub({ tour, onPlay, onExit }: { tour: Tournament; onPlay: () => void; o
               </ul>
               {k.fixtures.every((f) => f.played) && (
                 <p className="mt-2 text-[11px] tracking-wider text-muted-foreground uppercase">
-                  Avançam: {k.fixtures.map((f) => teamById(winnerOf(f.result!)).short).join(", ")}
+                  Avançam: {k.fixtures.map((f) => getTeam(winnerOf(f.result!)).short).join(", ")}
                 </p>
               )}
             </div>

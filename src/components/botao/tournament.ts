@@ -1,4 +1,4 @@
-import { TEAMS, teamById, type Team } from "./data/teams";
+import { TEAMS, teamByIdSync, type Team } from "./data/teams";
 import type { Difficulty, Fixture, GroupRow, MatchResult, Tournament } from "./types";
 
 export function shuffle<T>(arr: T[]): T[] {
@@ -12,9 +12,10 @@ export function shuffle<T>(arr: T[]): T[] {
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
-export function createTournament(userTeamId: string, difficulty: Difficulty): Tournament {
+export function createTournament(userTeamId: string, difficulty: Difficulty, userTeam?: Team): Tournament {
   const others = shuffle(TEAMS.filter((t) => t.id !== userTeamId)).slice(0, 31);
-  const pool = shuffle([teamById(userTeamId), ...others]);
+  const userTeamToUse = userTeam || teamByIdSync(userTeamId);
+  const pool = shuffle([userTeamToUse, ...others]);
 
   const groups = GROUP_NAMES.map((name, gi) => {
     const teamIds = pool.slice(gi * 4, gi * 4 + 4).map((t) => t.id);
@@ -102,8 +103,8 @@ export function sortTable(table: GroupRow[]): GroupRow[] {
 
 /** Simula uma partida CPU x CPU com base na força dos times. */
 export function simulateMatch(homeId: string, awayId: string, difficulty: Difficulty, knockout = false): MatchResult {
-  const h = teamById(homeId);
-  const a = teamById(awayId);
+  const h = teamByIdSync(homeId);
+  const a = teamByIdSync(awayId);
   const goals = (att: Team, def: Team, bonus: number) => {
     const lambda = Math.max(0.25, (att.power - def.power) / 32 + 1.15 + bonus);
     let g = 0;

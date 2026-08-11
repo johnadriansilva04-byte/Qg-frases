@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, Gamepad2, Sparkles, Zap, Cpu, Globe, Rocket, Star, Shield, Heart, Target } from "lucide-react";
+import { BookOpen, Gamepad2, Sparkles, Cpu, Globe, Rocket, Star } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,18 +19,12 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const FEATURES = [
-  { icon: Zap, title: "Rápido", desc: "Tudo carrega instantaneamente" },
-  { icon: Shield, title: "Seguro", desc: "Seus dados protegidos" },
-  { icon: Heart, title: "Grátis", desc: "Sem custos escondidos" },
-  { icon: Target, title: "Focado", desc: "Design pensado para você" },
-];
 
 const SECTIONS = [
   {
     icon: Gamepad2,
-    title: "Cidadela de Jogos",
-    description: "Trilha, Futebol de Botão e muito mais. Jogue clássicos e quebre recordes.",
+    title: "Cidadela dos Clássicos",
+    description: "Trilha de botão e muito mais",
     link: "/cidadela",
     color: "from-purple-500 to-pink-500",
     bgColor: "bg-purple-500/10",
@@ -109,20 +103,6 @@ function Index() {
                   </div>
                 </div>
               </Link>
-            );
-          })}
-        </div>
-
-        {/* Features */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mb-12">
-          {FEATURES.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <div key={feature.title} className="flex flex-col items-center text-center p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
-                <Icon className="w-6 h-6 text-purple-400 mb-2" />
-                <h3 className="font-semibold text-sm mb-1">{feature.title}</h3>
-                <p className="text-xs text-slate-400">{feature.desc}</p>
-              </div>
             );
           })}
         </div>

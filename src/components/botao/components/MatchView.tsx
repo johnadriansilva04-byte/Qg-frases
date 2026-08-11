@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FIELD, clampImpulse, initialDiscs, resetPositions, step, type Disc, type Side } from "../engine/physics";
 import { planAiShot } from "../engine/ai";
-import { teamById } from "../data/teams";
+import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 
 type Props = {
@@ -15,6 +15,7 @@ type Props = {
   onFinish: (result: MatchResult) => void;
   onQuit: () => void;
   isOnline?: boolean; // Nova prop para indicar modo online
+  customTeam?: Team; // Time personalizado do usuário
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -30,9 +31,16 @@ export function MatchView({
   onFinish,
   onQuit,
   isOnline = false,
+  customTeam,
 }: Props) {
-  const home = teamById(homeId);
-  const away = teamById(awayId);
+  // Função auxiliar para buscar time, usando o time personalizado se necessário
+  const getTeam = (teamId: string): Team => {
+    if (customTeam && teamId === customTeam.id) return customTeam;
+    return teamByIdSync(teamId);
+  };
+
+  const home = getTeam(homeId);
+  const away = getTeam(awayId);
   const cpuSide: Side = userSide === "home" ? "away" : "home";
   // No modo online, não há CPU - ambos os lados são jogadores reais
   const hasCpu = !isOnline;
@@ -348,7 +356,7 @@ export function MatchView({
   );
 }
 
-function TeamChip({ team, align }: { team: ReturnType<typeof teamById>; align: "left" | "right" }) {
+function TeamChip({ team, align }: { team: Team; align: "left" | "right" }) {
   return (
     <div className={`flex min-w-0 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
       <span

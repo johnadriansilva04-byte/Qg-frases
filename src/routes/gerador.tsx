@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { CATEGORIAS, buscarFrases, fraseAleatoria, totalDeFrases } from "@/data/frases";
 import { AdSlot, AdVideoSlot } from "@/components/AdSlot";
 import { AnuncioPessoal } from "@/components/AnuncioPessoal";
+import { NewsModule } from "@/components/NewsModule";
 
 export const Route = createFileRoute("/gerador")({
   head: () => ({
@@ -312,6 +313,7 @@ function Gerador() {
         <div className="mt-4 space-y-4 border-t border-border pt-4">
           <AnuncioPessoal indice={0} />
           {mostrarVideo && <AdVideoSlot />}
+          <NewsModule />
         </div>
       </main>
 
