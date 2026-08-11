@@ -17,8 +17,14 @@ export function AuthScreen({ onPronto }: Props) {
   const [cores, setCores] = useState<string[]>(CORES_PADRAO);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   const submit = async () => {
+    if (cooldown > 0) {
+      setErro(`Aguarde ${cooldown} segundos antes de tentar novamente.`);
+      return;
+    }
+
     setErro(null);
     setCarregando(true);
     try {
@@ -31,7 +37,22 @@ export function AuthScreen({ onPronto }: Props) {
         onPronto(p);
       }
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Algo deu errado. Tente de novo.");
+      const errorMessage = e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";
+      setErro(errorMessage);
+      
+      // Se for erro de rate limiting (429), adicionar cooldown
+      if (errorMessage.includes("Too Many Requests") || errorMessage.includes("429")) {
+        setCooldown(10);
+        const interval = setInterval(() => {
+          setCooldown((prev) => {
+            if (prev <= 1) {
+              clearInterval(interval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     } finally {
       setCarregando(false);
     }
@@ -114,9 +135,9 @@ export function AuthScreen({ onPronto }: Props) {
 
         {erro && <p className="text-sm text-destructive">{erro}</p>}
 
-        <button onClick={submit} disabled={carregando} className="btn-primary w-full disabled:opacity-60">
+        <button onClick={submit} disabled={carregando || cooldown > 0} className="btn-primary w-full disabled:opacity-60">
           {modo === "login" ? <LogIn className="size-4" /> : <UserPlus className="size-4" />}
-          {carregando ? "Aguarde..." : modo === "login" ? "Entrar" : "Criar conta"}
+          {carregando ? "Aguarde..." : cooldown > 0 ? `Aguarde ${cooldown}s` : modo === "login" ? "Entrar" : "Criar conta"}
         </button>
       </div>
 
