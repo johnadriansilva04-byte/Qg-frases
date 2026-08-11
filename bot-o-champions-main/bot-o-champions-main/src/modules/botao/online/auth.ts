@@ -3,6 +3,7 @@ import { registerCustomTeam, unregisterCustomTeam } from "../data/teams";
 
 export type Perfil = {
   id: string;
+  user_id: string;
   email: string;
   nome: string;
   cores: string[];
@@ -80,7 +81,7 @@ export function limparCache() {
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
   console.log("🔍 BUSCAR PERFIL - USER ID:", userId);
   console.log("🗂️  TABELA: botao_usuarios");
-  const { data, error } = await supabase.from("botao_usuarios").select("*").eq("id", userId).maybeSingle();
+  const { data, error } = await supabase.from("botao_usuarios").select("*").eq("user_id", userId).maybeSingle();
   console.log("📊 RESULTADO BUSCA:", { data, error });
   return (data as Perfil | null) ?? null;
 }
@@ -111,7 +112,7 @@ export async function entrar(email: string, senha: string) {
       const { data: novoPerfil, error: perr } = await supabase
         .from("botao_usuarios")
         .insert({
-          id: user.id,
+          user_id: user.id,
           email: email,
           nome: "Jogador",
           cores: CORES_PADRAO,
@@ -172,7 +173,7 @@ export async function cadastrar(input: {
   const { data: perfil, error: perr } = await supabase
     .from("botao_usuarios")
     .insert({
-      id: user.id,
+      user_id: user.id,
       email: input.email,
       nome: input.nome.trim(),
       cores: input.cores,
