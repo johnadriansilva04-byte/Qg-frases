@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type Perfil = {
   id: string;
-  telefone: string;
+  email: string;
   nome: string;
   cores: string[];
   time_personalizado: string;
@@ -18,7 +18,7 @@ export const CORES_PADRAO = ["#FF0000", "#00FF00", "#0000FF"];
 export const STORAGE_KEYS = {
   LOGGED_IN: "botao_online_logged_in",
   PERFIL_ID: "botao_online_usuario_id",
-  TELEFONE: "botao_online_telefone",
+  EMAIL: "botao_online_email",
   NOME: "botao_online_nome",
   TIME: "botao_online_time_personalizado",
   ABREVIACAO: "botao_online_abreviacao_time",
@@ -28,13 +28,14 @@ export const STORAGE_KEYS = {
   BLOCO_ID: "botao_online_bloco_id",
 } as const;
 
-export const somenteDigitos = (v: string) => v.replace(/\D/g, "");
-
-/** Telefone vira um e-mail sintético interno; o login do usuário é telefone + senha. */
-export const telefoneParaEmail = (telefone: string) => `botao${somenteDigitos(telefone)}@botao.app`;
+/** Validação simples de email */
+export const validarEmail = (email: string) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
 
 export function validarCadastro(input: {
-  telefone: string;
+  email: string;
   senha: string;
   nome: string;
   time: string;
@@ -42,8 +43,7 @@ export function validarCadastro(input: {
   numero: number;
   cores: string[];
 }): string | null {
-  const tel = somenteDigitos(input.telefone);
-  if (tel.length < 10 || tel.length > 13) return "Telefone inválido (use DDD + número).";
+  if (!validarEmail(input.email)) return "Email inválido.";
   if (input.senha.length < 6 || input.senha.length > 72) return "A senha precisa ter entre 6 e 72 caracteres.";
   if (!input.nome.trim() || input.nome.trim().length > 40) return "Informe um nome de até 40 caracteres.";
   if (!input.time.trim() || input.time.trim().length > 30) return "Informe um nome de time de até 30 caracteres.";
@@ -59,7 +59,7 @@ export function cachePerfil(p: Perfil) {
   const ls = window.localStorage;
   ls.setItem(STORAGE_KEYS.LOGGED_IN, "true");
   ls.setItem(STORAGE_KEYS.PERFIL_ID, p.id);
-  ls.setItem(STORAGE_KEYS.TELEFONE, p.telefone);
+  ls.setItem(STORAGE_KEYS.EMAIL, p.email);
   ls.setItem(STORAGE_KEYS.NOME, p.nome);
   ls.setItem(STORAGE_KEYS.TIME, p.time_personalizado);
   ls.setItem(STORAGE_KEYS.ABREVIACAO, p.abreviacao_time);
@@ -77,16 +77,16 @@ export async function buscarPerfil(userId: string): Promise<Perfil | null> {
   return (data as Perfil | null) ?? null;
 }
 
-export async function entrar(telefone: string, senha: string) {
+export async function entrar(email: string, senha: string) {
   const { error } = await supabase.auth.signInWithPassword({
-    email: telefoneParaEmail(telefone),
+    email: email,
     password: senha,
   });
-  if (error) throw new Error("Telefone ou senha incorretos.");
+  if (error) throw new Error("Email ou senha incorretos.");
 }
 
 export async function cadastrar(input: {
-  telefone: string;
+  email: string;
   senha: string;
   nome: string;
   time: string;
@@ -97,16 +97,13 @@ export async function cadastrar(input: {
   const erro = validarCadastro(input);
   if (erro) throw new Error(erro);
 
-  const email = telefoneParaEmail(input.telefone);
-  console.log('Tentando criar conta:', { email, telefone: input.telefone });
+  console.log('Tentando criar conta:', { email: input.email });
 
   const { data, error } = await supabase.auth.signUp({
-    email: email,
+    email: input.email,
     password: input.senha,
     options: { 
       emailRedirectTo: window.location.origin,
-      data: { phone: input.telefone },
-      emailConfirm: true // Auto-confirmar email para emails sintéticos
     },
   });
   
@@ -116,7 +113,7 @@ export async function cadastrar(input: {
     console.error('Erro detalhado do signup:', error);
     throw new Error(
       error.message.toLowerCase().includes("already")
-        ? "Já existe uma conta com esse telefone. Faça login."
+        ? "Já existe uma conta com esse email. Faça login."
         : `Erro ao criar conta: ${error.message}`,
     );
   }
@@ -127,7 +124,7 @@ export async function cadastrar(input: {
     .from("botao_usuarios")
     .insert({
       id: user.id,
-      telefone: somenteDigitos(input.telefone),
+      email: input.email,
       nome: input.nome.trim(),
       cores: input.cores,
       time_personalizado: input.time.trim(),

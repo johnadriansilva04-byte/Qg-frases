@@ -145,9 +145,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     deleteProgressLocal();
 
     // Excluir progresso do Supabase (se usuário estiver logado)
-    const telefone = localStorage.getItem('botao_online_telefone');
-    if (telefone) {
-      await deleteProgressFromSupabase(telefone);
+    const email = localStorage.getItem('botao_online_email');
+    if (email) {
+      await deleteProgressFromSupabase(email);
     }
 
     // Resetar estado do torneio

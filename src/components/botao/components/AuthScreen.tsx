@@ -8,7 +8,7 @@ type Props = {
 
 export function AuthScreen({ onPronto }: Props) {
   const [modo, setModo] = useState<"login" | "cadastro">("login");
-  const [telefone, setTelefone] = useState("");
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
   const [time, setTime] = useState("Meu Time");
@@ -29,10 +29,10 @@ export function AuthScreen({ onPronto }: Props) {
     setCarregando(true);
     try {
       if (modo === "login") {
-        await entrar(telefone, senha);
+        await entrar(email, senha);
         onPronto();
       } else {
-        const p = await cadastrar({ telefone, senha, nome, time, abreviacao, numero, cores });
+        const p = await cadastrar({ email, senha, nome, time, abreviacao, numero, cores });
         cachePerfil(p);
         onPronto(p);
       }
@@ -74,14 +74,14 @@ export function AuthScreen({ onPronto }: Props) {
       </div>
 
       <div className="panel space-y-4">
-        <Campo label="Telefone (com DDD)">
+        <Campo label="Email">
           <input
             className="field-input"
-            inputMode="numeric"
-            maxLength={16}
-            value={telefone}
-            onChange={(e) => setTelefone(e.target.value)}
-            placeholder="48999880030"
+            type="email"
+            maxLength={100}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="seu@email.com"
           />
         </Campo>
 
