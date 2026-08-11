@@ -183,10 +183,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const fx = t.groupFixtures.find((x) => x.id === current.id)!;
       applyResult(t, fx, r);
 
-      // Simula TODOS os jogos não jogados da fase de grupos
-      // Isso garante que todos os jogos sejam processados, não apenas os da mesma rodada
+      // Simula apenas os jogos da mesma rodada que NÃO envolvem o usuário
+      const currentRound = fx.stage.split("·")[1]?.trim();
       t.groupFixtures
-        .filter((x) => !x.played)
+        .filter((x) => !x.played && x.stage.includes(currentRound!) && x.homeId !== t.userTeamId && x.awayId !== t.userTeamId)
         .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
 
       // só monta o mata-mata quando todos os jogos da fase de grupos terminarem

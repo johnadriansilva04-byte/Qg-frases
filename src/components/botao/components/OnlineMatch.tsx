@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2, LogOut, User, Lock } from "lucide-react";
+import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2, User, Lock } from "lucide-react";
 import { useBotaoOnline } from "@/hooks/useBotaoOnline";
+import { useBotaoAuth } from "../online/useBotaoAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MatchView } from "./MatchView";
 
@@ -23,6 +24,7 @@ const STORAGE_KEYS = {
 };
 
 export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; onEstadoPartida?: (emPartida: boolean) => void }) {
+  const { logout } = useBotaoAuth();
   const {
     sessionId,
     lobby,
@@ -45,10 +47,12 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
     meusGols,
     tempoRestanteTurno,
     usuario,
-    login,
     loading,
     error
   } = useBotaoOnline();
+
+  const nome = usuario?.nome || "Jogador";
+  const cores = usuario?.cores || ["#FF0000", "#00FF00", "#0000FF"];
 
   // Carregar estado persistido
   const [screen, setScreen] = useState<Screen>(() => {
@@ -166,6 +170,11 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
     });
   }, []);
 
+  const getCorDisponivel = useCallback((coresOponente: string[]) => {
+    const coresDisponiveis = cores.filter((c: string) => !coresOponente.includes(c));
+    return coresDisponiveis[0] || cores[0];
+  }, [cores]);
+
 
 
   const handleCriarLobby = useCallback(async () => {
@@ -220,16 +229,11 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
       <div className="panel">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-2xl">Lobbies Online</h2>
-          <div className="flex gap-2">
-            <button onClick={handleLogout} className="btn-ghost text-destructive" title="Sair da conta">
-              <LogOut className="w-5 h-5" />
+          {onBack && (
+            <button onClick={onBack} className="btn-ghost">
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            {onBack && (
-              <button onClick={onBack} className="btn-ghost">
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         <div className="mb-4 p-3 bg-accent/10 rounded-lg">
@@ -237,13 +241,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <User className="inline w-4 h-4" />
-                <input
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="text-sm font-medium bg-transparent border-b border-border focus:border-primary focus:outline-none px-1"
-                  placeholder="Nome do seu time"
-                />
+                <span className="text-sm font-medium">{nome}</span>
               </div>
               <p className="text-sm text-muted-foreground mb-2">
                 <Users className="inline w-4 h-4 mr-1" />
@@ -257,7 +255,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
             <div className="flex flex-col items-center gap-2 ml-4">
               <span className="text-xs text-muted-foreground">Suas cores:</span>
               <div className="flex gap-1">
-                {cores.map((cor, i) => (
+                {cores.map((cor: string, i: number) => (
                   <div key={i} className="w-5 h-5 rounded border-2" style={{ backgroundColor: cor }} />
                 ))}
               </div>
@@ -444,7 +442,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
           Time: <span className="font-medium">{nome}</span>
         </p>
         <div className="flex justify-center gap-2 mb-4">
-          {cores.map((cor, i) => (
+          {cores.map((cor: string, i: number) => (
             <div key={i} className="w-6 h-6 rounded border-2" style={{ backgroundColor: cor }} />
           ))}
         </div>
