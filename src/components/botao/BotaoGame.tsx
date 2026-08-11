@@ -18,9 +18,13 @@ import {
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { OnlineMatch } from "./components/OnlineMatch";
+import { AuthScreen } from "./components/AuthScreen";
+import { UserMenu } from "./components/UserMenu";
+import { useBotaoAuth } from "./online/useBotaoAuth";
+import type { Perfil } from "./online/auth";
 
 type Screen =
-  | "login"
+  | "auth"
   | "menu"
   | "friendly-setup"
   | "friendly-match"
@@ -35,13 +39,15 @@ interface BotaoGameProps {
 }
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
+  const { perfil, carregando, logout, aplicarPerfil } = useBotaoAuth();
   const [screen, setScreen] = useState<Screen>(() => {
-    // Verificar se o usuário já está logado
+    // Verificar se o usuário já está logado com Supabase Auth
     const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
-    return isLoggedIn ? "menu" : "login";
+    return isLoggedIn ? "menu" : "auth";
   });
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
+  const [emPartidaOnline, setEmPartidaOnline] = useState(false);
 
   // Carregar times do banco de dados ao montar
   useEffect(() => {
@@ -72,7 +78,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       secondary: cores[1],
       numero: parseInt(numero)
     };
-  }, []);
+  }, [perfil]);
+
+  // quem está logado joga com o próprio time por padrão
+  useEffect(() => {
+    if (perfil) {
+      // Recarregar time personalizado quando perfil mudar
+      const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
+      const abreviacao = localStorage.getItem('botao_online_abreviacao_time') || "MTI";
+      const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
+      // O time personalizado já é carregado via customTeamData
+    }
+  }, [perfil]);
 
   const userTeam = useMemo(() => {
     return createCustomTeam(
@@ -101,6 +118,22 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const persist = (p: Progress) => {
     setProgress(p);
     saveProgress(p);
+  };
+
+  const handleLogout = async () => {
+    if (emPartidaOnline) {
+      setToast("Não dá pra sair da conta durante uma partida online.");
+      return;
+    }
+    await logout();
+    setScreen("auth");
+    setToast("Você saiu da conta.");
+  };
+
+  const aoLogar = (p?: Perfil) => {
+    if (p) aplicarPerfil(p);
+    setScreen("menu");
+    setToast("Bem-vindo de volta!");
   };
 
   const handleDeleteCampaign = async () => {
@@ -225,12 +258,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId) ?? false;
 
   /* ---------- telas ---------- */
+  if (screen === "online") {
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <OnlineMatch
+          onBack={() => setScreen("menu")}
+          onEstadoPartida={setEmPartidaOnline}
+        />
+      </Shell>
+    );
+  }
+
+  if (screen === "auth") {
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <AuthScreen onPronto={aoLogar} onPular={() => setScreen("menu")} />
+      </Shell>
+    );
+  }
+
   if (screen === "friendly-match" || screen === "tournament-match") {
     const f = screen === "friendly-match" ? { homeId: userTeam.id, awayId: rivalTeam, stage: "Amistoso" } : current!;
     const userSide = f.homeId === userTeam.id ? "home" : "away";
     const knockout = screen === "tournament-match" && (tour?.phase ?? "") === "mata-mata";
     return (
       <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <MatchView
           key={`${f.homeId}-${f.awayId}-${screen}`}
           homeId={f.homeId}
@@ -250,28 +305,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
+      <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
-        {screen === "login" && (
-          <div className="panel">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-display text-2xl">Entrar no Futebol de Botão</h2>
-              {onBack && (
-                <button onClick={onBack} className="btn-ghost">
-                  Voltar
-                </button>
-              )}
-            </div>
-            <OnlineMatch onBack={() => {
-              // Verificar se o login foi bem-sucedido antes de mudar a tela
-              const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
-              if (isLoggedIn) {
-                setScreen("menu");
-              }
-            }} />
-          </div>
-        )}
-
-        {screen !== "login" && (
+        {screen !== "auth" && (
           <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
         )}
 

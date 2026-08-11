@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight } from "lucide-react";
-import { TEAMS, teamById } from "./data/teams";
+import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Wifi } from "lucide-react";
+import { TEAMS, teamById, CUSTOM_TEAM_ID } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
 import {
   advanceKnockout,
@@ -16,9 +16,16 @@ import {
 import { isUnlocked, loadProgress, saveProgress, type Progress } from "./storage";
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
+import { AuthScreen } from "./components/AuthScreen";
+import { UserMenu } from "./components/UserMenu";
+import { OnlineMatch } from "./components/OnlineMatch";
+import { useBotaoAuth } from "./online/useBotaoAuth";
+import type { Perfil } from "./online/auth";
 
 type Screen =
   | "menu"
+  | "auth"
+  | "online"
   | "friendly-setup"
   | "friendly-match"
   | "tournament-setup"
@@ -27,6 +34,7 @@ type Screen =
   | "trophies";
 
 export function BotaoGame() {
+  const { perfil, carregando, logout, aplicarPerfil } = useBotaoAuth();
   const [screen, setScreen] = useState<Screen>("menu");
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [userTeam, setUserTeam] = useState("fla");
@@ -35,6 +43,7 @@ export function BotaoGame() {
   const [tour, setTour] = useState<Tournament | null>(null);
   const [current, setCurrent] = useState<Fixture | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [emPartidaOnline, setEmPartidaOnline] = useState(false);
 
   useEffect(() => setProgress(loadProgress()), []);
   useEffect(() => {
@@ -43,10 +52,33 @@ export function BotaoGame() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // quem está logado joga com o próprio time por padrão
+  useEffect(() => {
+    if (perfil) setUserTeam(CUSTOM_TEAM_ID);
+  }, [perfil]);
+
   const persist = (p: Progress) => {
     setProgress(p);
     saveProgress(p);
   };
+
+  const handleLogout = async () => {
+    if (emPartidaOnline) {
+      setToast("Não dá pra sair da conta durante uma partida online.");
+      return;
+    }
+    await logout();
+    setUserTeam("fla");
+    setScreen("menu");
+    setToast("Você saiu da conta.");
+  };
+
+  const aoLogar = (p?: Perfil) => {
+    if (p) aplicarPerfil(p);
+    setScreen("menu");
+    setToast("Bem-vindo de volta!");
+  };
+
 
   /* ---------- amistoso ---------- */
   const finishFriendly = (r: MatchResult) => {
@@ -160,10 +192,30 @@ export function BotaoGame() {
     );
   }
 
+  if (screen === "auth") {
+    return (
+      <Shell>
+        <div className="mx-auto w-full max-w-md px-4 pt-6 pb-16">
+          <AuthScreen onPronto={aoLogar} onPular={() => setScreen("menu")} />
+        </div>
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
         <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
+
+        <div className="mb-6 flex justify-end">
+          <UserMenu
+            perfil={perfil}
+            emPartida={emPartidaOnline}
+            onLogin={() => setScreen("auth")}
+            onLogout={() => void handleLogout()}
+          />
+        </div>
+
 
         {screen === "menu" && (
           <Menu
@@ -173,8 +225,18 @@ export function BotaoGame() {
             onTrophies={() => setScreen("trophies")}
             hasTour={!!tour && tour.phase !== "fim"}
             onResume={() => setScreen("hub")}
+            onOnline={() => setScreen(perfil ? "online" : "auth")}
           />
         )}
+
+        {screen === "online" && perfil && (
+          <OnlineMatch
+            perfil={perfil}
+            onSair={() => setScreen("menu")}
+            onEstadoPartida={setEmPartidaOnline}
+          />
+        )}
+
 
         {screen === "friendly-setup" && (
           <Setup
@@ -260,6 +322,7 @@ function Menu({
   onTrophies,
   hasTour,
   onResume,
+  onOnline,
 }: {
   progress: Progress;
   onFriendly: () => void;
@@ -267,6 +330,7 @@ function Menu({
   onTrophies: () => void;
   hasTour: boolean;
   onResume: () => void;
+  onOnline: () => void;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -282,6 +346,13 @@ function Menu({
         desc="Fase de grupos + mata-mata. Sorteio aleatório a cada campanha."
         onClick={onTournament}
       />
+      <MenuCard
+        icon={<Wifi className="size-5" />}
+        title="Online"
+        desc="Salas ao vivo contra outro jogador. Melhor de 3 blocos."
+        onClick={onOnline}
+      />
+
       <MenuCard
         icon={<Medal className="size-5" />}
         title="Sala de troféus"

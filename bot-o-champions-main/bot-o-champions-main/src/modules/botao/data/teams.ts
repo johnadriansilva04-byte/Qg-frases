@@ -49,3 +49,20 @@ export const TEAMS: Team[] = [
 export function teamById(id: string): Team {
   return TEAMS.find((t) => t.id === id) ?? TEAMS[0]!;
 }
+
+/** Id do time personalizado do jogador logado. */
+export const CUSTOM_TEAM_ID = "meu";
+
+/** Registra/atualiza o time do jogador logado na lista de times. */
+export function registerCustomTeam(t: Omit<Team, "id">): Team {
+  const team: Team = { ...t, id: CUSTOM_TEAM_ID };
+  const i = TEAMS.findIndex((x) => x.id === CUSTOM_TEAM_ID);
+  if (i >= 0) TEAMS[i] = team;
+  else TEAMS.unshift(team);
+  return team;
+}
+
+export function unregisterCustomTeam() {
+  const i = TEAMS.findIndex((x) => x.id === CUSTOM_TEAM_ID);
+  if (i >= 0) TEAMS.splice(i, 1);
+}

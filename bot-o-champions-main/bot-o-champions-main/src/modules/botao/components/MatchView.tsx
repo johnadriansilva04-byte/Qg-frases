@@ -4,6 +4,16 @@ import { planAiShot } from "../engine/ai";
 import { teamById } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 
+/** Jogada trocada entre os dois jogadores no modo online. */
+export type Shot = { i: number; discId: string; vx: number; vy: number };
+
+export type NetPlay = {
+  /** Lista ordenada de jogadas já registradas no servidor. */
+  shots: Shot[];
+  /** Envia a jogada local para o servidor. */
+  onShot: (s: Shot) => void;
+};
+
 type Props = {
   homeId: string;
   awayId: string;
@@ -12,6 +22,7 @@ type Props = {
   turns?: number;
   knockout?: boolean;
   stageLabel: string;
+  net?: NetPlay;
   onFinish: (result: MatchResult) => void;
   onQuit: () => void;
 };
@@ -26,12 +37,14 @@ export function MatchView({
   turns = 24,
   knockout = false,
   stageLabel,
+  net,
   onFinish,
   onQuit,
 }: Props) {
   const home = teamById(homeId);
   const away = teamById(awayId);
   const cpuSide: Side = userSide === "home" ? "away" : "home";
+  const online = !!net;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -41,6 +54,8 @@ export function MatchView({
   const turnRef = useRef<Side>("home");
   const portraitRef = useRef(false);
   const scaleRef = useRef(1);
+  const appliedRef = useRef(0);
+  const [applied, setApplied] = useState(0);
 
   const [score, setScore] = useState({ home: 0, away: 0 });
   const [turnsLeft, setTurnsLeft] = useState(turns);
@@ -171,21 +186,39 @@ export function MatchView({
     requestAnimationFrame(loop);
   }, [finishMatch]);
 
+  // aplica uma jogada (local ou recebida do adversário) — física determinística nos dois lados
+  const aplicarJogada = useCallback(
+    (discId: string, vx: number, vy: number) => {
+      const d = discsRef.current.find((x) => x.id === discId);
+      if (!d) return;
+      d.vx = vx;
+      d.vy = vy;
+      appliedRef.current += 1;
+      setApplied(appliedRef.current);
+      runSimulation();
+    },
+    [runSimulation],
+  );
+
+  // jogadas recebidas do adversário (modo online)
+  useEffect(() => {
+    if (!net || ended || simRef.current) return;
+    const proxima = net.shots.find((s) => s.i === appliedRef.current);
+    if (!proxima) return;
+    aplicarJogada(proxima.discId, proxima.vx, proxima.vy);
+  }, [net, net?.shots, ended, turn, applied, aplicarJogada]);
+
   // jogada da CPU
   useEffect(() => {
-    if (ended || turn !== cpuSide || simRef.current) return;
+    if (online || ended || turn !== cpuSide || simRef.current) return;
     const cpuTeam = cpuSide === "home" ? home : away;
     const t = setTimeout(() => {
       const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
       if (!shot) return;
-      const d = discsRef.current.find((x) => x.id === shot.discId);
-      if (!d) return;
-      d.vx = shot.ix;
-      d.vy = shot.iy;
-      runSimulation();
+      aplicarJogada(shot.discId, shot.ix, shot.iy);
     }, 750);
     return () => clearTimeout(t);
-  }, [turn, cpuSide, difficulty, ended, home, away, runSimulation]);
+  }, [turn, cpuSide, difficulty, ended, home, away, online, aplicarJogada]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {
@@ -227,9 +260,8 @@ export function MatchView({
     if (!d) return;
     const { ix, iy, power } = clampImpulse(d.x - aim.px, d.y - aim.py);
     if (power < 0.06) return;
-    d.vx = ix;
-    d.vy = iy;
-    runSimulation();
+    if (net) net.onShot({ i: appliedRef.current, discId: d.id, vx: ix, vy: iy });
+    aplicarJogada(d.id, ix, iy);
   };
 
   const userTeam = userSide === "home" ? home : away;
@@ -300,7 +332,7 @@ export function MatchView({
               Sua vez, <span className="text-foreground">{userTeam.short}</span> — arraste um botão pra trás e solte.
             </>
           ) : (
-            "A CPU está pensando..."
+            online ? "Vez do adversário..." : "A CPU está pensando..."
           )}
         </p>
         <div className="power-bar shrink-0" aria-hidden>
