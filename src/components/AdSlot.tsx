@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 type Props = { rotulo: string; nota?: string; altura?: string; children?: ReactNode };
 
@@ -7,9 +7,41 @@ type Props = { rotulo: string; nota?: string; altura?: string; children?: ReactN
  */
 export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
   const adSlot = rotulo === "Banner Topo" ? "9981926633" : rotulo === "Banner Rodapé" ? "7935061808" : rotulo;
+  const adRef = useRef<HTMLDivElement>(null);
+  const adLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (adLoadedRef.current) return;
+    
+    const loadAd = () => {
+      if (!adRef.current || adLoadedRef.current) return;
+      
+      // Verifica se o elemento tem largura antes de tentar carregar o anúncio
+      const rect = adRef.current.getBoundingClientRect();
+      if (rect.width === 0) {
+        console.warn('[AdSense] Slot com largura 0, adiando carregamento...');
+        setTimeout(loadAd, 500);
+        return;
+      }
+
+      try {
+        if (typeof window !== 'undefined' && (window as any).adsbygoogle) {
+          (window as any).adsbygoogle.push({});
+          adLoadedRef.current = true;
+        }
+      } catch (error) {
+        console.error('[AdSense] Erro ao carregar anúncio:', error);
+      }
+    };
+
+    // Pequeno delay para garantir que o DOM esteja pronto
+    const timer = setTimeout(loadAd, 300);
+    
+    return () => clearTimeout(timer);
+  }, [adSlot]);
 
   return (
-    <div className={`w-full ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6`}>
+    <div ref={adRef} className={`w-full ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6`}>
       <ins
         className="adsbygoogle block"
         style={{ display: "block" }}
@@ -18,7 +50,6 @@ export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
         data-ad-format="auto"
         data-full-width-responsive="true"
       />
-      <script dangerouslySetInnerHTML={{ __html: "(adsbygoogle = window.adsbygoogle || []).push({});" }} />
     </div>
   );
 }

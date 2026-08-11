@@ -233,23 +233,31 @@ export function useBotaoOnline() {
       supabase.removeChannel(channelRef.current);
     }
 
-    const channel = supabase
-      .channel(`lobby-${lobbyId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'botao_blocos',
-          filter: `lobby_id=eq.${lobbyId}`
-        },
-        () => {
-          carregarBlocos(lobbyId);
-        }
-      )
-      .subscribe();
+    try {
+      const channel = supabase
+        .channel(`lobby-${lobbyId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'botao_blocos',
+            filter: `lobby_id=eq.${lobbyId}`
+          },
+          () => {
+            carregarBlocos(lobbyId);
+          }
+        )
+        .subscribe((status: 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR' | 'SUBSCRIPTION_ERROR') => {
+          if (status === 'SUBSCRIPTION_ERROR') {
+            console.error('[Supabase] Erro na subscrição do lobby:', status);
+          }
+        });
 
-    channelRef.current = channel;
+      channelRef.current = channel;
+    } catch (error) {
+      console.error('[Supabase] Erro ao criar subscrição do lobby:', error);
+    }
   }, [carregarBlocos]);
 
   // Inscrever em realtime para um bloco
@@ -258,23 +266,31 @@ export function useBotaoOnline() {
       supabase.removeChannel(channelRef.current);
     }
 
-    const channel = supabase
-      .channel(`bloco-${blocoId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'botao_blocos',
-          filter: `id=eq.${blocoId}`
-        },
-        (payload) => {
-          setBlocoAtual(payload.new as Bloco);
-        }
-      )
-      .subscribe();
+    try {
+      const channel = supabase
+        .channel(`bloco-${blocoId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'botao_blocos',
+            filter: `id=eq.${blocoId}`
+          },
+          (payload: { new: Bloco }) => {
+            setBlocoAtual(payload.new);
+          }
+        )
+        .subscribe((status: 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR' | 'SUBSCRIPTION_ERROR') => {
+          if (status === 'SUBSCRIPTION_ERROR') {
+            console.error('[Supabase] Erro na subscrição do bloco:', status);
+          }
+        });
 
-    channelRef.current = channel;
+      channelRef.current = channel;
+    } catch (error) {
+      console.error('[Supabase] Erro ao criar subscrição do bloco:', error);
+    }
   }, []);
 
   // Inscrever em realtime para lista de lobbies
@@ -283,22 +299,30 @@ export function useBotaoOnline() {
       supabase.removeChannel(channelRef.current);
     }
 
-    const channel = supabase
-      .channel('lista-lobbies')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'botao_lobbies'
-        },
-        () => {
-          listarLobbies();
-        }
-      )
-      .subscribe();
+    try {
+      const channel = supabase
+        .channel('lista-lobbies')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'botao_lobbies'
+          },
+          () => {
+            listarLobbies();
+          }
+        )
+        .subscribe((status: 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR' | 'SUBSCRIPTION_ERROR') => {
+          if (status === 'SUBSCRIPTION_ERROR') {
+            console.error('[Supabase] Erro na subscrição da lista de lobbies:', status);
+          }
+        });
 
-    channelRef.current = channel;
+      channelRef.current = channel;
+    } catch (error) {
+      console.error('[Supabase] Erro ao criar subscrição da lista de lobbies:', error);
+    }
   }, [listarLobbies]);
 
   // Registrar jogada

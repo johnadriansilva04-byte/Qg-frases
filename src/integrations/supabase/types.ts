@@ -59,6 +59,138 @@ export type Database = {
         }
         Relationships: []
       }
+      botao_usuarios: {
+        Row: {
+          id: string
+          telefone: string
+          nome: string
+          pontos_soberania: number
+          partidas_jogadas: number
+          partidas_vencidas: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          telefone: string
+          nome: string
+          pontos_soberania?: number
+          partidas_jogadas?: number
+          partidas_vencidas?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          telefone?: string
+          nome?: string
+          pontos_soberania?: number
+          partidas_jogadas?: number
+          partidas_vencidas?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      botao_lobbies: {
+        Row: {
+          id: string
+          created_at: string
+          nome: string
+          criador_session: string
+          criador_nome: string
+          formato: string
+          status: string
+          max_blocos: number
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          nome: string
+          criador_session: string
+          criador_nome: string
+          formato?: string
+          status?: string
+          max_blocos?: number
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          nome?: string
+          criador_session?: string
+          criador_nome?: string
+          formato?: string
+          status?: string
+          max_blocos?: number
+        }
+        Relationships: []
+      }
+      botao_blocos: {
+        Row: {
+          id: string
+          created_at: string
+          lobby_id: string
+          jogador1_session: string
+          jogador1_nome: string
+          jogador1_time: string
+          jogador2_session: string | null
+          jogador2_nome: string | null
+          jogador2_time: string | null
+          status: string
+          turno: string
+          jogadas_restantes: number
+          timestamp_inicio_turno: string
+          tempo_maximo_turno: number
+          jogador1_gols: number
+          jogador2_gols: number
+          rodada: number
+          vencedor: string | null
+          finalizada_em: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          lobby_id: string
+          jogador1_session: string
+          jogador1_nome: string
+          jogador1_time: string
+          jogador2_session?: string | null
+          jogador2_nome?: string | null
+          jogador2_time?: string | null
+          status?: string
+          turno?: string
+          jogadas_restantes?: number
+          timestamp_inicio_turno?: string
+          tempo_maximo_turno?: number
+          jogador1_gols?: number
+          jogador2_gols?: number
+          rodada?: number
+          vencedor?: string | null
+          finalizada_em?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          lobby_id?: string
+          jogador1_session?: string
+          jogador1_nome?: string
+          jogador1_time?: string
+          jogador2_session?: string | null
+          jogador2_nome?: string | null
+          jogador2_time?: string | null
+          status?: string
+          turno?: string
+          jogadas_restantes?: number
+          timestamp_inicio_turno?: string
+          tempo_maximo_turno?: number
+          jogador1_gols?: number
+          jogador2_gols?: number
+          rodada?: number
+          vencedor?: string | null
+          finalizada_em?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
