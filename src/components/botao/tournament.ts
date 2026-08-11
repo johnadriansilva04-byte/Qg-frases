@@ -10,10 +10,10 @@ export function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-const GROUP_NAMES = ["A", "B", "C", "D"];
+const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 export function createTournament(userTeamId: string, difficulty: Difficulty): Tournament {
-  const others = shuffle(TEAMS.filter((t) => t.id !== userTeamId)).slice(0, 15);
+  const others = shuffle(TEAMS.filter((t) => t.id !== userTeamId)).slice(0, 31);
   const pool = shuffle([teamById(userTeamId), ...others]);
 
   const groups = GROUP_NAMES.map((name, gi) => {
@@ -134,7 +134,7 @@ export function simulateMatch(homeId: string, awayId: string, difficulty: Diffic
   return res;
 }
 
-const KO_STAGES = ["Quartas de final", "Semifinal", "Final"];
+const KO_STAGES = ["Oitavas de final", "Quartas de final", "Semifinal", "Final"];
 
 export function buildKnockout(t: Tournament) {
   const qualified: string[] = [];
@@ -142,13 +142,17 @@ export function buildKnockout(t: Tournament) {
     const sorted = sortTable(g.table);
     qualified.push(sorted[0]!.teamId, sorted[1]!.teamId);
   });
-  // A1 x B2, C1 x D2, B1 x A2, D1 x C2
-  const [a1, a2, b1, b2, c1, c2, d1, d2] = qualified as string[];
+  // A1 x H2, B1 x G2, C1 x F2, D1 x E2, E1 x D2, F1 x C2, G1 x B2, H1 x A2
+  const [a1, a2, b1, b2, c1, c2, d1, d2, e1, e2, f1, f2, g1, g2, h1, h2] = qualified as string[];
   const pairs: [string, string][] = [
-    [a1!, b2!],
-    [c1!, d2!],
-    [b1!, a2!],
-    [d1!, c2!],
+    [a1!, h2!],
+    [b1!, g2!],
+    [c1!, f2!],
+    [d1!, e2!],
+    [e1!, d2!],
+    [f1!, c2!],
+    [g1!, b2!],
+    [h1!, a2!],
   ];
   t.knockout = [
     {

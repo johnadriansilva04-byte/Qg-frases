@@ -89,23 +89,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (t.phase === "grupos") {
       const fx = t.groupFixtures.find((x) => x.id === current.id)!;
       applyResult(t, fx, r);
-      
+
       // simula os outros jogos da mesma rodada
       t.groupFixtures
         .filter((x) => !x.played && x.stage === fx.stage)
         .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
-      
-      // simula todas as rodadas restantes (jogos que o usuário não participa)
-      while (!t.groupFixtures.every((x) => x.played)) {
-        const nextRound = t.groupFixtures.find((x) => !x.played)?.stage;
-        if (!nextRound) break;
-        t.groupFixtures
-          .filter((x) => !x.played && x.stage === nextRound)
-          .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
+
+      // só monta o mata-mata quando todos os jogos da fase de grupos terminarem
+      if (t.groupFixtures.every((x) => x.played)) {
+        buildKnockout(t);
+        setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
       }
-      
-      buildKnockout(t);
-      setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
     } else {
       const stage = t.knockout[t.knockout.length - 1]!;
       const fx = stage.fixtures.find((x) => x.id === current.id)!;
@@ -218,7 +212,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         {screen === "tournament-setup" && (
           <Setup
             title="Torneio"
-            subtitle="16 times, 4 grupos, mata-mata até a final. Três títulos liberam o próximo nível."
+            subtitle="32 times, 8 grupos, mata-mata até a final. Três títulos liberam o próximo nível."
             userTeam={userTeam}
             setUserTeam={setUserTeam}
             rivalTeam={rivalTeam}
