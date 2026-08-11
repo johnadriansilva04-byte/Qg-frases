@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type Perfil = {
   id: string;
+  user_id: string;
   email: string;
   nome: string;
   cores: string[];
@@ -73,7 +74,7 @@ export function limparCache() {
 }
 
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
-  const { data } = await supabase.from("botao_usuarios").select("*").eq("id", userId).maybeSingle();
+  const { data } = await supabase.from("botao_usuarios").select("*").eq("user_id", userId).maybeSingle();
   return (data as Perfil | null) ?? null;
 }
 
@@ -104,6 +105,13 @@ export async function cadastrar(input: {
     password: input.senha,
     options: { 
       emailRedirectTo: window.location.origin,
+      data: {
+        nome: input.nome.trim(),
+        time_personalizado: input.time.trim(),
+        abreviacao_time: input.abreviacao.trim().toUpperCase(),
+        numero_jogador: input.numero,
+        cores: input.cores,
+      },
     },
   });
   
@@ -120,21 +128,17 @@ export async function cadastrar(input: {
   const user = data.user;
   if (!user) throw new Error("Não foi possível criar a conta.");
 
-  const { data: perfil, error: perr } = await supabase
-    .from("botao_usuarios")
-    .insert({
-      id: user.id,
-      email: input.email,
-      nome: input.nome.trim(),
-      cores: input.cores,
-      time_personalizado: input.time.trim(),
-      abreviacao_time: (input.abreviacao.trim().toUpperCase() as string),
-      numero_jogador: input.numero,
-    })
-    .select("*")
-    .maybeSingle();
-  if (perr || !perfil) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
-  return perfil as unknown as Perfil;
+  console.log('Perfil será criado automaticamente pelo trigger');
+
+  // Trigger cria perfil automaticamente, fazer login
+  await entrar(input.email, input.senha);
+  
+  // Buscar perfil criado pelo trigger
+  const perfilCriado = await buscarPerfil(user.id);
+  console.log('Perfil criado pelo trigger:', perfilCriado);
+  if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
+  
+  return perfilCriado;
 }
 
 export async function sair() {
