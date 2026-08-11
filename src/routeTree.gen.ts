@@ -11,6 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as CidadelaRouteImport } from './routes/cidadela'
+import { Route as CorretorRouteImport } from './routes/corretor'
+import { Route as NarradorRouteImport } from './routes/narrador'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as TermosRouteImport } from './routes/termos'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +27,98 @@ const BibliotecaRoute = BibliotecaRouteImport.update({
   path: '/biblioteca',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CidadelaRoute = CidadelaRouteImport.update({
+  id: '/cidadela',
+  path: '/cidadela',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CorretorRoute = CorretorRouteImport.update({
+  id: '/corretor',
+  path: '/corretor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NarradorRoute = NarradorRouteImport.update({
+  id: '/narrador',
+  path: '/narrador',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/cidadela': typeof CidadelaRoute
+  '/corretor': typeof CorretorRoute
+  '/narrador': typeof NarradorRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos': typeof TermosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/cidadela': typeof CidadelaRoute
+  '/corretor': typeof CorretorRoute
+  '/narrador': typeof NarradorRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos': typeof TermosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/cidadela': typeof CidadelaRoute
+  '/corretor': typeof CorretorRoute
+  '/narrador': typeof NarradorRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos': typeof TermosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/biblioteca'
+  fullPaths:
+    | '/'
+    | '/biblioteca'
+    | '/cidadela'
+    | '/corretor'
+    | '/narrador'
+    | '/privacidade'
+    | '/termos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/biblioteca'
-  id: '__root__' | '/' | '/biblioteca'
+  to:
+    | '/'
+    | '/biblioteca'
+    | '/cidadela'
+    | '/corretor'
+    | '/narrador'
+    | '/privacidade'
+    | '/termos'
+  id:
+    | '__root__'
+    | '/'
+    | '/biblioteca'
+    | '/cidadela'
+    | '/corretor'
+    | '/narrador'
+    | '/privacidade'
+    | '/termos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibliotecaRoute: typeof BibliotecaRoute
+  CidadelaRoute: typeof CidadelaRoute
+  CorretorRoute: typeof CorretorRoute
+  NarradorRoute: typeof NarradorRoute
+  PrivacidadeRoute: typeof PrivacidadeRoute
+  TermosRoute: typeof TermosRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,13 +137,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BibliotecaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cidadela': {
+      id: '/cidadela'
+      path: '/cidadela'
+      fullPath: '/cidadela'
+      preLoaderRoute: typeof CidadelaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/corretor': {
+      id: '/corretor'
+      path: '/corretor'
+      fullPath: '/corretor'
+      preLoaderRoute: typeof CorretorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/narrador': {
+      id: '/narrador'
+      path: '/narrador'
+      fullPath: '/narrador'
+      preLoaderRoute: typeof NarradorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibliotecaRoute: BibliotecaRoute,
+  CidadelaRoute: CidadelaRoute,
+  CorretorRoute: CorretorRoute,
+  NarradorRoute: NarradorRoute,
+  PrivacidadeRoute: PrivacidadeRoute,
+  TermosRoute: TermosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
