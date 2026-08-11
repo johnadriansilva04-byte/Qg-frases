@@ -128,11 +128,9 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <div className="flex min-h-screen">
+        <div className="min-h-screen">
           <Sidebar />
-          <div className="flex-1">
-            {children}
-          </div>
+          {children}
         </div>
         <Scripts />
       </body>
