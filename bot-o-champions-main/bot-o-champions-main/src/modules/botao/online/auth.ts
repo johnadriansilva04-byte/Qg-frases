@@ -150,7 +150,16 @@ export async function cadastrar(input: {
   const { data, error } = await supabase.auth.signUp({
     email: input.email,
     password: input.senha,
-    options: { emailRedirectTo: window.location.origin },
+    options: {
+      emailRedirectTo: window.location.origin,
+      data: {
+        nome: input.nome.trim(),
+        time_personalizado: input.time.trim(),
+        abreviacao_time: input.abreviacao.trim().toUpperCase(),
+        numero_jogador: input.numero,
+        cores: input.cores,
+      },
+    },
   });
   if (error) {
     console.error("❌ ERRO SUPABASE AUTH:", error);
@@ -167,40 +176,17 @@ export async function cadastrar(input: {
   }
 
   console.log("✅ USUÁRIO CRIADO NO SUPABASE AUTH, ID:", user.id);
+  console.log("📋 PERFIL SERÁ CRIADO AUTOMATICAMENTE PELO TRIGGER");
 
-  // Criar perfil
-  console.log("📋 CRIANDO PERFIL NA TABELA botao_usuarios");
-  const { data: perfil, error: perr } = await supabase
-    .from("botao_usuarios")
-    .insert({
-      user_id: user.id,
-      email: input.email,
-      nome: input.nome.trim(),
-      cores: input.cores,
-      time_personalizado: input.time.trim(),
-      abreviacao_time: input.abreviacao.trim().toUpperCase(),
-      numero_jogador: input.numero,
-    })
-    .select("*")
-    .maybeSingle();
-  
-  console.log("📊 RESULTADO INSERT PERFIL:", { perfil, error: perr });
-  
-  if (perr || !perfil) {
-    console.log("⚠️ FALHOU AO CRIAR PERFIL, TENTANDO LOGIN AUTOMÁTICO");
-    // Se falhar ao criar perfil, fazer login automático e o perfil será criado na função entrar
-    await entrar(input.email, input.senha);
-    const perfilCriado = await buscarPerfil(user.id);
-    console.log("📋 PERFIL CRIADO APÓS LOGIN:", perfilCriado);
-    if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
-    return perfilCriado;
-  }
-  
-  console.log("✅ PERFIL CRIADO COM SUCESSO, FAZENDO LOGIN AUTOMÁTICO");
-  // Fazer login automático após cadastro bem-sucedido
+  // Trigger cria perfil automaticamente, fazer login
   await entrar(input.email, input.senha);
   
-  return perfil as Perfil;
+  // Buscar perfil criado pelo trigger
+  const perfilCriado = await buscarPerfil(user.id);
+  console.log("📋 PERFIL CRIADO PELO TRIGGER:", perfilCriado);
+  if (!perfilCriado) throw new Error("Conta criada, mas o perfil falhou. Faça login novamente.");
+  
+  return perfilCriado;
 }
 
 export async function sair() {

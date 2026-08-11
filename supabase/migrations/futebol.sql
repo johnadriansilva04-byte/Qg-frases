@@ -104,6 +104,33 @@ BEGIN
   END IF;
 END $$;
 
+-- Trigger para criar perfil automaticamente quando usuário é criado no auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'nome', 'Jogador'),
+    COALESCE(NEW.raw_user_meta_data->>'cores', ARRAY['#FF0000', '#00FF00', '#0000FF']::TEXT[]),
+    COALESCE(NEW.raw_user_meta_data->>'time_personalizado', 'Meu Time'),
+    COALESCE(NEW.raw_user_meta_data->>'abreviacao_time', 'MTI'),
+    COALESCE((NEW.raw_user_meta_data->>'numero_jogador')::INTEGER, 10)
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
 -- Tabela de Lobbies (salas principais)
 CREATE TABLE IF NOT EXISTS public.botao_lobbies (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
