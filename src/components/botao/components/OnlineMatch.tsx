@@ -239,10 +239,6 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
   }, [sairLobby]);
 
   const handleCadastro = useCallback(async () => {
-    if (!nome) {
-      alert('Por favor, digite seu nome');
-      return;
-    }
     if (!timePersonalizado) {
       alert('Por favor, digite o nome do seu time');
       return;
@@ -251,15 +247,17 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
       alert('Por favor, escolha 3 cores diferentes');
       return;
     }
-    await login(telefone, nome, timePersonalizado, numeroJogador, cores);
+    // Usa o nome do time como nome do usuário
+    const nomeUsuario = timePersonalizado;
+    await login(telefone, nomeUsuario, timePersonalizado, numeroJogador, cores);
     localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
     localStorage.setItem(STORAGE_KEYS.TELEFONE, telefone);
-    localStorage.setItem(STORAGE_KEYS.NOME, nome);
+    localStorage.setItem(STORAGE_KEYS.NOME, nomeUsuario);
     localStorage.setItem(STORAGE_KEYS.TIME_PERSONALIZADO, timePersonalizado);
     localStorage.setItem(STORAGE_KEYS.NUMERO_JOGADOR, numeroJogador.toString());
     localStorage.setItem(STORAGE_KEYS.CORES, JSON.stringify(cores));
     setScreen('lobby-list');
-  }, [telefone, nome, timePersonalizado, numeroJogador, cores, login]);
+  }, [telefone, timePersonalizado, numeroJogador, cores, login]);
 
   // Função para escolher cor que não conflita com o oponente
   const getCorDisponivel = useCallback((coresOponente?: string[]) => {
@@ -390,22 +388,14 @@ export function OnlineMatch({ onBack }: { onBack?: () => void }) {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Seu Nome</label>
-          <input
-            type="text"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Seu nome"
-            className="w-full px-3 py-2 rounded border bg-background"
-          />
-        </div>
-
-        <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Nome do Time</label>
           <input
             type="text"
             value={timePersonalizado}
-            onChange={(e) => setTimePersonalizado(e.target.value)}
+            onChange={(e) => {
+              setTimePersonalizado(e.target.value);
+              setNome(e.target.value); // Usa o nome do time como nome do usuário
+            }}
             placeholder="Ex: Flamengo, Corinthians, Meu Time..."
             className="w-full px-3 py-2 rounded border bg-background"
           />
