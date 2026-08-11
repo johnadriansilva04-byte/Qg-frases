@@ -9,6 +9,7 @@ export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
   const adSlot = rotulo === "Banner Topo" ? "9981926633" : rotulo === "Banner Rodapé" ? "7935061808" : rotulo;
   const adRef = useRef<HTMLDivElement>(null);
   const adLoadedRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     if (adLoadedRef.current) return;
@@ -34,17 +35,40 @@ export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
       }
     };
 
-    // Pequeno delay para garantir que o DOM esteja pronto
-    const timer = setTimeout(loadAd, 300);
-    
-    return () => clearTimeout(timer);
+    // Usar IntersectionObserver para carregar apenas quando visível
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !adLoadedRef.current) {
+            // Pequeno delay para garantir que o DOM esteja pronto
+            setTimeout(loadAd, 100);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    if (adRef.current) {
+      observer.observe(adRef.current);
+      observerRef.current = observer;
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
   }, [adSlot]);
 
   return (
-    <div ref={adRef} className={`w-full ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6`}>
+    <div 
+      ref={adRef} 
+      className={`w-full min-w-[300px] ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6`}
+      style={{ display: 'block', minWidth: '300px' }}
+    >
       <ins
         className="adsbygoogle block"
-        style={{ display: "block" }}
+        style={{ display: "block", minWidth: "300px" }}
         data-ad-client="ca-pub-2783546143377409"
         data-ad-slot={adSlot}
         data-ad-format="auto"
