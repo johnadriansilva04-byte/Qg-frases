@@ -53,6 +53,8 @@ export function MatchView({
   const [ended, setEnded] = useState(false);
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
+  const [ownGoalPenalty, setOwnGoalPenalty] = useState(false); // Flag para jogar duas vezes após gol contra
+  const [difficultyMultiplier, setDifficultyMultiplier] = useState(1); // Multiplicador de dificuldade após gol contra
 
   const scoreRef = useRef(score);
   scoreRef.current = score;
@@ -134,11 +136,13 @@ export function MatchView({
   const runSimulation = useCallback(() => {
     simRef.current = true;
     let frames = 0;
+    let ownGoalDetected = false;
     const loop = () => {
       let goal: Side | null = null;
       for (let i = 0; i < 2; i++) {
         const r = step(discsRef.current);
         if (r.goal) goal = r.goal;
+        if (r.ownGoal) ownGoalDetected = true;
         if (goal) break;
       }
       frames++;
@@ -146,6 +150,21 @@ export function MatchView({
       if (goal) {
         const next = { ...scoreRef.current, [goal]: scoreRef.current[goal] + 1 };
         setScore(next);
+        
+        if (ownGoalDetected) {
+          setFlash("GOL CONTRA!");
+          // Após gol contra, aumentar dificuldade e não decrementar turnos
+          setDifficultyMultiplier(prev => prev + 0.5); // Aumentar dificuldade
+          setOwnGoalPenalty(true); // Ativar flag para jogar duas vezes
+          setTimeout(() => setFlash(null), 1500);
+          resetPositions(discsRef.current);
+          simRef.current = false;
+          // Não decrementa turnos após gol contra - deve jogar de novo
+          turnRef.current = turnRef.current; // Mantém o mesmo turno
+          setTurn(turnRef.current);
+          return;
+        }
+        
         setFlash("GOOOOL!");
         resetPositions(discsRef.current);
         setTimeout(() => setFlash(null), 1200);
@@ -165,6 +184,20 @@ export function MatchView({
       if (!moving || frames > 900) {
         simRef.current = false;
         const left = turnsRef.current - 1;
+        
+        // Se estava em penalidade de gol contra, decrementa apenas após a segunda jogada
+        if (ownGoalPenalty) {
+          setOwnGoalPenalty(false); // Remove a flag após a segunda jogada
+          setTurnsLeft(left); // Decrementa turnos
+          if (left <= 0) {
+            finishMatch(scoreRef.current.home, scoreRef.current.away);
+            return;
+          }
+          turnRef.current = turnRef.current === "home" ? "away" : "home";
+          setTurn(turnRef.current);
+          return;
+        }
+        
         setTurnsLeft(left);
         if (left <= 0) {
           finishMatch(scoreRef.current.home, scoreRef.current.away);
@@ -184,8 +217,12 @@ export function MatchView({
   useEffect(() => {
     if (!hasCpu || ended || turn !== cpuSide || simRef.current) return;
     const cpuTeam = cpuSide === "home" ? home : away;
+    // Aplicar multiplicador de dificuldade após gol contra
+    const adjustedDifficulty = ownGoalPenalty ? 
+      (difficulty === 'amador' ? 'medio' : difficulty === 'medio' ? 'profissional' : 'profissional') : 
+      difficulty;
     const t = setTimeout(() => {
-      const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
+      const shot = planAiShot(discsRef.current, cpuSide, adjustedDifficulty, cpuTeam.power * difficultyMultiplier);
       if (!shot) return;
       const d = discsRef.current.find((x) => x.id === shot.discId);
       if (!d) return;
@@ -194,7 +231,7 @@ export function MatchView({
       runSimulation();
     }, 750);
     return () => clearTimeout(t);
-  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation]);
+  }, [hasCpu, turn, cpuSide, difficulty, difficultyMultiplier, ownGoalPenalty, ended, home, away, runSimulation]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {

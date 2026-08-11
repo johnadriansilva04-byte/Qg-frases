@@ -70,7 +70,7 @@ export function resetPositions(discs: Disc[]) {
   });
 }
 
-export type StepResult = { moving: boolean; goal: Side | null; wallHit: boolean; hit: boolean };
+export type StepResult = { moving: boolean; goal: Side | null; wallHit: boolean; hit: boolean; ownGoal?: boolean };
 
 export function step(discs: Disc[]): StepResult {
   const { w, h, margin, goalHeight } = FIELD;
@@ -79,6 +79,7 @@ export function step(discs: Disc[]): StepResult {
   let goal: Side | null = null;
   let wallHit = false;
   let hit = false;
+  let lastTouchSide: Side | null = null;
 
   for (const d of discs) {
     d.x += d.vx;
@@ -121,6 +122,10 @@ export function step(discs: Disc[]): StepResult {
       a.vy -= (imp * ny) / a.mass;
       b.vx += (imp * nx) / b.mass;
       b.vy += (imp * ny) / b.mass;
+
+      // Rastrear qual side tocou a bola por último
+      if (a.side === "ball" && b.side !== "ball") lastTouchSide = b.side;
+      if (b.side === "ball" && a.side !== "ball") lastTouchSide = a.side;
     }
   }
 
@@ -160,7 +165,9 @@ export function step(discs: Disc[]): StepResult {
   }
 
   const moving = discs.some((d) => d.vx !== 0 || d.vy !== 0);
-  return { moving, goal, wallHit, hit };
+  // Detectar gol contra: se gol foi no lado do último toque
+  const ownGoal = goal ? lastTouchSide === goal : false;
+  return { moving, goal, wallHit, hit, ownGoal };
 }
 
 export const MAX_POWER = 26;
