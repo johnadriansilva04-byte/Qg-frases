@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.botao_times (
   pais TEXT NOT NULL,
   liga TEXT NOT NULL,
   is_personalizado BOOLEAN NOT NULL DEFAULT false,
-  usuario_id UUID REFERENCES public.botao_usuarios(id) ON DELETE CASCADE,
+  usuario_id UUID REFERENCES public.botao_perfis(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
@@ -73,7 +73,7 @@ INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Tabela de usuários (login por email obrigatório)
-CREATE TABLE IF NOT EXISTS public.botao_usuarios (
+CREATE TABLE IF NOT EXISTS public.botao_perfis (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL UNIQUE,
   email TEXT NOT NULL UNIQUE,
@@ -101,7 +101,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
+  INSERT INTO public.botao_perfis (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
   VALUES (
     NEW.id,
     NEW.email,
@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS public.botao_blocos (
 CREATE INDEX IF NOT EXISTS idx_botao_times_pais ON public.botao_times(pais);
 CREATE INDEX IF NOT EXISTS idx_botao_times_liga ON public.botao_times(liga);
 CREATE INDEX IF NOT EXISTS idx_botao_times_usuario ON public.botao_times(usuario_id);
-CREATE INDEX IF NOT EXISTS idx_botao_usuarios_email ON public.botao_usuarios(email);
+CREATE INDEX IF NOT EXISTS idx_botao_perfis_email ON public.botao_perfis(email);
 CREATE INDEX IF NOT EXISTS idx_botao_lobbies_status ON public.botao_lobbies(status);
 CREATE INDEX IF NOT EXISTS idx_botao_lobbies_criador ON public.botao_lobbies(criador_session);
 CREATE INDEX IF NOT EXISTS idx_botao_blocos_lobby ON public.botao_blocos(lobby_id);
@@ -184,9 +184,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_times TO authenticated;
 GRANT SELECT ON public.botao_times TO anon;
 GRANT ALL ON public.botao_times TO service_role;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_usuarios TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.botao_usuarios TO anon;
-GRANT ALL ON public.botao_usuarios TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_perfis TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.botao_perfis TO anon;
+GRANT ALL ON public.botao_perfis TO service_role;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_lobbies TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.botao_lobbies TO anon;
@@ -198,7 +198,7 @@ GRANT ALL ON public.botao_blocos TO service_role;
 
 -- RLS
 ALTER TABLE public.botao_times ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.botao_usuarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.botao_perfis ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.botao_lobbies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.botao_blocos ENABLE ROW LEVEL SECURITY;
 
@@ -213,14 +213,14 @@ DROP POLICY IF EXISTS "Usuarios podem atualizar seus times" ON public.botao_time
 CREATE POLICY "Usuarios podem atualizar seus times" ON public.botao_times FOR UPDATE USING (is_personalizado = true AND auth.uid() = usuario_id);
 
 -- Políticas para usuários
-DROP POLICY IF EXISTS "Todos podem ver usuarios" ON public.botao_usuarios;
-CREATE POLICY "Todos podem ver usuarios" ON public.botao_usuarios FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Todos podem ver usuarios" ON public.botao_perfis;
+CREATE POLICY "Todos podem ver usuarios" ON public.botao_perfis FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Autenticados podem criar usuarios" ON public.botao_usuarios;
-CREATE POLICY "Autenticados podem criar usuarios" ON public.botao_usuarios FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Autenticados podem criar usuarios" ON public.botao_perfis;
+CREATE POLICY "Autenticados podem criar usuarios" ON public.botao_perfis FOR INSERT WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Autenticados podem atualizar usuarios" ON public.botao_usuarios;
-CREATE POLICY "Autenticados podem atualizar usuarios" ON public.botao_usuarios FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Autenticados podem atualizar usuarios" ON public.botao_perfis;
+CREATE POLICY "Autenticados podem atualizar usuarios" ON public.botao_perfis FOR UPDATE USING (true);
 
 -- Políticas para lobbies
 DROP POLICY IF EXISTS "Todos podem ver lobbies" ON public.botao_lobbies;

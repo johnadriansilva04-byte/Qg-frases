@@ -80,8 +80,8 @@ export function limparCache() {
 
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
   console.log("🔍 BUSCAR PERFIL - USER ID:", userId);
-  console.log("🗂️  TABELA: botao_usuarios");
-  const { data, error } = await supabase.from("botao_usuarios").select("*").eq("user_id", userId).maybeSingle();
+  console.log("🗂️  TABELA: botao_perfis");
+  const { data, error } = await supabase.from("botao_perfis").select("*").eq("user_id", userId).maybeSingle();
   console.log("📊 RESULTADO BUSCA:", { data, error });
   return (data as Perfil | null) ?? null;
 }
@@ -110,7 +110,7 @@ export async function entrar(email: string, senha: string) {
       console.log("⚠️ PERFIL NÃO ENCONTRADO, CRIANDO PERFIL BÁSICO");
       // Criar perfil básico com valores padrão
       const { data: novoPerfil, error: perr } = await supabase
-        .from("botao_usuarios")
+        .from("botao_perfis")
         .insert({
           user_id: user.id,
           email: email,
