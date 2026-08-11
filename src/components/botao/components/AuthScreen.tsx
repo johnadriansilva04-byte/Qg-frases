@@ -38,11 +38,17 @@ export function AuthScreen({ onPronto }: Props) {
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";
-      setErro(errorMessage);
       
-      // Se for erro de rate limiting (429), adicionar cooldown
-      if (errorMessage.includes("Too Many Requests") || errorMessage.includes("429")) {
-        setCooldown(10);
+      // Melhorar mensagem para email rate limit
+      const friendlyMessage = errorMessage.includes("email rate limit")
+        ? "Muitas tentativas de criação de conta. Aguarde 1 minuto antes de tentar novamente."
+        : errorMessage;
+      
+      setErro(friendlyMessage);
+      
+      // Se for erro de rate limiting (429 ou email rate limit), adicionar cooldown
+      if (errorMessage.includes("Too Many Requests") || errorMessage.includes("429") || errorMessage.includes("email rate limit")) {
+        setCooldown(60);
         const interval = setInterval(() => {
           setCooldown((prev) => {
             if (prev <= 1) {
