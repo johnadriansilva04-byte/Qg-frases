@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCw, Users, ArrowLeft, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GradeTimes } from "./GradeTimes";
 import { Campo, type FimDaJogada } from "./Campo";
 import { supabase } from "@/integrations/supabase/client";
 import { useJogador } from "@/hooks/useJogador";
@@ -13,7 +12,6 @@ import {
   entrarNoBloco,
   finalizarBloco,
   getBlocos,
-  getLendarios,
   getLobbiesAtivos,
   registrarGolBloco,
   registrarJogadaBloco,
@@ -21,7 +19,6 @@ import {
   salvarResultado,
   type Bloco,
   type Lobby,
-  type TimeBotao,
 } from "@/lib/botao/api";
 
 type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado";
@@ -40,13 +37,27 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
   const [lobbyAtivo, setLobbyAtivo] = useState<Lobby | null>(null);
   const [nomeSala, setNomeSala] = useState("");
   const [formato, setFormato] = useState("melhor_de_3");
-  const [timeEscolhido, setTimeEscolhido] = useState<TimeBotao | null>(null);
   const [blocoId, setBlocoId] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>("lobby-list");
 
   const session = jogador?.user_id ?? perfil?.user_id ?? "";
 
-  const { data: times = [] } = useQuery({ queryKey: ["botao_times"], queryFn: getLendarios });
+  // Time personalizado do usuário (vem do login)
+  const meuTime = useMemo(() => {
+    if (!perfil) return null;
+    return {
+      id: `custom-${perfil.user_id}`,
+      nome: perfil.time_personalizado,
+      abreviacao: perfil.abreviacao_time,
+      cores: perfil.cores,
+      pais: "Brasil",
+      liga: "Personalizado",
+      is_personalizado: true,
+      usuario_id: perfil.user_id,
+      created_at: perfil.created_at,
+    };
+  }, [perfil]);
+
   const { data: lobbies = [], refetch: recarregarLobbies } = useQuery({
     queryKey: ["botao_lobbies"],
     queryFn: getLobbiesAtivos,
@@ -58,11 +69,6 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
     enabled: !!lobbyAtivo,
     refetchInterval: 4000,
   });
-
-  const meuTime = useMemo(
-    () => timeEscolhido ?? times.find((t) => t.usuario_id === session) ?? times[0] ?? null,
-    [timeEscolhido, times, session],
-  );
 
   // Sincronização em tempo real dos blocos da sala aberta
   useEffect(() => {
@@ -82,66 +88,82 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
 
   const novaSala = useMutation({
     mutationFn: async () => {
-      if (!jogador) throw new Error("Perfil não carregado.");
+      if (!perfil || !session) throw new Error("Perfil não carregado.");
+      console.log('[OnlineMatchV2] Criando lobby:', { nome: nomeSala.trim(), session, nome: perfil.nome });
       return criarLobby({
-        nome: nomeSala.trim() || `Mesa de ${jogador.nome}`,
-        criadorSession: jogador.user_id,
-        criadorNome: jogador.nome,
+        nome: nomeSala.trim() || `Mesa de ${perfil.nome}`,
+        criadorSession: session,
+        criadorNome: perfil.nome,
         formato,
       });
     },
     onSuccess: (lobby) => {
+      console.log('[OnlineMatchV2] Lobby criado:', lobby);
       setNomeSala("");
       setLobbyAtivo(lobby);
       setScreen("lobby-view");
       recarregarLobbies();
     },
+    onError: (error) => {
+      console.error('[OnlineMatchV2] Erro ao criar lobby:', error);
+    },
   });
 
   const novoBloco = useMutation({
     mutationFn: async () => {
-      if (!jogador || !lobbyAtivo || !meuTime) throw new Error("Escolha um time primeiro.");
+      if (!perfil || !lobbyAtivo || !meuTime) throw new Error("Perfil não carregado.");
       const cfg = FORMATOS.find((f) => f.valor === lobbyAtivo.formato) ?? FORMATOS[0]!;
+      console.log('[OnlineMatchV2] Criando bloco:', { lobbyId: lobbyAtivo.id, session, timeId: meuTime.id });
       return criarBloco({
         lobbyId: lobbyAtivo.id,
-        session: jogador.user_id,
-        nome: jogador.nome,
+        session: session,
+        nome: perfil.nome,
         timeId: meuTime.id,
         jogadas: cfg.jogadas,
         tempoTurno: 30,
       });
     },
     onSuccess: (bloco) => {
+      console.log('[OnlineMatchV2] Bloco criado:', bloco);
       setBlocoId(bloco.id);
       queryClient.invalidateQueries({ queryKey: ["botao_blocos", lobbyAtivo?.id] });
+    },
+    onError: (error) => {
+      console.error('[OnlineMatchV2] Erro ao criar bloco:', error);
     },
   });
 
   const entrar = useMutation({
     mutationFn: async (bloco: Bloco) => {
-      if (!jogador || !meuTime) throw new Error("Escolha um time primeiro.");
+      if (!perfil || !meuTime) throw new Error("Perfil não carregado.");
+      console.log('[OnlineMatchV2] Entrando no bloco:', { blocoId: bloco.id, session, timeId: meuTime.id });
       return entrarNoBloco({
         blocoId: bloco.id,
-        session: jogador.user_id,
-        nome: jogador.nome,
+        session: session,
+        nome: perfil.nome,
         timeId: meuTime.id,
       });
     },
     onSuccess: (bloco) => {
+      console.log('[OnlineMatchV2] Entrou no bloco:', bloco);
       setBlocoId(bloco.id);
       queryClient.invalidateQueries({ queryKey: ["botao_blocos", lobbyAtivo?.id] });
+    },
+    onError: (error) => {
+      console.error('[OnlineMatchV2] Erro ao entrar no bloco:', error);
     },
   });
 
   const blocoAtual = blocos.find((b) => b.id === blocoId) ?? null;
 
-  if (screen === "jogo" && blocoAtual && jogador) {
+  if (screen === "jogo" && blocoAtual && perfil) {
     return (
       <main className="px-4 py-6">
         <MesaOnline
           bloco={blocoAtual}
-          times={times}
-          souJogador1={blocoAtual.jogador1_session === jogador.user_id}
+          perfil={perfil}
+          meuTime={meuTime}
+          souJogador1={blocoAtual.jogador1_session === session}
           onSair={() => {
             setBlocoId(null);
             setScreen("lobby-view");
@@ -163,12 +185,26 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
         </div>
 
         <section className="surface mb-6 space-y-4 p-5">
-          <h2 className="text-xl">Seu time nesta sessão</h2>
-          <GradeTimes
-            times={times.slice(0, 12)}
-            selecionado={meuTime?.id ?? null}
-            onSelecionar={setTimeEscolhido}
-          />
+          <h2 className="text-xl">Seu time</h2>
+          {meuTime && (
+            <div className="flex items-center gap-3 p-3 border rounded-lg">
+              <span
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
+                style={{ background: meuTime.cores[0] }}
+              >
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{ background: meuTime.cores[1] }}
+                >
+                  <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
+                </span>
+              </span>
+              <div>
+                <p className="font-display text-lg">{meuTime.nome}</p>
+                <p className="text-sm text-muted-foreground">{meuTime.abreviacao}</p>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="space-y-3">
@@ -210,15 +246,12 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
           )}
 
           {blocos.map((bloco) => {
-            const t1 = times.find((t) => t.id === bloco.jogador1_time);
-            const t2 = times.find((t) => t.id === bloco.jogador2_time);
             const meuBloco = bloco.jogador1_session === session || bloco.jogador2_session === session;
             return (
               <article key={bloco.id} className="surface flex flex-wrap items-center gap-3 p-4">
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate font-display text-lg leading-tight">
-                    {bloco.jogador1_nome} ({t1?.abreviacao ?? "—"}) x{" "}
-                    {bloco.jogador2_nome ?? "aguardando"} ({t2?.abreviacao ?? "—"})
+                    {bloco.jogador1_nome} x {bloco.jogador2_nome ?? "aguardando"}
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     {bloco.status === "aguardando"
@@ -272,12 +305,26 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
       </div>
 
       <section className="surface mb-6 space-y-4 p-5">
-        <h2 className="text-xl">Seu time nesta sessão</h2>
-        <GradeTimes
-          times={times.slice(0, 12)}
-          selecionado={meuTime?.id ?? null}
-          onSelecionar={setTimeEscolhido}
-        />
+        <h2 className="text-xl">Seu time</h2>
+        {meuTime && (
+          <div className="flex items-center gap-3 p-3 border rounded-lg">
+            <span
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
+              style={{ background: meuTime.cores[0] }}
+            >
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-full"
+                style={{ background: meuTime.cores[1] }}
+              >
+                <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
+              </span>
+            </span>
+            <div>
+              <p className="font-display text-lg">{meuTime.nome}</p>
+              <p className="text-sm text-muted-foreground">{meuTime.abreviacao}</p>
+            </div>
+          </div>
+        )}
       </section>
 
       {!lobbyAtivo ? (
@@ -289,7 +336,7 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
               <input
                 value={nomeSala}
                 onChange={(e) => setNomeSala(e.target.value)}
-                placeholder={`Mesa de ${jogador?.nome ?? "jogador"}`}
+                placeholder={`Mesa de ${perfil?.nome ?? "jogador"}`}
                 className="w-full px-3 py-2 rounded border bg-background"
               />
             </div>
@@ -309,9 +356,12 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
                 ))}
               </div>
             </div>
-            <button onClick={() => novaSala.mutate()} disabled={novaSala.isPending} className="btn-primary">
-              <Plus className="mr-1 h-4 w-4" /> Abrir sala
+            <button onClick={() => novaSala.mutate()} disabled={novaSala.isPending || !perfil} className="btn-primary">
+              <Plus className="mr-1 h-4 w-4" /> {novaSala.isPending ? "Criando..." : "Abrir sala"}
             </button>
+            {!perfil && (
+              <p className="text-sm text-red-500">Você precisa estar logado para criar uma sala.</p>
+            )}
           </section>
 
           <section className="space-y-3">
@@ -348,41 +398,64 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
 /** Mesa online: cada jogada parte da formação inicial e o placar vive no banco. */
 function MesaOnline({
   bloco,
-  times,
+  perfil,
+  meuTime,
   souJogador1,
   onSair,
   onVoltarLobby,
 }: {
   bloco: Bloco;
-  times: TimeBotao[];
+  perfil: any;
+  meuTime: any;
   souJogador1: boolean;
   onSair: () => void;
   onVoltarLobby: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { data: jogador } = useJogador();
   const [salvo, setSalvo] = useState(false);
 
-  const timeA = times.find((t) => t.id === bloco.jogador1_time) ?? times[0]!;
-  const timeB = times.find((t) => t.id === (bloco.jogador2_time ?? "")) ?? times[1] ?? timeA;
+  // Usar o time personalizado do jogador e criar um time padrão para o oponente
+  const timeA = souJogador1 ? meuTime : {
+    id: "opponent",
+    nome: "Oponente",
+    abreviacao: "OPP",
+    cores: ["#FF0000", "#00FF00", "#0000FF"],
+    pais: "Brasil",
+    liga: "Personalizado",
+    is_personalizado: false,
+    usuario_id: null,
+    created_at: new Date().toISOString(),
+  };
+  const timeB = souJogador1 ? {
+    id: "opponent",
+    nome: "Oponente",
+    abreviacao: "OPP",
+    cores: ["#FF0000", "#00FF00", "#0000FF"],
+    pais: "Brasil",
+    liga: "Personalizado",
+    is_personalizado: false,
+    usuario_id: null,
+    created_at: new Date().toISOString(),
+  } : meuTime;
+
   const meuLado = souJogador1 ? "A" : "B";
   const ladoAtivo = bloco.turno === "jogador1" ? "A" : "B";
   const minhaVez = ladoAtivo === meuLado && bloco.status === "em_jogo";
 
   // Registra resultado no perfil quando a mesa termina
   useEffect(() => {
-    if (bloco.status !== "finalizado" || salvo || !jogador) return;
+    if (bloco.status !== "finalizado" || salvo || !perfil) return;
     const meu = souJogador1 ? "jogador1" : "jogador2";
     const res = bloco.vencedor === "empate" ? "e" : bloco.vencedor === meu ? "v" : "d";
     setSalvo(true);
     salvarResultado({
-      usuario: jogador,
+      usuario: perfil,
       resultado: res,
       pontos: res === "v" ? 20 : res === "e" ? 6 : 2,
     })
       .then(() => queryClient.invalidateQueries({ queryKey: ["botao_usuarios", "atual"] }))
       .catch(() => console.error("Não foi possível salvar o resultado."));
-  }, [bloco.status, bloco.vencedor, salvo, jogador, souJogador1, queryClient]);
+  }, [bloco.status, bloco.vencedor, salvo, perfil, souJogador1, queryClient]);
 
   const aoFinalizar = async ({ golDe }: FimDaJogada) => {
     try {
