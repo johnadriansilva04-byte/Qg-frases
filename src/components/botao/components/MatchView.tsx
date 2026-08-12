@@ -17,6 +17,8 @@ type Props = {
   onQuit: () => void;
   isOnline?: boolean; // Nova prop para indicar modo online
   customTeam?: Team; // Time personalizado do usuário
+  onPlay?: (goals: number) => void; // Callback chamado quando uma jogada termina (para sincronização online)
+  initialTurn?: Side; // Turno inicial (para sincronização online)
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -33,6 +35,8 @@ export function MatchView({
   onQuit,
   isOnline = false,
   customTeam,
+  onPlay,
+  initialTurn,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -51,14 +55,14 @@ export function MatchView({
   const discsRef = useRef<Disc[]>(initialDiscs());
   const aimRef = useRef<Aim>(null);
   const simRef = useRef(false);
-  const turnRef = useRef<Side>("home");
+  const turnRef = useRef<Side>(initialTurn || "home");
   const portraitRef = useRef(false);
   const scaleRef = useRef(1);
   const historyRef = useRef<Disc[][]>([]); // Histórico de estados dos discos
 
   const [score, setScore] = useState({ home: 0, away: 0 });
   const [turnsLeft, setTurnsLeft] = useState(turns);
-  const [turn, setTurn] = useState<Side>("home");
+  const [turn, setTurn] = useState<Side>(initialTurn || "home");
   const [flash, setFlash] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
@@ -73,7 +77,15 @@ export function MatchView({
   const endedRef = useRef(false);
   const scoreHistoryRef = useRef<{ home: number; away: number }[]>([{ home: 0, away: 0 }]);
   const turnsHistoryRef = useRef<number[]>([turns]);
-  const turnHistoryRef = useRef<Side[]>(["home"]);
+  const turnHistoryRef = useRef<Side[]>([initialTurn || "home"]);
+
+  // Sincronizar turno com initialTurn quando mudar (modo online)
+  useEffect(() => {
+    if (initialTurn && isOnline) {
+      turnRef.current = initialTurn;
+      setTurn(initialTurn);
+    }
+  }, [initialTurn, isOnline]);
 
   /* ---------- render loop ---------- */
   useEffect(() => {
@@ -163,7 +175,7 @@ export function MatchView({
       if (goal) {
         const next = { ...scoreRef.current, [goal]: scoreRef.current[goal] + 1 };
         setScore(next);
-        
+
         if (ownGoalDetected) {
           setFlash("GOL CONTRA!");
           setTimeout(() => setFlash(null), 1500);
@@ -176,13 +188,15 @@ export function MatchView({
           // Decrementa turnos normalmente
           const left = turnsRef.current - 1;
           setTurnsLeft(left);
+          // Chamar onPlay para sincronização online
+          if (onPlay) onPlay(1);
           if (left <= 0) {
             finishMatch(next.home, next.away);
             return;
           }
           return;
         }
-        
+
         setFlash("GOOOOL!");
         resetPositions(discsRef.current);
         setTimeout(() => setFlash(null), 1200);
@@ -191,15 +205,17 @@ export function MatchView({
         simRef.current = false;
         const left = turnsRef.current - 1;
         setTurnsLeft(left);
+        // Chamar onPlay para sincronização online
+        if (onPlay) onPlay(1);
         if (left <= 0) {
           finishMatch(next.home, next.away);
           return;
         }
-        
+
         // Dar 5 segundos para quem sofreu o gol tirar a bola do meio
         turnRef.current = conceding;
         setTurn(conceding);
-        
+
         // Bloquear input por 5 segundos após o gol e passar vez se não jogar
         setGoalCooldown(5);
         const cooldownInterval = setInterval(() => {
@@ -211,13 +227,15 @@ export function MatchView({
                 const nextTurn = conceding === "home" ? "away" : "home";
                 turnRef.current = nextTurn;
                 setTurn(nextTurn);
+                // Chamar onPlay para sincronização online quando passa a vez
+                if (onPlay) onPlay(0);
               }
               return null;
             }
             return prev - 1;
           });
         }, 1000);
-        
+
         return;
       }
       if (!moving || frames > 900) {
@@ -228,8 +246,13 @@ export function MatchView({
           finishMatch(scoreRef.current.home, scoreRef.current.away);
           return;
         }
-        turnRef.current = turnRef.current === "home" ? "away" : "home";
-        setTurn(turnRef.current);
+        // No modo online, NÃO alternar turno localmente - deixar o banco controlar
+        if (!isOnline) {
+          turnRef.current = turnRef.current === "home" ? "away" : "home";
+          setTurn(turnRef.current);
+        }
+        // Chamar onPlay para sincronização online quando a jogada termina sem gol
+        if (onPlay) onPlay(0);
         return;
       }
       requestAnimationFrame(loop);
@@ -295,8 +318,10 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    // No modo online, só permite input se for o turno do usuário
-    if (ended || simRef.current || turn !== userSide) return;
+    // No modo online, permite input mas verifica se é realmente o turno do usuário
+    if (ended || simRef.current) return;
+    // No modo online, não bloqueia por turno local - deixa o callback onPlay decidir
+    if (!isOnline && turn !== userSide) return;
     // Bloquear input durante cooldown após gol
     if (goalCooldown !== null) return;
     const { x, y } = toField(e);

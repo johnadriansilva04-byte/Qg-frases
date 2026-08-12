@@ -443,5 +443,36 @@ BEGIN
 END;
 $$;
 
+-- Função para limpar blocos e lobbies antigos (mais de 4 minutos)
+CREATE OR REPLACE FUNCTION limpar_salas_antigas()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Finalizar blocos em jogo há mais de 4 minutos
+    UPDATE botao_blocos
+    SET status = 'finalizado',
+        vencedor = CASE
+            WHEN jogador1_gols > jogador2_gols THEN 'jogador1'
+            WHEN jogador2_gols > jogador1_gols THEN 'jogador2'
+            ELSE 'empate'
+        END,
+        finalizada_em = now()
+    WHERE status = 'em_jogo'
+      AND created_at < now() - interval '4 minutes';
+
+    -- Encerrar lobbies sem blocos ativos há mais de 4 minutos
+    UPDATE botao_lobbies
+    SET status = 'encerrado'
+    WHERE status = 'ativo'
+      AND id NOT IN (
+        SELECT DISTINCT lobby_id
+        FROM botao_blocos
+        WHERE status IN ('aguardando', 'em_jogo')
+      )
+      AND created_at < now() - interval '4 minutes';
+END;
+$$;
+
 -- Limpar cache do schema ao final
 NOTIFY pgrst, 'reload schema';

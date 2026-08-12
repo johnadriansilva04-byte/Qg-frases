@@ -19,11 +19,21 @@ import {
   registrarJogadaBloco,
   sairDoBloco,
   salvarResultado,
+  limparSalasAntigas,
   type Bloco,
   type Lobby,
 } from "@/lib/botao/api";
 
 type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado";
+
+// Chaves para persistência no localStorage
+const STORAGE_KEYS = {
+  SCREEN: 'botao_online_v2_screen',
+  NOME_SALA: 'botao_online_v2_nome_sala',
+  FORMATO: 'botao_online_v2_formato',
+  LOBBY_ID: 'botao_online_v2_lobby_id',
+  BLOCO_ID: 'botao_online_v2_bloco_id',
+};
 
 const FORMATOS = [
   { valor: "melhor_de_3", rotulo: "Melhor de 3", jogadas: 12 },
@@ -35,14 +45,91 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
   const queryClient = useQueryClient();
   const { data: jogador } = useJogador();
   const { perfil } = useBotaoAuth();
-  
+
   const [lobbyAtivo, setLobbyAtivo] = useState<Lobby | null>(null);
-  const [nomeSala, setNomeSala] = useState("");
-  const [formato, setFormato] = useState("melhor_de_3");
-  const [blocoId, setBlocoId] = useState<string | null>(null);
-  const [screen, setScreen] = useState<Screen>("lobby-list");
+  const [nomeSala, setNomeSala] = useState(() => localStorage.getItem(STORAGE_KEYS.NOME_SALA) || "");
+  const [formato, setFormato] = useState(() => localStorage.getItem(STORAGE_KEYS.FORMATO) || "melhor_de_3");
+  const [blocoId, setBlocoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.BLOCO_ID));
+  const [screen, setScreen] = useState<Screen>(() => (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list");
 
   const session = jogador?.user_id ?? perfil?.user_id ?? "";
+
+  // Persistir estado quando mudar
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SCREEN, screen);
+  }, [screen]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.NOME_SALA, nomeSala);
+  }, [nomeSala]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.FORMATO, formato);
+  }, [formato]);
+
+  useEffect(() => {
+    if (lobbyAtivo) {
+      localStorage.setItem(STORAGE_KEYS.LOBBY_ID, lobbyAtivo.id);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.LOBBY_ID);
+    }
+  }, [lobbyAtivo]);
+
+  useEffect(() => {
+    if (blocoId) {
+      localStorage.setItem(STORAGE_KEYS.BLOCO_ID, blocoId);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.BLOCO_ID);
+    }
+  }, [blocoId]);
+
+  // Restaurar sessão ao montar
+  useEffect(() => {
+    const savedLobbyId = localStorage.getItem(STORAGE_KEYS.LOBBY_ID);
+    const savedScreen = localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen;
+
+    console.log('[OnlineMatchV2] Restaurando sessão:', { savedLobbyId, savedScreen });
+
+    if (savedScreen && savedScreen !== "lobby-list" && savedLobbyId) {
+      // Buscar o lobby salvo
+      getLobbiesAtivos().then(lobbies => {
+        const lobbySalvo = lobbies.find(l => l.id === savedLobbyId);
+        if (lobbySalvo) {
+          console.log('[OnlineMatchV2] Restaurando lobby salvo:', lobbySalvo);
+          setLobbyAtivo(lobbySalvo);
+          setScreen(savedScreen);
+        } else {
+          console.log('[OnlineMatchV2] Lobby salvo não encontrado, voltando para lista');
+          limparPersistencia();
+          setScreen("lobby-list");
+        }
+      });
+    }
+  }, []);
+
+  // Limpar persistência
+  const limparPersistencia = useCallback(() => {
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+  }, []);
+
+  // Timer para limpar salas antigas a cada minuto
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        await limparSalasAntigas();
+        // Recarregar lobbies após limpeza
+        if (screen === "lobby-list") {
+          recarregarLobbies();
+        }
+      } catch (error) {
+        console.error('[OnlineMatchV2] Erro ao limpar salas antigas:', error);
+      }
+    }, 60000); // 1 minuto
+
+    return () => clearInterval(interval);
+  }, [screen]);
 
   // Time personalizado do usuário (vem do login)
   const meuTime = useMemo(() => {
@@ -168,8 +255,9 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
         onSair={() => {
           setBlocoId(null);
           setScreen("lobby-view");
+          limparPersistencia();
         }}
-        onVoltarLobby={() => setScreen("lobby-view")}
+        onVoltarLobby={() => { setScreen("lobby-view"); limparPersistencia(); }}
       />
     );
   }
@@ -178,7 +266,7 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
     return (
       <main className="mx-auto w-full max-w-4xl px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => setScreen("lobby-list")} className="btn-ghost">
+          <button onClick={() => { setScreen("lobby-list"); limparPersistencia(); }} className="btn-ghost">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h2 className="font-display text-2xl">{lobbyAtivo.nome}</h2>
@@ -230,13 +318,14 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
                   await encerrarLobby(lobbyAtivo.id);
                   setLobbyAtivo(null);
                   setScreen("lobby-list");
+                  limparPersistencia();
                   recarregarLobbies();
                 }}
               >
                 Encerrar sala
               </button>
             )}
-            <button className="btn-secondary" onClick={() => setScreen("lobby-list")}>
+            <button className="btn-secondary" onClick={() => { setScreen("lobby-list"); limparPersistencia(); }}>
               Voltar
             </button>
           </div>
@@ -271,6 +360,7 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
                         className="btn-ghost"
                         onClick={async () => {
                           await sairDoBloco(bloco.id);
+                          setBlocoId(null);
                           queryClient.invalidateQueries({ queryKey: ["botao_blocos", lobbyAtivo.id] });
                         }}
                       >
@@ -413,7 +503,18 @@ function MesaOnline({
 }) {
   const queryClient = useQueryClient();
   const [salvo, setSalvo] = useState(false);
+  const [currentTurn, setCurrentTurn] = useState<"home" | "away">("home");
   const souJogador1 = bloco.jogador1_session === session;
+
+  // Sincronizar o turno com o banco de dados
+  useEffect(() => {
+    const novoTurno = bloco.turno === "jogador1"
+      ? (souJogador1 ? "home" : "away")
+      : (souJogador1 ? "away" : "home");
+    
+    console.log('[MesaOnline] Turno no banco mudou:', bloco.turno, '->', novoTurno);
+    setCurrentTurn(novoTurno);
+  }, [bloco.turno, souJogador1]);
 
   // Converter time personalizado para formato Team do MatchView
   const userTeam = useMemo(() => {
@@ -437,14 +538,40 @@ function MesaOnline({
   const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
   const userSide = souJogador1 ? "home" : "away";
 
-  // Calcular jogadas restantes baseado no formato
-  const formato = FORMATOS.find((f) => f.valor === "melhor_de_3") ?? FORMATOS[0];
-  const turns = formato.jogadas;
+  // Usar jogadas restantes do bloco, não do formato
+  const turns = bloco.jogadas_restantes || 12;
 
   const handleFinish = useCallback((result: MatchResult) => {
     console.log('[MesaOnline] Partida finalizada:', result);
     onVoltarLobby();
   }, [onVoltarLobby]);
+
+  const handlePlay = useCallback(async (goals: number) => {
+    console.log('[MesaOnline] Jogada realizada, gols:', goals);
+    console.log('[MesaOnline] Turno atual no banco:', bloco.turno);
+    console.log('[MesaOnline] Sou jogador1?', souJogador1);
+    
+    // Verificar se é realmente o turno deste jogador
+    const meuTurnoNoBanco = souJogador1 ? bloco.turno === 'jogador1' : bloco.turno === 'jogador2';
+    
+    if (!meuTurnoNoBanco) {
+      console.warn('[MesaOnline] Não é seu turno! Jogada ignorada.');
+      return;
+    }
+    
+    // Registrar a jogada no banco (decrementa jogadas e alterna turno)
+    try {
+      await registrarJogadaBloco(bloco.id);
+      
+      // Se houve gol, registrar o gol também
+      if (goals > 0) {
+        const jogador = souJogador1 ? 'jogador1' : 'jogador2';
+        await registrarGolBloco(bloco.id, jogador);
+      }
+    } catch (error) {
+      console.error('[MesaOnline] Erro ao registrar jogada:', error);
+    }
+  }, [bloco.id, bloco.turno, souJogador1]);
 
   const handleQuit = useCallback(() => {
     console.log('[MesaOnline] Saindo da partida');
@@ -486,17 +613,20 @@ function MesaOnline({
 
   return (
     <MatchView
+      key={`${bloco.id}-${currentTurn}`}
       homeId={homeId}
       awayId={awayId}
       userSide={userSide}
       difficulty="amador" as Difficulty
       turns={turns}
       knockout={false}
-      stageLabel="Partida Online"
+      stageLabel={`Partida Online - ${bloco.turno === 'jogador1' ? (souJogador1 ? 'Seu turno' : 'Turno do oponente') : (souJogador1 ? 'Turno do oponente' : 'Seu turno')}`}
       onFinish={handleFinish}
       onQuit={handleQuit}
       isOnline={true}
       customTeam={userTeam}
+      onPlay={handlePlay}
+      initialTurn={currentTurn}
     />
   );
 }

@@ -201,6 +201,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
   }, [nome, cores, blocos, getCorDisponivel, entrarBloco]);
 
   const handleFimJogada = useCallback((gols: number) => {
+    console.log('[OnlineMatch] Jogada realizada, gols:', gols);
     registrarJogada();
     if (gols > 0) {
       const jogador = blocoAtual?.jogador1_session === sessionId ? 'jogador1' : 'jogador2';
@@ -436,6 +437,11 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
     const souJogador1 = blocoAtual.jogador1_session === sessionId;
     const oponenteTime = souJogador1 ? blocoAtual.jogador2_time : blocoAtual.jogador1_time;
     const userSide = souJogador1 ? "home" : "away";
+    
+    // Determinar turno atual baseado no banco
+    const currentTurn = blocoAtual.turno === "jogador1" 
+      ? (souJogador1 ? "home" : "away")
+      : (souJogador1 ? "away" : "home");
 
     return (
       <div className="h-screen">
@@ -448,6 +454,8 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
           knockout={false}
           stageLabel={`Rodada ${blocoAtual.rodada} - ${meuTurno ? 'Seu turno' : 'Aguardando oponente'}`}
           isOnline={true}
+          onPlay={handleFimJogada}
+          initialTurn={currentTurn}
           onFinish={(result) => {
             const meusGols = souJogador1 ? result.homeGoals : result.awayGoals;
             handleFimJogada(meusGols);

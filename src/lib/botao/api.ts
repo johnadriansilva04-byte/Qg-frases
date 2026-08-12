@@ -305,36 +305,38 @@ export async function registrarGolBloco(blocoId: string, jogador: "jogador1" | "
   const { error } = await supabase.rpc("registrar_gol_bloco", {
     p_bloco_id: blocoId,
     p_jogador: jogador,
-  });
+  } as any);
   if (error) throw error;
 }
 
 /** Consome uma jogada (decrementa, alterna turno e finaliza no zero). */
 export async function registrarJogadaBloco(blocoId: string) {
   console.log('[API] Registrando jogada para bloco:', blocoId);
-  
+
   // Tentar usar RPC primeiro
-  const { error: rpcError, data: rpcData } = await supabase.rpc("registrar_jogada_bloco", { p_bloco_id: blocoId });
-  
+  const { error: rpcError, data: rpcData } = await supabase.rpc("registrar_jogada_bloco", { p_bloco_id: blocoId } as any);
+
   if (rpcError) {
     console.error('[API] Erro ao registrar jogada via RPC:', rpcError);
     console.log('[API] Tentando método alternativo via update direto...');
-    
+
     // Método alternativo: fazer update direto
     const { data: bloco, error: fetchError } = await supabase
       .from("botao_blocos")
       .select("*")
       .eq("id", blocoId)
       .single();
-    
+
     if (fetchError) {
       console.error('[API] Erro ao buscar bloco:', fetchError);
       throw fetchError;
     }
-    
-    const novasJogadas = Math.max(0, (bloco.jogadas_restantes || 20) - 1);
-    const novoTurno = bloco.turno === "jogador1" ? "jogador2" : "jogador1";
-    
+
+    const novasJogadas = Math.max(0, (bloco.jogadas_restantes as number || 20) - 1);
+    const novoTurno = (bloco.turno as string) === "jogador1" ? "jogador2" : "jogador1";
+
+    console.log('[API] Atualizando bloco:', { novasJogadas, novoTurno });
+
     const { error: updateError } = await supabase
       .from("botao_blocos")
       .update({
@@ -343,22 +345,22 @@ export async function registrarJogadaBloco(blocoId: string) {
         timestamp_inicio_turno: new Date().toISOString(),
         status: novasJogadas <= 0 ? "finalizado" : bloco.status,
         vencedor: novasJogadas <= 0 ? (
-          (bloco.jogador1_gols || 0) > (bloco.jogador2_gols || 0) ? "jogador1" :
-          (bloco.jogador2_gols || 0) > (bloco.jogador1_gols || 0) ? "jogador2" : "empate"
+          ((bloco.jogador1_gols as number) || 0) > ((bloco.jogador2_gols as number) || 0) ? "jogador1" :
+          ((bloco.jogador2_gols as number) || 0) > ((bloco.jogador1_gols as number) || 0) ? "jogador2" : "empate"
         ) : bloco.vencedor,
         finalizada_em: novasJogadas <= 0 ? new Date().toISOString() : bloco.finalizada_em,
-      })
+      } as any)
       .eq("id", blocoId);
-    
+
     if (updateError) {
       console.error('[API] Erro ao atualizar bloco:', updateError);
       throw updateError;
     }
-    
+
     console.log('[API] Jogada registrada com sucesso via update direto');
     return;
   }
-  
+
   console.log('[API] Jogada registrada com sucesso via RPC:', rpcData);
 }
 
@@ -378,4 +380,14 @@ export async function finalizarBloco(blocoId: string, vencedor: string) {
 export async function sairDoBloco(blocoId: string) {
   const { error } = await supabase.from("botao_blocos").delete().eq("id", blocoId);
   if (error) throw error;
+}
+
+/** Limpa salas e blocos antigos (mais de 4 minutos) */
+export async function limparSalasAntigas() {
+  const { error } = await supabase.rpc("limpar_salas_antigas");
+  if (error) {
+    console.error('[API] Erro ao limpar salas antigas:', error);
+    throw error;
+  }
+  console.log('[API] Salas antigas limpas com sucesso');
 }
