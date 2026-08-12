@@ -584,7 +584,8 @@ DECLARE
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
 
-  v_mesa_id := 'mesa_' || encode(gen_random_bytes(6), 'hex');
+  -- Usar gen_random_uuid() em vez de gen_random_bytes
+  v_mesa_id := 'mesa_' || substring(encode(gen_random_uuid()::text::bytea, 'hex'), 1, 12);
 
   INSERT INTO public.mesas_futebol AS m
     (mesa_id, jogador_1_id, time_j1, status, jogador_1_online, ultimo_heartbeat_j1)
