@@ -746,6 +746,7 @@ BEGIN
 END; $$;
 
 -- Função para registrar gol
+DROP FUNCTION IF EXISTS public.registrar_gol_mesa(TEXT, UUID);
 CREATE OR REPLACE FUNCTION public.registrar_gol_mesa(p_mesa_id TEXT, p_jogador_id UUID DEFAULT NULL)
 RETURNS public.mesas_futebol
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
