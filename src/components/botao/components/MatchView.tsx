@@ -195,12 +195,18 @@ export function MatchView({
         turnRef.current = conceding;
         setTurn(conceding);
         
-        // Bloquear input por 5 segundos após o gol
+        // Bloquear input por 5 segundos após o gol e passar vez se não jogar
         setGoalCooldown(5);
         const cooldownInterval = setInterval(() => {
           setGoalCooldown(prev => {
             if (prev === null || prev <= 1) {
               clearInterval(cooldownInterval);
+              // Passar a vez automaticamente após 5 segundos
+              if (!simRef.current && !ended) {
+                const nextTurn = conceding === "home" ? "away" : "home";
+                turnRef.current = nextTurn;
+                setTurn(nextTurn);
+              }
               return null;
             }
             return prev - 1;
@@ -365,10 +371,10 @@ export function MatchView({
           </div>
         )}
         {goalCooldown !== null && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center">
-            <div className="flex flex-col items-center gap-2">
-              <span className="font-display text-2xl sm:text-4xl text-foreground">Tirar bola do meio</span>
-              <span className="font-mono text-3xl sm:text-5xl text-primary">{goalCooldown}</span>
+          <div className="pointer-events-none absolute top-4 right-4">
+            <div className="flex flex-col items-end gap-1">
+              <span className="font-display text-sm text-muted-foreground">Tirar bola do meio</span>
+              <span className="font-mono text-2xl text-primary font-bold">{goalCooldown}s</span>
             </div>
           </div>
         )}
