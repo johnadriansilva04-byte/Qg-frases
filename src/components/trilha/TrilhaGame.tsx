@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { ArrowLeft, Trophy, Target, BookOpen, X, Award } from "lucide-react";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
+import { GameEndAdModal } from "./GameEndAdModal";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
 import { useTrilhaPhases } from "@/hooks/useTrilhaChampionship";
@@ -290,6 +291,9 @@ function TrilhaGameBoard({
   
   const [selected, setSelected] = useState<number | null>(null);
   const [gameEnded, setGameEnded] = useState(false);
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
+  const [gameResult, setGameResult] = useState<"victory" | "defeat" | "draw">("victory");
 
   // Salvar resultado no ranking quando o jogo termina
   useEffect(() => {
@@ -310,6 +314,11 @@ function TrilhaGameBoard({
       } else {
         phases.recordLoss();
       }
+      
+      // Mostrar modal de anúncio para dobrar pontos/recuperar pontos
+      setFinalScore(score);
+      setGameResult(result);
+      setShowAdModal(true);
       
       setGameEnded(true);
     }
@@ -435,6 +444,47 @@ function TrilhaGameBoard({
 
   const profile = AI_PROFILES[difficulty];
 
+  const handleWatchVideo = async (): Promise<boolean> => {
+    // Simular carregamento do anúncio do Google AdSense
+    // Na implementação real, isso usaria a API do Google AdSense para rewarded ads
+    return new Promise((resolve) => {
+      // Simular delay de carregamento do anúncio
+      setTimeout(() => {
+        // Calcular novos pontos baseados no resultado
+        let newScore = finalScore;
+        
+        if (gameResult === "victory") {
+          // Vitória: 3 pontos → 6 pontos (dobro)
+          newScore = finalScore * 2;
+        } else if (gameResult === "defeat") {
+          // Derrota: -3 pontos → -1 ponto (recupera 2)
+          newScore = finalScore + 2;
+        } else if (gameResult === "draw") {
+          // Empate: 1 ponto → 2 pontos (dobro)
+          newScore = finalScore * 2;
+        }
+        
+        // Atualizar o ranking com os novos pontos
+        addRankingEntry({
+          date: new Date().toISOString(),
+          game: "trilha",
+          difficulty,
+          result: gameResult,
+          score: newScore,
+        });
+        
+        // Aqui seria a lógica real do Google AdSense
+        // Por enquanto, retorna true para simular sucesso
+        // Quando integrado com AdSense real, verificaria se o anúncio foi carregado
+        resolve(true);
+      }, 1000);
+    });
+  };
+
+  const handleCloseAdModal = () => {
+    setShowAdModal(false);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
@@ -533,6 +583,15 @@ function TrilhaGameBoard({
           />
         </div>
       </main>
+
+      {/* Modal de anúncio para dobrar pontos após fim de jogo */}
+      <GameEndAdModal
+        isOpen={showAdModal}
+        result={gameResult}
+        baseScore={finalScore}
+        onWatchVideo={handleWatchVideo}
+        onClose={handleCloseAdModal}
+      />
     </div>
   );
 }

@@ -3,7 +3,7 @@ export interface RankingEntry {
   date: string;
   game: string;
   difficulty: string;
-  result: "victory" | "defeat";
+  result: "victory" | "defeat" | "draw";
   score: number;
 }
 
@@ -45,12 +45,14 @@ export function clearRanking(): void {
   }
 }
 
-export function getTrilhaScore(difficulty: string, result: "victory" | "defeat"): number {
-  const baseScores: Record<string, number> = {
-    recruta: 10,
-    sargento: 25,
-    general: 50,
+export function getTrilhaScore(difficulty: string, result: "victory" | "defeat" | "draw"): number {
+  // Pontos base independentes da dificuldade conforme solicitado:
+  // Vitória: 3 pontos, Derrota: -3 pontos, Empate: 1 ponto
+  const basePoints = {
+    victory: 3,
+    defeat: -3,
+    draw: 1
   };
-  const base = baseScores[difficulty] || 10;
-  return result === "victory" ? base : Math.floor(base * 0.3);
+  
+  return basePoints[result];
 }
