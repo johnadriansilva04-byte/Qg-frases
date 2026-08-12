@@ -14,7 +14,7 @@ export function UserMenu({ perfil, onLogin, onLogout }: Props) {
   const abreviacao = localStorage.getItem(STORAGE_KEYS.ABREVIACAO) || 'MTI';
 
   return (
-    <div className="fixed top-4 left-4 z-[9999]">
+    <div className="fixed top-4 left-4 z-10">
       {isLoggedIn ? (
         <div className="panel flex items-center gap-3 p-3 shadow-lg">
           <div className="flex items-center gap-2">
