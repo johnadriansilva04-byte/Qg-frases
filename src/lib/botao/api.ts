@@ -311,8 +311,55 @@ export async function registrarGolBloco(blocoId: string, jogador: "jogador1" | "
 
 /** Consome uma jogada (decrementa, alterna turno e finaliza no zero). */
 export async function registrarJogadaBloco(blocoId: string) {
-  const { error } = await supabase.rpc("registrar_jogada_bloco", { p_bloco_id: blocoId });
-  if (error) throw error;
+  console.log('[API] Registrando jogada para bloco:', blocoId);
+  
+  // Tentar usar RPC primeiro
+  const { error: rpcError, data: rpcData } = await supabase.rpc("registrar_jogada_bloco", { p_bloco_id: blocoId });
+  
+  if (rpcError) {
+    console.error('[API] Erro ao registrar jogada via RPC:', rpcError);
+    console.log('[API] Tentando método alternativo via update direto...');
+    
+    // Método alternativo: fazer update direto
+    const { data: bloco, error: fetchError } = await supabase
+      .from("botao_blocos")
+      .select("*")
+      .eq("id", blocoId)
+      .single();
+    
+    if (fetchError) {
+      console.error('[API] Erro ao buscar bloco:', fetchError);
+      throw fetchError;
+    }
+    
+    const novasJogadas = Math.max(0, (bloco.jogadas_restantes || 20) - 1);
+    const novoTurno = bloco.turno === "jogador1" ? "jogador2" : "jogador1";
+    
+    const { error: updateError } = await supabase
+      .from("botao_blocos")
+      .update({
+        jogadas_restantes: novasJogadas,
+        turno: novoTurno,
+        timestamp_inicio_turno: new Date().toISOString(),
+        status: novasJogadas <= 0 ? "finalizado" : bloco.status,
+        vencedor: novasJogadas <= 0 ? (
+          (bloco.jogador1_gols || 0) > (bloco.jogador2_gols || 0) ? "jogador1" :
+          (bloco.jogador2_gols || 0) > (bloco.jogador1_gols || 0) ? "jogador2" : "empate"
+        ) : bloco.vencedor,
+        finalizada_em: novasJogadas <= 0 ? new Date().toISOString() : bloco.finalizada_em,
+      })
+      .eq("id", blocoId);
+    
+    if (updateError) {
+      console.error('[API] Erro ao atualizar bloco:', updateError);
+      throw updateError;
+    }
+    
+    console.log('[API] Jogada registrada com sucesso via update direto');
+    return;
+  }
+  
+  console.log('[API] Jogada registrada com sucesso via RPC:', rpcData);
 }
 
 export async function forcarTrocaTurnoBloco(blocoId: string) {
