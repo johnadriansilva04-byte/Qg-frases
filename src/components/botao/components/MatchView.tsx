@@ -19,6 +19,7 @@ type Props = {
   customTeam?: Team; // Time personalizado do usuário
   onPlay?: (goals: number) => void; // Callback chamado quando uma jogada termina (para sincronização online)
   initialTurn?: Side; // Turno inicial (para sincronização online)
+  onJogadaAdversaria?: (jogada: any) => void; // Callback para receber jogadas do adversário
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -37,6 +38,7 @@ export function MatchView({
   customTeam,
   onPlay,
   initialTurn,
+  onJogadaAdversaria,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -59,6 +61,7 @@ export function MatchView({
   const portraitRef = useRef(false);
   const scaleRef = useRef(1);
   const historyRef = useRef<Disc[][]>([]); // Histórico de estados dos discos
+  const initializedRef = useRef(false); // Flag para evitar re-inicialização
 
   const [score, setScore] = useState({ home: 0, away: 0 });
   const [turnsLeft, setTurnsLeft] = useState(turns);
@@ -80,10 +83,19 @@ export function MatchView({
   const turnHistoryRef = useRef<Side[]>([initialTurn || "home"]);
 
   // Sincronizar turno com initialTurn quando mudar (modo online)
+  // APENAS atualiza a flag de interatividade, não reinicializa o jogo
   useEffect(() => {
-    if (initialTurn && isOnline) {
+    if (initialTurn && isOnline && !initializedRef.current) {
+      // Primeira inicialização
       turnRef.current = initialTurn;
       setTurn(initialTurn);
+      initializedRef.current = true;
+    } else if (initialTurn && isOnline && initializedRef.current) {
+      // Atualizações subsequentes - apenas atualiza turno se não estiver em simulação
+      if (!simRef.current && !endedRef.current) {
+        turnRef.current = initialTurn;
+        setTurn(initialTurn);
+      }
     }
   }, [initialTurn, isOnline]);
 

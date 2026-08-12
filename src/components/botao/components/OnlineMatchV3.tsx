@@ -253,6 +253,7 @@ function MesaOnline({
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos);
   const [oponenteOnline, setOponenteOnline] = useState(false);
+  const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
   const mesaRef = useRef<MesaRealtime | null>(null);
 
   const souJogador1 = mesa.jogador_1_id === userId;
@@ -285,6 +286,10 @@ function MesaOnline({
       mesaId: mesa.mesa_id,
       userId,
       handlers: {
+        onJogadaAdversaria: (jogada) => {
+          console.log('[MesaOnline] Jogada do adversário:', jogada);
+          setJogadaAdversaria(jogada);
+        },
         onEstado: (m) => {
           setPlacar([m.placar_j1, m.placar_j2]);
         },
@@ -382,6 +387,10 @@ function MesaOnline({
         customTeam={userTeam}
         onPlay={handlePlay}
         initialTurn={currentTurn}
+        onJogadaAdversaria={(jogada) => {
+          console.log('[MesaOnline] Recebendo jogada do adversário no MatchView:', jogada);
+          // Aplicar jogada na física do MatchView
+        }}
       />
     </div>
   );
