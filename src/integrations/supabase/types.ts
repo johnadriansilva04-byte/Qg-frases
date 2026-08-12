@@ -62,42 +62,87 @@ export type Database = {
       botao_usuarios: {
         Row: {
           id: string
-          telefone: string
+          user_id: string
+          email: string
           nome: string
           cores: string[]
           time_personalizado: string
+          abreviacao_time: string
           numero_jogador: number
           pontos_soberania: number
           partidas_jogadas: number
           partidas_vencidas: number
+          progresso_caminpanha: Json
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          telefone: string
+          user_id: string
+          email: string
           nome: string
           cores?: string[]
           time_personalizado?: string
+          abreviacao_time?: string
           numero_jogador?: number
           pontos_soberania?: number
           partidas_jogadas?: number
           partidas_vencidas?: number
+          progresso_caminpanha?: Json
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          telefone?: string
+          user_id?: string
+          email?: string
           nome?: string
           cores?: string[]
           time_personalizado?: string
+          abreviacao_time?: string
           numero_jogador?: number
           pontos_soberania?: number
           partidas_jogadas?: number
           partidas_vencidas?: number
+          progresso_caminpanha?: Json
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      botao_times: {
+        Row: {
+          id: string
+          nome: string
+          abreviacao: string
+          cores: string[]
+          pais: string
+          liga: string
+          is_personalizado: boolean
+          usuario_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          nome: string
+          abreviacao: string
+          cores: string[]
+          pais: string
+          liga: string
+          is_personalizado?: boolean
+          usuario_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          nome?: string
+          abreviacao?: string
+          cores?: string[]
+          pais?: string
+          liga?: string
+          is_personalizado?: boolean
+          usuario_id?: string | null
+          created_at?: string
         }
         Relationships: []
       }

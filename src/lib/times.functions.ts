@@ -43,54 +43,8 @@ export async function buscarTimePorId(id: string): Promise<TimeDB | null> {
   }
 }
 
-export async function salvarTimePersonalizado(
-  usuarioId: string,
-  nome: string,
-  abreviacao: string,
-  cores: string[]
-): Promise<TimeDB | null> {
-  try {
-    // Verificar se o usuário existe antes de criar o time
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('botao_usuarios')
-      .select('user_id')
-      .eq('user_id', usuarioId)
-      .maybeSingle();
-    
-    if (usuarioError) {
-      console.error('Erro ao verificar usuário:', usuarioError);
-      return null;
-    }
-    
-    if (!usuario) {
-      console.error('Usuário não encontrado:', usuarioId);
-      return null;
-    }
-    
-    const id = `custom-${usuarioId}`;
-    
-    const { data, error } = await supabase
-      .from('botao_times')
-      .upsert({
-        id,
-        nome,
-        abreviacao,
-        cores,
-        pais: 'Brasil',
-        liga: 'Personalizado',
-        is_personalizado: true,
-        usuario_id: usuarioId,
-      })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Erro ao salvar time personalizado:', error);
-    return null;
-  }
-}
+// Função removida - o time personalizado é criado automaticamente pelo trigger do banco
+// quando o usuário é cadastrado no Supabase Auth
 
 export async function buscarTimesPorPais(pais: string): Promise<TimeDB[]> {
   try {
