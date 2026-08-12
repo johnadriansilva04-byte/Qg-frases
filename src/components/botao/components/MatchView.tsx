@@ -463,10 +463,7 @@ export function MatchView({
 function TeamChip({ team, align }: { team: Team; align: "left" | "right" }) {
   return (
     <div className={`flex min-w-0 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
-      <span
-        className="size-6 shrink-0 rounded-full border-2 sm:size-8"
-        style={{ background: team.primary, borderColor: team.secondary }}
-      />
+      <span className="text-2xl sm:text-3xl">⚽</span>
       <span className="truncate font-display text-sm text-foreground sm:text-base">{team.short}</span>
     </div>
   );
