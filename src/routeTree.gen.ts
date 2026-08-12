@@ -15,7 +15,6 @@ import { Route as CidadelaRouteImport } from './routes/cidadela'
 import { Route as CorretorRouteImport } from './routes/corretor'
 import { Route as GeradorRouteImport } from './routes/gerador'
 import { Route as NoticiasRouteImport } from './routes/noticias'
-import { Route as PracinhaBrasileiraoRouteImport } from './routes/pracinha-brasileirao'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
 
@@ -49,11 +48,6 @@ const NoticiasRoute = NoticiasRouteImport.update({
   path: '/noticias',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PracinhaBrasileiraoRoute = PracinhaBrasileiraoRouteImport.update({
-  id: '/pracinha-brasileirao',
-  path: '/pracinha-brasileirao',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
   id: '/privacidade',
   path: '/privacidade',
@@ -72,7 +66,6 @@ export interface FileRoutesByFullPath {
   '/corretor': typeof CorretorRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
-  '/pracinha-brasileirao': typeof PracinhaBrasileiraoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
 }
@@ -83,7 +76,6 @@ export interface FileRoutesByTo {
   '/corretor': typeof CorretorRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
-  '/pracinha-brasileirao': typeof PracinhaBrasileiraoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
 }
@@ -95,7 +87,6 @@ export interface FileRoutesById {
   '/corretor': typeof CorretorRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
-  '/pracinha-brasileirao': typeof PracinhaBrasileiraoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
 }
@@ -108,7 +99,6 @@ export interface FileRouteTypes {
     | '/corretor'
     | '/gerador'
     | '/noticias'
-    | '/pracinha-brasileirao'
     | '/privacidade'
     | '/termos'
   fileRoutesByTo: FileRoutesByTo
@@ -119,7 +109,6 @@ export interface FileRouteTypes {
     | '/corretor'
     | '/gerador'
     | '/noticias'
-    | '/pracinha-brasileirao'
     | '/privacidade'
     | '/termos'
   id:
@@ -130,7 +119,6 @@ export interface FileRouteTypes {
     | '/corretor'
     | '/gerador'
     | '/noticias'
-    | '/pracinha-brasileirao'
     | '/privacidade'
     | '/termos'
   fileRoutesById: FileRoutesById
@@ -142,7 +130,6 @@ export interface RootRouteChildren {
   CorretorRoute: typeof CorretorRoute
   GeradorRoute: typeof GeradorRoute
   NoticiasRoute: typeof NoticiasRoute
-  PracinhaBrasileiraoRoute: typeof PracinhaBrasileiraoRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
 }
@@ -191,13 +178,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NoticiasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pracinha-brasileirao': {
-      id: '/pracinha-brasileirao'
-      path: '/pracinha-brasileirao'
-      fullPath: '/pracinha-brasileirao'
-      preLoaderRoute: typeof PracinhaBrasileiraoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/privacidade': {
       id: '/privacidade'
       path: '/privacidade'
@@ -222,7 +202,6 @@ const rootRouteChildren: RootRouteChildren = {
   CorretorRoute: CorretorRoute,
   GeradorRoute: GeradorRoute,
   NoticiasRoute: NoticiasRoute,
-  PracinhaBrasileiraoRoute: PracinhaBrasileiraoRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,
 }

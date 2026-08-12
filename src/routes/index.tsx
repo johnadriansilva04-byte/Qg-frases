@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, Gamepad2, Sparkles, Cpu, Globe, Rocket, Star, Tv } from "lucide-react";
+import { BookOpen, Gamepad2, Sparkles, Cpu, Globe, Rocket, Star } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,14 +28,6 @@ const SECTIONS = [
     link: "/cidadela",
     color: "from-purple-500 to-pink-500",
     bgColor: "bg-purple-500/10",
-  },
-  {
-    icon: Tv,
-    title: "Pracinha do Brasileirão",
-    description: "Transmissões ao vivo dos jogos do Brasileirão Série A e B",
-    link: "/pracinha-brasileirao",
-    color: "from-red-500 to-orange-500",
-    bgColor: "bg-red-500/10",
   },
   {
     icon: BookOpen,
