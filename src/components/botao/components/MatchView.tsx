@@ -3,6 +3,7 @@ import { FIELD, clampImpulse, initialDiscs, resetPositions, step, type Disc, typ
 import { planAiShot } from "../engine/ai";
 import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
+import { RotateCcw } from "lucide-react";
 
 type Props = {
   homeId: string;
@@ -53,6 +54,7 @@ export function MatchView({
   const turnRef = useRef<Side>("home");
   const portraitRef = useRef(false);
   const scaleRef = useRef(1);
+  const historyRef = useRef<Disc[][]>([]); // Histórico de estados dos discos
 
   const [score, setScore] = useState({ home: 0, away: 0 });
   const [turnsLeft, setTurnsLeft] = useState(turns);
@@ -69,6 +71,9 @@ export function MatchView({
   const turnsRef = useRef(turnsLeft);
   turnsRef.current = turnsLeft;
   const endedRef = useRef(false);
+  const scoreHistoryRef = useRef<{ home: number; away: number }[]>([{ home: 0, away: 0 }]);
+  const turnsHistoryRef = useRef<number[]>([turns]);
+  const turnHistoryRef = useRef<Side[]>(["home"]);
 
   /* ---------- render loop ---------- */
   useEffect(() => {
@@ -321,6 +326,13 @@ export function MatchView({
     if (!d) return;
     const { ix, iy, power } = clampImpulse(d.x - aim.px, d.y - aim.py);
     if (power < 0.06) return;
+    
+    // Salvar estado antes da jogada
+    historyRef.current.push(JSON.parse(JSON.stringify(discsRef.current)));
+    scoreHistoryRef.current.push({ ...scoreRef.current });
+    turnsHistoryRef.current.push(turnsRef.current);
+    turnHistoryRef.current.push(turnRef.current);
+    
     d.vx = ix;
     d.vy = iy;
     runSimulation();
@@ -329,18 +341,51 @@ export function MatchView({
   const userTeam = userSide === "home" ? home : away;
   const yourTurn = turn === userSide && !ended;
 
+  // Função para voltar uma jogada
+  const undoLastMove = () => {
+    if (historyRef.current.length === 0 || simRef.current || ended) return;
+    
+    // Restaurar estado anterior
+    const previousDiscs = historyRef.current.pop();
+    const previousScore = scoreHistoryRef.current.pop();
+    const previousTurns = turnsHistoryRef.current.pop();
+    const previousTurn = turnHistoryRef.current.pop();
+    
+    if (previousDiscs) {
+      discsRef.current = previousDiscs;
+      setScore(previousScore || { home: 0, away: 0 });
+      setTurnsLeft(previousTurns || turns);
+      setTurn(previousTurn || "home");
+      
+      // Atualizar refs
+      scoreRef.current = previousScore || { home: 0, away: 0 };
+      turnsRef.current = previousTurns || turns;
+      turnRef.current = previousTurn || "home";
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl px-3 pb-8">
-      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:justify-between">
+      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 sm:flex sm:justify-between">
         <div className="min-w-0">
           <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">{stageLabel}</p>
           <h2 className="truncate font-display text-lg text-foreground sm:text-2xl">
             {home.short} <span className="text-muted-foreground">vs</span> {away.short}
           </h2>
         </div>
-        <button onClick={onQuit} className="btn-ghost shrink-0">
-          Sair
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={undoLastMove} 
+            disabled={historyRef.current.length === 0 || simRef.current || ended}
+            className="btn-ghost shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Voltar jogada"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <button onClick={onQuit} className="btn-ghost shrink-0">
+            Sair
+          </button>
+        </div>
       </div>
 
       <div className="scoreboard mb-3">
