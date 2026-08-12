@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { useBotaoAuth } from "./useBotaoAuth";
 
 interface Lobby {
   id: string;
@@ -35,20 +36,9 @@ interface Bloco {
   finalizada_em: string | null;
 }
 
-interface Usuario {
-  id: string;
-  telefone: string;
-  nome: string;
-  cores?: string[];
-  time_personalizado?: string;
-  abreviacao_time?: string;
-  numero_jogador?: number;
-  pontos_soberania: number;
-  partidas_jogadas: number;
-  partidas_vencidas: number;
-}
-
 export function useBotaoOnline() {
+  const { perfil } = useBotaoAuth();
+  
   const [sessionId] = useState(() => {
     const existingSession = localStorage.getItem('botao_session_id');
     if (existingSession) return existingSession;
@@ -61,7 +51,6 @@ export function useBotaoOnline() {
   const [lobbiesDisponiveis, setLobbiesDisponiveis] = useState<Lobby[]>([]);
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [blocoAtual, setBlocoAtual] = useState<Bloco | null>(null);
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -71,37 +60,45 @@ export function useBotaoOnline() {
     setLoading(true);
     setError(null);
     
+    console.log('[ONLINE] Criando lobby:', { nome, formato, sessionId, perfilNome: perfil?.nome });
+    
     try {
       const { data, error } = await supabase
         .from('botao_lobbies')
         .insert({
           nome,
           criador_session: sessionId,
-          criador_nome: nome,
+          criador_nome: perfil?.nome || 'Jogador',
           formato,
           status: 'ativo'
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ONLINE] Erro ao criar lobby:', error);
+        throw error;
+      }
       
+      console.log('[ONLINE] Lobby criado com sucesso:', data);
       setLobby(data);
       
       // Inscrever em realtime para este lobby
       inscreverLobby(data.id);
     } catch (err) {
       setError('Erro ao criar lobby');
-      console.error(err);
+      console.error('[ONLINE] Erro ao criar lobby:', err);
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, perfil]);
 
   // Listar lobbies disponíveis
   const listarLobbies = useCallback(async () => {
     setLoading(true);
     setError(null);
+    
+    console.log('[ONLINE] Listando lobbies disponíveis');
     
     try {
       const { data, error } = await supabase
@@ -110,12 +107,16 @@ export function useBotaoOnline() {
         .eq('status', 'ativo')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ONLINE] Erro ao listar lobbies:', error);
+        throw error;
+      }
       
+      console.log('[ONLINE] Lobbies encontrados:', data?.length);
       setLobbiesDisponiveis(data || []);
     } catch (err) {
       setError('Erro ao listar lobbies');
-      console.error(err);
+      console.error('[ONLINE] Erro ao listar lobbies:', err);
     } finally {
       setLoading(false);
     }
@@ -401,34 +402,6 @@ export function useBotaoOnline() {
     setLobbiesDisponiveis([]);
   }, []);
 
-  // Login
-  const login = useCallback(async (telefone: string, nome: string, time_personalizado?: string, abreviacao_time?: string, numero_jogador?: number, cores?: string[]) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error } = await supabase
-        .from('botao_usuarios')
-        .upsert({
-          telefone,
-          nome,
-          time_personalizado: time_personalizado || "Meu Time",
-          abreviacao_time: abreviacao_time || "MTI",
-          numero_jogador: numero_jogador || 10,
-          cores: cores || ['#FF0000', '#00FF00', '#0000FF']
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      setUsuario(data);
-    } catch (err) {
-      setError('Erro ao fazer login');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   // Cleanup
   useEffect(() => {
@@ -482,8 +455,7 @@ export function useBotaoOnline() {
     meuTime,
     meusGols,
     tempoRestanteTurno,
-    usuario,
-    login,
+    usuario: perfil,
     loading,
     error
   };

@@ -225,6 +225,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
   };
 
   if (screen === "lobby-list") {
+    console.log('[ONLINE] Renderizando lobby-list', { lobbies: lobbiesDisponiveis.length, loading, error, usuario });
     return (
       <div className="panel">
         <div className="flex items-center justify-between mb-4">
@@ -234,33 +235,6 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
-        </div>
-
-        <div className="mb-4 p-3 bg-accent/10 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="inline w-4 h-4" />
-                <span className="text-sm font-medium">{nome}</span>
-              </div>
-              <p className="text-sm text-muted-foreground mb-2">
-                <Users className="inline w-4 h-4 mr-1" />
-                Sistema de lobbies com múltiplos blocos
-              </p>
-              <p className="text-sm text-muted-foreground">
-                <Gamepad2 className="inline w-4 h-4 mr-1" />
-                Melhor de 3, 6 ou 9 rodadas
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-2 ml-4">
-              <span className="text-xs text-muted-foreground">Suas cores:</span>
-              <div className="flex gap-1">
-                {cores.map((cor: string, i: number) => (
-                  <div key={i} className="w-5 h-5 rounded border-2" style={{ backgroundColor: cor }} />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="mb-4">
@@ -288,7 +262,10 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
         </div>
 
         <button
-          onClick={handleCriarLobby}
+          onClick={() => {
+            console.log('[ONLINE] Criando lobby:', { nomeSala, formato });
+            handleCriarLobby();
+          }}
           disabled={loading || !nomeSala}
           className="btn-primary w-full mt-4"
         >
@@ -316,7 +293,10 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
                     </p>
                   </div>
                   <button
-                    onClick={() => handleEntrarLobby(lobby.id)}
+                    onClick={() => {
+                      console.log('[ONLINE] Entrando no lobby:', lobby.id);
+                      handleEntrarLobby(lobby.id);
+                    }}
                     disabled={loading}
                     className="btn-primary px-3 py-1 text-sm"
                   >
@@ -328,16 +308,6 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
             </div>
           )}
         </div>
-
-        {usuario && (
-          <div className="mt-4 p-3 bg-gold/10 rounded-lg">
-            <p className="text-sm">
-              <Trophy className="inline w-4 h-4 mr-1 text-gold" />
-              Pontos: {usuario.pontos_soberania} | 
-              Vitórias: {usuario.partidas_vencidas}
-            </p>
-          </div>
-        )}
 
         {error && (
           <div className="mt-4 p-3 bg-destructive/10 rounded-lg text-destructive">
