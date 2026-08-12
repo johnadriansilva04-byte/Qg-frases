@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 
 type Props = { rotulo: string; nota?: string; altura?: string; children?: ReactNode };
 
@@ -94,26 +95,89 @@ export function AdVideoSlot() {
 }
 
 /** Indicador visual para anúncios com botão de pontos */
-export function AdPointsIndicator({ onWatchVideo }: { onWatchVideo: () => void }) {
+export function AdPointsIndicator({ onWatchVideo }: { onWatchVideo: () => Promise<boolean> }) {
+  const [visible, setVisible] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setVisible(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [visible]);
+
+  const handleClose = () => {
+    setVisible(false);
+  };
+
+  const handleWatchVideo = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const success = await onWatchVideo();
+      
+      if (success) {
+        // Vídeo assistido com sucesso, fecha o indicador
+        setVisible(false);
+      } else {
+        // Não há vídeo disponível
+        setError("Não temos vídeo no momento, infelizmente.");
+        // Fecha após 3 segundos
+        setTimeout(() => setVisible(false), 3000);
+      }
+    } catch (err) {
+      setError("Erro ao carregar vídeo.");
+      setTimeout(() => setVisible(false), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!visible) return null;
+
   return (
-    <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-2">
+    <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-4">
       <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-3 py-2 backdrop-blur-sm">
         <div className="flex flex-col items-end">
           <span className="text-xs text-muted-foreground">Assista vídeo para ganhar</span>
           <span className="text-sm font-bold text-primary">+5 Pontos</span>
         </div>
         <button
-          onClick={onWatchVideo}
-          className="btn-primary px-3 py-1 text-xs"
+          onClick={handleWatchVideo}
+          disabled={loading}
+          className="btn-primary px-3 py-1 text-xs disabled:opacity-50"
         >
-          Assistir
+          {loading ? "Carregando..." : "Assistir"}
+        </button>
+        <button
+          onClick={handleClose}
+          className="text-muted-foreground hover:text-foreground p-1"
+          title="Fechar"
+        >
+          <X className="w-4 h-4" />
         </button>
       </div>
+      {error && (
+        <div className="text-xs text-destructive">{error}</div>
+      )}
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
         <span>Google automático aqui</span>
         <svg className="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
         </svg>
+        <span className="text-xs">({timeLeft}s)</span>
       </div>
     </div>
   );

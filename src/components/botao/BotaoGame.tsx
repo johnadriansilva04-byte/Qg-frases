@@ -214,13 +214,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setToast("Campanha salva com sucesso!");
   };
 
-  const handleAssistirVideo = async () => {
+  const handleAssistirVideo = async (): Promise<boolean> => {
     if (!perfil?.user_id) {
       setToast("Faça login para ganhar pontos assistindo vídeos.");
-      return;
+      return false;
     }
     
     // Simular assistir vídeo (na implementação real, isso seria integrado com AdSense)
+    // Aqui verificaria se o vídeo está disponível antes de dar pontos
     const novosPontos = await adicionarPontosVideo(perfil.user_id, 5);
     
     if (novosPontos !== null) {
@@ -230,7 +231,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (novoPerfil) {
         aplicarPerfil(novoPerfil);
       }
+      return true; // Vídeo assistido com sucesso
     }
+    
+    return false; // Não foi possível assistir o vídeo
   };
 
   /* ---------- amistoso ---------- */
@@ -411,7 +415,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
-      <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+      {screen === "menu" && (
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+      )}
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
         {screen !== "auth" && (
           <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
