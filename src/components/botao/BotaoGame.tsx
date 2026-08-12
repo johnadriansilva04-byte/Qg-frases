@@ -42,6 +42,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [screen, setScreen] = useState<Screen>(() => {
     // Verificar se o usuário já está logado com Supabase Auth
     const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
+    console.log('[BotaoGame] Inicializando screen:', { isLoggedIn, screen: isLoggedIn ? "menu" : "auth" });
     return isLoggedIn ? "menu" : "auth";
   });
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
@@ -60,6 +61,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return () => { mounted = false; };
   }, []);
 
+  // Monitorar login automático e mudar para menu se já estiver logado
+  useEffect(() => {
+    console.log('[BotaoGame] Monitorando perfil:', { perfil, carregando, screen });
+    if (!carregando && perfil && screen === "auth") {
+      console.log('[BotaoGame] Usuário já logado automaticamente, mudando para menu');
+      setScreen("menu");
+    }
+  }, [perfil, carregando, screen]);
+
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {
     const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
@@ -74,7 +84,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       secondary: cores[1],
       numero: parseInt(numero)
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [perfil]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nota: O time personalizado é carregado automaticamente via customTeamData useMemo
   // que depende dos dados do localStorage, que são atualizados pelo useBotaoAuth
@@ -131,6 +141,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   const aoLogar = async (p?: Perfil) => {
+    console.log('[BotaoGame] aoLogar chamado:', { perfil: p });
     if (p) aplicarPerfil(p);
     // Carregar progresso do Supabase se o usuário estiver logado
     if (p?.user_id) {

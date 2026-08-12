@@ -13,6 +13,8 @@ export function UserMenu({ perfil, onLogin, onLogout }: Props) {
   const timeNome = localStorage.getItem(STORAGE_KEYS.TIME) || 'Meu Time';
   const abreviacao = localStorage.getItem(STORAGE_KEYS.ABREVIACAO) || 'MTI';
 
+  console.log('[UserMenu] Renderizando:', { isLoggedIn, perfil, timeNome, abreviacao });
+
   return (
     <div className="fixed top-4 left-4 z-10">
       {isLoggedIn ? (
@@ -32,15 +34,7 @@ export function UserMenu({ perfil, onLogin, onLogout }: Props) {
             <LogOut className="size-4" />
           </button>
         </div>
-      ) : (
-        <button
-          onClick={onLogin}
-          className="btn-primary flex items-center gap-2 px-4 py-2 shadow-lg"
-        >
-          <User className="size-4" />
-          Login
-        </button>
-      )}
+      ) : null}
     </div>
   );
 }
