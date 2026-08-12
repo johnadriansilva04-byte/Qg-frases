@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
-import { useBotaoAuth } from "./useBotaoAuth";
+import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 
 interface Lobby {
   id: string;
