@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
-import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, type Progress } from "./storage";
+import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, saveTournament, loadTournament, saveTournamentToSupabase, loadTournamentFromSupabase, type Progress } from "./storage";
 import {
   advanceKnockout,
   applyResult,
@@ -47,6 +47,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
+  const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
 
   // Carregar times do banco de dados ao montar
   useEffect(() => {
@@ -91,7 +92,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
-  const [tour, setTour] = useState<Tournament | null>(null);
   const [current, setCurrent] = useState<Fixture | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -108,6 +108,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Salvar no Supabase se o usuário estiver logado
     if (perfil?.user_id) {
       saveProgressToSupabase(perfil.user_id, p);
+    }
+  };
+
+  const persistTournament = (t: Tournament | null) => {
+    setTour(t);
+    saveTournament(t);
+    // Salvar no Supabase se o usuário estiver logado
+    if (perfil?.user_id && t) {
+      saveTournamentToSupabase(perfil.user_id, t);
     }
   };
 
@@ -128,6 +137,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const supabaseProgress = await loadProgressFromSupabase(p.user_id);
       setProgress(supabaseProgress);
       saveProgress(supabaseProgress);
+      
+      // Carregar torneio do Supabase
+      const supabaseTournament = await loadTournamentFromSupabase(p.user_id);
+      if (supabaseTournament) {
+        persistTournament(supabaseTournament);
+      }
     }
     setScreen("menu");
     setToast("Bem-vindo de volta!");
@@ -148,7 +163,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
 
     // Resetar estado do torneio
-    setTour(null);
+    persistTournament(null);
     setCurrent(null);
 
     // Resetar progresso local
@@ -173,7 +188,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- torneio ---------- */
   const startTournament = () => {
-    setTour(createTournament(userTeam.id, difficulty, userTeam));
+    persistTournament(createTournament(userTeam.id, difficulty, userTeam));
     setScreen("hub");
   };
 
@@ -246,7 +261,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
     }
 
-    setTour(t);
+    persistTournament(t);
     setCurrent(null);
     setScreen("hub");
   };
