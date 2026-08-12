@@ -17,6 +17,7 @@ import {
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { OnlineMatchV2 } from "./components/OnlineMatchV2";
+import { OnlineMatchV3 } from "./components/OnlineMatchV3";
 import { AuthScreen } from "./components/AuthScreen";
 import { UserMenu } from "./components/UserMenu";
 import { useBotaoAuth } from "./online/useBotaoAuth";
@@ -372,7 +373,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-        <OnlineMatchV2
+        <OnlineMatchV3
           onBack={() => setScreen("menu")}
         />
       </Shell>
