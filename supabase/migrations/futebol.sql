@@ -351,7 +351,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   jogadas INTEGER;
-  formato TEXT;
+  v_formato TEXT;
   max_rodadas INTEGER;
 BEGIN
   -- Decrementar jogadas
@@ -364,16 +364,16 @@ BEGIN
   PERFORM public.alternar_turno_bloco(p_bloco_id);
   
   -- Buscar formato do lobby
-  SELECT formato INTO formato
+  SELECT l.formato INTO v_formato
   FROM public.botao_lobbies l
   JOIN public.botao_blocos b ON b.lobby_id = l.id
   WHERE b.id = p_bloco_id;
   
   -- Calcular máximo de rodadas baseado no formato
   max_rodadas = CASE 
-    WHEN formato = 'melhor_de_3' THEN 3
-    WHEN formato = 'melhor_de_6' THEN 6
-    WHEN formato = 'melhor_de_9' THEN 9
+    WHEN v_formato = 'melhor_de_3' THEN 3
+    WHEN v_formato = 'melhor_de_6' THEN 6
+    WHEN v_formato = 'melhor_de_9' THEN 9
     ELSE 3
   END;
   
@@ -474,5 +474,342 @@ BEGIN
 END;
 $$;
 
--- Limpar cache do schema ao final
+-- ============================================================================
+-- SISTEMA DE MESAS DE FUTEBOL ONLINE COM SINCRONIZAÇÃO EM TEMPO REAL (v2)
+-- ============================================================================
+
+-- Tabela principal de mesas de futebol para jogos online
+CREATE TABLE IF NOT EXISTS public.mesas_futebol (
+  id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mesa_id                  TEXT NOT NULL UNIQUE,
+
+  jogador_1_id             UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  jogador_2_id             UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+
+  time_j1                  TEXT NOT NULL DEFAULT 'MTI',
+  time_j2                  TEXT,
+
+  placar_j1                INTEGER NOT NULL DEFAULT 0,
+  placar_j2                INTEGER NOT NULL DEFAULT 0,
+
+  turno_atual_id           UUID REFERENCES auth.users(id),
+  status                   TEXT NOT NULL DEFAULT 'aguardando'
+                             CHECK (status IN ('aguardando','em_andamento','finalizado')),
+
+  -- Relógio autoritativo do servidor (5 min)
+  duracao_segundos         INTEGER NOT NULL DEFAULT 300,
+  iniciado_em              TIMESTAMPTZ,               -- setado ao virar em_andamento
+  tempo_restante_segundos  INTEGER NOT NULL DEFAULT 300,
+
+  -- Anti-reset / ordenação de jogadas
+  seq_jogada               BIGINT NOT NULL DEFAULT 0,
+  estado_fisico            JSONB,                     -- snapshot opcional da mesa
+
+  vencedor_id              UUID REFERENCES auth.users(id),
+  motivo_finalizacao       TEXT,                      -- tempo_esgotado | abandono | desistencia
+
+  jogador_1_online         BOOLEAN NOT NULL DEFAULT false,
+  jogador_2_online         BOOLEAN NOT NULL DEFAULT false,
+  ultimo_heartbeat_j1      TIMESTAMPTZ,
+  ultimo_heartbeat_j2      TIMESTAMPTZ,
+
+  criado_em                TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Colunas novas em bases já existentes
+ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS duracao_segundos INTEGER NOT NULL DEFAULT 300;
+ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS iniciado_em TIMESTAMPTZ;
+ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS seq_jogada BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS estado_fisico JSONB;
+
+-- Índices para mesas_futebol
+CREATE INDEX IF NOT EXISTS idx_mesas_futebol_mesa_id ON public.mesas_futebol(mesa_id);
+CREATE INDEX IF NOT EXISTS idx_mesas_futebol_status ON public.mesas_futebol(status);
+CREATE INDEX IF NOT EXISTS idx_mesas_futebol_j1 ON public.mesas_futebol(jogador_1_id);
+CREATE INDEX IF NOT EXISTS idx_mesas_futebol_j2 ON public.mesas_futebol(jogador_2_id);
+
+-- Permissões para mesas_futebol
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.mesas_futebol TO authenticated;
+GRANT SELECT ON public.mesas_futebol TO anon;
+GRANT ALL ON public.mesas_futebol TO service_role;
+
+-- RLS para mesas_futebol
+ALTER TABLE public.mesas_futebol ENABLE ROW LEVEL SECURITY;
+
+-- Políticas RLS para mesas_futebol
+DROP POLICY IF EXISTS "mesas_select_publico" ON public.mesas_futebol;
+CREATE POLICY "mesas_select_publico" ON public.mesas_futebol
+  FOR SELECT USING (true);   -- lobby precisa listar mesas aguardando
+
+DROP POLICY IF EXISTS "mesas_insert_dono" ON public.mesas_futebol;
+CREATE POLICY "mesas_insert_dono" ON public.mesas_futebol
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = jogador_1_id);
+
+DROP POLICY IF EXISTS "mesas_update_participante" ON public.mesas_futebol;
+CREATE POLICY "mesas_update_participante" ON public.mesas_futebol
+  FOR UPDATE TO authenticated
+  USING (auth.uid() = jogador_1_id OR auth.uid() = jogador_2_id)
+  WITH CHECK (auth.uid() = jogador_1_id OR auth.uid() = jogador_2_id);
+
+DROP POLICY IF EXISTS "mesas_delete_participante" ON public.mesas_futebol;
+CREATE POLICY "mesas_delete_participante" ON public.mesas_futebol
+  FOR DELETE TO authenticated
+  USING (auth.uid() = jogador_1_id OR auth.uid() = jogador_2_id);
+
+-- ============================================================================
+-- FUNÇÕES PARA CONTROLE DE PRESENÇA E INÍCIO DE PARTIDA
+-- ============================================================================
+
+-- Trigger de atualizado_em
+CREATE OR REPLACE FUNCTION public.atualizar_timestamp_mesa()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.atualizado_em := now();
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS trigger_atualizar_mesa ON public.mesas_futebol;
+CREATE TRIGGER trigger_atualizar_mesa
+BEFORE UPDATE ON public.mesas_futebol
+FOR EACH ROW EXECUTE FUNCTION public.atualizar_timestamp_mesa();
+
+-- Função para criar mesa
+CREATE OR REPLACE FUNCTION public.criar_mesa_futebol(p_time TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_mesa_id TEXT;
+  v_uid     UUID := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  v_mesa_id := 'mesa_' || encode(gen_random_bytes(6), 'hex');
+
+  INSERT INTO public.mesas_futebol AS m
+    (mesa_id, jogador_1_id, time_j1, status, jogador_1_online, ultimo_heartbeat_j1)
+  VALUES (v_mesa_id, v_uid, p_time, 'aguardando', true, now());
+
+  RETURN v_mesa_id;
+END; $$;
+
+-- Entra como jogador 2 e já inicia a partida (atômico, sem corrida).
+CREATE OR REPLACE FUNCTION public.entrar_mesa_futebol(p_mesa_id TEXT, p_time TEXT)
+RETURNS public.mesas_futebol
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid   UUID := auth.uid();
+  v_mesa  public.mesas_futebol;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT m.* INTO v_mesa
+  FROM public.mesas_futebol m
+  WHERE m.mesa_id = p_mesa_id
+  FOR UPDATE;
+
+  IF v_mesa.id IS NULL THEN RAISE EXCEPTION 'mesa inexistente'; END IF;
+
+  -- Reconexão: já sou participante, apenas devolvo o estado atual.
+  IF v_uid = v_mesa.jogador_1_id OR v_uid = v_mesa.jogador_2_id THEN
+    RETURN public.registrar_heartbeat_mesa(p_mesa_id);
+  END IF;
+
+  IF v_mesa.jogador_2_id IS NOT NULL THEN RAISE EXCEPTION 'mesa cheia'; END IF;
+  IF v_mesa.status <> 'aguardando' THEN RAISE EXCEPTION 'mesa indisponivel'; END IF;
+
+  UPDATE public.mesas_futebol m
+     SET jogador_2_id            = v_uid,
+         time_j2                 = p_time,
+         jogador_2_online        = true,
+         ultimo_heartbeat_j2     = now(),
+         jogador_1_online        = true,
+         status                  = 'em_andamento',
+         turno_atual_id          = m.jogador_1_id,   -- 1º turno: dono da mesa
+         iniciado_em             = now(),
+         tempo_restante_segundos = m.duracao_segundos
+   WHERE m.mesa_id = p_mesa_id
+  RETURNING m.* INTO v_mesa;
+
+  RETURN v_mesa;
+END; $$;
+
+-- Função para registrar heartbeat de jogador (manter presença)
+CREATE OR REPLACE FUNCTION public.registrar_heartbeat_mesa(p_mesa_id TEXT)
+RETURNS public.mesas_futebol
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid  UUID := auth.uid();
+  v_mesa public.mesas_futebol;
+BEGIN
+  UPDATE public.mesas_futebol m
+     SET jogador_1_online    = CASE WHEN m.jogador_1_id = v_uid THEN true ELSE m.jogador_1_online END,
+         jogador_2_online    = CASE WHEN m.jogador_2_id = v_uid THEN true ELSE m.jogador_2_online END,
+         ultimo_heartbeat_j1 = CASE WHEN m.jogador_1_id = v_uid THEN now() ELSE m.ultimo_heartbeat_j1 END,
+         ultimo_heartbeat_j2 = CASE WHEN m.jogador_2_id = v_uid THEN now() ELSE m.ultimo_heartbeat_j2 END
+   WHERE m.mesa_id = p_mesa_id
+  RETURNING m.* INTO v_mesa;
+
+  RETURN v_mesa;
+END; $$;
+
+-- ============================================================================
+-- FUNÇÕES PARA CONTROLE DE TURNOS E JOGADAS
+-- ============================================================================
+
+-- Relógio autoritativo (derivado de iniciado_em — não depende de tick)
+CREATE OR REPLACE FUNCTION public.tempo_restante_mesa(p_mesa_id TEXT)
+RETURNS INTEGER
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT GREATEST(
+           0,
+           m.duracao_segundos - FLOOR(EXTRACT(EPOCH FROM (now() - COALESCE(m.iniciado_em, now()))))::INT
+         )
+  FROM public.mesas_futebol m
+  WHERE m.mesa_id = p_mesa_id;
+$$;
+
+-- Sincroniza a coluna e finaliza quem chegou a 00:00. Chamada pelo cron/Edge Function.
+CREATE OR REPLACE FUNCTION public.tick_mesas_futebol()
+RETURNS INTEGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_afetadas INTEGER := 0;
+BEGIN
+  UPDATE public.mesas_futebol m
+     SET tempo_restante_segundos = GREATEST(
+           0, m.duracao_segundos - FLOOR(EXTRACT(EPOCH FROM (now() - m.iniciado_em)))::INT)
+   WHERE m.status = 'em_andamento' AND m.iniciado_em IS NOT NULL;
+
+  UPDATE public.mesas_futebol m
+     SET status             = 'finalizado',
+         motivo_finalizacao = 'tempo_esgotado',
+         turno_atual_id     = NULL,
+         vencedor_id        = CASE
+                                WHEN m.placar_j1 > m.placar_j2 THEN m.jogador_1_id
+                                WHEN m.placar_j2 > m.placar_j1 THEN m.jogador_2_id
+                                ELSE NULL
+                              END
+   WHERE m.status = 'em_andamento'
+     AND m.tempo_restante_segundos <= 0;
+
+  GET DIAGNOSTICS v_afetadas = ROW_COUNT;
+  RETURN v_afetadas;
+END; $$;
+
+-- JOGADA + TROCA DE TURNO (versão sem ambiguidade)
+-- Valida turno no servidor: quem não é da vez recebe exceção.
+CREATE OR REPLACE FUNCTION public.registrar_jogada_mesa(
+  p_mesa_id       TEXT,
+  p_estado_fisico JSONB DEFAULT NULL,
+  p_trocar_turno  BOOLEAN DEFAULT true
+)
+RETURNS public.mesas_futebol
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid        UUID := auth.uid();
+  v_mesa       public.mesas_futebol;
+  v_proximo_id UUID;
+  v_restante   INTEGER;
+BEGIN
+  SELECT m.* INTO v_mesa
+  FROM public.mesas_futebol m
+  WHERE m.mesa_id = p_mesa_id
+  FOR UPDATE;
+
+  IF v_mesa.id IS NULL           THEN RAISE EXCEPTION 'mesa inexistente'; END IF;
+  IF v_mesa.status <> 'em_andamento' THEN RAISE EXCEPTION 'partida nao esta em andamento'; END IF;
+  IF v_uid IS DISTINCT FROM v_mesa.turno_atual_id THEN RAISE EXCEPTION 'nao e seu turno'; END IF;
+
+  v_restante := GREATEST(0, v_mesa.duracao_segundos
+                  - FLOOR(EXTRACT(EPOCH FROM (now() - v_mesa.iniciado_em)))::INT);
+  IF v_restante <= 0 THEN
+    PERFORM public.tick_mesas_futebol();
+    RAISE EXCEPTION 'tempo esgotado';
+  END IF;
+
+  v_proximo_id := CASE
+    WHEN NOT p_trocar_turno THEN v_mesa.turno_atual_id
+    WHEN v_mesa.turno_atual_id = v_mesa.jogador_1_id THEN v_mesa.jogador_2_id
+    ELSE v_mesa.jogador_1_id
+  END;
+
+  UPDATE public.mesas_futebol m
+     SET turno_atual_id          = v_proximo_id,
+         seq_jogada              = m.seq_jogada + 1,
+         estado_fisico           = COALESCE(p_estado_fisico, m.estado_fisico),
+         tempo_restante_segundos = v_restante
+   WHERE m.mesa_id = p_mesa_id
+  RETURNING m.* INTO v_mesa;
+
+  RETURN v_mesa;
+END; $$;
+
+-- Função para registrar gol
+CREATE OR REPLACE FUNCTION public.registrar_gol_mesa(p_mesa_id TEXT, p_jogador_id UUID DEFAULT NULL)
+RETURNS public.mesas_futebol
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_alvo UUID := COALESCE(p_jogador_id, auth.uid());
+  v_mesa public.mesas_futebol;
+BEGIN
+  UPDATE public.mesas_futebol m
+     SET placar_j1 = m.placar_j1 + CASE WHEN m.jogador_1_id = v_alvo THEN 1 ELSE 0 END,
+         placar_j2 = m.placar_j2 + CASE WHEN m.jogador_2_id = v_alvo THEN 1 ELSE 0 END
+   WHERE m.mesa_id = p_mesa_id AND m.status = 'em_andamento'
+  RETURNING m.* INTO v_mesa;
+
+  RETURN v_mesa;
+END; $$;
+
+-- Função para abandonar partida
+CREATE OR REPLACE FUNCTION public.abandonar_partida_mesa(p_mesa_id TEXT)
+RETURNS public.mesas_futebol
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid  UUID := auth.uid();
+  v_mesa public.mesas_futebol;
+BEGIN
+  UPDATE public.mesas_futebol m
+     SET status             = 'finalizado',
+         motivo_finalizacao = 'abandono',
+         turno_atual_id     = NULL,
+         vencedor_id        = CASE WHEN v_uid = m.jogador_1_id THEN m.jogador_2_id ELSE m.jogador_1_id END
+   WHERE m.mesa_id = p_mesa_id AND m.status = 'em_andamento'
+  RETURNING m.* INTO v_mesa;
+
+  RETURN v_mesa;
+END; $$;
+
+-- ============================================================================
+-- GRANTS PARA AS RPCs
+-- ============================================================================
+
+GRANT EXECUTE ON FUNCTION public.criar_mesa_futebol(TEXT)                       TO authenticated;
+GRANT EXECUTE ON FUNCTION public.entrar_mesa_futebol(TEXT, TEXT)                TO authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_jogada_mesa(TEXT, JSONB, BOOLEAN)    TO authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_gol_mesa(TEXT, UUID)                 TO authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_heartbeat_mesa(TEXT)               TO authenticated;
+GRANT EXECUTE ON FUNCTION public.abandonar_partida_mesa(TEXT)                   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.tempo_restante_mesa(TEXT)                      TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.tick_mesas_futebol()                           TO service_role;
+
+-- ============================================================================
+-- REALTIME (Postgres Changes na mesa) + CRON do relógio
+-- ============================================================================
+
+ALTER TABLE public.mesas_futebol REPLICA IDENTITY FULL;
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.mesas_futebol;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Cron: reconcilia o relógio e finaliza partidas expiradas a cada 5s.
+-- (o countdown visual é local e derivado; o cron é a autoridade)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+SELECT cron.unschedule('tick_mesas_futebol') WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'tick_mesas_futebol');
+SELECT cron.schedule('tick_mesas_futebol', '5 seconds', $$SELECT public.tick_mesas_futebol();$$);
+
 NOTIFY pgrst, 'reload schema';

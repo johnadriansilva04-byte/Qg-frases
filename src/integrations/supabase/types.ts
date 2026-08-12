@@ -125,17 +125,6 @@ export type Database = {
           progresso_caminpanha?: Json
           updated_at?: string
         }
-          cores?: string[]
-          time_personalizado?: string
-          abreviacao_time?: string
-          numero_jogador?: number
-          pontos_soberania?: number
-          partidas_jogadas?: number
-          partidas_vencidas?: number
-          progresso_caminpanha?: Json
-          created_at?: string
-          updated_at?: string
-        }
         Relationships: []
       }
       botao_times: {
@@ -270,6 +259,83 @@ export type Database = {
           rodada?: number
           vencedor?: string | null
           finalizada_em?: string | null
+        }
+        Relationships: []
+      }
+      mesas_futebol: {
+        Row: {
+          id: string
+          mesa_id: string
+          jogador_1_id: string
+          jogador_2_id: string | null
+          time_j1: string
+          time_j2: string | null
+          placar_j1: number
+          placar_j2: number
+          turno_atual_id: string | null
+          status: string
+          duracao_segundos: number
+          iniciado_em: string | null
+          tempo_restante_segundos: number
+          seq_jogada: number
+          estado_fisico: Json | null
+          vencedor_id: string | null
+          motivo_finalizacao: string | null
+          jogador_1_online: boolean
+          jogador_2_online: boolean
+          ultimo_heartbeat_j1: string | null
+          ultimo_heartbeat_j2: string | null
+          criado_em: string
+          atualizado_em: string
+        }
+        Insert: {
+          id?: string
+          mesa_id: string
+          jogador_1_id: string
+          jogador_2_id?: string | null
+          time_j1?: string
+          time_j2?: string | null
+          placar_j1?: number
+          placar_j2?: number
+          turno_atual_id?: string | null
+          status?: string
+          duracao_segundos?: number
+          iniciado_em?: string | null
+          tempo_restante_segundos?: number
+          seq_jogada?: number
+          estado_fisico?: Json | null
+          vencedor_id?: string | null
+          motivo_finalizacao?: string | null
+          jogador_1_online?: boolean
+          jogador_2_online?: boolean
+          ultimo_heartbeat_j1?: string | null
+          ultimo_heartbeat_j2?: string | null
+          criado_em?: string
+          atualizado_em?: string
+        }
+        Update: {
+          id?: string
+          mesa_id?: string
+          jogador_1_id?: string
+          jogador_2_id?: string | null
+          time_j1?: string
+          time_j2?: string | null
+          placar_j1?: number
+          placar_j2?: number
+          turno_atual_id?: string | null
+          status?: string
+          duracao_segundos?: number
+          iniciado_em?: string | null
+          tempo_restante_segundos?: number
+          seq_jogada?: number
+          estado_fisico?: Json | null
+          vencedor_id?: string | null
+          motivo_finalizacao?: string | null
+          jogador_1_online?: boolean
+          jogador_2_online?: boolean
+          ultimo_heartbeat_j1?: string | null
+          ultimo_heartbeat_j2?: string | null
+          atualizado_em?: string
         }
         Relationships: []
       }
