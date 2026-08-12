@@ -172,6 +172,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setToast("Campanha excluída com sucesso!");
   };
 
+  const handleSaveCampaign = async () => {
+    if (!perfil?.user_id) {
+      setToast("Faça login para salvar a campanha.");
+      return;
+    }
+
+    // Salvar progresso no Supabase
+    await saveProgressToSupabase(perfil.user_id, progress);
+    
+    // Salvar torneio no Supabase se existir
+    if (tour) {
+      await saveTournamentToSupabase(perfil.user_id, tour);
+    }
+
+    setToast("Campanha salva com sucesso!");
+  };
+
   /* ---------- amistoso ---------- */
   const finishFriendly = (r: MatchResult) => {
     const userIsHome = r.homeId === userTeam.id;
@@ -333,6 +350,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             hasTour={!!tour && tour.phase !== "fim"}
             onResume={() => setScreen("hub")}
             onDeleteCampaign={handleDeleteCampaign}
+            onSaveCampaign={handleSaveCampaign}
           />
         )}
 
@@ -422,6 +440,7 @@ function Menu({
   hasTour,
   onResume,
   onDeleteCampaign,
+  onSaveCampaign,
 }: {
   progress: Progress;
   onFriendly: () => void;
@@ -431,6 +450,7 @@ function Menu({
   hasTour: boolean;
   onResume: () => void;
   onDeleteCampaign: () => void;
+  onSaveCampaign: () => void;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -464,6 +484,14 @@ function Menu({
           title="Continuar campanha"
           desc="Voltar para o torneio em andamento."
           onClick={onResume}
+        />
+      )}
+      {hasTour && (
+        <MenuCard
+          icon={<Shuffle className="size-5" />}
+          title="Salvar campanha"
+          desc="Salva o progresso atual da campanha no servidor."
+          onClick={onSaveCampaign}
         />
       )}
       {hasTour && (
