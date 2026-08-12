@@ -32,6 +32,12 @@ export type UsuarioBotao = {
   progresso_caminpanha: any;
   created_at: string;
   updated_at: string;
+  campeonatos_ganhos: number;
+  gols_feitos: number;
+  gols_sofridos: number;
+  vitorias: number;
+  derrotas: number;
+  empates: number;
 };
 
 export type Lobby = {
@@ -114,13 +120,41 @@ export async function getMeusTimes(userId: string): Promise<TimeBotao[]> {
 
 /* -------------------------------- Usuário -------------------------------- */
 
-export async function getUsuarioAtual(user_id: string): Promise<UsuarioBotao | null> {
+export async function getUsuarioAtual(userId: string): Promise<UsuarioBotao | null> {
   const { data, error } = await supabase
     .from("botao_usuarios")
     .select("*")
-    .eq("user_id", user_id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
+  return data;
+}
+
+export async function criarPerfilSeNaoExistir(userId: string, email: string, nome?: string): Promise<UsuarioBotao | null> {
+  // Primeiro tenta buscar
+  const existente = await getUsuarioAtual(userId);
+  if (existente) return existente;
+
+  // Se não existe, cria
+  const { data, error } = await supabase
+    .from("botao_usuarios")
+    .insert({
+      user_id: userId,
+      email: email,
+      nome: nome || email.split("@")[0],
+      time_personalizado: "Meu Time",
+      abreviacao_time: "MTI",
+      numero_jogador: 10,
+      cores: ["#FF0000", "#00FF00", "#0000FF"],
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error('Erro ao criar perfil:', error);
+    return null;
+  }
+
   return data;
 }
 

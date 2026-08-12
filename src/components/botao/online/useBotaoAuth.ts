@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { buscarPerfil, cachePerfil, limparCache, sair, type Perfil } from "./auth";
+import { criarPerfilSeNaoExistir } from "@/lib/botao/api";
 
 export function useBotaoAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -42,7 +43,7 @@ export function useBotaoAuth() {
         }
         
         console.log('Buscando perfil para usuário:', u.id);
-        const p = await buscarPerfil(u.id);
+        let p = await buscarPerfil(u.id);
         
         if (!vivo) return;
         
@@ -50,8 +51,20 @@ export function useBotaoAuth() {
           console.log('Perfil encontrado:', p.id);
           cachePerfil(p);
         } else {
-          console.log('Perfil não encontrado para usuário:', u.id);
-          limparCache();
+          console.log('Perfil não encontrado para usuário:', u.id, '- criando automaticamente');
+          // Criar perfil automaticamente se usuário estiver logado no Supabase
+          if (u.email) {
+            p = await criarPerfilSeNaoExistir(u.id, u.email, u.user_metadata?.['nome']);
+            if (p) {
+              console.log('Perfil criado automaticamente:', p.id);
+              cachePerfil(p);
+            } else {
+              console.log('Falha ao criar perfil automaticamente');
+              limparCache();
+            }
+          } else {
+            limparCache();
+          }
         }
         
         setPerfil(p);
