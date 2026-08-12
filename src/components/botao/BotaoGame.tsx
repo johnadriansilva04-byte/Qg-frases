@@ -41,10 +41,18 @@ interface BotaoGameProps {
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const { perfil, carregando, logout, aplicarPerfil, recarregar } = useBotaoAuth();
   const [screen, setScreen] = useState<Screen>(() => {
-    // Verificar se o usuário já está logado com Supabase Auth
+    // Carregar tela salva no localStorage
+    const savedScreen = localStorage.getItem('botao_screen') as Screen;
     const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
-    console.log('[BotaoGame] Inicializando screen:', { isLoggedIn, screen: isLoggedIn ? "menu" : "auth" });
-    return isLoggedIn ? "menu" : "auth";
+    
+    // Se não tem tela salva ou usuário não está logado, usar padrão
+    if (!savedScreen || !isLoggedIn) {
+      console.log('[BotaoGame] Inicializando screen:', { isLoggedIn, screen: isLoggedIn ? "menu" : "auth" });
+      return isLoggedIn ? "menu" : "auth";
+    }
+    
+    console.log('[BotaoGame] Restaurando tela salva:', savedScreen);
+    return savedScreen;
   });
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
@@ -70,6 +78,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setScreen("menu");
     }
   }, [perfil, carregando, screen]);
+
+  // Salvar tela atual no localStorage
+  useEffect(() => {
+    localStorage.setItem('botao_screen', screen);
+  }, [screen]);
 
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {
@@ -138,6 +151,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
     await logout();
     setScreen("auth");
+    localStorage.removeItem('botao_screen'); // Limpar tela salva ao fazer logout
     setToast("Você saiu da conta.");
   };
 
