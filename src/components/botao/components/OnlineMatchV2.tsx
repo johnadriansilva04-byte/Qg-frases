@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCw, Users, ArrowLeft, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Campo, type FimDaJogada } from "./Campo";
+import { MatchView } from "./MatchView";
 import { supabase } from "@/integrations/supabase/client";
 import { useJogador } from "@/hooks/useJogador";
 import { useBotaoAuth } from "../online/useBotaoAuth";
+import { createCustomTeam } from "../data/teams";
+import type { Difficulty, MatchResult } from "../types";
 import {
   criarBloco,
   criarLobby,
@@ -158,19 +160,17 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
 
   if (screen === "jogo" && blocoAtual && perfil) {
     return (
-      <main className="px-4 py-6">
-        <MesaOnline
-          bloco={blocoAtual}
-          perfil={perfil}
-          meuTime={meuTime}
-          souJogador1={blocoAtual.jogador1_session === session}
-          onSair={() => {
-            setBlocoId(null);
-            setScreen("lobby-view");
-          }}
-          onVoltarLobby={() => setScreen("lobby-view")}
-        />
-      </main>
+      <MesaOnline
+        bloco={blocoAtual}
+        perfil={perfil}
+        meuTime={meuTime}
+        session={session}
+        onSair={() => {
+          setBlocoId(null);
+          setScreen("lobby-view");
+        }}
+        onVoltarLobby={() => setScreen("lobby-view")}
+      />
     );
   }
 
@@ -395,52 +395,61 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
   );
 }
 
-/** Mesa online: cada jogada parte da formação inicial e o placar vive no banco. */
+/** Mesa online: usa MatchView com interface idêntica ao torneio */
 function MesaOnline({
   bloco,
   perfil,
   meuTime,
-  souJogador1,
+  session,
   onSair,
   onVoltarLobby,
 }: {
   bloco: Bloco;
   perfil: any;
   meuTime: any;
-  souJogador1: boolean;
+  session: string;
   onSair: () => void;
   onVoltarLobby: () => void;
 }) {
   const queryClient = useQueryClient();
   const [salvo, setSalvo] = useState(false);
+  const souJogador1 = bloco.jogador1_session === session;
 
-  // Usar o time personalizado do jogador e criar um time padrão para o oponente
-  const timeA = souJogador1 ? meuTime : {
-    id: "opponent",
-    nome: "Oponente",
-    abreviacao: "OPP",
-    cores: ["#FF0000", "#00FF00", "#0000FF"],
-    pais: "Brasil",
-    liga: "Personalizado",
-    is_personalizado: false,
-    usuario_id: null,
-    created_at: new Date().toISOString(),
-  };
-  const timeB = souJogador1 ? {
-    id: "opponent",
-    nome: "Oponente",
-    abreviacao: "OPP",
-    cores: ["#FF0000", "#00FF00", "#0000FF"],
-    pais: "Brasil",
-    liga: "Personalizado",
-    is_personalizado: false,
-    usuario_id: null,
-    created_at: new Date().toISOString(),
-  } : meuTime;
+  // Converter time personalizado para formato Team do MatchView
+  const userTeam = useMemo(() => {
+    if (!meuTime) return createCustomTeam('custom', 'Meu Time', 'MTI', '#FF0000', '#00FF00', 75);
+    return createCustomTeam(
+      meuTime.id,
+      meuTime.nome,
+      meuTime.abreviacao,
+      meuTime.cores[0],
+      meuTime.cores[1],
+      75
+    );
+  }, [meuTime]);
 
-  const meuLado = souJogador1 ? "A" : "B";
-  const ladoAtivo = bloco.turno === "jogador1" ? "A" : "B";
-  const minhaVez = ladoAtivo === meuLado && bloco.status === "em_jogo";
+  // Criar time para o oponente
+  const opponentTeam = useMemo(() => {
+    return createCustomTeam('opponent', 'Oponente', 'OPP', '#0000FF', '#FFFF00', 75);
+  }, []);
+
+  const homeId = souJogador1 ? userTeam.id : opponentTeam.id;
+  const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
+  const userSide = souJogador1 ? "home" : "away";
+
+  // Calcular jogadas restantes baseado no formato
+  const formato = FORMATOS.find((f) => f.valor === "melhor_de_3") ?? FORMATOS[0];
+  const turns = formato.jogadas;
+
+  const handleFinish = useCallback((result: MatchResult) => {
+    console.log('[MesaOnline] Partida finalizada:', result);
+    onVoltarLobby();
+  }, [onVoltarLobby]);
+
+  const handleQuit = useCallback(() => {
+    console.log('[MesaOnline] Saindo da partida');
+    onSair();
+  }, [onSair]);
 
   // Registra resultado no perfil quando a mesa termina
   useEffect(() => {
@@ -457,78 +466,37 @@ function MesaOnline({
       .catch(() => console.error("Não foi possível salvar o resultado."));
   }, [bloco.status, bloco.vencedor, salvo, perfil, souJogador1, queryClient]);
 
-  const aoFinalizar = async ({ golDe }: FimDaJogada) => {
-    try {
-      if (golDe) {
-        await registrarGolBloco(bloco.id, golDe === "A" ? "jogador1" : "jogador2");
-      }
-      await registrarJogadaBloco(bloco.id);
-      queryClient.invalidateQueries({ queryKey: ["botao_blocos", bloco.lobby_id] });
-    } catch {
-      console.error("Falha ao enviar a jogada.");
-    }
-  };
+  // Sincronização em tempo real do bloco atual
+  useEffect(() => {
+    const canal = supabase
+      .channel(`bloco-${bloco.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "botao_blocos", filter: `id=eq.${bloco.id}` },
+        (payload) => {
+          console.log('[MesaOnline] Bloco atualizado:', payload.new);
+          queryClient.invalidateQueries({ queryKey: ["botao_blocos", bloco.lobby_id] });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [bloco.id, bloco.lobby_id, queryClient]);
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4">
-      <div className="surface flex items-center justify-between gap-3 p-4">
-        <div className="min-w-0">
-          <p className="truncate font-display text-lg leading-tight">
-            {bloco.jogador1_nome} · {timeA.abreviacao}
-          </p>
-          <p className="text-xs text-muted-foreground">{souJogador1 ? "você" : "adversário"}</p>
-        </div>
-        <div className="text-center">
-          <p className="font-display text-3xl leading-none text-primary">
-            {bloco.jogador1_gols} <span className="text-muted-foreground">x</span> {bloco.jogador2_gols}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">{bloco.jogadas_restantes} jogada(s)</p>
-        </div>
-        <div className="min-w-0 text-right">
-          <p className="truncate font-display text-lg leading-tight">
-            {bloco.jogador2_nome ?? "aguardando"} · {timeB.abreviacao}
-          </p>
-          <p className="text-xs text-muted-foreground">{souJogador1 ? "adversário" : "você"}</p>
-        </div>
-      </div>
-
-      <Campo
-        coresA={timeA.cores}
-        coresB={timeB.cores}
-        ladoAtivo={ladoAtivo}
-        ladosControlados={[meuLado]}
-        bloqueado={!minhaVez}
-        resetKey={bloco.jogadas_restantes}
-        onFimDaJogada={aoFinalizar}
-      />
-
-      <div className="surface space-y-1 p-4">
-        <p className="font-display text-lg">
-          {bloco.status === "aguardando"
-            ? "Aguardando um adversário assumir o outro lado…"
-            : bloco.status === "finalizado"
-              ? bloco.vencedor === "empate"
-                ? "Mesa encerrada em empate"
-                : `Vitória de ${bloco.vencedor === "jogador1" ? bloco.jogador1_nome : bloco.jogador2_nome}`
-              : minhaVez
-                ? "Sua vez — arraste um botão para trás e solte"
-                : "Vez do adversário…"}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Online, cada jogada parte da formação inicial e o placar é sincronizado em tempo real.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {bloco.status === "em_jogo" && (
-          <button className="btn-secondary" onClick={() => finalizarBloco(bloco.id, "empate")}>
-            Encerrar mesa
-          </button>
-        )}
-        <button className="btn-ghost" onClick={onVoltarLobby}>
-          Voltar à sala
-        </button>
-      </div>
-    </div>
+    <MatchView
+      homeId={homeId}
+      awayId={awayId}
+      userSide={userSide}
+      difficulty="amador" as Difficulty
+      turns={turns}
+      knockout={false}
+      stageLabel="Partida Online"
+      onFinish={handleFinish}
+      onQuit={handleQuit}
+      isOnline={true}
+      customTeam={userTeam}
+    />
   );
 }
