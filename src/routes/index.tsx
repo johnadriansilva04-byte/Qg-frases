@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, Gamepad2, Sparkles, Cpu, Globe, Rocket, Star } from "lucide-react";
+import { BookOpen, Gamepad2, Sparkles, Cpu, Globe, Rocket, Star, Tv } from "lucide-react";
+import { PracinhaBrasileirao } from "@/components/PracinhaBrasileirao";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -44,6 +45,14 @@ const SECTIONS = [
     link: "/gerador",
     color: "from-green-500 to-emerald-500",
     bgColor: "bg-green-500/10",
+  },
+  {
+    icon: Tv,
+    title: "Pracinha do Brasileirão",
+    description: "Transmissões ao vivo dos jogos do Brasileirão Série A e B",
+    link: "#",
+    color: "from-red-500 to-orange-500",
+    bgColor: "bg-red-500/10",
   },
 ];
 
@@ -105,6 +114,13 @@ function Index() {
               </Link>
             );
           })}
+        </div>
+
+        {/* Módulo Pracinha do Brasileirão */}
+        <div className="w-full max-w-5xl mb-12 md:mb-16">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900/50 backdrop-blur-sm p-6 md:p-8">
+            <PracinhaBrasileirao />
+          </div>
         </div>
 
         {/* Stats */}

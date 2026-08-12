@@ -94,7 +94,8 @@ INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Trigger para criar perfil automaticamente quando usuário é criado no auth
--- Corrigido com tratamento de erro robusto para evitar loop infinito e erro de foreign key
+-- Corrigido para garantir que o time só seja criado se o usuário foi inserido com sucesso
+-- E para evitar duplicatas usando ON CONFLICT
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -108,6 +109,7 @@ DECLARE
   v_abreviacao_time TEXT;
   v_numero_jogador INTEGER;
   v_usuario_id UUID;
+  v_usuario_criado BOOLEAN := FALSE;
 BEGIN
   v_nome := COALESCE(NEW.raw_user_meta_data->>'nome', 'Jogador');
   
@@ -123,7 +125,7 @@ BEGIN
   v_numero_jogador := COALESCE((NEW.raw_user_meta_data->>'numero_jogador')::INTEGER, 10);
   v_usuario_id := NEW.id;
 
-  -- Criar usuário com tratamento de erro
+  -- Criar usuário com ON CONFLICT para evitar duplicatas
   BEGIN
     INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
     VALUES (
@@ -134,37 +136,52 @@ BEGIN
       v_time_personalizado,
       v_abreviacao_time,
       v_numero_jogador
-    );
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      email = EXCLUDED.email,
+      nome = EXCLUDED.nome,
+      cores = EXCLUDED.cores,
+      time_personalizado = EXCLUDED.time_personalizado,
+      abreviacao_time = EXCLUDED.abreviacao_time,
+      numero_jogador = EXCLUDED.numero_jogador,
+      updated_at = now();
     
-    -- Log de sucesso
-    RAISE LOG 'Usuário criado com sucesso: %', v_usuario_id;
+    v_usuario_criado := TRUE;
+    RAISE LOG 'Usuário criado/atualizado com sucesso: %', v_usuario_id;
     
   EXCEPTION WHEN OTHERS THEN
     RAISE LOG 'Erro ao criar usuário %: %', v_usuario_id, SQLERRM;
-    -- Se falhar, ainda assim retorna NEW para não bloquear o auth
+    -- Se falhar, retorna NEW sem tentar criar o time
     RETURN NEW;
   END;
 
-  -- Criar time personalizado automaticamente APENAS se o usuário foi criado
-  BEGIN
-    INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga, is_personalizado, usuario_id)
-    VALUES (
-      'custom-' || v_usuario_id::TEXT,
-      v_time_personalizado,
-      v_abreviacao_time,
-      v_cores,
-      'Brasil',
-      'Personalizado',
-      true,
-      v_usuario_id
-    );
-    
-    RAISE LOG 'Time personalizado criado com sucesso para usuário: %', v_usuario_id;
-    
-  EXCEPTION WHEN OTHERS THEN
-    RAISE LOG 'Erro ao criar time personalizado para usuário %: %', v_usuario_id, SQLERRM;
-    -- Não falha o trigger se o time não for criado
-  END;
+  -- Criar time personalizado automaticamente APENAS se o usuário foi criado com sucesso
+  -- Usar ON CONFLICT para evitar duplicatas
+  IF v_usuario_criado THEN
+    BEGIN
+      INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga, is_personalizado, usuario_id)
+      VALUES (
+        'custom-' || v_usuario_id::TEXT,
+        v_time_personalizado,
+        v_abreviacao_time,
+        v_cores,
+        'Brasil',
+        'Personalizado',
+        true,
+        v_usuario_id
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        nome = EXCLUDED.nome,
+        abreviacao = EXCLUDED.abreviacao,
+        cores = EXCLUDED.cores;
+      
+      RAISE LOG 'Time personalizado criado/atualizado com sucesso para usuário: %', v_usuario_id;
+      
+    EXCEPTION WHEN OTHERS THEN
+      RAISE LOG 'Erro ao criar time personalizado para usuário %: %', v_usuario_id, SQLERRM;
+      -- Não falha o trigger se o time não for criado, mas o usuário já existe
+    END;
+  END IF;
 
   RETURN NEW;
 END;

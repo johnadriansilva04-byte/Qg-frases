@@ -68,8 +68,8 @@ export function useBotaoAuth() {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state change:', event, session?.user?.id);
-      // Ignorar eventos que não precisam de sync completo
-      if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION" || event === "SIGNED_IN") return;
+      // Processar todos os eventos exceto TOKEN_REFRESHED para evitar loops
+      if (event === "TOKEN_REFRESHED") return;
       void sync(session?.user ?? null);
     });
 
