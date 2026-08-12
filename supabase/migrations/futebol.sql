@@ -487,7 +487,7 @@ CREATE TABLE IF NOT EXISTS public.mesas_futebol (
   jogador_2_id             UUID REFERENCES auth.users(id) ON DELETE SET NULL,
 
   time_j1                  TEXT NOT NULL DEFAULT 'MTI',
-  time_j2                  TEXT,
+  time_j2                  TEXT NOT NULL DEFAULT 'MTI',
 
   placar_j1                INTEGER NOT NULL DEFAULT 0,
   placar_j2                INTEGER NOT NULL DEFAULT 0,
@@ -522,6 +522,10 @@ ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS duracao_segundos INTEG
 ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS iniciado_em TIMESTAMPTZ;
 ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS seq_jogada BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS estado_fisico JSONB;
+
+-- Corrigir constraint time_j2 para permitir NULL (já existente)
+ALTER TABLE public.mesas_futebol ALTER COLUMN time_j2 DROP NOT NULL;
+ALTER TABLE public.mesas_futebol ALTER COLUMN time_j2 SET DEFAULT NULL;
 
 -- Índices para mesas_futebol
 CREATE INDEX IF NOT EXISTS idx_mesas_futebol_mesa_id ON public.mesas_futebol(mesa_id);
