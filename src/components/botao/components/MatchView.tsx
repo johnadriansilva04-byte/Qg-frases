@@ -62,6 +62,7 @@ export function MatchView({
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
   const [turnTimer, setTurnTimer] = useState<number | null>(null); // Timer de 10 segundos para jogar
+  const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
 
   const scoreRef = useRef(score);
   scoreRef.current = score;
@@ -195,9 +196,16 @@ export function MatchView({
         setTurn(conceding);
         
         // Bloquear input por 5 segundos após o gol
-        const blockTimer = window.setTimeout(() => {
-          // Timer apenas para bloqueio visual, a lógica já está correta
-        }, 5000);
+        setGoalCooldown(5);
+        const cooldownInterval = setInterval(() => {
+          setGoalCooldown(prev => {
+            if (prev === null || prev <= 1) {
+              clearInterval(cooldownInterval);
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
         
         return;
       }
@@ -278,6 +286,8 @@ export function MatchView({
   const onPointerDown = (e: React.PointerEvent) => {
     // No modo online, só permite input se for o turno do usuário
     if (ended || simRef.current || turn !== userSide) return;
+    // Bloquear input durante cooldown após gol
+    if (goalCooldown !== null) return;
     const { x, y } = toField(e);
     const hit = discsRef.current
       .filter((d) => d.side === userSide)
@@ -352,6 +362,14 @@ export function MatchView({
         {flash && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
             <span className="goal-flash font-display text-4xl sm:text-6xl">{flash}</span>
+          </div>
+        )}
+        {goalCooldown !== null && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <div className="flex flex-col items-center gap-2">
+              <span className="font-display text-2xl sm:text-4xl text-foreground">Tirar bola do meio</span>
+              <span className="font-mono text-3xl sm:text-5xl text-primary">{goalCooldown}</span>
+            </div>
           </div>
         )}
         {pens && (
