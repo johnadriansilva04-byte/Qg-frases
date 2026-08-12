@@ -72,6 +72,12 @@ export type Database = {
           pontos_soberania: number
           partidas_jogadas: number
           partidas_vencidas: number
+          campeonatos_ganhos: number
+          gols_feitos: number
+          gols_sofridos: number
+          vitorias: number
+          derrotas: number
+          empates: number
           progresso_caminpanha: Json
           created_at: string
           updated_at: string
@@ -88,6 +94,12 @@ export type Database = {
           pontos_soberania?: number
           partidas_jogadas?: number
           partidas_vencidas?: number
+          campeonatos_ganhos?: number
+          gols_feitos?: number
+          gols_sofridos?: number
+          vitorias?: number
+          derrotas?: number
+          empates?: number
           progresso_caminpanha?: Json
           created_at?: string
           updated_at?: string
@@ -97,6 +109,22 @@ export type Database = {
           user_id?: string
           email?: string
           nome?: string
+          cores?: string[]
+          time_personalizado?: string
+          abreviacao_time?: string
+          numero_jogador?: number
+          pontos_soberania?: number
+          partidas_jogadas?: number
+          partidas_vencidas?: number
+          campeonatos_ganhos?: number
+          gols_feitos?: number
+          gols_sofridos?: number
+          vitorias?: number
+          derrotas?: number
+          empates?: number
+          progresso_caminpanha?: Json
+          updated_at?: string
+        }
           cores?: string[]
           time_personalizado?: string
           abreviacao_time?: string

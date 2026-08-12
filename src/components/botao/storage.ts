@@ -145,7 +145,7 @@ export async function atualizarPontosSoberania(userId: string, golsFeitos: numbe
 
     const { data: currentData } = await supabase
       .from('botao_usuarios')
-      .select('pontos_soberania, partidas_jogadas, partidas_vencidas')
+      .select('pontos_soberania, partidas_jogadas, partidas_vencidas, gols_feitos, gols_sofridos, vitorias, derrotas, empates')
       .eq('user_id', userId)
       .single();
 
@@ -154,13 +154,21 @@ export async function atualizarPontosSoberania(userId: string, golsFeitos: numbe
     const novosPontos = (currentData.pontos_soberania || 0) + pontosTotais;
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias = vitoria ? (currentData.partidas_vencidas || 0) + 1 : (currentData.partidas_vencidas || 0);
+    const novosGolsFeitos = (currentData.gols_feitos || 0) + golsFeitos;
+    const novosGolsSofridos = (currentData.gols_sofridos || 0) + golsSofridos;
+    const novasVitoriasCount = vitoria ? (currentData.vitorias || 0) + 1 : (currentData.vitorias || 0);
+    const novasDerrotasCount = !vitoria ? (currentData.derrotas || 0) + 1 : (currentData.derrotas || 0);
 
     const { error } = await supabase
       .from('botao_usuarios')
       .update({
         pontos_soberania: novosPontos,
         partidas_jogadas: novasPartidas,
-        partidas_vencidas: novasVitorias
+        partidas_vencidas: novasVitorias,
+        gols_feitos: novosGolsFeitos,
+        gols_sofridos: novosGolsSofridos,
+        vitorias: novasVitoriasCount,
+        derrotas: novasDerrotasCount
       })
       .eq('user_id', userId);
 
@@ -169,6 +177,63 @@ export async function atualizarPontosSoberania(userId: string, golsFeitos: numbe
     console.log('[Pontos] Atualizados:', { pontosTotais, novosPontos, golsFeitos, golsSofridos, vitoria });
   } catch (error) {
     console.error('Erro ao atualizar pontos de soberania:', error);
+  }
+}
+
+export async function atualizarEstatisticasOnline(userId: string, resultado: 'vitoria' | 'derrota' | 'empate', golsFeitos: number, golsSofridos: number, campeonatoGanho: boolean = false) {
+  try {
+    const { data: currentData } = await supabase
+      .from('botao_usuarios')
+      .select('pontos_soberania, partidas_jogadas, partidas_vencidas, campeonatos_ganhos, gols_feitos, gols_sofridos, vitorias, derrotas, empates')
+      .eq('user_id', userId)
+      .single();
+
+    if (!currentData) return;
+
+    // Calcular pontos baseados no resultado
+    let pontosTotais = 0;
+    if (resultado === 'vitoria') {
+      pontosTotais = 10; // +10 pontos por vitória online
+    } else if (resultado === 'empate') {
+      pontosTotais = 0; // 0 pontos por empate
+    } else {
+      pontosTotais = -5; // -5 pontos por derrota
+    }
+
+    // Adicionar pontos pelos gols
+    pontosTotais += golsFeitos * 1;
+    pontosTotais -= golsSofridos * 2;
+
+    const novosPontos = (currentData.pontos_soberania || 0) + pontosTotais;
+    const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
+    const novasVitorias = resultado === 'vitoria' ? (currentData.partidas_vencidas || 0) + 1 : (currentData.partidas_vencidas || 0);
+    const novosCampeonatos = campeonatoGanho ? (currentData.campeonatos_ganhos || 0) + 1 : (currentData.campeonatos_ganhos || 0);
+    const novosGolsFeitos = (currentData.gols_feitos || 0) + golsFeitos;
+    const novosGolsSofridos = (currentData.gols_sofridos || 0) + golsSofridos;
+    const novasVitoriasCount = resultado === 'vitoria' ? (currentData.vitorias || 0) + 1 : (currentData.vitorias || 0);
+    const novasDerrotasCount = resultado === 'derrota' ? (currentData.derrotas || 0) + 1 : (currentData.derrotas || 0);
+    const novosEmpatesCount = resultado === 'empate' ? (currentData.empates || 0) + 1 : (currentData.empates || 0);
+
+    const { error } = await supabase
+      .from('botao_usuarios')
+      .update({
+        pontos_soberania: novosPontos,
+        partidas_jogadas: novasPartidas,
+        partidas_vencidas: novasVitorias,
+        campeonatos_ganhos: novosCampeonatos,
+        gols_feitos: novosGolsFeitos,
+        gols_sofridos: novosGolsSofridos,
+        vitorias: novasVitoriasCount,
+        derrotas: novasDerrotasCount,
+        empates: novosEmpatesCount
+      })
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    console.log('[Estatísticas Online] Atualizadas:', { resultado, pontosTotais, novosPontos, golsFeitos, golsSofridos, campeonatoGanho });
+  } catch (error) {
+    console.error('Erro ao atualizar estatísticas online:', error);
   }
 }
 

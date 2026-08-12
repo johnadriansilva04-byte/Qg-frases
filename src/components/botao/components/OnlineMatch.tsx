@@ -1,30 +1,24 @@
 import { useEffect, useState, useCallback } from "react";
-import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2, User, Lock } from "lucide-react";
+import { Clock, Users, Plus, DoorOpen, Trophy, X, ArrowLeft, Gamepad2, User, Lock, Target } from "lucide-react";
 import { useBotaoOnline } from "@/hooks/useBotaoOnline";
 import { useBotaoAuth } from "../online/useBotaoAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MatchView } from "./MatchView";
+import { atualizarEstatisticasOnline } from "../storage";
 
-type Screen = "login" | "cadastro" | "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
+type Screen = "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
 
 // Chaves para persistência no localStorage
 const STORAGE_KEYS = {
   SCREEN: 'botao_online_screen',
-  NOME: 'botao_online_nome',
-  TELEFONE: 'botao_online_telefone',
   NOME_SALA: 'botao_online_nome_sala',
-  CORES: 'botao_online_cores',
   FORMATO: 'botao_online_formato',
   LOBBY_ID: 'botao_online_lobby_id',
   BLOCO_ID: 'botao_online_bloco_id',
-  LOGGED_IN: 'botao_online_logged_in',
-  TIME_PERSONALIZADO: 'botao_online_time_personalizado',
-  ABREVIACAO_TIME: 'botao_online_abreviacao_time',
-  NUMERO_JOGADOR: 'botao_online_numero_jogador'
 };
 
 export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; onEstadoPartida?: (emPartida: boolean) => void }) {
-  const { logout } = useBotaoAuth();
+  const { logout, perfil } = useBotaoAuth();
   const {
     sessionId,
     lobby,
@@ -51,13 +45,12 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
     error
   } = useBotaoOnline();
 
-  const nome = usuario?.nome || "Jogador";
-  const cores = usuario?.cores || ["#FF0000", "#00FF00", "#0000FF"];
+  const nome = perfil?.nome || usuario?.nome || "Jogador";
+  const cores = perfil?.cores || usuario?.cores || ["#FF0000", "#00FF00", "#0000FF"];
+  const pontosSoberania = perfil?.pontos_soberania || 0;
 
   // Carregar estado persistido
   const [screen, setScreen] = useState<Screen>(() => {
-    const isLoggedIn = localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === 'true';
-    if (!isLoggedIn) return "lobby-list";
     return (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list";
   });
 
@@ -215,6 +208,12 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
     }
   }, [registrarJogada, registrarGol, blocoAtual, sessionId]);
 
+  const handleFimJogo = useCallback(async (resultado: 'vitoria' | 'derrota' | 'empate', golsFeitos: number, golsSofridos: number, campeonatoGanho: boolean = false) => {
+    if (perfil?.user_id) {
+      await atualizarEstatisticasOnline(perfil.user_id, resultado, golsFeitos, golsSofridos, campeonatoGanho);
+    }
+  }, [perfil]);
+
   const handleSair = useCallback(() => {
     sairLobby();
     setScreen('lobby-list');
@@ -225,11 +224,17 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
   };
 
   if (screen === "lobby-list") {
-    console.log('[ONLINE] Renderizando lobby-list', { lobbies: lobbiesDisponiveis.length, loading, error, usuario });
+    console.log('[ONLINE] Renderizando lobby-list', { lobbies: lobbiesDisponiveis.length, loading, error, perfil, pontosSoberania });
     return (
       <div className="panel">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-2xl">Lobbies Online</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="font-display text-2xl">Lobbies Online</h2>
+            <div className="flex items-center gap-2 mt-2">
+              <Trophy className="w-4 h-4 text-yellow-500" />
+              <span className="text-sm font-medium">{pontosSoberania} pontos de soberania</span>
+            </div>
+          </div>
           {onBack && (
             <button onClick={onBack} className="btn-ghost">
               <ArrowLeft className="w-5 h-5" />
@@ -456,10 +461,19 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
   if (screen === "resultado" && blocoAtual) {
     const venceu = blocoAtual.vencedor === (blocoAtual.jogador1_session === sessionId ? 'jogador1' : 'jogador2');
     const souVencedor = venceu || blocoAtual.vencedor === 'empate';
+    const resultado: 'vitoria' | 'derrota' | 'empate' = souVencedor ? (blocoAtual.vencedor === 'empate' ? 'empate' : 'vitoria') : 'derrota';
+    
+    const meusGols = blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador1_gols : blocoAtual.jogador2_gols;
+    const golsOponente = blocoAtual.jogador1_session === sessionId ? blocoAtual.jogador2_gols : blocoAtual.jogador1_gols;
+
+    // Atualizar estatísticas quando entra na tela de resultado
+    useEffect(() => {
+      handleFimJogo(resultado, meusGols, golsOponente, false);
+    }, []);
 
     return (
       <div className="panel text-center">
-        <Trophy className={`w-20 h-20 mx-auto mb-4 ${souVencedor ? 'text-gold' : 'text-muted-foreground'}`} />
+        <Trophy className={`w-20 h-20 mx-auto mb-4 ${souVencedor ? 'text-yellow-500' : 'text-muted-foreground'}`} />
         <h2 className="font-display text-3xl mb-2">
           {souVencedor ? (blocoAtual.vencedor === 'empate' ? "Empate!" : "Vitória!") : "Derrota"}
         </h2>
@@ -467,11 +481,14 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
           Placar final: {blocoAtual.jogador1_gols} - {blocoAtual.jogador2_gols}
         </p>
         
-        {usuario && (
-          <div className="mb-4 p-3 bg-gold/10 rounded-lg">
+        {perfil && (
+          <div className="mb-4 p-3 bg-yellow-500/10 rounded-lg">
             <p className="text-sm">
-              <Trophy className="inline w-4 h-4 mr-1 text-gold" />
+              <Trophy className="inline w-4 h-4 mr-1 text-yellow-500" />
               {souVencedor ? "+10 pontos" : blocoAtual.vencedor === 'empate' ? "+0 pontos" : "-5 pontos"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Total: {pontosSoberania} pontos de soberania
             </p>
           </div>
         )}

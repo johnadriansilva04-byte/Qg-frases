@@ -12,6 +12,12 @@ export type Perfil = {
   pontos_soberania: number;
   partidas_jogadas: number;
   partidas_vencidas: number;
+  campeonatos_ganhos: number;
+  gols_feitos: number;
+  gols_sofridos: number;
+  vitorias: number;
+  derrotas: number;
+  empates: number;
 };
 
 export const CORES_PADRAO = ["#FF0000", "#00FF00", "#0000FF"];
