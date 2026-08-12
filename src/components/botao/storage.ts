@@ -9,12 +9,16 @@ export type Progress = {
   trophies: { difficulty: Difficulty; teamId: string; date: string }[];
   friendlies: { w: number; d: number; l: number };
   tournament?: Tournament;
+  gols_feitos: number;
+  gols_sofridos: number;
 };
 
 const EMPTY: Progress = {
   titles: { amador: 0, profissional: 0, lenda: 0 },
   trophies: [],
   friendlies: { w: 0, d: 0, l: 0 },
+  gols_feitos: 0,
+  gols_sofridos: 0,
 };
 
 export function loadProgress(): Progress {
@@ -128,6 +132,69 @@ export async function loadTournamentFromSupabase(userId: string): Promise<Tourna
     return progress.tournament || null;
   } catch (error) {
     console.error('Erro ao carregar torneio do Supabase:', error);
+    return null;
+  }
+}
+
+export async function atualizarPontosSoberania(userId: string, golsFeitos: number, golsSofridos: number, vitoria: boolean) {
+  try {
+    // Calcular pontos: +1 por gol feito, -2 por gol sofrido, +3 por vitória, -4 por derrota
+    const pontosGols = golsFeitos * 1 + golsSofridos * (-2);
+    const pontosResultado = vitoria ? 3 : -4;
+    const pontosTotais = pontosGols + pontosResultado;
+
+    const { data: currentData } = await supabase
+      .from('botao_usuarios')
+      .select('pontos_soberania, partidas_jogadas, partidas_vencidas')
+      .eq('user_id', userId)
+      .single();
+
+    if (!currentData) return;
+
+    const novosPontos = (currentData.pontos_soberania || 0) + pontosTotais;
+    const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
+    const novasVitorias = vitoria ? (currentData.partidas_vencidas || 0) + 1 : (currentData.partidas_vencidas || 0);
+
+    const { error } = await supabase
+      .from('botao_usuarios')
+      .update({
+        pontos_soberania: novosPontos,
+        partidas_jogadas: novasPartidas,
+        partidas_vencidas: novasVitorias
+      })
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    console.log('[Pontos] Atualizados:', { pontosTotais, novosPontos, golsFeitos, golsSofridos, vitoria });
+  } catch (error) {
+    console.error('Erro ao atualizar pontos de soberania:', error);
+  }
+}
+
+export async function adicionarPontosVideo(userId: string, pontos: number = 5) {
+  try {
+    const { data: currentData } = await supabase
+      .from('botao_usuarios')
+      .select('pontos_soberania')
+      .eq('user_id', userId)
+      .single();
+
+    if (!currentData) return;
+
+    const novosPontos = (currentData.pontos_soberania || 0) + pontos;
+
+    const { error } = await supabase
+      .from('botao_usuarios')
+      .update({ pontos_soberania: novosPontos })
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    console.log('[Pontos] Vídeo assistido:', { pontos, novosPontos });
+    return novosPontos;
+  } catch (error) {
+    console.error('Erro ao adicionar pontos por vídeo:', error);
     return null;
   }
 }

@@ -92,3 +92,29 @@ export function AdVideoSlot() {
     </div>
   );
 }
+
+/** Indicador visual para anúncios com botão de pontos */
+export function AdPointsIndicator({ onWatchVideo }: { onWatchVideo: () => void }) {
+  return (
+    <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-2">
+      <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-3 py-2 backdrop-blur-sm">
+        <div className="flex flex-col items-end">
+          <span className="text-xs text-muted-foreground">Assista vídeo para ganhar</span>
+          <span className="text-sm font-bold text-primary">+5 Pontos</span>
+        </div>
+        <button
+          onClick={onWatchVideo}
+          className="btn-primary px-3 py-1 text-xs"
+        >
+          Assistir
+        </button>
+      </div>
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span>Google automático aqui</span>
+        <svg className="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+        </svg>
+      </div>
+    </div>
+  );
+}

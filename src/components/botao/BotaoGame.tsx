@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
-import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, saveTournament, loadTournament, saveTournamentToSupabase, loadTournamentFromSupabase, type Progress } from "./storage";
+import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, saveTournament, loadTournament, saveTournamentToSupabase, loadTournamentFromSupabase, atualizarPontosSoberania, adicionarPontosVideo, type Progress } from "./storage";
+import { AdPointsIndicator } from "@/components/AdSlot";
 import {
   advanceKnockout,
   applyResult,
@@ -38,7 +39,7 @@ interface BotaoGameProps {
 }
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
-  const { perfil, carregando, logout, aplicarPerfil } = useBotaoAuth();
+  const { perfil, carregando, logout, aplicarPerfil, recarregar } = useBotaoAuth();
   const [screen, setScreen] = useState<Screen>(() => {
     // Verificar se o usuário já está logado com Supabase Auth
     const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
@@ -200,6 +201,25 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setToast("Campanha salva com sucesso!");
   };
 
+  const handleAssistirVideo = async () => {
+    if (!perfil?.user_id) {
+      setToast("Faça login para ganhar pontos assistindo vídeos.");
+      return;
+    }
+    
+    // Simular assistir vídeo (na implementação real, isso seria integrado com AdSense)
+    const novosPontos = await adicionarPontosVideo(perfil.user_id, 5);
+    
+    if (novosPontos !== null) {
+      setToast(`+5 pontos! Você agora tem ${novosPontos} pontos de soberania.`);
+      // Recarregar perfil para atualizar pontos
+      const novoPerfil = await recarregar();
+      if (novoPerfil) {
+        aplicarPerfil(novoPerfil);
+      }
+    }
+  };
+
   /* ---------- amistoso ---------- */
   const finishFriendly = (r: MatchResult) => {
     const userIsHome = r.homeId === userTeam.id;
@@ -209,7 +229,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (gf > ga) f.w++;
     else if (gf < ga) f.l++;
     else f.d++;
-    persist({ ...progress, friendlies: f });
+    
+    // Atualizar gols no progresso
+    const novoProgresso = {
+      ...progress,
+      friendlies: f,
+      gols_feitos: (progress.gols_feitos || 0) + gf,
+      gols_sofridos: (progress.gols_sofridos || 0) + ga
+    };
+    
+    persist(novoProgresso);
+    
+    // Atualizar pontos de soberania se estiver logado
+    if (perfil?.user_id) {
+      const vitoria = gf > ga;
+      atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
+    }
+    
     setToast(gf > ga ? "Vitória no amistoso!" : gf < ga ? "Derrota no amistoso." : "Empate no amistoso.");
     setScreen("menu");
   };
@@ -231,6 +267,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const finishTournamentMatch = (r: MatchResult) => {
     if (!tour || !current) return;
     const t: Tournament = structuredClone(tour);
+
+    const userIsHome = r.homeId === userTeam.id;
+    const gf = userIsHome ? r.homeGoals : r.awayGoals;
+    const ga = userIsHome ? r.awayGoals : r.homeGoals;
 
     if (t.phase === "grupos") {
       const fx = t.groupFixtures.find((x) => x.id === current.id)!;
@@ -278,7 +318,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (t.phase === "fim" && t.champion === t.userTeamId) {
         const titles = { ...progress.titles, [t.difficulty]: progress.titles[t.difficulty] + 1 };
         persist({
-          ...progress,
           titles,
           trophies: [
             ...progress.trophies,
@@ -287,6 +326,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         });
         setToast("CAMPEÃO! Troféu adicionado à sala.");
       }
+    }
+
+    // Atualizar gols no progresso
+    const novoProgresso = {
+      ...progress,
+      gols_feitos: (progress.gols_feitos || 0) + gf,
+      gols_sofridos: (progress.gols_sofridos || 0) + ga
+    };
+    persist(novoProgresso);
+
+    // Atualizar pontos de soberania se estiver logado
+    if (perfil?.user_id) {
+      const vitoria = gf > ga;
+      atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
     }
 
     persistTournament(t);
@@ -346,6 +399,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   return (
     <Shell>
       <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+      {(screen === "menu" || screen === "friendly-setup" || screen === "tournament-setup" || screen === "hub" || screen === "trophies") && perfil && (
+        <AdPointsIndicator onWatchVideo={handleAssistirVideo} />
+      )}
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
         {screen !== "auth" && (
           <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
