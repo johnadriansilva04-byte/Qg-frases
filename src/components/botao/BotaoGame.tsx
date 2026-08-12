@@ -3,7 +3,6 @@ import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } fro
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
 import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, saveTournament, loadTournament, saveTournamentToSupabase, loadTournamentFromSupabase, atualizarPontosSoberania, adicionarPontosVideo, type Progress } from "./storage";
-import { AdPointsIndicator } from "@/components/AdSlot";
 import {
   advanceKnockout,
   applyResult,
@@ -413,9 +412,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   return (
     <Shell>
       <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-      {(screen === "menu" || screen === "friendly-setup" || screen === "tournament-setup" || screen === "hub" || screen === "trophies") && perfil && (
-        <AdPointsIndicator onWatchVideo={handleAssistirVideo} />
-      )}
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
         {screen !== "auth" && (
           <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
