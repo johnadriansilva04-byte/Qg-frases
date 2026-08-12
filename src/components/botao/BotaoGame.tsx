@@ -16,7 +16,7 @@ import {
 } from "./tournament";
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
-import { OnlineMatch } from "./components/OnlineMatch";
+import { OnlineMatchV2 } from "./components/OnlineMatchV2";
 import { AuthScreen } from "./components/AuthScreen";
 import { UserMenu } from "./components/UserMenu";
 import { useBotaoAuth } from "./online/useBotaoAuth";
@@ -372,9 +372,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-        <OnlineMatch
+        <OnlineMatchV2
           onBack={() => setScreen("menu")}
-          onEstadoPartida={setEmPartidaOnline}
         />
       </Shell>
     );
@@ -453,7 +452,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           />
         )}
 
-        {screen === "online" && <OnlineMatch onBack={() => setScreen("menu")} />}
 
         {screen === "tournament-setup" && (
           <Setup
