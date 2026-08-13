@@ -167,8 +167,17 @@ export function useTrilhaPhases() {
     let newCurrentPhase = progress.currentPhase;
     let newCompletedPhases = [...progress.completedPhases];
 
+    console.log('[Trilha Phases] Vitória registrada:', {
+      currentPhase: progress.currentPhase,
+      consecutiveWins: progress.consecutiveWins,
+      newConsecutiveWins,
+      requiredWins: currentPhaseConfig.requiredWins,
+      completedPhases: progress.completedPhases
+    });
+
     // Verifica se completou a fase
     if (newConsecutiveWins >= currentPhaseConfig.requiredWins) {
+      console.log('[Trilha Phases] Fase completada! Avançando...');
       newCompletedPhases.push(progress.currentPhase);
       
       // Avança para próxima fase se existir
@@ -176,6 +185,7 @@ export function useTrilhaPhases() {
       if (nextPhase) {
         newCurrentPhase = nextPhase.id;
         newConsecutiveWins = 0;
+        console.log('[Trilha Phases] Avançou para fase:', newCurrentPhase);
       }
     }
 
@@ -189,6 +199,7 @@ export function useTrilhaPhases() {
       completedPhases: newCompletedPhases,
     };
 
+    console.log('[Trilha Phases] Salvando progresso:', updatedData);
     saveProgress(updatedData);
 
     // Verifica conquistas de troféus

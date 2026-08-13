@@ -56,7 +56,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
       {showRules && <RulesModal onClose={handleCloseRules} />}
       {showTrophies && <TrophiesModal onClose={() => setShowTrophies(false)} phases={phases} />}
       <TrilhaGameBoard
-        key={`${difficulty}-${seed}-${phases.progress.currentPhase}`}
+        key={`${difficulty}-${seed}`}
         difficulty={difficulty}
         onReset={() => setSeed((s) => s + 1)}
         onBack={onBack}
@@ -309,8 +309,10 @@ function TrilhaGameBoard({
       });
       
       // Registrar vitória/derrota no sistema de fases
+      console.log('[TrilhaGame] Resultado:', result, 'Fase atual:', phases.progress.currentPhase);
       if (result === "victory") {
         phases.recordWin();
+        console.log('[TrilhaGame] Vitória registrada, nova fase após delay:', phases.progress.currentPhase);
       } else {
         phases.recordLoss();
       }

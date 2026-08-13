@@ -289,11 +289,20 @@ export function useBotaoOnline() {
 
   // Inscrever em realtime para um bloco
   const inscreverBloco = useCallback((blocoId: string) => {
+    // Não remover canal se já estiver inscrito neste bloco
+    if (channelRef.current && channelRef.current.topic === `bloco-${blocoId}`) {
+      console.log('[ONLINE] Já inscrito no bloco:', blocoId);
+      return;
+    }
+
+    // Remover canal anterior se existir e for diferente
     if (channelRef.current) {
+      console.log('[ONLINE] Removendo canal anterior:', channelRef.current.topic);
       supabase.removeChannel(channelRef.current);
     }
 
     try {
+      console.log('[ONLINE] Inscrevendo no bloco:', blocoId);
       const channel = supabase
         .channel(`bloco-${blocoId}`)
         .on(
@@ -305,10 +314,12 @@ export function useBotaoOnline() {
             filter: `id=eq.${blocoId}`
           },
           (payload: { new: Bloco }) => {
+            console.log('[ONLINE] Bloco atualizado via realtime:', payload.new);
             setBlocoAtual(payload.new);
           }
         )
         .subscribe((status: 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR' | 'SUBSCRIPTION_ERROR') => {
+          console.log('[ONLINE] Status da subscrição do bloco:', status);
           if (status === 'SUBSCRIPTION_ERROR') {
             console.error('[Supabase] Erro na subscrição do bloco:', status);
           }
@@ -355,39 +366,43 @@ export function useBotaoOnline() {
   // Registrar jogada
   const registrarJogada = useCallback(async () => {
     if (!blocoAtual) return;
-    
-    await supabase.rpc('registrar_jogada_bloco', {
+
+    const { error } = await supabase.rpc('registrar_jogada_bloco', {
       p_bloco_id: blocoAtual.id
-    } as any);
+    });
+    if (error) console.error('[ONLINE] Erro ao registrar jogada:', error);
   }, [blocoAtual]);
 
   // Registrar gol
   const registrarGol = useCallback(async (jogador: 'jogador1' | 'jogador2') => {
     if (!blocoAtual) return;
-    
-    await supabase.rpc('registrar_gol_bloco', {
+
+    const { error } = await supabase.rpc('registrar_gol_bloco', {
       p_bloco_id: blocoAtual.id,
       p_jogador: jogador
-    } as any);
+    });
+    if (error) console.error('[ONLINE] Erro ao registrar gol:', error);
   }, [blocoAtual]);
 
   // Forçar troca de turno por timeout
   const forcarTrocaTurno = useCallback(async () => {
     if (!blocoAtual) return;
-    
-    await supabase.rpc('forcar_troca_turno_bloco', {
+
+    const { error } = await supabase.rpc('forcar_troca_turno_bloco', {
       p_bloco_id: blocoAtual.id
-    } as any);
+    });
+    if (error) console.error('[ONLINE] Erro ao forçar troca de turno:', error);
   }, [blocoAtual]);
 
   // Finalizar bloco
   const finalizarBloco = useCallback(async (vencedor: 'jogador1' | 'jogador2' | 'empate') => {
     if (!blocoAtual) return;
-    
-    await supabase.rpc('finalizar_bloco', {
+
+    const { error } = await supabase.rpc('finalizar_bloco', {
       p_bloco_id: blocoAtual.id,
       p_vencedor: vencedor
-    } as any);
+    });
+    if (error) console.error('[ONLINE] Erro ao finalizar bloco:', error);
   }, [blocoAtual]);
 
   // Sair do lobby/bloco

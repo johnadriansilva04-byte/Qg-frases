@@ -613,7 +613,7 @@ function MesaOnline({
 
   return (
     <MatchView
-      key={`${bloco.id}-${currentTurn}`}
+      key={bloco.id}
       homeId={homeId}
       awayId={awayId}
       userSide={userSide}
