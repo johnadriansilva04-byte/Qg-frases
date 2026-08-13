@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react";
 import { AdSlot } from "@/components/AdSlot";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
-import { TrilhaOnlineLobby } from "@/components/trilha/TrilhaOnlineLobby";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 
 export const Route = createFileRoute("/cidadela")({
@@ -26,11 +25,10 @@ export const Route = createFileRoute("/cidadela")({
   component: Cidadela,
 });
 
-type Game = "trilha" | "trilha-online" | "botao" | "dado" | "forca" | "velha" | "snake" | null;
+type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | null;
 
 const GAMES = [
-  { id: "trilha" as Game, label: "Trilha - Modo Carreira", description: "Jogo de estratégia tática offline", icon: Target, status: "disponível" },
-  { id: "trilha-online" as Game, label: "Trilha - Online", description: "Jogue contra outros jogadores", icon: Target, status: "disponível" },
+  { id: "trilha" as Game, label: "Trilha", description: "Jogo de estratégia tática", icon: Target, status: "disponível" },
   { id: "botao" as Game, label: "Futebol de Botão", description: "Campeonato com física realista", icon: Trophy, status: "disponível" },
   { id: "dado" as Game, label: "Dado Virtual", description: "Role o dado da sorte", icon: Dice2, status: "em breve" },
   { id: "forca" as Game, label: "Jogo da Forca", description: "Adivinhe a palavra secreta", icon: Skull, status: "em breve" },
@@ -43,10 +41,6 @@ function Cidadela() {
 
   if (activeGame === "trilha") {
     return <TrilhaGame onBack={() => setActiveGame(null)} />;
-  }
-
-  if (activeGame === "trilha-online") {
-    return <TrilhaOnlineLobby onBack={() => setActiveGame(null)} />;
   }
 
   if (activeGame === "botao") {

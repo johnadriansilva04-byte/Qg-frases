@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, Trophy, Target, BookOpen, X, Award } from "lucide-react";
+import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2 } from "lucide-react";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { GameEndAdModal } from "./GameEndAdModal";
@@ -8,6 +8,7 @@ import { useLocalGame } from "@/hooks/useLocalGame";
 import { useTrilhaPhases } from "@/hooks/useTrilhaChampionship";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
+import { TrilhaOnlineLobby } from "./TrilhaOnlineLobby";
 
 const TUTORIAL_KEY = "trilha_tutorial_seen";
 
@@ -23,6 +24,8 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   });
   const [showRules, setShowRules] = useState(false);
   const [showTrophies, setShowTrophies] = useState(false);
+  const [showModeSelection, setShowModeSelection] = useState(true);
+  const [gameMode, setGameMode] = useState<"career" | "online" | null>(null);
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
 
@@ -50,21 +53,122 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
     localStorage.setItem(TUTORIAL_KEY, "true");
   };
 
+  const handleSelectCareerMode = () => {
+    setGameMode("career");
+    setShowModeSelection(false);
+  };
+
+  const handleSelectOnlineMode = () => {
+    setGameMode("online");
+    setShowModeSelection(false);
+  };
+
+  const handleBackToModeSelection = () => {
+    setGameMode(null);
+    setShowModeSelection(true);
+  };
+
+  // Se estiver no modo online, renderiza o lobby online
+  if (gameMode === "online") {
+    return <TrilhaOnlineLobby onBack={handleBackToModeSelection} />;
+  }
+
   return (
     <>
       {showTutorial && <TutorialModal onStart={handleStartGame} onShowRules={handleShowRules} />}
       {showRules && <RulesModal onClose={handleCloseRules} />}
       {showTrophies && <TrophiesModal onClose={() => setShowTrophies(false)} phases={phases} />}
-      <TrilhaGameBoard
-        key={`${difficulty}-${seed}`}
-        difficulty={difficulty}
-        onReset={() => setSeed((s) => s + 1)}
-        onBack={onBack}
-        phases={phases}
-        currentPhaseConfig={currentPhaseConfig}
-        onShowTrophies={() => setShowTrophies(true)}
-      />
+      {showModeSelection && <ModeSelection onBack={onBack} onSelectCareer={handleSelectCareerMode} onSelectOnline={handleSelectOnlineMode} />}
+      {!showModeSelection && gameMode === "career" && (
+        <TrilhaGameBoard
+          key={`${difficulty}-${seed}`}
+          difficulty={difficulty}
+          onReset={() => setSeed((s) => s + 1)}
+          onBack={handleBackToModeSelection}
+          phases={phases}
+          currentPhaseConfig={currentPhaseConfig}
+          onShowTrophies={() => setShowTrophies(true)}
+        />
+      )}
     </>
+  );
+}
+
+function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack?: () => void; onSelectCareer: () => void; onSelectOnline: () => void }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="texto-marca text-lg sm:text-xl">TRILHA</h2>
+            <p className="text-xs text-muted-foreground">Jogo de estratégia tática da FEB</p>
+          </div>
+        </div>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Voltar à Cidadela</span>
+          </button>
+        ) : null}
+      </header>
+
+      <main className="mx-auto max-w-4xl px-4 py-8">
+        <div className="text-center mb-8">
+          <Target className="h-16 w-16 text-primary mx-auto mb-4" />
+          <h1 className="text-3xl font-bold mb-2">Escolha o Modo de Jogo</h1>
+          <p className="text-muted-foreground">Selecione como você quer jogar Trilha</p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <button
+            onClick={onSelectCareer}
+            className="p-6 bg-muted/50 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/10 transition-all text-left"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-primary/20 rounded-lg">
+                <Trophy className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Modo Carreira</h3>
+                <p className="text-sm text-muted-foreground">Offline</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Jogue contra a IA e avance pelas fases do campeonato. Complete todos os níveis para se tornar o Mestre da Trilha!
+            </p>
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <Gamepad2 className="h-4 w-4" />
+              <span>Sistema de Fases e Troféus</span>
+            </div>
+          </button>
+
+          <button
+            onClick={onSelectOnline}
+            className="p-6 bg-muted/50 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/10 transition-all text-left"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-primary/20 rounded-lg">
+                <Users className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Modo Online</h3>
+                <p className="text-sm text-muted-foreground">Multijogador</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Jogue contra outros jogadores em tempo real. Crie mesas ou entre em partidas já existentes.
+            </p>
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <Users className="h-4 w-4" />
+              <span>Jogue contra oponentes reais</span>
+            </div>
+          </button>
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -284,7 +388,7 @@ function TrilhaGameBoard({
   onReset: () => void;
   onBack?: () => void;
   phases: ReturnType<typeof useTrilhaPhases>;
-  currentPhaseConfig: ReturnType<typeof useTrilhaPhases>["getCurrentPhaseConfig"] | null;
+  currentPhaseConfig: Phase | null;
   onShowTrophies: () => void;
 }) {
   const game = useLocalGame(difficulty, 1);
