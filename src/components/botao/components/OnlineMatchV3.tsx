@@ -356,15 +356,13 @@ function MesaOnline({
           // Partida finalizada
         },
         onFimDeTurno: (payload) => {
-          console.log('[OnlineMatchV3] Recebendo fim_de_turno:', { payload, userId, meuJogador1: souJogador1 });
-          // Atualizar turno se novoTurnoId foi enviado E não é do próprio jogador
-          if (payload.novoTurnoId && payload.jogadorId !== userId) {
+          // Sempre atualizar turno quando receber broadcast com novoTurnoId
+          if (payload.novoTurnoId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
-            console.log('[OnlineMatchV3] Atualizando turno:', { novoTurno, novoTurnoId: payload.novoTurnoId, jogador1Id: mesa.jogador_1_id });
             setCurrentTurn(novoTurno);
           }
-          // Sincronizar contador de jogadas se foi enviado E não é do próprio jogador
-          if (payload.turnsLeft !== undefined && payload.jogadorId !== userId) {
+          // Sempre sincronizar contador de jogadas quando receber
+          if (payload.turnsLeft !== undefined) {
             setTurnsLeft(payload.turnsLeft);
           }
           // Chamar o handler do MatchView se estiver disponível
