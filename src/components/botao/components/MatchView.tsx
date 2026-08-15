@@ -90,10 +90,8 @@ export function MatchView({
     // Verificar se todos os discos e a bola estão em repouso
     const todosParados = discsRef.current.every(d => {
       const velocidade = Math.hypot(d.vx, d.vy);
-      return velocidade < 0.15; // Aumentado de 0.05 para 0.15
+      return velocidade < 0.15;
     });
-
-    console.log('[MatchView] verificarFimDeMovimento:', { todosParados, jogadaEmAndamento: jogadaEmAndamentoRef.current });
 
     if (todosParados && jogadaEmAndamentoRef.current) {
       // Limpar timer de segurança
@@ -109,8 +107,6 @@ export function MatchView({
       });
 
       jogadaEmAndamentoRef.current = false;
-
-      console.log('[MatchView] Enviando posições finais para sincronização');
 
       // Enviar posições finais para sincronização
       if (isOnline && onPlay) {
