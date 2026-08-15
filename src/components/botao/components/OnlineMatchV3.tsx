@@ -370,11 +370,14 @@ function MesaOnline({
   }, [onSair]);
 
   const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => {
+    console.log('[OnlineMatchV3] handlePlay chamado:', { goals, jogadaData, posicoesFinais });
+    
     if (!mesaRef.current) return;
 
     try {
       // Enviar jogada via MesaRealtime com dados reais da física (broadcast imediato)
       if (jogadaData && jogadaData.discId !== "own_goal" && jogadaData.discId !== "goal" && jogadaData.discId !== "pass_turn" && jogadaData.discId !== "no_goal") {
+        console.log('[OnlineMatchV3] Enviando jogada via broadcast');
         await mesaRef.current.enviarJogada({
           id_botao: jogadaData.discId,
           forca: Math.round(jogadaData.power * 100),
@@ -387,6 +390,7 @@ function MesaOnline({
 
       // Se houve gol, registrar o gol e enviar broadcast
       if (goals > 0) {
+        console.log('[OnlineMatchV3] Registrando gol');
         await mesaRef.current.registrarGol();
         await mesaRef.current.enviarGoalScored({
           jogadorId: userId,
@@ -396,6 +400,7 @@ function MesaOnline({
 
       // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
+        console.log('[OnlineMatchV3] Enviando fim de turno e trocando turno');
         // Enviar broadcast das posições finais
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
@@ -414,7 +419,7 @@ function MesaOnline({
         }, { trocarTurno: true, estadoFisico: posicoesFinais });
       }
     } catch (error) {
-      // Erro ao enviar jogada
+      console.error('[OnlineMatchV3] Erro no handlePlay:', error);
     }
   }, [userId, placar, mesa.mesa_id]);
 

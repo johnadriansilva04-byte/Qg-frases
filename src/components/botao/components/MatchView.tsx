@@ -93,6 +93,8 @@ export function MatchView({
       return velocidade < 0.05;
     });
 
+    console.log('[MatchView] verificarFimDeMovimento:', { todosParados, jogadaEmAndamento: jogadaEmAndamentoRef.current });
+
     if (todosParados && jogadaEmAndamentoRef.current) {
       // Limpar timer de segurança
       if (safetyTimerRef.current) {
@@ -107,6 +109,8 @@ export function MatchView({
       });
 
       jogadaEmAndamentoRef.current = false;
+
+      console.log('[MatchView] Enviando posições finais para sincronização');
 
       // Enviar posições finais para sincronização
       if (isOnline && onPlay) {
