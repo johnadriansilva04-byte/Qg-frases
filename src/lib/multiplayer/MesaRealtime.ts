@@ -115,7 +115,10 @@ export class MesaRealtime {
 
   /** Conecta ao canal da mesa: Presence + Broadcast + Postgres Changes. */
   async conectarMesa(): Promise<MesaRow | null> {
-    if (this.conectado) return this.mesa;
+    if (this.conectado) {
+      console.log('[MesaRealtime] Já conectado, ignorando reconexão');
+      return this.mesa;
+    }
     this.conectado = true;
 
     this.canal = this.supabase.channel(`mesa_${this.mesaId}`, {

@@ -311,6 +311,7 @@ function MesaOnline({
 
   // Inicializar MesaRealtime - roda apenas uma vez quando mesa.mesa_id ou userId mudam
   useEffect(() => {
+    console.log('[DEBUG] useEffect MesaRealtime executado:', { userId, mesaId: mesa.mesa_id, mesaRef: mesaRef.current });
     if (!userId || !mesa.mesa_id) return;
 
     const mesaRealtime = new MesaRealtime({
