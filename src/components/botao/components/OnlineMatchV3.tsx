@@ -317,14 +317,18 @@ function MesaOnline({
       userId,
       handlers: {
         onJogadaAdversaria: (jogada) => {
+          console.log('[OnlineMatchV3] Recebendo jogada adversária:', jogada);
           setJogadaAdversaria(jogada);
         },
         onEstado: (m) => {
+          console.log('[OnlineMatchV3] Estado atualizado:', m);
           setPlacar([m.placar_j1, m.placar_j2]);
         },
         onTurno: (meuTurno, turnoAtualId) => {
+          console.log('[OnlineMatchV3] Turno atualizado:', { meuTurno, turnoAtualId, jogador1: mesa.jogador_1_id });
           // Lógica simples: se turno_atual_id == jogador_1_id, então home, senão away
           const novoTurno = turnoAtualId === mesa.jogador_1_id ? "home" : "away";
+          console.log('[OnlineMatchV3] Novo turno calculado:', novoTurno);
           setCurrentTurn(novoTurno);
         },
         onTempo: (segundos) => {

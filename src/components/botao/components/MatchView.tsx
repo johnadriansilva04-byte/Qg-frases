@@ -329,9 +329,12 @@ export function MatchView({
     if (!isOnline || !onJogadaAdversaria) return;
 
     const handleJogadaAdversaria = (jogada: any) => {
+      console.log('[MatchView] Recebendo jogada do adversário:', jogada);
+      
       // Encontrar o disco correspondente
       const disco = discsRef.current.find((d) => d.id === jogada.id_botao);
       if (!disco) {
+        console.error('[MatchView] Disco não encontrado:', jogada.id_botao);
         return;
       }
 
@@ -347,6 +350,8 @@ export function MatchView({
         ix = Math.cos(rad) * forcaNormalizada;
         iy = Math.sin(rad) * forcaNormalizada;
       }
+
+      console.log('[MatchView] Aplicando força ao disco:', { ix, iy });
 
       // Aplicar velocidade ao disco
       disco.vx = ix;
