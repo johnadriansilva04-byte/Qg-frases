@@ -787,6 +787,48 @@ BEGIN
   RETURN v_mesa;
 END; $$;
 
+-- Função para iniciar partida manualmente (usada quando 2 jogadores estão conectados)
+DROP FUNCTION IF EXISTS public.iniciar_partida_mesa(TEXT);
+CREATE OR REPLACE FUNCTION public.iniciar_partida_mesa(p_mesa_id TEXT)
+RETURNS public.mesas_futebol
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid  UUID := auth.uid();
+  v_mesa public.mesas_futebol;
+BEGIN
+  -- Verificar se o usuário é participante da mesa
+  SELECT m.* INTO v_mesa
+  FROM public.mesas_futebol m
+  WHERE m.mesa_id = p_mesa_id
+    AND (m.jogador_1_id = v_uid OR m.jogador_2_id = v_uid)
+  FOR UPDATE;
+
+  IF v_mesa.id IS NULL THEN
+    RAISE EXCEPTION 'mesa inexistente ou usuario nao e participante';
+  END IF;
+
+  IF v_mesa.status <> 'aguardando' THEN
+    RAISE EXCEPTION 'mesa ja esta em andamento ou finalizada';
+  END IF;
+
+  IF v_mesa.jogador_2_id IS NULL THEN
+    RAISE EXCEPTION 'mesa precisa de 2 jogadores para iniciar';
+  END IF;
+
+  -- Iniciar partida: mudar status, definir turno do criador (jogador_1), iniciar relógio
+  UPDATE public.mesas_futebol m
+     SET status                  = 'em_andamento',
+         turno_atual_id          = m.jogador_1_id,  -- Criador começa
+         iniciado_em             = now(),
+         tempo_restante_segundos = m.duracao_segundos,
+         jogador_1_online        = true,
+         jogador_2_online        = true
+   WHERE m.mesa_id = p_mesa_id
+  RETURNING m.* INTO v_mesa;
+
+  RETURN v_mesa;
+END; $$;
+
 -- ============================================================================
 -- GRANTS PARA AS RPCs
 -- ============================================================================
@@ -797,6 +839,7 @@ GRANT EXECUTE ON FUNCTION public.registrar_jogada_mesa(TEXT, JSONB, BOOLEAN)    
 GRANT EXECUTE ON FUNCTION public.registrar_gol_mesa(TEXT, UUID)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.registrar_heartbeat_mesa(TEXT)               TO authenticated;
 GRANT EXECUTE ON FUNCTION public.abandonar_partida_mesa(TEXT)                   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.iniciar_partida_mesa(TEXT)                     TO authenticated;
 GRANT EXECUTE ON FUNCTION public.tempo_restante_mesa(TEXT)                      TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.tick_mesas_futebol()                           TO service_role;
 

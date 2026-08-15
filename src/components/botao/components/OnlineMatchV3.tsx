@@ -411,9 +411,22 @@ function MesaOnline({
       return;
     }
     console.log('[MesaOnline] Iniciando partida com 2 jogadores...');
-    // Aqui você pode chamar uma RPC para mudar o status da mesa para "em_andamento"
-    // Por enquanto, vamos apenas marcar como iniciada localmente
-    setPartidaIniciada(true);
+
+    try {
+      const { data, error } = await supabase.rpc('iniciar_partida_mesa', {
+        p_mesa_id: mesa.mesa_id
+      });
+
+      if (error) {
+        console.error('[MesaOnline] Erro ao iniciar partida:', error);
+        return;
+      }
+
+      console.log('[MesaOnline] Partida iniciada com sucesso:', data);
+      setPartidaIniciada(true);
+    } catch (error) {
+      console.error('[MesaOnline] Erro ao iniciar partida:', error);
+    }
   };
 
   // Mostrar tela de espera se não tiver 2 jogadores conectados
