@@ -311,12 +311,8 @@ export function MatchView({
       disco.vx = ix;
       disco.vy = iy;
 
-      // Iniciar simulação após um pequeno delay para garantir que o estado esteja pronto
-      setTimeout(() => {
-        if (!simRef.current) {
-          runSimulation();
-        }
-      }, 50);
+      // Iniciar simulação imediatamente
+      runSimulation();
     };
 
     // Registrar o handler
@@ -534,16 +530,16 @@ export function MatchView({
       <div ref={wrapRef} className="relative">
         <canvas
           ref={canvasRef}
-          className={`pitch-canvas w-full touch-none select-none ${isOnline && turn !== userSide ? 'opacity-60' : ''}`}
+          className={`pitch-canvas w-full touch-none select-none`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         />
         {isOnline && turn !== userSide && !ended && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/20">
-            <div className="bg-background/90 px-6 py-3 rounded-lg shadow-lg">
-              <p className="font-display text-lg text-foreground">Aguardando jogada do oponente...</p>
+          <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2">
+            <div className="bg-black/70 px-3 py-1 rounded-full">
+              <p className="font-display text-xs text-white">Aguardando oponente...</p>
             </div>
           </div>
         )}
