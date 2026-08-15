@@ -417,15 +417,16 @@ function MesaOnline({
           jogadorId: userId,
         });
         
-        // Trocar o turno no banco (após parada confirmada)
-        await mesaRef.current.enviarJogada({
-          id_botao: "no_goal",
-          forca: 0,
-          forca_x: 0,
-          forca_y: 0,
-          angulo: 0,
-          origem: { x: 0, y: 0 },
-        }, { trocarTurno: true, estadoFisico: posicoesFinais });
+        // Trocar o turno no banco chamando RPC diretamente (sem broadcast)
+        const { data, error } = await supabase.rpc("registrar_jogada_mesa", {
+          p_mesa_id: mesa.mesa_id,
+          p_estado_fisico: posicoesFinais as never,
+          p_trocar_turno: true,
+        });
+        
+        if (error) {
+          console.error('[OnlineMatchV3] Erro ao trocar turno:', error);
+        }
       }
     } catch (error) {
       // Erro ao enviar jogada
