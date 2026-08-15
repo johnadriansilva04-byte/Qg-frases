@@ -355,9 +355,11 @@ function MesaOnline({
           // Partida finalizada
         },
         onFimDeTurno: (payload) => {
+          console.log('[DEBUG] Recebendo fim de turno:', payload);
           // Atualizar turno se novoTurnoId foi enviado
           if (payload.novoTurnoId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
+            console.log('[DEBUG] Atualizando turno para:', novoTurno, 'userId:', userId);
             setCurrentTurn(novoTurno);
           }
           // Chamar o handler do MatchView se estiver disponível
@@ -414,6 +416,8 @@ function MesaOnline({
         const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
         const proximoTurnoSide = proximoTurno === mesa.jogador_1_id ? 'home' : 'away';
         
+        console.log('[DEBUG] Enviando fim de turno:', { proximoTurno, proximoTurnoSide, userId });
+        
         // Enviar broadcast das posições finais E do novo turno
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
@@ -424,6 +428,7 @@ function MesaOnline({
         
         // Atualizar turno localmente
         setCurrentTurn(proximoTurnoSide);
+        console.log('[DEBUG] Turno atualizado localmente para:', proximoTurnoSide);
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
