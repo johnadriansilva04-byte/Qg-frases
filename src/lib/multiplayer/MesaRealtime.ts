@@ -244,11 +244,11 @@ export class MesaRealtime {
     // 1) adversário vê o chute na hora
     await this.canal?.send({ type: "broadcast", event: "jogada", payload });
 
-    // 2) servidor valida turno e alterna (fonte da verdade)
+    // 2) servidor valida turno mas NÃO alterna automaticamente (a troca será feita após parada)
     const { data, error } = await this.supabase.rpc("registrar_jogada_mesa", {
       p_mesa_id: this.mesaId,
       p_estado_fisico: (opts.estadoFisico ?? null) as never,
-      p_trocar_turno: opts.trocarTurno ?? true,
+      p_trocar_turno: false, // NÃO trocar turno automaticamente
     });
 
     if (error) {

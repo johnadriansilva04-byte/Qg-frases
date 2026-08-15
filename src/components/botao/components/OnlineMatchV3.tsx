@@ -373,7 +373,7 @@ function MesaOnline({
     if (!mesaRef.current) return;
 
     try {
-      // Enviar jogada via MesaRealtime com dados reais da física
+      // Enviar jogada via MesaRealtime com dados reais da física (broadcast imediato)
       if (jogadaData && jogadaData.discId !== "own_goal" && jogadaData.discId !== "goal" && jogadaData.discId !== "pass_turn" && jogadaData.discId !== "no_goal") {
         await mesaRef.current.enviarJogada({
           id_botao: jogadaData.discId,
@@ -381,32 +381,39 @@ function MesaOnline({
           forca_x: jogadaData.ix,
           forca_y: jogadaData.iy,
           angulo: Math.round(Math.atan2(jogadaData.iy, jogadaData.ix) * (180 / Math.PI)),
-          origem: { x: 0, y: 0 }, // Será preenchido pela posição real do disco
+          origem: { x: 0, y: 0 },
         });
       }
 
       // Se houve gol, registrar o gol e enviar broadcast
       if (goals > 0) {
         await mesaRef.current.registrarGol();
-        // Enviar broadcast do gol para atualizar placar instantaneamente
         await mesaRef.current.enviarGoalScored({
           jogadorId: userId,
           placar: { home: placar[0], away: placar[1] },
         });
       }
 
-      // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno
+      // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno E trocar turno no banco
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
+        // Enviar broadcast das posições finais
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
           bola: posicoesFinais.bola,
           jogadorId: userId,
         });
+        
+        // AGORA SIM trocar o turno no banco (após parada confirmada)
+        await supabase.rpc("registrar_jogada_mesa", {
+          p_mesa_id: mesa.mesa_id,
+          p_estado_fisico: posicoesFinais as never,
+          p_trocar_turno: true, // Trocar turno agora
+        });
       }
     } catch (error) {
       // Erro ao enviar jogada
     }
-  }, [userId, placar]);
+  }, [userId, placar, mesa.mesa_id]);
 
   const handleQuit = useCallback(() => {
     if (mesaRef.current) {

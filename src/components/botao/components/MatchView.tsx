@@ -80,9 +80,45 @@ export function MatchView({
   const turnsRef = useRef(turnsLeft);
   turnsRef.current = turnsLeft;
   const endedRef = useRef(false);
-  const scoreHistoryRef = useRef<{ home: number; away: number }[]>([{ home: 0, away: 0 }]);
-  const turnsHistoryRef = useRef<number[]>([turns]);
-  const turnHistoryRef = useRef<Side[]>([initialTurn || "home"]);
+  const historyRef = useRef<any[]>([]);
+  const scoreHistoryRef = useRef<any[]>([]);
+  const turnsHistoryRef = useRef<number[]>([]);
+  const turnHistoryRef = useRef<Side[]>([]);
+  const safetyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const jogadaEmAndamentoRef = useRef(false);
+
+  const verificarFimDeMovimento = useCallback(() => {
+    // Verificar se todos os discos e a bola estão em repouso
+    const todosParados = discsRef.current.every(d => {
+      const velocidade = Math.hypot(d.vx, d.vy);
+      return velocidade < 0.05;
+    });
+
+    if (todosParados && jogadaEmAndamentoRef.current) {
+      // Limpar timer de segurança
+      if (safetyTimerRef.current) {
+        clearTimeout(safetyTimerRef.current);
+        safetyTimerRef.current = null;
+      }
+
+      // Congelar posições finais
+      discsRef.current.forEach(d => {
+        d.vx = 0;
+        d.vy = 0;
+      });
+
+      jogadaEmAndamentoRef.current = false;
+
+      // Enviar posições finais para sincronização
+      if (isOnline && onPlay) {
+        const posicoesFinais = {
+          discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
+          bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
+        };
+        onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
+      }
+    }
+  }, [isOnline, onPlay]);
 
   // Sincronizar turno com initialTurn quando mudar (modo online)
   // APENAS atualiza a flag de interatividade, não reinicializa o jogo
@@ -186,6 +222,12 @@ export function MatchView({
       }
       frames++;
       const moving = discsRef.current.some((d) => d.vx !== 0 || d.vy !== 0);
+      
+      // Verificar fim de movimento no modo online
+      if (isOnline && moving && jogadaEmAndamentoRef.current) {
+        verificarFimDeMovimento();
+      }
+      
       if (goal) {
         const next = { ...scoreRef.current, [goal]: scoreRef.current[goal] + 1 };
         setScore(next);
@@ -456,7 +498,34 @@ export function MatchView({
     d.vx = ix;
     d.vy = iy;
 
-    // No modo online, passar dados da jogada para sincronização
+    // Marcar jogada como em andamento
+    jogadaEmAndamentoRef.current = true;
+
+    // Iniciar timer de segurança de 6 segundos
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+    }
+    safetyTimerRef.current = setTimeout(() => {
+      // Forçar parada após 6 segundos
+      if (jogadaEmAndamentoRef.current) {
+        discsRef.current.forEach(disc => {
+          disc.vx = 0;
+          disc.vy = 0;
+        });
+        jogadaEmAndamentoRef.current = false;
+        
+        // Enviar posições finais mesmo com timeout
+        if (isOnline && onPlay) {
+          const posicoesFinais = {
+            discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
+            bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
+          };
+          onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
+        }
+      }
+    }, 6000);
+
+    // No modo online, enviar broadcast imediato da jogada com vetor de força
     if (isOnline && onPlay) {
       onPlay(0, { discId: d.id, ix, iy, power });
     }
