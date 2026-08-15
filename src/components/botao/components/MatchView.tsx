@@ -127,6 +127,7 @@ export function MatchView({
   // Sincronizar turno com initialTurn quando mudar (modo online)
   // APENAS atualiza a flag de interatividade, não reinicializa o jogo
   useEffect(() => {
+    console.log('[DEBUG] useEffect turno executado:', { initialTurn, isOnline, initialized: initializedRef.current, ended: endedRef.current });
     if (initialTurn && isOnline && !initializedRef.current) {
       // Primeira inicialização
       turnRef.current = initialTurn;
