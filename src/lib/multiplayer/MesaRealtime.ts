@@ -108,7 +108,7 @@ export class MesaRealtime {
     if (this.conectado) return this.mesa;
     this.conectado = true;
 
-    this.canal = this.supabase.channel(`mesa:${this.mesaId}`, {
+    this.canal = this.supabase.channel(`mesa_${this.mesaId}`, {
       config: {
         presence: { key: this.userId },
         broadcast: { self: false, ack: false },
