@@ -357,8 +357,8 @@ function MesaOnline({
         },
         onFimDeTurno: (payload) => {
           console.log('[DEBUG] Recebendo fim de turno:', payload);
-          // Atualizar turno se novoTurnoId foi enviado
-          if (payload.novoTurnoId) {
+          // Atualizar turno se novoTurnoId foi enviado E não é do próprio jogador
+          if (payload.novoTurnoId && payload.jogadorId !== userId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
             console.log('[DEBUG] Atualizando turno para:', novoTurno, 'userId:', userId);
             setCurrentTurn(novoTurno);
