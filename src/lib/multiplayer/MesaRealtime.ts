@@ -130,25 +130,21 @@ export class MesaRealtime {
       if (!j || j.autor_id === this.userId) return;
       if (j.seq <= this.ultimaSeqRecebida) return; // fora de ordem / duplicada
       this.ultimaSeqRecebida = j.seq;
-      console.log('[MesaRealtime] Jogada do adversário recebida:', j);
       this.h.onJogadaAdversaria?.(j);
     });
 
     // 1.1) sincronização de posições finais após movimento
     this.canal.on("broadcast", { event: "sync_positions" }, ({ payload }) => {
-      console.log('[MesaRealtime] Sync positions recebido:', payload);
       this.h.onSyncPositions?.(payload as any);
     });
 
     // 1.2) gol marcado
     this.canal.on("broadcast", { event: "goal_scored" }, ({ payload }) => {
-      console.log('[MesaRealtime] Goal scored recebido:', payload);
       this.h.onGoalScored?.(payload as any);
     });
 
     // 1.3) fim de turno - sincronização de posições finais
     this.canal.on("broadcast", { event: "fim_de_turno" }, ({ payload }) => {
-      console.log('[MesaRealtime] Fim de turno recebido:', payload);
       this.h.onFimDeTurno?.(payload as any);
     });
 
@@ -168,8 +164,6 @@ export class MesaRealtime {
     this.canal.on("presence", { event: "sync" }, () => {
       const estado = this.canal?.presenceState() ?? {};
       const presentes = Object.keys(estado);
-      console.log('[MesaRealtime] Presence sync - jogadores conectados:', presentes);
-      console.log('[MesaRealtime] Estado completo do presence:', estado);
 
       // Determinar meu número de jogador baseado na ordem de entrada
       const meuIndice = presentes.indexOf(this.userId);
@@ -181,17 +175,13 @@ export class MesaRealtime {
 
       // Notificar sobre oponente
       const ids = presentes.filter((k) => k !== this.userId);
-      console.log('[MesaRealtime] Oponentes detectados:', ids);
       this.h.onOponente?.(ids.length > 0, ids[0] ?? null);
 
       // Quando tiver 2 jogadores conectados, notificar para permitir início da partida
       if (presentes.length === 2) {
         const jogador1Id = presentes[0]!;
         const jogador2Id = presentes[1]!;
-        console.log('[MesaRealtime] 2 jogadores conectados!', { jogador1Id, jogador2Id, meuNumero: this.meuNumeroJogador });
         this.h.onDoisJogadoresConectados?.(jogador1Id, jogador2Id);
-      } else {
-        console.log('[MesaRealtime] Apenas', presentes.length, 'jogador(es) conectado(s)');
       }
     });
 
@@ -281,13 +271,11 @@ export class MesaRealtime {
 
   /** Envia sincronização de posições finais após movimento (broadcast) */
   async enviarSyncPositions(payload: { discos: any[]; bola: any }) {
-    console.log('[MesaRealtime] Enviando sync_positions:', payload);
     await this.canal?.send({ type: "broadcast", event: "sync_positions", payload });
   }
 
   /** Envia evento de gol marcado (broadcast) */
   async enviarGoalScored(payload: { jogadorId: string; placar: { home: number; away: number } }) {
-    console.log('[MesaRealtime] Enviando goal_scored:', payload);
     await this.canal?.send({ type: "broadcast", event: "goal_scored", payload });
   }
 
@@ -297,7 +285,6 @@ export class MesaRealtime {
     bola: { x: number; y: number };
     jogadorId: string;
   }) {
-    console.log('[MesaRealtime] Enviando fim_de_turno:', payload);
     await this.canal?.send({ type: "broadcast", event: "fim_de_turno", payload });
   }
 
@@ -395,20 +382,11 @@ export class MesaRealtime {
 
   private iniciarRelogio() {
     if (this.timerRelogio) return;
-    console.log('[MesaRealtime] Iniciando relógio...');
     this.timerRelogio = setInterval(() => {
       if (!this.mesa || this.mesa.status !== "em_andamento") {
-        console.log('[MesaRealtime] Relógio pausado - mesa não está em andamento');
         return;
       }
       const tempo = this.tempoRestante();
-      
-      // Log apenas a cada 60 segundos ou nos últimos 10 segundos
-      const deveLogar = tempo % 60 === 0 || tempo <= 10;
-      if (deveLogar) {
-        console.log('[MesaRealtime] Tick do relógio:', tempo, 'segundos');
-      }
-      
       this.h.onTempo?.(tempo);
     }, 1000);
   }

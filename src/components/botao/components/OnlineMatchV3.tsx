@@ -60,9 +60,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
           if (isParticipant) {
             setMesaId(savedMesaId);
             setScreen(savedScreen);
-            console.log('[OnlineMatchV3] Sessão restaurada:', { mesaId: savedMesaId, status: mesa.status });
           } else {
-            console.log('[OnlineMatchV3] Usuário não é participante da mesa, limpando persistência');
             limparPersistencia();
             setScreen("lobby-list");
           }
@@ -120,7 +118,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
       recarregarMesas();
     },
     onError: (error) => {
-      console.error('[OnlineMatchV3] Erro ao criar mesa:', error);
+      // Silenciar erro
     },
   });
 
@@ -136,7 +134,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
       recarregarMesas();
     },
     onError: (error) => {
-      console.error('[OnlineMatchV3] Erro ao entrar na mesa:', error);
+      // Silenciar erro
     },
   });
 
@@ -258,7 +256,7 @@ function MesaOnline({
   userId: string;
   onSair: () => void;
 }) {
-  const [currentTurn, setCurrentTurn] = useState<"home" | "away">("home");
+  const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
   const [oponenteOnline, setOponenteOnline] = useState(false);
@@ -266,8 +264,6 @@ function MesaOnline({
   const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(mesa.status === "em_andamento" || (mesa.jogador_2_id !== null)); // Se já tiver 2 jogadores ou estiver em andamento
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
   const mesaRef = useRef<MesaRealtime | null>(null);
-
-  console.log('[MesaOnline] Estado inicial:', { tempoRestante, status: mesa.status, iniciado_em: mesa.iniciado_em, jogador2: mesa.jogador_2_id });
 
   const souJogador1 = mesa.jogador_1_id === userId;
   const userTeam = useMemo(() => {
@@ -321,17 +317,14 @@ function MesaOnline({
       userId,
       handlers: {
         onJogadaAdversaria: (jogada) => {
-          console.log('[MesaOnline] Jogada do adversário:', jogada);
           setJogadaAdversaria(jogada);
         },
         onEstado: (m) => {
           setPlacar([m.placar_j1, m.placar_j2]);
         },
         onTurno: (meuTurno, turnoAtualId) => {
-          console.log('[MesaOnline] Turno atualizado:', { meuTurno, turnoAtualId, userSide, souJogador1 });
-          // Se é meu turno, seto para meu lado. Se não, seto para o lado oposto
-          const novoTurno = meuTurno ? userSide : (userSide === "home" ? "away" : "home");
-          console.log('[MesaOnline] Novo turno:', novoTurno);
+          // Lógica simples: se turno_atual_id == jogador_1_id, então home, senão away
+          const novoTurno = turnoAtualId === mesa.jogador_1_id ? "home" : "away";
           setCurrentTurn(novoTurno);
         },
         onTempo: (segundos) => {
@@ -341,30 +334,25 @@ function MesaOnline({
           setOponenteOnline(online);
         },
         onDoisJogadoresConectados: (jogador1Id, jogador2Id) => {
-          console.log('[MesaOnline] 2 jogadores conectados:', { jogador1Id, jogador2Id });
           setDoisJogadoresConectados(true);
         },
         onSyncPositions: (payload) => {
-          console.log('[MesaOnline] Sync positions recebido:', payload);
           // Será aplicado no MatchView via callback
         },
         onGoalScored: (payload) => {
-          console.log('[MesaOnline] Goal scored recebido:', payload);
           setPlacar([payload.placar.home, payload.placar.away]);
         },
         onPartidaIniciada: (m) => {
-          console.log('[MesaOnline] Partida iniciada:', m);
           setPartidaIniciada(true);
         },
         onPartidaFinalizada: (m) => {
-          console.log('[MesaOnline] Partida finalizada:', m);
+          // Partida finalizada
         },
         onFimDeTurno: (payload) => {
-          console.log('[MesaOnline] Fim de turno recebido:', payload);
           // Será aplicado no MatchView via callback
         },
         onErro: (erro) => {
-          console.error('[MesaOnline] Erro:', erro);
+          // Erro
         },
       },
     });
@@ -378,7 +366,6 @@ function MesaOnline({
   }, [userId, mesa.mesa_id, userSide]);
 
   const handleFinish = useCallback((result: MatchResult) => {
-    console.log('[MesaOnline] Partida finalizada:', result);
     onSair();
   }, [onSair]);
 
@@ -417,12 +404,11 @@ function MesaOnline({
         });
       }
     } catch (error) {
-      console.error('[MesaOnline] Erro ao enviar jogada:', error);
+      // Erro ao enviar jogada
     }
   }, [userId, placar]);
 
   const handleQuit = useCallback(() => {
-    console.log('[MesaOnline] Saindo da partida');
     if (mesaRef.current) {
       mesaRef.current.desconectar(true);
     }
@@ -434,10 +420,8 @@ function MesaOnline({
   const iniciarPartida = async () => {
     if (!mesaRef.current) return;
     if (!doisJogadoresConectados) {
-      console.error('[MesaOnline] Tentando iniciar partida sem 2 jogadores!');
       return;
     }
-    console.log('[MesaOnline] Iniciando partida com 2 jogadores...');
 
     try {
       const { data, error } = await supabase.rpc('iniciar_partida_mesa', {
@@ -445,14 +429,12 @@ function MesaOnline({
       });
 
       if (error) {
-        console.error('[MesaOnline] Erro ao iniciar partida:', error);
         return;
       }
 
-      console.log('[MesaOnline] Partida iniciada com sucesso:', data);
       setPartidaIniciada(true);
     } catch (error) {
-      console.error('[MesaOnline] Erro ao iniciar partida:', error);
+      // Erro ao iniciar partida
     }
   };
 
@@ -540,11 +522,9 @@ function MesaOnline({
         onPlay={handlePlay}
         initialTurn={currentTurn}
         onJogadaAdversaria={(jogada) => {
-          console.log('[MesaOnline] Recebendo jogada do adversário no MatchView:', jogada);
           // Aplicar jogada na física do MatchView
         }}
         onFimDeTurno={(handler) => {
-          console.log('[MesaOnline] Registrando handler de fim de turno no MatchView');
           // O handler será chamado pelo MatchView quando receber posições finais
         }}
       />

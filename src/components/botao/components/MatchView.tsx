@@ -288,12 +288,9 @@ export function MatchView({
     if (!isOnline || !onJogadaAdversaria) return;
 
     const handleJogadaAdversaria = (jogada: any) => {
-      console.log('[MatchView] Recebendo jogada do adversário:', jogada);
-      
       // Encontrar o disco correspondente
       const disco = discsRef.current.find((d) => d.id === jogada.id_botao);
       if (!disco) {
-        console.error('[MatchView] Disco não encontrado:', jogada.id_botao);
         return;
       }
 
@@ -331,8 +328,6 @@ export function MatchView({
     if (!isOnline || !onFimDeTurno) return;
 
     const handleFimDeTurno = (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => {
-      console.log('[MatchView] Recebendo fim de turno com posições finais:', payload);
-      
       // Aplicar posições finais aos discos
       payload.discos.forEach(discoFinal => {
         const discoLocal = discsRef.current.find((d) => d.id === discoFinal.id);
@@ -424,7 +419,6 @@ export function MatchView({
     if (ended || simRef.current) return;
     if (!isOnline && turn !== userSide) return;
     if (isOnline && turn !== userSide) {
-      console.log('[MatchView] Input bloqueado - não é seu turno', { turn, userSide, isOnline });
       return; // Input bloqueado - não é seu turno
     }
     // Bloquear input durante cooldown após gol
