@@ -534,7 +534,7 @@ function MesaOnline({
       </div>
 
       <MatchView
-        key={`${mesa.id}-${currentTurn}`}
+        key={mesa.id}
         homeId={homeId}
         awayId={awayId}
         userSide={userSide}
