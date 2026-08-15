@@ -360,11 +360,20 @@ function MesaOnline({
         },
         onFimDeTurno: (payload) => {
           console.log('[OnlineMatchV3] Recebendo fim de turno:', payload);
+          console.log('[OnlineMatchV3] Meu userId:', userId, 'Meu userSide:', userSide);
+          
           // Atualizar turno se novoTurnoId foi enviado
           if (payload.novoTurnoId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
-            console.log('[OnlineMatchV3] Atualizando turno via broadcast:', novoTurno);
+            console.log('[OnlineMatchV3] Atualizando turno via broadcast:', {
+              novoTurnoId: payload.novoTurnoId,
+              novoTurno,
+              userSide,
+              jogador1Id: mesa.jogador_1_id,
+              jogador2Id: mesa.jogador_2_id
+            });
             setCurrentTurn(novoTurno);
+            console.log('[OnlineMatchV3] Turno recebido no cliente:', novoTurno, 'Meu lado:', userSide);
           }
           // Chamar o handler do MatchView se estiver disponível
           if (fimDeTurnoHandlerRef.current) {
@@ -418,6 +427,14 @@ function MesaOnline({
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
         // Calcular próximo turno
         const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
+        const proximoTurnoSide = proximoTurno === mesa.jogador_1_id ? 'home' : 'away';
+        
+        console.log('[OnlineMatchV3] Enviando fim de turno:', {
+          userId,
+          proximoTurno,
+          proximoTurnoSide,
+          userSide
+        });
         
         // Enviar broadcast das posições finais E do novo turno
         await mesaRef.current.enviarFimDeTurno({
@@ -428,7 +445,8 @@ function MesaOnline({
         });
         
         // Atualizar turno localmente
-        setCurrentTurn(proximoTurno === mesa.jogador_1_id ? 'home' : 'away');
+        setCurrentTurn(proximoTurnoSide);
+        console.log('[OnlineMatchV3] Turno atualizado localmente para:', proximoTurnoSide);
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
