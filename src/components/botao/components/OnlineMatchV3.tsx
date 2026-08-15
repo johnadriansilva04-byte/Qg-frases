@@ -427,9 +427,7 @@ function MesaOnline({
           novoTurnoId: proximoTurno,
         });
         
-        // Atualizar turno localmente
-        setCurrentTurn(proximoTurnoSide);
-        console.log('[DEBUG] Turno atualizado localmente para:', proximoTurnoSide);
+        // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
