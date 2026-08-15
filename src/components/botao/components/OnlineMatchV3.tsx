@@ -416,16 +416,24 @@ function MesaOnline({
         // Calcular próximo turno
         const proximoTurno = mesa.jogador_1_id === userId ? (mesa.jogador_2_id || mesa.jogador_1_id) : mesa.jogador_1_id;
         
-        // Enviar broadcast das posições finais e novo turno (sem turnsLeft, usa seq_jogada do servidor)
+        // Incrementar contador apenas se for o jogador 1 jogando
+        const novoTurnsLeft = mesa.jogador_1_id === userId ? turnsLeft - 1 : turnsLeft;
+        
+        // Enviar broadcast das posições finais, novo turno E contador de jogadas
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
           bola: posicoesFinais.bola,
           jogadorId: userId,
-          novoTurnoId: proximoTurno || undefined,
+          novoTurnoId: proximoTurno,
+          turnsLeft: novoTurnsLeft,
         });
         
+        // Atualizar contador localmente apenas se for o jogador 1
+        if (mesa.jogador_1_id === userId) {
+          setTurnsLeft(novoTurnsLeft);
+        }
+        
         // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
-        // O contador de jogadas é sincronizado automaticamente via seq_jogada do servidor
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
