@@ -461,6 +461,16 @@ function MesaOnline({
   }, [onSair]);
 
   const meuTurno = currentTurn === userSide;
+  
+  // Log para debug de turno
+  console.log('[OnlineMatchV3] Estado do turno:', {
+    currentTurn,
+    userSide,
+    meuTurno,
+    userId,
+    jogador1Id: mesa.jogador_1_id,
+    jogador2Id: mesa.jogador_2_id
+  });
 
   const iniciarPartida = async () => {
     if (!mesaRef.current) return;
