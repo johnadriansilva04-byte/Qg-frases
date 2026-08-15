@@ -311,7 +311,6 @@ export function MatchView({
             discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
             bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
           };
-          console.log('[MatchView] Chamando onPlay no modo online:', { posicoesFinais, isRemotePlay: isRemotePlayRef.current });
           // Chamar onPlay com posições finais para sincronização
           if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
         } else {
