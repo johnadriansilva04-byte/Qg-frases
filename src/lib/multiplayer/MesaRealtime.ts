@@ -367,9 +367,15 @@ export class MesaRealtime {
 
   private iniciarRelogio() {
     if (this.timerRelogio) return;
+    console.log('[MesaRealtime] Iniciando relógio...');
     this.timerRelogio = setInterval(() => {
-      if (!this.mesa || this.mesa.status !== "em_andamento") return;
-      this.h.onTempo?.(this.tempoRestante());
+      if (!this.mesa || this.mesa.status !== "em_andamento") {
+        console.log('[MesaRealtime] Relógio pausado - mesa não está em andamento');
+        return;
+      }
+      const tempo = this.tempoRestante();
+      console.log('[MesaRealtime] Tick do relógio:', tempo, 'segundos');
+      this.h.onTempo?.(tempo);
     }, 1000);
   }
 

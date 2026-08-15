@@ -251,12 +251,14 @@ function MesaOnline({
 }) {
   const [currentTurn, setCurrentTurn] = useState<"home" | "away">("home");
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
-  const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos);
+  const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
   const [oponenteOnline, setOponenteOnline] = useState(false);
   const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
   const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(false);
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
   const mesaRef = useRef<MesaRealtime | null>(null);
+
+  console.log('[MesaOnline] Estado inicial:', { tempoRestante, status: mesa.status, iniciado_em: mesa.iniciado_em });
 
   const souJogador1 = mesa.jogador_1_id === userId;
   const userTeam = useMemo(() => {
@@ -320,6 +322,7 @@ function MesaOnline({
           setCurrentTurn(meuTurno ? userSide : userSide === "home" ? "away" : "home");
         },
         onTempo: (segundos) => {
+          console.log('[MesaOnline] Tempo atualizado:', segundos);
           setTempoRestante(segundos);
         },
         onOponente: (online) => {
@@ -487,7 +490,7 @@ function MesaOnline({
         awayId={awayId}
         userSide={userSide}
         difficulty="amador" as Difficulty
-        turns={300} // 5 minutos
+        turns={12} // Melhor de 3 (12 jogadas por partida)
         knockout={false}
         stageLabel={`Partida Online - ${meuTurno ? 'Seu turno' : 'Turno do oponente'}`}
         onFinish={handleFinish}
