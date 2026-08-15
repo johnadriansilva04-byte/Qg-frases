@@ -85,6 +85,8 @@ export function MatchView({
   const turnHistoryRef = useRef<Side[]>([]);
   const safetyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const jogadaEmAndamentoRef = useRef(false);
+  const hasShotThisTurnRef = useRef(false); // Flag para prevenir disparo duplo de jogada
+  const isRemotePlayRef = useRef(false); // Flag para diferenciar jogada remota de local
 
   const verificarFimDeMovimento = useCallback(() => {
     // Verificar se todos os discos e a bola estão em repouso
@@ -108,14 +110,17 @@ export function MatchView({
 
       jogadaEmAndamentoRef.current = false;
 
-      // Enviar posições finais para sincronização
-      if (isOnline && onPlay) {
+      // Enviar posições finais para sincronização apenas se for jogada local
+      if (isOnline && onPlay && !isRemotePlayRef.current) {
         const posicoesFinais = {
           discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
           bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
         };
         onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
       }
+      
+      // Resetar flag de jogada remota
+      isRemotePlayRef.current = false;
     }
   }, [isOnline, onPlay]);
 
@@ -130,8 +135,15 @@ export function MatchView({
     } else if (initialTurn && isOnline && initializedRef.current) {
       // Atualizações subsequentes - sempre atualizar o turno
       if (!endedRef.current) {
+        const turnoAnterior = turnRef.current;
         turnRef.current = initialTurn;
         setTurn(initialTurn);
+        
+        // Resetar flag de jogada quando o turno muda
+        if (turnoAnterior !== initialTurn) {
+          hasShotThisTurnRef.current = false;
+          console.log('[MatchView] Turno mudou, resetando hasShotThisTurnRef');
+        }
       }
     }
   }, [initialTurn, isOnline]);
@@ -353,6 +365,10 @@ export function MatchView({
 
       console.log('[MatchView] Aplicando força ao disco:', { ix, iy });
 
+      // Marcar como jogada remota para não disparar onPlay ao terminar
+      isRemotePlayRef.current = true;
+      jogadaEmAndamentoRef.current = true;
+
       // Aplicar velocidade ao disco
       disco.vx = ix;
       disco.vy = iy;
@@ -493,6 +509,12 @@ export function MatchView({
     const { ix, iy, power } = clampImpulse(d.x - aim.px, d.y - aim.py);
     if (power < 0.06) return;
 
+    // Prevenir disparo duplo de jogada no mesmo turno
+    if (hasShotThisTurnRef.current) {
+      console.log('[MatchView] Jogada já feita neste turno, ignorando');
+      return;
+    }
+
     // Salvar estado antes da jogada
     historyRef.current.push(JSON.parse(JSON.stringify(discsRef.current)));
     scoreHistoryRef.current.push({ ...scoreRef.current });
@@ -502,8 +524,9 @@ export function MatchView({
     d.vx = ix;
     d.vy = iy;
 
-    // Marcar jogada como em andamento
+    // Marcar jogada como em andamento e marcar que já jogou neste turno
     jogadaEmAndamentoRef.current = true;
+    hasShotThisTurnRef.current = true;
 
     // Iniciar timer de segurança de 6 segundos
     if (safetyTimerRef.current) {
