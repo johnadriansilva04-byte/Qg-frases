@@ -62,7 +62,6 @@ export function MatchView({
   const turnRef = useRef<Side>(initialTurn || "home");
   const portraitRef = useRef(false);
   const scaleRef = useRef(1);
-  const historyRef = useRef<Disc[][]>([]); // Histórico de estados dos discos
   const initializedRef = useRef(false); // Flag para evitar re-inicialização
 
   const [score, setScore] = useState({ home: 0, away: 0 });
