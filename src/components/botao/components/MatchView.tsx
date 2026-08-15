@@ -350,8 +350,6 @@ export function MatchView({
         iy = Math.sin(rad) * forcaNormalizada;
       }
 
-      console.log('[MatchView] Aplicando força ao disco:', { ix, iy });
-
       // Marcar como jogada remota para não disparar onPlay ao terminar
       isRemotePlayRef.current = true;
       jogadaEmAndamentoRef.current = true;
@@ -463,12 +461,10 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    console.log('[DEBUG] onPointerDown:', { turn, userSide, isOnline, ended, simRef: simRef.current });
     // No modo online, bloqueia input se não for o turno do usuário
     if (ended || simRef.current) return;
     if (!isOnline && turn !== userSide) return;
     if (isOnline && turn !== userSide) {
-      console.log('[DEBUG] Input bloqueado - não é seu turno:', { turn, userSide });
       return; // Input bloqueado - não é seu turno
     }
     // Bloquear input durante cooldown após gol
@@ -503,7 +499,6 @@ export function MatchView({
 
     // Prevenir disparo duplo de jogada no mesmo turno
     if (hasShotThisTurnRef.current) {
-      console.log('[MatchView] Jogada já feita neste turno, ignorando');
       return;
     }
 
@@ -519,7 +514,6 @@ export function MatchView({
     // Marcar jogada como em andamento e marcar que já jogou neste turno
     jogadaEmAndamentoRef.current = true;
     hasShotThisTurnRef.current = true;
-    console.log('[DEBUG] hasShotThisTurnRef setado para true');
 
     // Iniciar timer de segurança de 6 segundos
     if (safetyTimerRef.current) {
