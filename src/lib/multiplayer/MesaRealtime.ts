@@ -71,6 +71,7 @@ export interface MesaRealtimeHandlers {
     discos: Array<{ id: string; x: number; y: number }>; 
     bola: { x: number; y: number };
     jogadorId: string;
+    novoTurnoId?: string;
   }) => void;
   onPartidaIniciada?: (mesa: MesaRow) => void;
   onPartidaFinalizada?: (mesa: MesaRow) => void;

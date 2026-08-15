@@ -360,6 +360,12 @@ function MesaOnline({
         },
         onFimDeTurno: (payload) => {
           console.log('[OnlineMatchV3] Recebendo fim de turno:', payload);
+          // Atualizar turno se novoTurnoId foi enviado
+          if (payload.novoTurnoId) {
+            const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
+            console.log('[OnlineMatchV3] Atualizando turno via broadcast:', novoTurno);
+            setCurrentTurn(novoTurno);
+          }
           // Chamar o handler do MatchView se estiver disponível
           if (fimDeTurnoHandlerRef.current) {
             fimDeTurnoHandlerRef.current(payload);
@@ -408,30 +414,26 @@ function MesaOnline({
         });
       }
 
-      // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno
+      // Se a jogada terminou sem gol e temos posições finais, enviar broadcast de fim de turno com novo turno
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
-        // Enviar broadcast das posições finais
+        // Calcular próximo turno
+        const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
+        
+        // Enviar broadcast das posições finais E do novo turno
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
           bola: posicoesFinais.bola,
           jogadorId: userId,
+          novoTurnoId: proximoTurno,
         });
         
-        // Trocar o turno no banco chamando RPC diretamente (sem broadcast)
-        const { data, error } = await supabase.rpc("registrar_jogada_mesa", {
-          p_mesa_id: mesa.mesa_id,
-          p_estado_fisico: posicoesFinais as never,
-          p_trocar_turno: true,
-        });
-        
-        if (error) {
-          console.error('[OnlineMatchV3] Erro ao trocar turno:', error);
-        }
+        // Atualizar turno localmente
+        setCurrentTurn(proximoTurno === mesa.jogador_1_id ? 'home' : 'away');
       }
     } catch (error) {
-      // Erro ao enviar jogada
+      console.error('[OnlineMatchV3] Erro no handlePlay:', error);
     }
-  }, [userId, placar, mesa.mesa_id]);
+  }, [userId, placar, mesa.mesa_id, mesa.jogador_1_id, mesa.jogador_2_id]);
 
   const handleQuit = useCallback(() => {
     if (mesaRef.current) {
