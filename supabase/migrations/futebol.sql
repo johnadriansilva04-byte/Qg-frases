@@ -354,16 +354,7 @@ DECLARE
   v_formato TEXT;
   max_rodadas INTEGER;
 BEGIN
-  -- Decrementar jogadas
-  UPDATE public.botao_blocos
-  SET jogadas_restantes = jogadas_restantes - 1
-  WHERE id = p_bloco_id
-  RETURNING jogadas_restantes INTO jogadas;
-  
-  -- Alternar turno
-  PERFORM public.alternar_turno_bloco(p_bloco_id);
-  
-  -- Buscar formato do lobby
+  -- Buscar formato do lobby antes do update
   SELECT l.formato INTO v_formato
   FROM public.botao_lobbies l
   JOIN public.botao_blocos b ON b.lobby_id = l.id
@@ -377,7 +368,18 @@ BEGIN
     ELSE 3
   END;
   
-  -- Verificar se acabaram as jogadas ou se alguém venceu por rodadas
+  -- Decrementar jogadas E alternar turno em um único UPDATE atômico
+  UPDATE public.botao_blocos
+  SET jogadas_restantes = jogadas_restantes - 1,
+      turno = CASE 
+        WHEN turno = 'jogador1' THEN 'jogador2'
+        ELSE 'jogador1'
+      END,
+      timestamp_inicio_turno = now()
+  WHERE id = p_bloco_id
+  RETURNING jogadas_restantes INTO jogadas;
+  
+  -- Verificar se acabaram as jogadas
   IF jogadas <= 0 THEN
     UPDATE public.botao_blocos
     SET status = 'finalizado',
@@ -471,6 +473,36 @@ BEGIN
         WHERE status IN ('aguardando', 'em_jogo')
       )
       AND created_at < now() - interval '4 minutes';
+END;
+$$;
+
+-- Função para limpar mesas de futebol antigas (mais de 5 minutos após início)
+CREATE OR REPLACE FUNCTION limpar_mesas_antigas()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    -- Finalizar mesas em andamento há mais de 5 minutos
+    UPDATE public.mesas_futebol
+    SET status = 'finalizado',
+        motivo_finalizacao = 'tempo_esgotado',
+        turno_atual_id = NULL,
+        vencedor_id = CASE
+            WHEN placar_j1 > placar_j2 THEN jogador_1_id
+            WHEN placar_j2 > placar_j1 THEN jogador_2_id
+            ELSE NULL
+        END
+    WHERE status = 'em_andamento'
+      AND iniciado_em IS NOT NULL
+      AND iniciado_em < now() - interval '5 minutes';
+
+    -- Deletar mesas finalizadas há mais de 10 minutos (para não poluir banco)
+    DELETE FROM public.mesas_futebol
+    WHERE status = 'finalizado'
+      AND (atualizado_em < now() - interval '10 minutes' OR 
+           (atualizado_em IS NULL AND criado_em < now() - interval '10 minutes'));
 END;
 $$;
 
@@ -854,11 +886,11 @@ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Cron: reconcilia o relógio e finaliza partidas expiradas a cada 5s.
+-- Cron: reconcilia o relógio, finaliza partidas expiradas e limpa mesas antigas a cada 5s.
 -- (o countdown visual é local e derivado; o cron é a autoridade)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 SELECT cron.unschedule('tick_mesas_futebol') WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'tick_mesas_futebol');
-SELECT cron.schedule('tick_mesas_futebol', '5 seconds', $$SELECT public.tick_mesas_futebol();$$);
+SELECT cron.schedule('tick_mesas_futebol', '5 seconds', $$SELECT public.tick_mesas_futebol(); SELECT public.limpar_mesas_antigas();$$);
 
 NOTIFY pgrst, 'reload schema';

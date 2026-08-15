@@ -40,20 +40,7 @@ interface BotaoGameProps {
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const { perfil, carregando, logout, aplicarPerfil, recarregar } = useBotaoAuth();
-  const [screen, setScreen] = useState<Screen>(() => {
-    // Carregar tela salva no localStorage
-    const savedScreen = localStorage.getItem('botao_screen') as Screen;
-    const isLoggedIn = localStorage.getItem('botao_online_logged_in') === 'true';
-    
-    // Se não tem tela salva ou usuário não está logado, usar padrão
-    if (!savedScreen || !isLoggedIn) {
-      console.log('[BotaoGame] Inicializando screen:', { isLoggedIn, screen: isLoggedIn ? "menu" : "auth" });
-      return isLoggedIn ? "menu" : "auth";
-    }
-    
-    console.log('[BotaoGame] Restaurando tela salva:', savedScreen);
-    return savedScreen;
-  });
+  const [screen, setScreen] = useState<Screen>("menu");
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
@@ -66,15 +53,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (mounted && teams.length > 0) {
         setAllTeams(teams);
       }
+    }).catch(() => {
+      // Silenciosamente usar times padrão em caso de erro
     });
     return () => { mounted = false; };
   }, []);
 
   // Monitorar login automático e mudar para menu se já estiver logado
   useEffect(() => {
-    console.log('[BotaoGame] Monitorando perfil:', { perfil, carregando, screen });
     if (!carregando && perfil && screen === "auth") {
-      console.log('[BotaoGame] Usuário já logado automaticamente, mudando para menu');
       setScreen("menu");
     }
   }, [perfil, carregando, screen]);

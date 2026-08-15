@@ -74,10 +74,19 @@ export function MatchView({
   const [turnTimer, setTurnTimer] = useState<number | null>(null); // Timer de 10 segundos para jogar
   const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
 
+  // Sincronizar turnsLeft com a prop turns (para modo online)
+  useEffect(() => {
+    setTurnsLeft(turns);
+  }, [turns]);
+
+  // Sincronizar turnsRef com turnsLeft (para uso interno)
+  useEffect(() => {
+    turnsRef.current = turnsLeft;
+  }, [turnsLeft]);
+
   const scoreRef = useRef(score);
   scoreRef.current = score;
   const turnsRef = useRef(turnsLeft);
-  turnsRef.current = turnsLeft;
   const endedRef = useRef(false);
   const historyRef = useRef<any[]>([]);
   const scoreHistoryRef = useRef<any[]>([]);
@@ -242,12 +251,14 @@ export function MatchView({
           const conceding: Side = goal === "home" ? "home" : "away";
           turnRef.current = conceding;
           setTurn(conceding);
-          // Decrementa turnos normalmente
-          const left = turnsRef.current - 1;
-          setTurnsLeft(left);
+          // Decrementa turnos normalmente (apenas no modo offline)
+          if (!isOnline) {
+            const left = turnsRef.current - 1;
+            setTurnsLeft(left);
+          }
           // Chamar onPlay para sincronização online (gol contra)
           if (onPlay) onPlay(1, { discId: "own_goal", ix: 0, iy: 0, power: 0 });
-          if (left <= 0) {
+          if (!isOnline && turnsRef.current - 1 <= 0) {
             finishMatch(next.home, next.away);
             return;
           }
@@ -260,8 +271,11 @@ export function MatchView({
         const conceding: Side = goal === "home" ? "away" : "home";
         // Quem sofreu o gol (conceding) recebe o próximo turno
         simRef.current = false;
-        const left = turnsRef.current - 1;
-        setTurnsLeft(left);
+        // Decrementa turnos normalmente (apenas no modo offline)
+        const left = isOnline ? turnsRef.current : turnsRef.current - 1;
+        if (!isOnline) {
+          setTurnsLeft(left);
+        }
         // Chamar onPlay para sincronização online (gol normal)
         if (onPlay) onPlay(1, { discId: "goal", ix: 0, iy: 0, power: 0 });
         if (left <= 0) {
@@ -297,11 +311,17 @@ export function MatchView({
       }
       if (!moving || frames > 900) {
         simRef.current = false;
-        const left = turnsRef.current - 1;
-        setTurnsLeft(left);
-        if (left <= 0) {
-          finishMatch(scoreRef.current.home, scoreRef.current.away);
-          return;
+        // Decrementa turnos normalmente (apenas no modo offline)
+        if (!isOnline) {
+          const left = turnsRef.current - 1;
+          setTurnsLeft(left);
+          if (left <= 0) {
+            finishMatch(scoreRef.current.home, scoreRef.current.away);
+            return;
+          }
+        } else {
+          // No modo online, chamar onPlay para sincronizar jogada sem gol
+          if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 });
         }
         
         // No modo online, enviar posições finais e NÃO alternar turno localmente
@@ -614,10 +634,14 @@ export function MatchView({
         <canvas
           ref={canvasRef}
           className={`pitch-canvas w-full touch-none select-none`}
+          style={{ touchAction: 'none' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          onTouchStart={(e) => { e.preventDefault(); }}
+          onTouchMove={(e) => { e.preventDefault(); }}
+          onTouchEnd={(e) => { e.preventDefault(); }}
         />
         {isOnline && turn !== userSide && !ended && (
           <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2">

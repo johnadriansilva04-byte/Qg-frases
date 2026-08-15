@@ -430,10 +430,7 @@ function MesaOnline({
           turnsLeft: novoTurnsLeft,
         });
         
-        // Atualizar turno e contador localmente após enviar broadcast
-        setTurnsLeft(novoTurnsLeft);
-        
-        // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
+        // NÃO atualizar turno nem contador localmente - ambos só mudam quando receber broadcast do oponente
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);

@@ -143,7 +143,6 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
       liga: "Personalizado",
       is_personalizado: true,
       usuario_id: perfil.user_id,
-      created_at: perfil.created_at,
     };
   }, [perfil]);
 
@@ -178,7 +177,6 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
   const novaSala = useMutation({
     mutationFn: async () => {
       if (!perfil || !session) throw new Error("Perfil não carregado.");
-      console.log('[OnlineMatchV2] Criando lobby:', { nome: nomeSala.trim(), session, nome: perfil.nome });
       return criarLobby({
         nome: nomeSala.trim() || `Mesa de ${perfil.nome}`,
         criadorSession: session,
@@ -601,7 +599,6 @@ function MesaOnline({
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "botao_blocos", filter: `id=eq.${bloco.id}` },
         (payload) => {
-          console.log('[MesaOnline] Bloco atualizado:', payload.new);
           queryClient.invalidateQueries({ queryKey: ["botao_blocos", bloco.lobby_id] });
         }
       )
@@ -613,11 +610,10 @@ function MesaOnline({
 
   return (
     <MatchView
-      key={bloco.id}
       homeId={homeId}
       awayId={awayId}
       userSide={userSide}
-      difficulty="amador" as Difficulty
+      difficulty="amador"
       turns={turns}
       knockout={false}
       stageLabel={`Partida Online - ${bloco.turno === 'jogador1' ? (souJogador1 ? 'Seu turno' : 'Turno do oponente') : (souJogador1 ? 'Turno do oponente' : 'Seu turno')}`}
