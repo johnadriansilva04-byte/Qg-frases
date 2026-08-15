@@ -17,7 +17,7 @@ type Props = {
   onQuit: () => void;
   isOnline?: boolean; // Nova prop para indicar modo online
   customTeam?: Team; // Time personalizado do usuário
-  onPlay?: (goals: number) => void; // Callback chamado quando uma jogada termina (para sincronização online)
+  onPlay?: (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }) => void; // Callback chamado quando uma jogada termina (para sincronização online)
   initialTurn?: Side; // Turno inicial (para sincronização online)
   onJogadaAdversaria?: (jogada: any) => void; // Callback para receber jogadas do adversário
 };
@@ -200,8 +200,8 @@ export function MatchView({
           // Decrementa turnos normalmente
           const left = turnsRef.current - 1;
           setTurnsLeft(left);
-          // Chamar onPlay para sincronização online
-          if (onPlay) onPlay(1);
+          // Chamar onPlay para sincronização online (gol contra)
+          if (onPlay) onPlay(1, { discId: "own_goal", ix: 0, iy: 0, power: 0 });
           if (left <= 0) {
             finishMatch(next.home, next.away);
             return;
@@ -217,8 +217,8 @@ export function MatchView({
         simRef.current = false;
         const left = turnsRef.current - 1;
         setTurnsLeft(left);
-        // Chamar onPlay para sincronização online
-        if (onPlay) onPlay(1);
+        // Chamar onPlay para sincronização online (gol normal)
+        if (onPlay) onPlay(1, { discId: "goal", ix: 0, iy: 0, power: 0 });
         if (left <= 0) {
           finishMatch(next.home, next.away);
           return;
@@ -240,7 +240,7 @@ export function MatchView({
                 turnRef.current = nextTurn;
                 setTurn(nextTurn);
                 // Chamar onPlay para sincronização online quando passa a vez
-                if (onPlay) onPlay(0);
+                if (onPlay) onPlay(0, { discId: "pass_turn", ix: 0, iy: 0, power: 0 });
               }
               return null;
             }
@@ -264,7 +264,7 @@ export function MatchView({
           setTurn(turnRef.current);
         }
         // Chamar onPlay para sincronização online quando a jogada termina sem gol
-        if (onPlay) onPlay(0);
+        if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 });
         return;
       }
       requestAnimationFrame(loop);
@@ -330,10 +330,13 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    // No modo online, permite input mas verifica se é realmente o turno do usuário
+    // No modo online, bloqueia input se não for o turno do usuário
     if (ended || simRef.current) return;
-    // No modo online, não bloqueia por turno local - deixa o callback onPlay decidir
     if (!isOnline && turn !== userSide) return;
+    if (isOnline && turn !== userSide) {
+      console.log('[MatchView] Input bloqueado - não é seu turno');
+      return;
+    }
     // Bloquear input durante cooldown após gol
     if (goalCooldown !== null) return;
     const { x, y } = toField(e);
@@ -363,15 +366,21 @@ export function MatchView({
     if (!d) return;
     const { ix, iy, power } = clampImpulse(d.x - aim.px, d.y - aim.py);
     if (power < 0.06) return;
-    
+
     // Salvar estado antes da jogada
     historyRef.current.push(JSON.parse(JSON.stringify(discsRef.current)));
     scoreHistoryRef.current.push({ ...scoreRef.current });
     turnsHistoryRef.current.push(turnsRef.current);
     turnHistoryRef.current.push(turnRef.current);
-    
+
     d.vx = ix;
     d.vy = iy;
+
+    // No modo online, passar dados da jogada para sincronização
+    if (isOnline && onPlay) {
+      onPlay(0, { discId: d.id, ix, iy, power });
+    }
+
     runSimulation();
   };
 

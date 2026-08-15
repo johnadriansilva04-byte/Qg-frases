@@ -57,6 +57,12 @@ export interface MesaRealtimeHandlers {
   onTempo?: (segundosRestantes: number) => void;
   /** ambos jogadores presentes no canal */
   onOponente?: (online: boolean, oponenteId: string | null) => void;
+  /** quando 2 jogadores estão conectados e prontos para começar */
+  onDoisJogadoresConectados?: (jogador1Id: string, jogador2Id: string) => void;
+  /** sincronização de posições finais após movimento */
+  onSyncPositions?: (payload: { discos: any[]; bola: any }) => void;
+  /** gol marcado - atualiza placar */
+  onGoalScored?: (payload: { jogadorId: string; placar: { home: number; away: number } }) => void;
   onPartidaIniciada?: (mesa: MesaRow) => void;
   onPartidaFinalizada?: (mesa: MesaRow) => void;
   onErro?: (erro: Error) => void;
@@ -85,6 +91,7 @@ export class MesaRealtime {
   private timerRelogio: ReturnType<typeof setInterval> | null = null;
   private timerHeartbeat: ReturnType<typeof setInterval> | null = null;
   private conectado = false;
+  private meuNumeroJogador: 1 | 2 | null = null; // 1 = host, 2 = guest
 
   constructor(opts: MesaRealtimeOptions) {
     this.supabase = opts.supabase;
@@ -114,7 +121,20 @@ export class MesaRealtime {
       if (!j || j.autor_id === this.userId) return;
       if (j.seq <= this.ultimaSeqRecebida) return; // fora de ordem / duplicada
       this.ultimaSeqRecebida = j.seq;
+      console.log('[MesaRealtime] Jogada do adversário recebida:', j);
       this.h.onJogadaAdversaria?.(j);
+    });
+
+    // 1.1) sincronização de posições finais após movimento
+    this.canal.on("broadcast", { event: "sync_positions" }, ({ payload }) => {
+      console.log('[MesaRealtime] Sync positions recebido:', payload);
+      this.h.onSyncPositions?.(payload as any);
+    });
+
+    // 1.2) gol marcado
+    this.canal.on("broadcast", { event: "goal_scored" }, ({ payload }) => {
+      console.log('[MesaRealtime] Goal scored recebido:', payload);
+      this.h.onGoalScored?.(payload as any);
     });
 
     // 2) estado autoritativo da mesa
@@ -129,11 +149,35 @@ export class MesaRealtime {
       ({ new: row }) => this.aplicarEstado(row as MesaRow),
     );
 
-    // 3) presença
+    // 3) presença - detectar quando 2 jogadores estão conectados
     this.canal.on("presence", { event: "sync" }, () => {
       const estado = this.canal?.presenceState() ?? {};
-      const ids = Object.keys(estado).filter((k) => k !== this.userId);
+      const presentes = Object.keys(estado);
+      console.log('[MesaRealtime] Presence sync - jogadores conectados:', presentes);
+      console.log('[MesaRealtime] Estado completo do presence:', estado);
+
+      // Determinar meu número de jogador baseado na ordem de entrada
+      const meuIndice = presentes.indexOf(this.userId);
+      if (meuIndice === 0) {
+        this.meuNumeroJogador = 1;
+      } else if (meuIndice === 1) {
+        this.meuNumeroJogador = 2;
+      }
+
+      // Notificar sobre oponente
+      const ids = presentes.filter((k) => k !== this.userId);
+      console.log('[MesaRealtime] Oponentes detectados:', ids);
       this.h.onOponente?.(ids.length > 0, ids[0] ?? null);
+
+      // Quando tiver 2 jogadores conectados, notificar para permitir início da partida
+      if (presentes.length === 2) {
+        const jogador1Id = presentes[0]!;
+        const jogador2Id = presentes[1]!;
+        console.log('[MesaRealtime] 2 jogadores conectados!', { jogador1Id, jogador2Id, meuNumero: this.meuNumeroJogador });
+        this.h.onDoisJogadoresConectados?.(jogador1Id, jogador2Id);
+      } else {
+        console.log('[MesaRealtime] Apenas', presentes.length, 'jogador(es) conectado(s)');
+      }
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -215,6 +259,18 @@ export class MesaRealtime {
     });
     if (error) return this.h.onErro?.(new Error(error.message));
     if (data) this.aplicarEstado(data as MesaRow);
+  }
+
+  /** Envia sincronização de posições finais após movimento (broadcast) */
+  async enviarSyncPositions(payload: { discos: any[]; bola: any }) {
+    console.log('[MesaRealtime] Enviando sync_positions:', payload);
+    await this.canal?.send({ type: "broadcast", event: "sync_positions", payload });
+  }
+
+  /** Envia evento de gol marcado (broadcast) */
+  async enviarGoalScored(payload: { jogadorId: string; placar: { home: number; away: number } }) {
+    console.log('[MesaRealtime] Enviando goal_scored:', payload);
+    await this.canal?.send({ type: "broadcast", event: "goal_scored", payload });
   }
 
   /** Atalho para registrar o listener sem instanciar handlers no construtor. */

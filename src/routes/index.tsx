@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, Gamepad2, Sparkles, Cpu, Globe, Rocket, Star } from "lucide-react";
+import { Cpu, Globe, Rocket, Star, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 
 const SECTIONS = [
   {
-    icon: Gamepad2,
+    icon: "gamepad",
     title: "Cidadela dos Clássicos",
     description: "Trilha de botão e muito mais",
     link: "/cidadela",
@@ -30,7 +30,7 @@ const SECTIONS = [
     bgColor: "bg-purple-500/10",
   },
   {
-    icon: BookOpen,
+    icon: "book",
     title: "Biblioteca",
     description: "Livros selecionados de motivação, fé e desenvolvimento pessoal.",
     link: "/biblioteca",
@@ -38,7 +38,7 @@ const SECTIONS = [
     bgColor: "bg-blue-500/10",
   },
   {
-    icon: Sparkles,
+    icon: "pen",
     title: "Gerador de Texto",
     description: "Frases prontas, correção de texto e muito mais. Crie conteúdo em segundos.",
     link: "/gerador",
@@ -78,7 +78,6 @@ function Index() {
         {/* Seções principais */}
         <div className="grid gap-6 md:gap-8 w-full max-w-5xl mb-12 md:mb-16">
           {SECTIONS.map((section, index) => {
-            const Icon = section.icon;
             return (
               <Link
                 key={section.title}
@@ -88,7 +87,54 @@ function Index() {
                 <div className={`absolute inset-0 bg-gradient-to-r ${section.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
                 <div className="relative flex items-start gap-4 md:gap-6">
                   <div className={`p-3 md:p-4 rounded-xl ${section.bgColor} group-hover:scale-110 transition-transform`}>
-                    <Icon className={`w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r ${section.color} bg-clip-text text-transparent`} />
+                    {section.icon === "gamepad" && (
+                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <rect x="4" y="16" width="56" height="32" rx="8" fill="url(#gamepadGrad)" />
+                        <circle cx="16" cy="32" r="5" fill="#fff" opacity="0.9"/>
+                        <circle cx="48" cy="32" r="5" fill="#fff" opacity="0.9"/>
+                        <rect x="26" y="28" width="12" height="8" rx="2" fill="#fff" opacity="0.7"/>
+                        <defs>
+                          <linearGradient id="gamepadGrad" x1="4" y1="16" x2="60" y2="48" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#a855f7"/>
+                            <stop offset="1" stopColor="#ec4899"/>
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
+                    {section.icon === "book" && (
+                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#bookGrad)" />
+                        <path d="M32 16 L32 48" stroke="#fff" stroke-width="2" opacity="0.5"/>
+                        <path d="M12 20 L28 18" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M12 28 L28 26" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M12 36 L28 34" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M36 18 L52 20" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M36 26 L52 28" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M36 34 L52 36" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <defs>
+                          <linearGradient id="bookGrad" x1="8" y1="12" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#3b82f6"/>
+                            <stop offset="1" stopColor="#06b6d4"/>
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
+                    {section.icon === "pen" && (
+                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <rect x="8" y="24" width="40" height="28" rx="2" fill="#fff" opacity="0.3"/>
+                        <path d="M12 28 L44 28" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M12 34 L36 34" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M12 40 L40 40" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M36 8 L56 28 L48 56 L28 36 L36 8Z" fill="url(#penGrad)" />
+                        <path d="M36 8 L56 28" stroke="#fff" stroke-width="2" opacity="0.5"/>
+                        <defs>
+                          <linearGradient id="penGrad" x1="36" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#22c55e"/>
+                            <stop offset="1" stopColor="#10b981"/>
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
                   </div>
                   <div className="flex-1">
                     <h2 className="text-xl md:text-2xl font-bold mb-2 group-hover:text-purple-400 transition-colors">

@@ -5,7 +5,7 @@ import { MatchView } from "./MatchView";
 import { supabase } from "@/integrations/supabase/client";
 import { useJogador } from "@/hooks/useJogador";
 import { useBotaoAuth } from "../online/useBotaoAuth";
-import { createCustomTeam } from "../data/teams";
+import { createCustomTeam, teamByIdSync } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { MesaRealtime, type MesaRow, type JogadaPayload } from "@/lib/multiplayer/MesaRealtime";
 import {
@@ -254,6 +254,8 @@ function MesaOnline({
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos);
   const [oponenteOnline, setOponenteOnline] = useState(false);
   const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
+  const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(false);
+  const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
   const mesaRef = useRef<MesaRealtime | null>(null);
 
   const souJogador1 = mesa.jogador_1_id === userId;
@@ -270,8 +272,29 @@ function MesaOnline({
   }, [meuTime]);
 
   const opponentTeam = useMemo(() => {
-    return createCustomTeam('opponent', 'Oponente', 'OPP', '#0000FF', '#FFFF00', 75);
-  }, []);
+    // Buscar o time do adversário da mesa
+    const opponentTimeId = souJogador1 ? mesa.time_j2 : mesa.time_j1;
+    
+    if (!opponentTimeId) {
+      // Se ainda não tem adversário, usar time genérico
+      return createCustomTeam('opponent', 'Aguardando...', '---', '#666666', '#999999', 75);
+    }
+
+    // Se o time for personalizado (começa com "custom-"), criar com dados genéricos
+    // Na prática, precisaríamos buscar os dados do time personalizado do adversário do banco
+    if (opponentTimeId.startsWith('custom-')) {
+      return createCustomTeam(opponentTimeId, 'Adversário', 'ADV', '#FF0000', '#FFFFFF', 75);
+    }
+
+    // Buscar time do banco de dados
+    const teamFromDb = teamByIdSync(opponentTimeId);
+    if (teamFromDb) {
+      return teamFromDb;
+    }
+
+    // Fallback para time genérico
+    return createCustomTeam(opponentTimeId, 'Adversário', 'ADV', '#0000FF', '#FFFF00', 75);
+  }, [mesa.time_j1, mesa.time_j2, souJogador1]);
 
   const homeId = souJogador1 ? userTeam.id : opponentTeam.id;
   const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
@@ -302,6 +325,22 @@ function MesaOnline({
         onOponente: (online) => {
           setOponenteOnline(online);
         },
+        onDoisJogadoresConectados: (jogador1Id, jogador2Id) => {
+          console.log('[MesaOnline] 2 jogadores conectados:', { jogador1Id, jogador2Id });
+          setDoisJogadoresConectados(true);
+        },
+        onSyncPositions: (payload) => {
+          console.log('[MesaOnline] Sync positions recebido:', payload);
+          // Será aplicado no MatchView via callback
+        },
+        onGoalScored: (payload) => {
+          console.log('[MesaOnline] Goal scored recebido:', payload);
+          setPlacar([payload.placar.home, payload.placar.away]);
+        },
+        onPartidaIniciada: (m) => {
+          console.log('[MesaOnline] Partida iniciada:', m);
+          setPartidaIniciada(true);
+        },
         onPartidaFinalizada: (m) => {
           console.log('[MesaOnline] Partida finalizada:', m);
         },
@@ -324,26 +363,33 @@ function MesaOnline({
     onSair();
   }, [onSair]);
 
-  const handlePlay = useCallback(async (goals: number) => {
+  const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }) => {
     if (!mesaRef.current) return;
 
     try {
-      // Enviar jogada via MesaRealtime
-      await mesaRef.current.enviarJogada({
-        id_botao: "botao_" + Date.now(),
-        forca: 50,
-        angulo: 45,
-        origem: { x: 0, y: 0 },
-      });
+      // Enviar jogada via MesaRealtime com dados reais da física
+      if (jogadaData) {
+        await mesaRef.current.enviarJogada({
+          id_botao: jogadaData.discId,
+          forca: Math.round(jogadaData.power * 100),
+          angulo: Math.round(Math.atan2(jogadaData.iy, jogadaData.ix) * (180 / Math.PI)),
+          origem: { x: 0, y: 0 }, // Será preenchido pela posição real do disco
+        });
+      }
 
-      // Se houve gol, registrar o gol
+      // Se houve gol, registrar o gol e enviar broadcast
       if (goals > 0) {
         await mesaRef.current.registrarGol();
+        // Enviar broadcast do gol para atualizar placar instantaneamente
+        await mesaRef.current.enviarGoalScored({
+          jogadorId: userId,
+          placar: { home: placar[0], away: placar[1] },
+        });
       }
     } catch (error) {
       console.error('[MesaOnline] Erro ao enviar jogada:', error);
     }
-  }, []);
+  }, [userId, placar]);
 
   const handleQuit = useCallback(() => {
     console.log('[MesaOnline] Saindo da partida');
@@ -354,6 +400,69 @@ function MesaOnline({
   }, [onSair]);
 
   const meuTurno = currentTurn === userSide;
+
+  const iniciarPartida = async () => {
+    if (!mesaRef.current) return;
+    if (!doisJogadoresConectados) {
+      console.error('[MesaOnline] Tentando iniciar partida sem 2 jogadores!');
+      return;
+    }
+    console.log('[MesaOnline] Iniciando partida com 2 jogadores...');
+    // Aqui você pode chamar uma RPC para mudar o status da mesa para "em_andamento"
+    // Por enquanto, vamos apenas marcar como iniciada localmente
+    setPartidaIniciada(true);
+  };
+
+  // Mostrar tela de espera se não tiver 2 jogadores conectados
+  if (!doisJogadoresConectados) {
+    return (
+      <div className="space-y-4">
+        <div className="surface p-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
+            <p className="text-sm text-muted-foreground">
+              Aguardando oponente... {oponenteOnline ? "Oponente conectado!" : "Aguardando conexão"}
+            </p>
+          </div>
+          <button onClick={handleQuit} className="btn-ghost">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="surface p-8 text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-lg font-medium">Aguardando segundo jogador...</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Compartilhe o código da sala: <span className="font-mono font-bold">{mesa.mesa_id}</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar botão para iniciar partida se 2 jogadores conectados mas partida não iniciada
+  if (doisJogadoresConectados && !partidaIniciada) {
+    return (
+      <div className="space-y-4">
+        <div className="surface p-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
+            <p className="text-sm text-muted-foreground">
+              2 jogadores conectados! Pronto para começar.
+            </p>
+          </div>
+          <button onClick={handleQuit} className="btn-ghost">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="surface p-8 text-center">
+          <p className="text-lg font-medium mb-4">Ambos os jogadores estão conectados!</p>
+          <button onClick={iniciarPartida} className="btn-primary">
+            Iniciar Partida
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
