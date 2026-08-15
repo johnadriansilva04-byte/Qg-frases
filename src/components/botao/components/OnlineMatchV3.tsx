@@ -102,7 +102,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
     queryKey: ["mesa_atual", mesaId],
     queryFn: () => mesaId ? buscarMesa(mesaId) : null,
     enabled: !!mesaId,
-    refetchInterval: 3000,
+    refetchInterval: screen === "jogo" ? false : 3000, // Desativar polling durante partida
   });
 
   // Criar mesa
@@ -309,7 +309,7 @@ function MesaOnline({
   const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
   const userSide = souJogador1 ? "home" : "away";
 
-  // Inicializar MesaRealtime
+  // Inicializar MesaRealtime - roda apenas uma vez quando mesa.mesa_id ou userId mudam
   useEffect(() => {
     if (!userId || !mesa.mesa_id) return;
 
@@ -319,7 +319,6 @@ function MesaOnline({
       userId,
       handlers: {
         onJogadaAdversaria: (jogada) => {
-          console.log('[OnlineMatchV3] Recebendo jogada adversária:', jogada);
           setJogadaAdversaria(jogada);
           // Chamar o handler do MatchView se estiver disponível
           if (jogadaAdversariaHandlerRef.current) {
@@ -327,14 +326,11 @@ function MesaOnline({
           }
         },
         onEstado: (m) => {
-          console.log('[OnlineMatchV3] Estado atualizado:', m);
           setPlacar([m.placar_j1, m.placar_j2]);
         },
         onTurno: (meuTurno, turnoAtualId) => {
-          console.log('[OnlineMatchV3] Turno atualizado:', { meuTurno, turnoAtualId, jogador1: mesa.jogador_1_id });
           // Lógica simples: se turno_atual_id == jogador_1_id, então home, senão away
           const novoTurno = turnoAtualId === mesa.jogador_1_id ? "home" : "away";
-          console.log('[OnlineMatchV3] Novo turno calculado:', novoTurno);
           setCurrentTurn(novoTurno);
         },
         onTempo: (segundos) => {
@@ -381,7 +377,7 @@ function MesaOnline({
     return () => {
       mesaRealtime.desconectar();
     };
-  }, [userId, mesa.mesa_id, userSide]);
+  }, [mesa.mesa_id, userId]); // Dependências estáticas apenas
 
   const handleFinish = useCallback((result: MatchResult) => {
     onSair();
