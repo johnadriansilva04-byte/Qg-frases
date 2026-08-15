@@ -110,15 +110,6 @@ export function MatchView({
 
       jogadaEmAndamentoRef.current = false;
 
-      // Enviar posições finais para sincronização apenas se for jogada local
-      if (isOnline && onPlay && !isRemotePlayRef.current) {
-        const posicoesFinais = {
-          discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
-          bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
-        };
-        onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
-      }
-      
       // Resetar flag de jogada remota
       isRemotePlayRef.current = false;
     }
