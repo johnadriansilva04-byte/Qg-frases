@@ -124,12 +124,14 @@ export class MesaRealtime {
       },
     });
 
-    // 1) jogadas do adversário (baixa latência, não passa pelo banco)
+    // 1) broadcast de jogadas em tempo real
     this.canal.on("broadcast", { event: "jogada" }, ({ payload }) => {
+      console.log('[MesaRealtime] Recebendo broadcast de jogada:', payload);
       const j = payload as JogadaPayload;
       if (!j || j.autor_id === this.userId) return;
       if (j.seq <= this.ultimaSeqRecebida) return; // fora de ordem / duplicada
       this.ultimaSeqRecebida = j.seq;
+      console.log('[MesaRealtime] Chamando onJogadaAdversaria:', j);
       this.h.onJogadaAdversaria?.(j);
     });
 
