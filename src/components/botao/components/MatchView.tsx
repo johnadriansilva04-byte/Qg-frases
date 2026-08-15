@@ -90,7 +90,7 @@ export function MatchView({
     // Verificar se todos os discos e a bola estão em repouso
     const todosParados = discsRef.current.every(d => {
       const velocidade = Math.hypot(d.vx, d.vy);
-      return velocidade < 0.05;
+      return velocidade < 0.15; // Aumentado de 0.05 para 0.15
     });
 
     console.log('[MatchView] verificarFimDeMovimento:', { todosParados, jogadaEmAndamento: jogadaEmAndamentoRef.current });
@@ -226,8 +226,8 @@ export function MatchView({
       frames++;
       const moving = discsRef.current.some((d) => d.vx !== 0 || d.vy !== 0);
       
-      // Verificar fim de movimento no modo online
-      if (isOnline && moving && jogadaEmAndamentoRef.current) {
+      // Verificar fim de movimento no modo online (chamar sempre se jogada em andamento)
+      if (isOnline && jogadaEmAndamentoRef.current) {
         verificarFimDeMovimento();
       }
       
