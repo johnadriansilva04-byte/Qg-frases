@@ -55,15 +55,24 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
     if (savedScreen && savedScreen !== "lobby-list" && savedMesaId) {
       buscarMesa(savedMesaId).then(mesa => {
         if (mesa) {
-          setMesaId(savedMesaId);
-          setScreen(savedScreen);
+          // Verificar se o usuário é participante da mesa
+          const isParticipant = mesa.jogador_1_id === userId || mesa.jogador_2_id === userId;
+          if (isParticipant) {
+            setMesaId(savedMesaId);
+            setScreen(savedScreen);
+            console.log('[OnlineMatchV3] Sessão restaurada:', { mesaId: savedMesaId, status: mesa.status });
+          } else {
+            console.log('[OnlineMatchV3] Usuário não é participante da mesa, limpando persistência');
+            limparPersistencia();
+            setScreen("lobby-list");
+          }
         } else {
           limparPersistencia();
           setScreen("lobby-list");
         }
       });
     }
-  }, []);
+  }, [userId]);
 
   const limparPersistencia = useCallback(() => {
     Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
@@ -254,11 +263,11 @@ function MesaOnline({
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
   const [oponenteOnline, setOponenteOnline] = useState(false);
   const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
-  const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(false);
+  const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(mesa.status === "em_andamento" || (mesa.jogador_2_id !== null)); // Se já tiver 2 jogadores ou estiver em andamento
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
   const mesaRef = useRef<MesaRealtime | null>(null);
 
-  console.log('[MesaOnline] Estado inicial:', { tempoRestante, status: mesa.status, iniciado_em: mesa.iniciado_em });
+  console.log('[MesaOnline] Estado inicial:', { tempoRestante, status: mesa.status, iniciado_em: mesa.iniciado_em, jogador2: mesa.jogador_2_id });
 
   const souJogador1 = mesa.jogador_1_id === userId;
   const userTeam = useMemo(() => {
