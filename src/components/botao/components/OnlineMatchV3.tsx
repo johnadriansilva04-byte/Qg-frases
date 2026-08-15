@@ -88,7 +88,6 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
       liga: "Personalizado",
       is_personalizado: true,
       usuario_id: perfil.user_id,
-      created_at: perfil.created_at,
     };
   }, [perfil]);
 
@@ -260,7 +259,9 @@ function MesaOnline({
   
   const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
-  const [turnsLeft, setTurnsLeft] = useState(28); // 28 jogadas totais
+  const [seqJogada, setSeqJogada] = useState(mesa.seq_jogada || 0); // Sequência de jogadas do servidor
+  const TOTAL_JOGADAS = 28; // Total fixo de jogadas
+  const turnsLeft = TOTAL_JOGADAS - seqJogada; // Calculado dinamicamente
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
   const [oponenteOnline, setOponenteOnline] = useState(false);
   const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
@@ -328,6 +329,7 @@ function MesaOnline({
         },
         onEstado: (m) => {
           setPlacar([m.placar_j1, m.placar_j2]);
+          setSeqJogada(m.seq_jogada || 0); // Sincronizar sequência do servidor
         },
         onTurno: (meuTurno, turnoAtualId) => {
           // Lógica simples: se turno_atual_id == jogador_1_id, então home, senão away
@@ -360,10 +362,6 @@ function MesaOnline({
           if (payload.novoTurnoId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
             setCurrentTurn(novoTurno);
-          }
-          // Sempre sincronizar contador de jogadas quando receber
-          if (payload.turnsLeft !== undefined) {
-            setTurnsLeft(payload.turnsLeft);
           }
           // Chamar o handler do MatchView se estiver disponível
           if (fimDeTurnoHandlerRef.current) {
@@ -409,28 +407,25 @@ function MesaOnline({
         await mesaRef.current.registrarGol();
         await mesaRef.current.enviarGoalScored({
           jogadorId: userId,
-          placar: { home: placar[0], away: placar[1] },
+          placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
         });
       }
 
       // Se a jogada terminou sem gol e temos posições finais, enviar broadcast de fim de turno com novo turno
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
         // Calcular próximo turno
-        const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
+        const proximoTurno = mesa.jogador_1_id === userId ? (mesa.jogador_2_id || mesa.jogador_1_id) : mesa.jogador_1_id;
         
-        // Calcular novo contador de jogadas
-        const novoTurnsLeft = turnsLeft - 1;
-        
-        // Enviar broadcast das posições finais, novo turno E contador de jogadas
+        // Enviar broadcast das posições finais e novo turno (sem turnsLeft, usa seq_jogada do servidor)
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
           bola: posicoesFinais.bola,
           jogadorId: userId,
-          novoTurnoId: proximoTurno,
-          turnsLeft: novoTurnsLeft,
+          novoTurnoId: proximoTurno || undefined,
         });
         
-        // NÃO atualizar turno nem contador localmente - ambos só mudam quando receber broadcast do oponente
+        // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
+        // O contador de jogadas é sincronizado automaticamente via seq_jogada do servidor
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
@@ -540,8 +535,8 @@ function MesaOnline({
         homeId={homeId}
         awayId={awayId}
         userSide={userSide}
-        difficulty="amador" as Difficulty
-        turns={turnsLeft} // Sincronizado via broadcast
+        difficulty="amador"
+        turns={turnsLeft} // Sincronizado via seq_jogada do servidor
         knockout={false}
         stageLabel={`Partida Online - ${meuTurno ? 'Seu turno' : 'Turno do oponente'}`}
         onFinish={handleFinish}
@@ -556,7 +551,9 @@ function MesaOnline({
         }}
         onFimDeTurno={(handler) => {
           // Guardar o handler para ser chamado quando receber fim de turno do MesaRealtime
-          fimDeTurnoHandlerRef.current = handler;
+          if (typeof handler === 'function') {
+            fimDeTurnoHandlerRef.current = handler;
+          }
         }}
       />
     </div>
