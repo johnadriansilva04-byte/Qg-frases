@@ -394,7 +394,7 @@ function MesaOnline({
         });
       }
 
-      // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno E trocar turno no banco
+      // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
         // Enviar broadcast das posições finais
         await mesaRef.current.enviarFimDeTurno({
@@ -403,12 +403,15 @@ function MesaOnline({
           jogadorId: userId,
         });
         
-        // AGORA SIM trocar o turno no banco (após parada confirmada)
-        await supabase.rpc("registrar_jogada_mesa", {
-          p_mesa_id: mesa.mesa_id,
-          p_estado_fisico: posicoesFinais as never,
-          p_trocar_turno: true, // Trocar turno agora
-        });
+        // Trocar o turno no banco (após parada confirmada)
+        await mesaRef.current.enviarJogada({
+          id_botao: "no_goal",
+          forca: 0,
+          forca_x: 0,
+          forca_y: 0,
+          angulo: 0,
+          origem: { x: 0, y: 0 },
+        }, { trocarTurno: true, estadoFisico: posicoesFinais });
       }
     } catch (error) {
       // Erro ao enviar jogada
