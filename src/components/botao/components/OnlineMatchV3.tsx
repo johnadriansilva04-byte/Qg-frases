@@ -538,7 +538,7 @@ function MesaOnline({
         awayId={awayId}
         userSide={userSide}
         difficulty="amador" as Difficulty
-        turns={12} // Melhor de 3 (12 jogadas por partida)
+        turns={28} // 28 jogadas (14 por jogador)
         knockout={false}
         stageLabel={`Partida Online - ${meuTurno ? 'Seu turno' : 'Turno do oponente'}`}
         onFinish={handleFinish}
