@@ -389,7 +389,6 @@ function MesaOnline({
   }, [onSair]);
 
   const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => {
-    console.log('[OnlineMatchV3] handlePlay chamado:', { userId, goals, jogadaData, posicoesFinais });
     if (!mesaRef.current) return;
 
     try {
@@ -416,13 +415,11 @@ function MesaOnline({
 
       // Se a jogada terminou sem gol e temos posições finais, enviar broadcast de fim de turno com novo turno
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
-        // Decrementar contador de jogadas
-        const novoTurnsLeft = turnsLeft - 1;
-        setTurnsLeft(novoTurnsLeft);
-        
         // Calcular próximo turno
         const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
-        const proximoTurnoSide = proximoTurno === mesa.jogador_1_id ? 'home' : 'away';
+        
+        // Calcular novo contador de jogadas
+        const novoTurnsLeft = turnsLeft - 1;
         
         // Enviar broadcast das posições finais, novo turno E contador de jogadas
         await mesaRef.current.enviarFimDeTurno({
@@ -432,6 +429,9 @@ function MesaOnline({
           novoTurnoId: proximoTurno,
           turnsLeft: novoTurnsLeft,
         });
+        
+        // Atualizar turno e contador localmente após enviar broadcast
+        setTurnsLeft(novoTurnsLeft);
         
         // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
       }
