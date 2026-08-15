@@ -473,12 +473,10 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    console.log('[MatchView] onPointerDown:', { turn, userSide, isOnline, ended, simRef: simRef.current });
     // No modo online, bloqueia input se não for o turno do usuário
     if (ended || simRef.current) return;
     if (!isOnline && turn !== userSide) return;
     if (isOnline && turn !== userSide) {
-      console.log('[MatchView] Input bloqueado - não é seu turno:', { turn, userSide });
       return; // Input bloqueado - não é seu turno
     }
     // Bloquear input durante cooldown após gol

@@ -359,21 +359,10 @@ function MesaOnline({
           // Partida finalizada
         },
         onFimDeTurno: (payload) => {
-          console.log('[OnlineMatchV3] Recebendo fim de turno:', payload);
-          console.log('[OnlineMatchV3] Meu userId:', userId, 'Meu userSide:', userSide);
-          
           // Atualizar turno se novoTurnoId foi enviado
           if (payload.novoTurnoId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
-            console.log('[OnlineMatchV3] Atualizando turno via broadcast:', {
-              novoTurnoId: payload.novoTurnoId,
-              novoTurno,
-              userSide,
-              jogador1Id: mesa.jogador_1_id,
-              jogador2Id: mesa.jogador_2_id
-            });
             setCurrentTurn(novoTurno);
-            console.log('[OnlineMatchV3] Turno recebido no cliente:', novoTurno, 'Meu lado:', userSide);
           }
           // Chamar o handler do MatchView se estiver disponível
           if (fimDeTurnoHandlerRef.current) {
@@ -429,13 +418,6 @@ function MesaOnline({
         const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
         const proximoTurnoSide = proximoTurno === mesa.jogador_1_id ? 'home' : 'away';
         
-        console.log('[OnlineMatchV3] Enviando fim de turno:', {
-          userId,
-          proximoTurno,
-          proximoTurnoSide,
-          userSide
-        });
-        
         // Enviar broadcast das posições finais E do novo turno
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
@@ -446,7 +428,6 @@ function MesaOnline({
         
         // Atualizar turno localmente
         setCurrentTurn(proximoTurnoSide);
-        console.log('[OnlineMatchV3] Turno atualizado localmente para:', proximoTurnoSide);
       }
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
@@ -461,16 +442,6 @@ function MesaOnline({
   }, [onSair]);
 
   const meuTurno = currentTurn === userSide;
-  
-  // Log para debug de turno
-  console.log('[OnlineMatchV3] Estado do turno:', {
-    currentTurn,
-    userSide,
-    meuTurno,
-    userId,
-    jogador1Id: mesa.jogador_1_id,
-    jogador2Id: mesa.jogador_2_id
-  });
 
   const iniciarPartida = async () => {
     if (!mesaRef.current) return;
