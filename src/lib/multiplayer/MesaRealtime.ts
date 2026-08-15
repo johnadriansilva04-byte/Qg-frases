@@ -151,6 +151,7 @@ export class MesaRealtime {
 
     // 1.3) fim de turno - sincronização de posições finais
     this.canal.on("broadcast", { event: "fim_de_turno" }, ({ payload }) => {
+      console.log('[MesaRealtime] Recebendo broadcast fim_de_turno:', payload);
       this.h.onFimDeTurno?.(payload as any);
     });
 
@@ -292,7 +293,9 @@ export class MesaRealtime {
     jogadorId: string;
     novoTurnoId?: string;
   }) {
+    console.log('[MesaRealtime] Enviando broadcast fim_de_turno:', payload);
     await this.canal?.send({ type: "broadcast", event: "fim_de_turno", payload });
+    console.log('[MesaRealtime] Broadcast enviado com sucesso');
   }
 
   /** Atalho para registrar o listener sem instanciar handlers no construtor. */
