@@ -389,6 +389,7 @@ function MesaOnline({
   }, [onSair]);
 
   const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => {
+    console.log('[OnlineMatchV3] handlePlay chamado:', { goals, jogadaData, posicoesFinais, userId });
     if (!mesaRef.current) return;
 
     try {
