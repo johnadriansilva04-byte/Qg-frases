@@ -142,7 +142,7 @@ export function MatchView({
         // Resetar flag de jogada quando o turno muda
         if (turnoAnterior !== initialTurn) {
           hasShotThisTurnRef.current = false;
-          console.log('[MatchView] Turno mudou, resetando hasShotThisTurnRef');
+          console.log('[DEBUG] Turno mudou:', { turnoAnterior, novoTurno: initialTurn, hasShotThisTurnRef: hasShotThisTurnRef.current });
         }
       }
     }
@@ -529,6 +529,7 @@ export function MatchView({
     // Marcar jogada como em andamento e marcar que já jogou neste turno
     jogadaEmAndamentoRef.current = true;
     hasShotThisTurnRef.current = true;
+    console.log('[DEBUG] hasShotThisTurnRef setado para true');
 
     // Iniciar timer de segurança de 6 segundos
     if (safetyTimerRef.current) {
