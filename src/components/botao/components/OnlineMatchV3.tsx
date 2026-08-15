@@ -260,6 +260,7 @@ function MesaOnline({
   
   const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
+  const [turnsLeft, setTurnsLeft] = useState(28); // 28 jogadas totais
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
   const [oponenteOnline, setOponenteOnline] = useState(false);
   const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
@@ -311,7 +312,6 @@ function MesaOnline({
 
   // Inicializar MesaRealtime - roda apenas uma vez quando mesa.mesa_id ou userId mudam
   useEffect(() => {
-    console.log('[DEBUG] useEffect MesaRealtime executado:', { userId, mesaId: mesa.mesa_id, mesaRef: mesaRef.current });
     if (!userId || !mesa.mesa_id) return;
 
     const mesaRealtime = new MesaRealtime({
@@ -356,12 +356,14 @@ function MesaOnline({
           // Partida finalizada
         },
         onFimDeTurno: (payload) => {
-          console.log('[DEBUG] Recebendo fim de turno:', payload);
           // Atualizar turno se novoTurnoId foi enviado E não é do próprio jogador
           if (payload.novoTurnoId && payload.jogadorId !== userId) {
             const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
-            console.log('[DEBUG] Atualizando turno para:', novoTurno, 'userId:', userId);
             setCurrentTurn(novoTurno);
+          }
+          // Sincronizar contador de jogadas se foi enviado E não é do próprio jogador
+          if (payload.turnsLeft !== undefined && payload.jogadorId !== userId) {
+            setTurnsLeft(payload.turnsLeft);
           }
           // Chamar o handler do MatchView se estiver disponível
           if (fimDeTurnoHandlerRef.current) {
@@ -413,18 +415,21 @@ function MesaOnline({
 
       // Se a jogada terminou sem gol e temos posições finais, enviar broadcast de fim de turno com novo turno
       if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
+        // Decrementar contador de jogadas
+        const novoTurnsLeft = turnsLeft - 1;
+        setTurnsLeft(novoTurnsLeft);
+        
         // Calcular próximo turno
         const proximoTurno = mesa.jogador_1_id === userId ? mesa.jogador_2_id : mesa.jogador_1_id;
         const proximoTurnoSide = proximoTurno === mesa.jogador_1_id ? 'home' : 'away';
         
-        console.log('[DEBUG] Enviando fim de turno:', { proximoTurno, proximoTurnoSide, userId });
-        
-        // Enviar broadcast das posições finais E do novo turno
+        // Enviar broadcast das posições finais, novo turno E contador de jogadas
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
           bola: posicoesFinais.bola,
           jogadorId: userId,
           novoTurnoId: proximoTurno,
+          turnsLeft: novoTurnsLeft,
         });
         
         // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
@@ -432,7 +437,7 @@ function MesaOnline({
     } catch (error) {
       console.error('[OnlineMatchV3] Erro no handlePlay:', error);
     }
-  }, [userId, placar, mesa.mesa_id, mesa.jogador_1_id, mesa.jogador_2_id]);
+  }, [userId, placar, turnsLeft, mesa.mesa_id, mesa.jogador_1_id, mesa.jogador_2_id]);
 
   const handleQuit = useCallback(() => {
     if (mesaRef.current) {
@@ -538,7 +543,7 @@ function MesaOnline({
         awayId={awayId}
         userSide={userSide}
         difficulty="amador" as Difficulty
-        turns={28} // 28 jogadas (14 por jogador)
+        turns={turnsLeft} // Sincronizado via broadcast
         knockout={false}
         stageLabel={`Partida Online - ${meuTurno ? 'Seu turno' : 'Turno do oponente'}`}
         onFinish={handleFinish}

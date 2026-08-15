@@ -127,7 +127,6 @@ export function MatchView({
   // Sincronizar turno com initialTurn quando mudar (modo online)
   // APENAS atualiza a flag de interatividade, não reinicializa o jogo
   useEffect(() => {
-    console.log('[DEBUG] useEffect turno executado:', { initialTurn, isOnline, initialized: initializedRef.current, ended: endedRef.current });
     if (initialTurn && isOnline && !initializedRef.current) {
       // Primeira inicialização
       turnRef.current = initialTurn;
@@ -143,7 +142,6 @@ export function MatchView({
         // Resetar flag de jogada quando o turno muda
         if (turnoAnterior !== initialTurn) {
           hasShotThisTurnRef.current = false;
-          console.log('[DEBUG] Turno mudou:', { turnoAnterior, novoTurno: initialTurn, hasShotThisTurnRef: hasShotThisTurnRef.current });
         }
       }
     }
@@ -342,12 +340,9 @@ export function MatchView({
     if (!isOnline || !onJogadaAdversaria) return;
 
     const handleJogadaAdversaria = (jogada: any) => {
-      console.log('[MatchView] Recebendo jogada do adversário:', jogada);
-      
       // Encontrar o disco correspondente
       const disco = discsRef.current.find((d) => d.id === jogada.id_botao);
       if (!disco) {
-        console.error('[MatchView] Disco não encontrado:', jogada.id_botao);
         return;
       }
 
