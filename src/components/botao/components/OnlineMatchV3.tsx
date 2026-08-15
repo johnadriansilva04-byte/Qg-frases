@@ -256,6 +256,8 @@ function MesaOnline({
   userId: string;
   onSair: () => void;
 }) {
+  const souJogador1 = mesa.jogador_1_id === userId;
+  
   const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
@@ -264,8 +266,6 @@ function MesaOnline({
   const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(mesa.status === "em_andamento" || (mesa.jogador_2_id !== null)); // Se já tiver 2 jogadores ou estiver em andamento
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
   const mesaRef = useRef<MesaRealtime | null>(null);
-
-  const souJogador1 = mesa.jogador_1_id === userId;
   const userTeam = useMemo(() => {
     if (!meuTime) return createCustomTeam('custom', 'Meu Time', 'MTI', '#FF0000', '#00FF00', 75);
     return createCustomTeam(
