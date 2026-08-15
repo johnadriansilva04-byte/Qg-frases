@@ -327,11 +327,14 @@ function MesaOnline({
         onEstado: (m) => {
           setPlacar([m.placar_j1, m.placar_j2]);
         },
-        onTurno: (meuTurno) => {
-          setCurrentTurn(meuTurno ? userSide : userSide === "home" ? "away" : "home");
+        onTurno: (meuTurno, turnoAtualId) => {
+          console.log('[MesaOnline] Turno atualizado:', { meuTurno, turnoAtualId, userSide, souJogador1 });
+          // Se é meu turno, seto para meu lado. Se não, seto para o lado oposto
+          const novoTurno = meuTurno ? userSide : (userSide === "home" ? "away" : "home");
+          console.log('[MesaOnline] Novo turno:', novoTurno);
+          setCurrentTurn(novoTurno);
         },
         onTempo: (segundos) => {
-          console.log('[MesaOnline] Tempo atualizado:', segundos);
           setTempoRestante(segundos);
         },
         onOponente: (online) => {
@@ -356,6 +359,10 @@ function MesaOnline({
         onPartidaFinalizada: (m) => {
           console.log('[MesaOnline] Partida finalizada:', m);
         },
+        onFimDeTurno: (payload) => {
+          console.log('[MesaOnline] Fim de turno recebido:', payload);
+          // Será aplicado no MatchView via callback
+        },
         onErro: (erro) => {
           console.error('[MesaOnline] Erro:', erro);
         },
@@ -375,15 +382,17 @@ function MesaOnline({
     onSair();
   }, [onSair]);
 
-  const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }) => {
+  const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => {
     if (!mesaRef.current) return;
 
     try {
       // Enviar jogada via MesaRealtime com dados reais da física
-      if (jogadaData) {
+      if (jogadaData && jogadaData.discId !== "own_goal" && jogadaData.discId !== "goal" && jogadaData.discId !== "pass_turn" && jogadaData.discId !== "no_goal") {
         await mesaRef.current.enviarJogada({
           id_botao: jogadaData.discId,
           forca: Math.round(jogadaData.power * 100),
+          forca_x: jogadaData.ix,
+          forca_y: jogadaData.iy,
           angulo: Math.round(Math.atan2(jogadaData.iy, jogadaData.ix) * (180 / Math.PI)),
           origem: { x: 0, y: 0 }, // Será preenchido pela posição real do disco
         });
@@ -396,6 +405,15 @@ function MesaOnline({
         await mesaRef.current.enviarGoalScored({
           jogadorId: userId,
           placar: { home: placar[0], away: placar[1] },
+        });
+      }
+
+      // Se a jogada terminou sem gol e temos posições finais, enviar evento de fim de turno
+      if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
+        await mesaRef.current.enviarFimDeTurno({
+          discos: posicoesFinais.discos,
+          bola: posicoesFinais.bola,
+          jogadorId: userId,
         });
       }
     } catch (error) {
@@ -507,7 +525,7 @@ function MesaOnline({
       </div>
 
       <MatchView
-        key={mesa.id}
+        key={`${mesa.id}-${currentTurn}`}
         homeId={homeId}
         awayId={awayId}
         userSide={userSide}
@@ -524,6 +542,10 @@ function MesaOnline({
         onJogadaAdversaria={(jogada) => {
           console.log('[MesaOnline] Recebendo jogada do adversário no MatchView:', jogada);
           // Aplicar jogada na física do MatchView
+        }}
+        onFimDeTurno={(handler) => {
+          console.log('[MesaOnline] Registrando handler de fim de turno no MatchView');
+          // O handler será chamado pelo MatchView quando receber posições finais
         }}
       />
     </div>

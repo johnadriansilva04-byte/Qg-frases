@@ -17,9 +17,10 @@ type Props = {
   onQuit: () => void;
   isOnline?: boolean; // Nova prop para indicar modo online
   customTeam?: Team; // Time personalizado do usuário
-  onPlay?: (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }) => void; // Callback chamado quando uma jogada termina (para sincronização online)
+  onPlay?: (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => void; // Callback chamado quando uma jogada termina (para sincronização online)
   initialTurn?: Side; // Turno inicial (para sincronização online)
   onJogadaAdversaria?: (jogada: any) => void; // Callback para receber jogadas do adversário
+  onFimDeTurno?: (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => void; // Callback para receber fim de turno
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -39,6 +40,7 @@ export function MatchView({
   onPlay,
   initialTurn,
   onJogadaAdversaria,
+  onFimDeTurno,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -91,8 +93,8 @@ export function MatchView({
       setTurn(initialTurn);
       initializedRef.current = true;
     } else if (initialTurn && isOnline && initializedRef.current) {
-      // Atualizações subsequentes - apenas atualiza turno se não estiver em simulação
-      if (!simRef.current && !endedRef.current) {
+      // Atualizações subsequentes - sempre atualizar o turno
+      if (!endedRef.current) {
         turnRef.current = initialTurn;
         setTurn(initialTurn);
       }
@@ -258,20 +260,108 @@ export function MatchView({
           finishMatch(scoreRef.current.home, scoreRef.current.away);
           return;
         }
-        // No modo online, NÃO alternar turno localmente - deixar o banco controlar
-        if (!isOnline) {
+        
+        // No modo online, enviar posições finais e NÃO alternar turno localmente
+        if (isOnline) {
+          // Coletar posições finais de todos os discos e da bola
+          const posicoesFinais = {
+            discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
+            bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
+          };
+          // Chamar onPlay com posições finais para sincronização
+          if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
+        } else {
           turnRef.current = turnRef.current === "home" ? "away" : "home";
           setTurn(turnRef.current);
+          if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 });
         }
-        // Chamar onPlay para sincronização online quando a jogada termina sem gol
-        if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 });
         return;
       }
       requestAnimationFrame(loop);
     };
 
     requestAnimationFrame(loop);
-  }, [finishMatch]);
+  }, [finishMatch, isOnline]);
+
+  // Receber e aplicar jogadas do adversário
+  useEffect(() => {
+    if (!isOnline || !onJogadaAdversaria) return;
+
+    const handleJogadaAdversaria = (jogada: any) => {
+      console.log('[MatchView] Recebendo jogada do adversário:', jogada);
+      
+      // Encontrar o disco correspondente
+      const disco = discsRef.current.find((d) => d.id === jogada.id_botao);
+      if (!disco) {
+        console.error('[MatchView] Disco não encontrado:', jogada.id_botao);
+        return;
+      }
+
+      // Aplicar a força recebida do adversário
+      // Usar forca_x e forca_y se disponíveis, caso contrário calcular do ângulo
+      let ix, iy;
+      if (jogada.forca_x !== undefined && jogada.forca_y !== undefined) {
+        ix = jogada.forca_x;
+        iy = jogada.forca_y;
+      } else {
+        const rad = (jogada.angulo * Math.PI) / 180;
+        const forcaNormalizada = jogada.forca / 100;
+        ix = Math.cos(rad) * forcaNormalizada;
+        iy = Math.sin(rad) * forcaNormalizada;
+      }
+
+      // Aplicar velocidade ao disco
+      disco.vx = ix;
+      disco.vy = iy;
+
+      // Iniciar simulação após um pequeno delay para garantir que o estado esteja pronto
+      setTimeout(() => {
+        if (!simRef.current) {
+          runSimulation();
+        }
+      }, 50);
+    };
+
+    // Registrar o handler
+    onJogadaAdversaria(handleJogadaAdversaria);
+  }, [isOnline, onJogadaAdversaria, runSimulation]);
+
+  // Receber e aplicar posições finais do fim de turno
+  useEffect(() => {
+    if (!isOnline || !onFimDeTurno) return;
+
+    const handleFimDeTurno = (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => {
+      console.log('[MatchView] Recebendo fim de turno com posições finais:', payload);
+      
+      // Aplicar posições finais aos discos
+      payload.discos.forEach(discoFinal => {
+        const discoLocal = discsRef.current.find((d) => d.id === discoFinal.id);
+        if (discoLocal) {
+          discoLocal.x = discoFinal.x;
+          discoLocal.y = discoFinal.y;
+          discoLocal.vx = 0;
+          discoLocal.vy = 0;
+        }
+      });
+
+      // Aplicar posição final da bola
+      const bolaLocal = discsRef.current.find((d) => d.side === "ball");
+      if (bolaLocal) {
+        bolaLocal.x = payload.bola.x;
+        bolaLocal.y = payload.bola.y;
+        bolaLocal.vx = 0;
+        bolaLocal.vy = 0;
+      }
+
+      // Forçar re-renderização
+      setAimPower(prev => prev); // Trigger re-render
+    };
+
+    // Registrar o handler passando a função callback
+    if (typeof onFimDeTurno === 'function') {
+      onFimDeTurno(handleFimDeTurno);
+    }
+  }, [isOnline, onFimDeTurno]);
 
   // jogada da CPU (desabilitado no modo online)
   useEffect(() => {
@@ -334,8 +424,8 @@ export function MatchView({
     if (ended || simRef.current) return;
     if (!isOnline && turn !== userSide) return;
     if (isOnline && turn !== userSide) {
-      console.log('[MatchView] Input bloqueado - não é seu turno');
-      return;
+      console.log('[MatchView] Input bloqueado - não é seu turno', { turn, userSide, isOnline });
+      return; // Input bloqueado - não é seu turno
     }
     // Bloquear input durante cooldown após gol
     if (goalCooldown !== null) return;
@@ -450,12 +540,19 @@ export function MatchView({
       <div ref={wrapRef} className="relative">
         <canvas
           ref={canvasRef}
-          className="pitch-canvas w-full touch-none select-none"
+          className={`pitch-canvas w-full touch-none select-none ${isOnline && turn !== userSide ? 'opacity-60' : ''}`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         />
+        {isOnline && turn !== userSide && !ended && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/20">
+            <div className="bg-background/90 px-6 py-3 rounded-lg shadow-lg">
+              <p className="font-display text-lg text-foreground">Aguardando jogada do oponente...</p>
+            </div>
+          </div>
+        )}
         {flash && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
             <span className="goal-flash font-display text-4xl sm:text-6xl">{flash}</span>

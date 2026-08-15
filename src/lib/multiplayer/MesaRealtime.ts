@@ -37,12 +37,15 @@ export interface MesaRow {
 export interface JogadaPayload {
   id_botao: string | number;
   forca: number;
+  forca_x: number;
+  forca_y: number;
   angulo: number;
   /** posição de origem, para corrigir divergência de física entre clientes */
   origem?: { x: number; y: number };
   /** contador incremental do emissor, usado para descartar jogadas fora de ordem */
   seq: number;
   autor_id: string;
+  jogador_id: string;
   enviado_em: number;
 }
 
@@ -63,6 +66,12 @@ export interface MesaRealtimeHandlers {
   onSyncPositions?: (payload: { discos: any[]; bola: any }) => void;
   /** gol marcado - atualiza placar */
   onGoalScored?: (payload: { jogadorId: string; placar: { home: number; away: number } }) => void;
+  /** fim de turno - sincroniza posições finais e passa turno */
+  onFimDeTurno?: (payload: { 
+    discos: Array<{ id: string; x: number; y: number }>; 
+    bola: { x: number; y: number };
+    jogadorId: string;
+  }) => void;
   onPartidaIniciada?: (mesa: MesaRow) => void;
   onPartidaFinalizada?: (mesa: MesaRow) => void;
   onErro?: (erro: Error) => void;
@@ -135,6 +144,12 @@ export class MesaRealtime {
     this.canal.on("broadcast", { event: "goal_scored" }, ({ payload }) => {
       console.log('[MesaRealtime] Goal scored recebido:', payload);
       this.h.onGoalScored?.(payload as any);
+    });
+
+    // 1.3) fim de turno - sincronização de posições finais
+    this.canal.on("broadcast", { event: "fim_de_turno" }, ({ payload }) => {
+      console.log('[MesaRealtime] Fim de turno recebido:', payload);
+      this.h.onFimDeTurno?.(payload as any);
     });
 
     // 2) estado autoritativo da mesa
@@ -221,15 +236,18 @@ export class MesaRealtime {
 
   /** Envia o chute do jogador local: broadcast imediato + RPC de turno. */
   async enviarJogada(
-    dados: Omit<JogadaPayload, "seq" | "autor_id" | "enviado_em">,
+    dados: Omit<JogadaPayload, "seq" | "autor_id" | "enviado_em" | "jogador_id">,
     opts: { trocarTurno?: boolean; estadoFisico?: unknown } = {},
   ): Promise<boolean> {
     if (!this.podeJogar()) return false;
 
     const payload: JogadaPayload = {
       ...dados,
+      forca_x: dados.forca_x || 0,
+      forca_y: dados.forca_y || 0,
       seq: ++this.seqLocal,
       autor_id: this.userId,
+      jogador_id: this.userId,
       enviado_em: Date.now(),
     };
 
@@ -271,6 +289,16 @@ export class MesaRealtime {
   async enviarGoalScored(payload: { jogadorId: string; placar: { home: number; away: number } }) {
     console.log('[MesaRealtime] Enviando goal_scored:', payload);
     await this.canal?.send({ type: "broadcast", event: "goal_scored", payload });
+  }
+
+  /** Envia evento de fim de turno com posições finais (broadcast) */
+  async enviarFimDeTurno(payload: { 
+    discos: Array<{ id: string; x: number; y: number }>; 
+    bola: { x: number; y: number };
+    jogadorId: string;
+  }) {
+    console.log('[MesaRealtime] Enviando fim_de_turno:', payload);
+    await this.canal?.send({ type: "broadcast", event: "fim_de_turno", payload });
   }
 
   /** Atalho para registrar o listener sem instanciar handlers no construtor. */
@@ -374,7 +402,13 @@ export class MesaRealtime {
         return;
       }
       const tempo = this.tempoRestante();
-      console.log('[MesaRealtime] Tick do relógio:', tempo, 'segundos');
+      
+      // Log apenas a cada 60 segundos ou nos últimos 10 segundos
+      const deveLogar = tempo % 60 === 0 || tempo <= 10;
+      if (deveLogar) {
+        console.log('[MesaRealtime] Tick do relógio:', tempo, 'segundos');
+      }
+      
       this.h.onTempo?.(tempo);
     }, 1000);
   }
