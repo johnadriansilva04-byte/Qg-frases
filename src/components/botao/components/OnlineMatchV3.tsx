@@ -260,7 +260,7 @@ function MesaOnline({
   const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
   const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
   const [seqJogada, setSeqJogada] = useState(mesa.seq_jogada || 0); // Sequência de jogadas do servidor
-  const TOTAL_JOGADAS = 28; // Total fixo de jogadas
+  const TOTAL_JOGADAS = 12; // Total fixo de jogadas
   const turnsLeft = TOTAL_JOGADAS - seqJogada; // Calculado dinamicamente
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
   const [oponenteOnline, setOponenteOnline] = useState(false);
@@ -330,6 +330,7 @@ function MesaOnline({
         onEstado: (m) => {
           setPlacar([m.placar_j1, m.placar_j2]);
           setSeqJogada(m.seq_jogada || 0); // Sincronizar sequência do servidor
+          // O placar é sincronizado automaticamente via Postgres Changes
         },
         onTurno: (meuTurno, turnoAtualId) => {
           // Lógica simples: se turno_atual_id == jogador_1_id, então home, senão away
@@ -347,9 +348,6 @@ function MesaOnline({
         },
         onSyncPositions: (payload) => {
           // Será aplicado no MatchView via callback
-        },
-        onGoalScored: (payload) => {
-          setPlacar([payload.placar.home, payload.placar.away]);
         },
         onPartidaIniciada: (m) => {
           setPartidaIniciada(true);
@@ -402,13 +400,9 @@ function MesaOnline({
         });
       }
 
-      // Se houve gol, registrar o gol e enviar broadcast
+      // Se houve gol, registrar o gol no servidor (placar será sincronizado via Postgres Changes)
       if (goals > 0) {
         await mesaRef.current.registrarGol();
-        await mesaRef.current.enviarGoalScored({
-          jogadorId: userId,
-          placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
-        });
       }
 
       // Se a jogada terminou sem gol e temos posições finais, enviar broadcast de fim de turno com novo turno
@@ -417,20 +411,19 @@ function MesaOnline({
         const proximoTurno = mesa.jogador_1_id === userId ? (mesa.jogador_2_id || mesa.jogador_1_id) : mesa.jogador_1_id;
         
         // Incrementar contador apenas se for o jogador 1 jogando
-        const novoTurnsLeft = mesa.jogador_1_id === userId ? turnsLeft - 1 : turnsLeft;
+        const novoSeqJogada = mesa.jogador_1_id === userId ? seqJogada + 1 : seqJogada;
         
-        // Enviar broadcast das posições finais, novo turno E contador de jogadas
+        // Enviar broadcast das posições finais e novo turno (sem turnsLeft, usa seq_jogada do servidor)
         await mesaRef.current.enviarFimDeTurno({
           discos: posicoesFinais.discos,
           bola: posicoesFinais.bola,
           jogadorId: userId,
           novoTurnoId: proximoTurno,
-          turnsLeft: novoTurnsLeft,
         });
         
         // Atualizar contador localmente apenas se for o jogador 1
         if (mesa.jogador_1_id === userId) {
-          setTurnsLeft(novoTurnsLeft);
+          setSeqJogada(novoSeqJogada);
         }
         
         // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
@@ -553,6 +546,7 @@ function MesaOnline({
         customTeam={userTeam}
         onPlay={handlePlay}
         initialTurn={currentTurn}
+        score={{ home: placar[0] ?? 0, away: placar[1] ?? 0 }}
         onJogadaAdversaria={(handler) => {
           // Guardar o handler para ser chamado quando receber jogada do MesaRealtime
           jogadaAdversariaHandlerRef.current = handler;

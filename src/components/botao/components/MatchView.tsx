@@ -21,6 +21,7 @@ type Props = {
   initialTurn?: Side; // Turno inicial (para sincronização online)
   onJogadaAdversaria?: (jogada: any) => void; // Callback para receber jogadas do adversário
   onFimDeTurno?: (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => void; // Callback para receber fim de turno
+  score?: { home: number; away: number }; // Placar sincronizado do servidor (para modo online)
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -41,6 +42,7 @@ export function MatchView({
   initialTurn,
   onJogadaAdversaria,
   onFimDeTurno,
+  score: serverScore,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -78,6 +80,13 @@ export function MatchView({
   useEffect(() => {
     setTurnsLeft(turns);
   }, [turns]);
+
+  // Sincronizar placar com a prop score (para modo online)
+  useEffect(() => {
+    if (serverScore && isOnline) {
+      setScore(serverScore);
+    }
+  }, [serverScore, isOnline]);
 
   // Sincronizar turnsRef com turnsLeft (para uso interno)
   useEffect(() => {
