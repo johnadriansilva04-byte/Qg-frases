@@ -374,6 +374,9 @@ export function MatchView({
     if (!isOnline || !onFimDeTurno) return;
 
     const handleFimDeTurno = (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => {
+      // Resetar flag de jogada quando receber fim de turno
+      hasShotThisTurnRef.current = false;
+
       // Aplicar posições finais aos discos
       payload.discos.forEach(discoFinal => {
         const discoLocal = discsRef.current.find((d) => d.id === discoFinal.id);
