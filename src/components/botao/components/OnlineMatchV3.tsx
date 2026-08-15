@@ -266,6 +266,8 @@ function MesaOnline({
   const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(mesa.status === "em_andamento" || (mesa.jogador_2_id !== null)); // Se já tiver 2 jogadores ou estiver em andamento
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
   const mesaRef = useRef<MesaRealtime | null>(null);
+  const jogadaAdversariaHandlerRef = useRef<((jogada: any) => void) | null>(null);
+  const fimDeTurnoHandlerRef = useRef<((payload: any) => void) | null>(null);
   const userTeam = useMemo(() => {
     if (!meuTime) return createCustomTeam('custom', 'Meu Time', 'MTI', '#FF0000', '#00FF00', 75);
     return createCustomTeam(
@@ -319,6 +321,10 @@ function MesaOnline({
         onJogadaAdversaria: (jogada) => {
           console.log('[OnlineMatchV3] Recebendo jogada adversária:', jogada);
           setJogadaAdversaria(jogada);
+          // Chamar o handler do MatchView se estiver disponível
+          if (jogadaAdversariaHandlerRef.current) {
+            jogadaAdversariaHandlerRef.current(jogada);
+          }
         },
         onEstado: (m) => {
           console.log('[OnlineMatchV3] Estado atualizado:', m);
@@ -353,7 +359,11 @@ function MesaOnline({
           // Partida finalizada
         },
         onFimDeTurno: (payload) => {
-          // Será aplicado no MatchView via callback
+          console.log('[OnlineMatchV3] Recebendo fim de turno:', payload);
+          // Chamar o handler do MatchView se estiver disponível
+          if (fimDeTurnoHandlerRef.current) {
+            fimDeTurnoHandlerRef.current(payload);
+          }
         },
         onErro: (erro) => {
           // Erro
@@ -535,11 +545,13 @@ function MesaOnline({
         customTeam={userTeam}
         onPlay={handlePlay}
         initialTurn={currentTurn}
-        onJogadaAdversaria={(jogada) => {
-          // Aplicar jogada na física do MatchView
+        onJogadaAdversaria={(handler) => {
+          // Guardar o handler para ser chamado quando receber jogada do MesaRealtime
+          jogadaAdversariaHandlerRef.current = handler;
         }}
         onFimDeTurno={(handler) => {
-          // O handler será chamado pelo MatchView quando receber posições finais
+          // Guardar o handler para ser chamado quando receber fim de turno do MesaRealtime
+          fimDeTurnoHandlerRef.current = handler;
         }}
       />
     </div>
