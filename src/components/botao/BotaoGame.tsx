@@ -360,9 +360,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-        <OnlineMatchV3
-          onBack={() => setScreen("menu")}
-        />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <Globe className="w-16 h-16 text-purple-400 mb-4 animate-pulse" />
+          <h2 className="text-2xl font-bold mb-2">Modo Online</h2>
+          <p className="text-muted-foreground mb-4">Em breve você poderá jogar contra outros jogadores em tempo real!</p>
+          <button
+            onClick={() => setScreen("menu")}
+            className="btn-primary"
+          >
+            Voltar ao menu
+          </button>
+        </div>
       </Shell>
     );
   }
