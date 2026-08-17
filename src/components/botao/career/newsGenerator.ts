@@ -5,6 +5,106 @@ import type { Coach, Headline } from "./types";
 let uid = 0;
 const nextId = () => `hl-${Date.now()}-${uid++}`;
 
+// Nomes de treinadores fictícios para cada time
+const TREINADORES: Record<string, string> = {
+  "fla": "Jorge Jesus",
+  "flu": "Fernando Diniz",
+  "vas": "Rafael Paiva",
+  "bot": "Bruno Lage",
+  "saopaulo": "Hernán Crespo",
+  "pal": "Abel Ferreira",
+  "cor": "Vanderlei Luxemburgo",
+  "santos": "Fábio Carille",
+  "gre": "Renato Gaúcho",
+  "int": "Diego Aguirre",
+  "cru": "Luiz Felipe Scolari",
+  "atl": "Cuca",
+  "bah": "Roger Machado",
+  "for": "Juan Pablo Vojvoda",
+  "cear": "Enderson Moreira",
+  "fort": "Vojvoda",
+  "goi": "Rogério Ceni",
+  "cui": "Marcelo Cabo",
+  "ava": "Geninho",
+  "sport": "Oliveira",
+  "juv": "Mazzarri",
+  "mil": "Pioli",
+  "intmil": "Inzaghi",
+  "nap": "Spalletti",
+  "rom": "Mourinho",
+  "laz": "Sarri",
+  "inter": "Simone",
+  "ata": "Simeone",
+  "bar": "Xavi",
+  "real": "Ancelotti",
+  "val": "Gattuso",
+  "sev": "Lopetegui",
+  "bet": "Pellegrini",
+  "vil": "Emery",
+  "soc": "Iraola",
+  "ath": "Simeone",
+  "esp": "Mendilibar",
+  "ray": "Iraola",
+  "get": "Quique",
+  "mal": "Pellicer",
+  "cad": "Alcaraz",
+  "alm": "Pellegrini",
+  "elc": "Míchel",
+  "lev": "Pacheta",
+  "valc": "Rubén Baraja",
+  "gij": "Coudet",
+  "vll": "Pacheta",
+  "osa": "Arrasate",
+  "mai": "Míchel",
+  "bil": "Valverde",
+  "rea": "Iraola",
+  "cel": "Coudet",
+  "vilr": "Pellegrini",
+  "spo": "Rubén Baraja",
+  "gir": "Gennaro Gattuso",
+  "sas": "Roberto De Zerbi",
+  "ver": "Gasperini",
+  "tor": "Juric",
+  "lag": "Lucas",
+  "udin": "Gotti",
+  "lec": "Baroni",
+  "mon": "Stankovic",
+  "bolog": "Mihajlovic",
+  "cre": "Baroni",
+  "gen": "Gilardino",
+  "samp": "Stankovic",
+  "emp": "Paolo Zanetti",
+  "sal": "D'Aversa",
+  "ven": "Zanetti",
+  "bre": "Italiano",
+  "fio": "Italiano",
+  "romaa": "Mourinho",
+  "lazio": "Sarri",
+  "napoli": "Spalletti",
+  "juve": "Allegri",
+  "milan": "Pioli",
+  "intermil": "Inzaghi",
+  "atm": "Simeone",
+  "barca": "Xavi",
+  "realm": "Ancelotti",
+  "sevil": "Lopetegui",
+  "villar": "Emery",
+  "reals": "Ancelotti",
+  "atlb": "Simeone",
+  "barcb": "Xavi",
+  "realmc": "Ancelotti",
+  "juveb": "Allegri",
+  "milanb": "Pioli",
+  "intermilb": "Inzaghi",
+  "napolib": "Spalletti",
+  "romab": "Mourinho",
+  "laziob": "Sarri",
+  "atmb": "Simeone",
+  "sevilb": "Lopetegui",
+  "villarb": "Emery",
+  "realsb": "Ancelotti",
+};
+
 const T_GERAL = [
   "{H} e {A} empatam em partida truncada",
   "{W} atropela {L} em virada dramática",
@@ -13,6 +113,20 @@ const T_GERAL = [
   "Clássico regional: {H} {gH} x {gA} {A}",
   "Torcida em festa: {W} avança confiante",
   "{L} decepciona torcida em derrota amarga",
+  "{coachW} comemora vitória do {W}",
+  "{coachL} lamenta derrota do {L}",
+  "Show de {coachW}: {W} domina",
+  "{coachL} cobra postura após derrota",
+  "Tática de {coachW} funciona perfeitamente",
+  "{coachL} promete reação imediata",
+  "{W} faz festa, torcida aplaude {coachW}",
+  "{L} tropeça, {coachL} assume responsabilidade",
+  "{coachW}: 'Melhor jogo da temporada'",
+  "{coachL}: 'Precisamos melhorar muito'",
+  "Vitória histórica do {W}, diz {coachW}",
+  "Derrota dura: {coachL} pede calma",
+  "{W} humilha, {coachW} emocionado",
+  "{L} afundado, {coachL} sob pressão",
 ];
 
 const T_USER_VIT = [
@@ -20,17 +134,36 @@ const T_USER_VIT = [
   "{T} vence com autoridade e cresce no torneio",
   "Vitória convincente: {T} dita o ritmo",
   "{coach} comemora: {T} vence de {gH} a {gA}",
+  "{coach}: 'Time respondeu muito bem'",
+  "{T} domina, {coach} projeta título",
+  "Jogo de {coach} funciona: {T} vence",
+  "{coach} aplaude ofensiva do {T}",
+  "{T} faz show, {coach} em êxtase",
+  "Vitória importante, diz {coach}",
 ];
 
 const T_USER_DER = [
   "{coach} promete reação após tropeço do {T}",
   "{T} tropeça e liga alerta na torcida",
   "Derrota amarga: {T} precisa se reerguer",
+  "{coach} lamenta derrota do {T}",
+  "{coach} cobra postura após derrota",
+  "{coach} admite: 'Precisamos melhorar'",
+  "{T} decepciona, {coach} revisa tática",
+  "Crisis no {T}: {coach} pede união",
+  "{coach} pede calma após derrota",
+  "{T} sofre, {coach} assume responsabilidade",
 ];
 
 const T_USER_EMP = [
   "{T} empata e desperdiça chance de disparar",
   "{coach} fica insatisfeito com empate morno do {T}",
+  "{T} segura empate, {coach} analisa jogo",
+  "Jogo truncado: {coach} avalia {T}",
+  "{T} escapa de derrota, {coach} aliviado",
+  "{coach} pede evolução após empate",
+  "{T} faz seu jogo, {coach} critica arbitragem",
+  "Empate frustra {coach}",
 ];
 
 const T_COLETIVA = [
@@ -38,6 +171,12 @@ const T_COLETIVA = [
   "{coach} evita polêmica: 'Respeito o adversário, mas jogamos pra vencer'",
   "'Confio no meu grupo', diz {coach} em entrevista",
   "{coach} projeta jogo duro: 'Nada será fácil'",
+  "{coach}: 'Treinamos muito para isso'",
+  "{coach} elogia preparação física",
+  "{coach} cobra intensidade nos treinos",
+  "{coach} projeta tática agressiva",
+  "{coach} foca em organização defensiva",
+  "{coach} promete jogo ofensivo",
 ];
 
 const T_POLEMICA = [
@@ -47,18 +186,30 @@ const T_POLEMICA = [
   "Imprensa aponta: {T} oscila demais entre casa e fora",
   "Crítica do dia: {coach} é questionado por escalação conservadora",
   "Ex-jogador dispara: '{T} joga com medo de perder'",
+  "{coach} rebate críticas: 'Sabemos o que fazemos'",
+  "Torcida do {T} cobra mudança na tática",
+  "Especialistas questionam {coach}",
+  "{T} sob pressão, {coach} responde",
 ];
 
 const T_LIDER = [
   "{T} assume o ponteiro: 'a pressa agora é nossa'",
   "Líder isolado! {T} abre vantagem na tabela",
   "Com {coach} no comando, {T} dispara na liderança",
+  "{coach} comemora liderança do {T}",
+  "{T} no topo, {coach} projeta título",
+  "{coach}: 'Liderança é gratificante'",
+  "{T} domina, {coach} confiante",
 ];
 
 const T_REBAIXA = [
   "{T} entra na zona de rebaixamento e acende o alerta",
   "Crise: {T} acumula jogos sem vencer e cochicha demissão",
   "Torcida do {T} pede cabeça após mais um revés",
+  "{coach} admite: 'Luta difícil pela sobrevivência'",
+  "{T} afundado, {coach} sob fogo",
+  "SOS {T}: {coach} cobra reação imediata",
+  "{coach} pede união para escapar do rebaixamento",
 ];
 
 const T_MATA = [
@@ -66,6 +217,8 @@ const T_MATA = [
   "{coach} garante: 'mata-mata é outra história, vamos pra cima'",
   "Eliminação ronda o {T} após tropeço nas {stage}",
   "Classificação dramática! {T} avança nas {stage}",
+  "{coach}: 'Mata-mata exige concentração total'",
+  "{T} focado, diz {coach}",
 ];
 
 const T_SUBORNO = [
@@ -73,12 +226,39 @@ const T_SUBORNO = [
   "Boato: estranho é visto no estacionamento após jogo do {T}",
   "Coluna do dia: 'algo cheira mal no futebol de botão'",
   "Diretoria do {T} nega qualquer irregularidade",
+  "Rumor: envelope misterioso circula no {T}",
+  "{T} envolvido em polêmica de suborno",
+];
+
+const T_GOLEADA = [
+  "GOLEADA! {W} destrói adversário",
+  "{coachW}: 'Melhor jogo da temporada'",
+  "{W} faz show, {coachW} aplaude time",
+  "Festival de gols: {W} domina",
+  "{coachW} elogia ofensiva do {W}",
+  "{W} humilha, {coachW} comemora",
+  "Massacre! {W} goleia, {coachL} em choque",
+];
+
+const T_ZEBRA = [
+  "ZEBRA! {W} surpreende e vence",
+  "{coachW} comemora vitória histórica do {W}",
+  "{W} faz milagre, {coachW} emocionado",
+  "Sensação! {W} vence, {coachW} em êxtase",
+  "{W} choca o futebol, {coachW} herói",
+  "Vitória inacreditável do {W}, diz {coachW}",
+  "Imprevisível! {W} vence, {coachL} perplexo",
 ];
 
 const pick = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]!;
 
 function fill(template: string, vars: Record<string, string | number>) {
   return template.replace(/\{(\w+)\}/g, (_m, k) => String(vars[k] ?? ""));
+}
+
+function getTreinador(teamId: string): string {
+  const team = teamByIdSync(teamId);
+  return TREINADORES[team?.short?.toLowerCase() || ""] || "Treinador";
 }
 
 /** Gera manchetes para a rodada recém-encerrada. */
@@ -134,7 +314,21 @@ export function gerarManchetesDaRodada(
           : null;
     const W = winId ? teamByIdSync(winId).short : "";
     const L = winId ? teamByIdSync(winId === f.homeId ? f.awayId : f.homeId).short : "";
-    const template = pick(T_GERAL);
+    const diff = Math.abs(f.result.homeGoals - f.result.awayGoals);
+    
+    // Escolher template baseado no resultado
+    let template;
+    if (diff >= 4) {
+      template = pick(T_GOLEADA);
+    } else if (diff >= 3) {
+      template = pick(T_ZEBRA);
+    } else {
+      template = pick(T_GERAL);
+    }
+
+    const coachW = winId ? getTreinador(winId) : "";
+    const coachL = winId ? getTreinador(winId === f.homeId ? f.awayId : f.homeId) : "";
+
     news.push({
       id: nextId(),
       manchete: fill(template, {
@@ -144,8 +338,10 @@ export function gerarManchetesDaRodada(
         L,
         gH: f.result.homeGoals,
         gA: f.result.awayGoals,
+        coachW,
+        coachL,
       }),
-      tag: "geral",
+      tag: diff >= 3 ? "zebra" : "geral",
       rodada: rodadaNum,
     });
   });
@@ -207,7 +403,7 @@ export function gerarManchetesDaRodada(
   if (Math.random() < 0.4) {
     news.push({
       id: nextId(),
-      manchete: fill(pick(T_POLEMICA), { T: userTeamName }),
+      manchete: fill(pick(T_POLEMICA), { T: userTeamName, coach: coach.apelido || coach.nome || "Treinador" }),
       tag: "polemica",
       rodada: rodadaNum,
     });

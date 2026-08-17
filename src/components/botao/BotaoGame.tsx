@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } from "lucide-react";
+import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2, Calendar } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import {
   DIFFICULTIES,
@@ -49,6 +49,7 @@ import { NewsFeed } from "./career/NewsFeed";
 import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
 import { SubornoStory } from "./career/SubornoStory";
+import { CalendarView } from "./career/CalendarView";
 import {
   SUBORNO_INICIAL,
   deveOfertarSuborno,
@@ -77,6 +78,17 @@ import {
   aplicarEscolhaRemoto,
   iniciarCampanhaRemota,
 } from "./career/careerRemote";
+import {
+  getOrCreateCurrentSeason,
+  inscreverSeason,
+  criarCompeticao,
+  gerarBrasileirao,
+  gerarCopaBrasil,
+  gerarLibertadores,
+  getSeasonState,
+  processarCustoMensal,
+} from "./career/seasonApi";
+import { type SeasonState } from "./career/seasonTypes";
 
 type Screen =
   | "auth"
@@ -107,6 +119,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
+  const [seasonState, setSeasonState] = useState<SeasonState | null>(null);
 
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
@@ -149,26 +162,31 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     localStorage.setItem("botao_screen", screen);
   }, [screen]);
 
-  // Carregar time personalizado do usuário
+  // Carregar time personalizado do usuário (prioridade: perfil Supabase > localStorage)
   const customTeamData = useMemo(() => {
+    if (perfil?.time_personalizado && perfil?.abreviacao_time && perfil?.cores) {
+      return {
+        nome: perfil.time_personalizado,
+        short: perfil.abreviacao_time,
+        primary: perfil.cores[0],
+        secondary: perfil.cores[1],
+      };
+    }
     const timeNome = localStorage.getItem("botao_online_time_personalizado") || "Meu Time";
     const abreviacao = localStorage.getItem("botao_online_abreviacao_time") || "MTI";
     const cores = JSON.parse(
       localStorage.getItem("botao_online_cores") || '["#FF0000", "#00FF00", "#0000FF"]',
     );
-    const numero = localStorage.getItem("botao_online_numero_jogador") || "10";
-
     return {
       nome: timeNome,
       short: abreviacao,
       primary: cores[0],
       secondary: cores[1],
-      numero: parseInt(numero),
     };
-  }, [perfil]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [perfil]);
 
   // Nota: O time personalizado é carregado automaticamente via customTeamData useMemo
-  // que depende dos dados do localStorage, que são atualizados pelo useBotaoAuth
+  // que depende dos dados do perfil Supabase
 
   const userTeam = useMemo(() => {
     return createCustomTeam(
@@ -183,7 +201,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
-  const [formatoTorneio, setFormatoTorneio] = useState<"copa" | "pontos-corridos">("copa");
   const [current, setCurrent] = useState<Fixture | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -387,12 +404,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     iniciarCampanha(career);
   };
 
-  const iniciarCampanha = (c: CareerState) => {
-    const t =
-      formatoTorneio === "pontos-corridos"
-        ? createLeague(userTeam.id, difficulty, 10, userTeam)
-        : createTournament(userTeam.id, difficulty, userTeam);
+  const iniciarCampanha = async (c: CareerState) => {
+    // Criar Brasileirão (pontos corridos com 20 times) - modo infinito
+    const t = createLeague(userTeam.id, difficulty, 20, userTeam);
     persistTournament(t);
+    
     const novaCareer: CareerState = {
       ...c,
       dificuldadeAtual: difficulty,
@@ -405,16 +421,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
     persistCareer(novaCareer);
-    // RPC remota (limpa manchetes antigas do banco + registra nova campanha)
+    
+    // Se estiver logado, sincronizar com Supabase
     if (perfil?.user_id) {
-      iniciarCampanhaRemota(difficulty)
-        .then(() => {
-          // grava manchetes de estreia no banco
-          const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
-          return inserirManchetesRemotas(perfil.user_id, semId);
-        })
-        .catch(() => {});
+      try {
+        await iniciarCampanhaRemota(difficulty);
+        const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
+        await inserirManchetesRemotas(perfil.user_id, semId);
+      } catch (error) {
+        console.error("Erro ao sincronizar campanha com Supabase:", error);
+      }
     }
+    
     setScreen("hub");
   };
 
@@ -443,11 +461,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const playNext = () => {
     if (!tour) return;
-    // O enredo de suborno, se ativo, abre antes de qualquer outra decisão.
-    if (career?.suborno?.nodeAtual) {
-      setScreen("suborno");
-      return;
-    }
     // Se houver evento de carreira pendente, mostra a escolha antes
     if (career?.eventoPendenteId) {
       setScreen("choice");
@@ -474,6 +487,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       },
     };
     persistCareer(novo);
+    setCareer(novo);
     // Se a cena resolveu o capítulo, gera manchete narrativa do desfecho.
     if (finalizado && novoSub.desfecho) {
       const manchete =
@@ -486,25 +500,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               : novoSub.desfecho === "aceitou"
                 ? "Sombras rondam o banco após resultados suspeitos"
                 : "Treinador recusa propina e mantém nome limpo";
-      persistCareer(addHeadlines(novo, [
+      const comManchete = addHeadlines(novo, [
         {
           id: `suborno-${Date.now()}`,
           manchete,
           tag: "polemica",
           rodada: 99,
         },
-      ]));
+      ]);
+      persistCareer(comManchete);
+      setCareer(comManchete);
     }
-    // Após fechar o capítulo final, segue para a partida (ou decisão de carreira).
-    if (finalizado) {
-      const f = nextUserFixture(tour!);
-      if (!f) {
-        setScreen("hub");
-        return;
-      }
-      setCurrent(f);
-      setScreen("tournament-match");
-    }
+    // Não vai direto para a partida - espera o usuário clicar em "Continuar" no SubornoStory
   };
 
   const aplicarEscolha = (choice: Choice) => {
@@ -554,12 +561,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       applyResult(t, fx, r);
 
       // Simula apenas os jogos da mesma rodada que NÃO envolvem o usuário
-      const currentRound = fx.stage.split("·")[1]?.trim();
+      const currentRound = fx.stage;
       t.groupFixtures
         .filter(
           (x) =>
             !x.played &&
-            x.stage.includes(currentRound!) &&
+            x.stage === currentRound &&
             x.homeId !== t.userTeamId &&
             x.awayId !== t.userTeamId,
         )
@@ -572,6 +579,32 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           const tabela = sortTable(t.groups[0]!.table);
           t.champion = tabela[0]!.teamId;
           t.phase = "fim";
+
+          // Lógica de promoção/rebaixamento (2 primeiros sobem, 2 últimos caem)
+          if (career) {
+            const userPosition = tabela.findIndex((r) => r.teamId === t.userTeamId);
+            const novaDivisao = userPosition <= 1 ? (
+              career.divisao === "serie-c" ? "serie-b" : career.divisao === "serie-b" ? "serie-a" : "serie-a"
+            ) : userPosition >= 18 ? (
+              career.divisao === "serie-a" ? "serie-b" : career.divisao === "serie-b" ? "serie-c" : "serie-c"
+            ) : career.divisao;
+
+            const careerAtualizado: CareerState = {
+              ...career,
+              divisao: novaDivisao,
+            };
+            persistCareer(careerAtualizado);
+            setCareer(careerAtualizado);
+
+            if (novaDivisao !== career.divisao) {
+              if (userPosition <= 1) {
+                setToast(`PROMOÇÃO! Você subiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE A"}!`);
+              } else if (userPosition >= 18) {
+                setToast(`REBAIXAMENTO! Você caiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}.`);
+              }
+            }
+          }
+
           setToast(
             t.champion === t.userTeamId
               ? "CAMPEÃO DA LIGA! Pontos corridos conquistados."
@@ -899,14 +932,21 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
-  if (screen === "suborno" && career?.suborno?.nodeAtual) {
+  if (screen === "suborno" && career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho)) {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <SubornoStory
           state={career.suborno}
           onAvancar={aplicarSuborno}
-          onFechar={() => setScreen("hub")}
+          onFechar={() => {
+            // Se o suborno foi finalizado (nodeAtual é null), vai para a partida
+            if (!career.suborno?.nodeAtual) {
+              playNext();
+            } else {
+              setScreen("hub");
+            }
+          }}
         />
       </Shell>
     );
@@ -1007,16 +1047,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
         {screen === "tournament-setup" && (
           <Setup
-            title="Torneio"
-            subtitle="Escolha o formato: Copa (grupos + mata-mata) ou Pontos Corridos (liga). Três títulos liberam o próximo nível."
+            title="Modo Carreira"
+            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver soberania."
             userTeam={userTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
             difficulty={difficulty}
             setDifficulty={setDifficulty}
             progress={progress}
-            formato={formatoTorneio}
-            setFormato={setFormatoTorneio}
             onStart={startTournament}
             onBack={() => setScreen("menu")}
           />
@@ -1029,6 +1067,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             career={career}
             onPlay={playNext}
             onExit={() => setScreen("menu")}
+            onOpenSuborno={() => setScreen("suborno")}
           />
         )}
 
@@ -1124,7 +1163,7 @@ function Menu({
         />
         <MenuCard
           icon={<Medal className="size-5" />}
-          title="Torneio"
+          title="Modo Carreira"
           desc="Fase de grupos + mata-mata. Sorteio aleatório a cada campanha."
           onClick={onTournament}
         />
@@ -1209,8 +1248,6 @@ function Setup(props: {
   setDifficulty: (d: Difficulty) => void;
   progress: Progress;
   showRival?: boolean;
-  formato?: "copa" | "pontos-corridos";
-  setFormato?: (f: "copa" | "pontos-corridos") => void;
   onStart: () => void;
   onBack: () => void;
 }) {
@@ -1224,8 +1261,6 @@ function Setup(props: {
     setDifficulty,
     progress,
     showRival,
-    formato,
-    setFormato,
     onStart,
     onBack,
   } = props;
@@ -1290,37 +1325,6 @@ function Setup(props: {
         />
       )}
 
-      {formato && setFormato && (
-        <div>
-          <p className="mb-2 font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
-            Formato do torneio
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              {
-                id: "copa" as const,
-                nome: "Copa (Grupos + Mata-mata)",
-                desc: "8 grupos de 4 + oitavas até a final. Clássico.",
-              },
-              {
-                id: "pontos-corridos" as const,
-                nome: "Pontos Corridos (Liga)",
-                desc: "Turno único de 10 times. Quem somar mais, é campeão.",
-              },
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setFormato(f.id)}
-                className={`diff-card ${formato === f.id ? "diff-card-active" : ""}`}
-              >
-                <span className="font-display text-lg">{f.nome}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{f.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="flex gap-3">
         <button onClick={onBack} className="btn-ghost">
           Voltar
@@ -1339,13 +1343,17 @@ function Hub({
   career,
   onPlay,
   onExit,
+  onOpenSuborno,
 }: {
   tour: Tournament;
   userTeam: Team;
   career: CareerState | null;
   onPlay: () => void;
   onExit: () => void;
+  onOpenSuborno: () => void;
 }) {
+  const [showFullTable, setShowFullTable] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const stage = tour.knockout[tour.knockout.length - 1];
 
@@ -1355,126 +1363,308 @@ function Hub({
     return teamByIdSync(teamId);
   };
 
+  // Calcular estatísticas do campeonato
+  const campeonatoStats = useMemo(() => {
+    if (tour.phase !== "grupos" || tour.groups.length === 0) return null;
+    
+    const tabela = sortTable(tour.groups[0]!.table);
+    const artilheiro = tabela.reduce((max, r) => (r.gp > max.gp ? r : max), tabela[0]!);
+    const menosGols = tabela.reduce((min, r) => (r.gc < min.gc ? r : min), tabela[0]!);
+    
+    // Encontrar maior vitória
+    let maiorVitoria: any = null;
+    tour.groupFixtures.forEach(f => {
+      if (f.result && f.played) {
+        const diff = Math.abs(f.result.homeGoals - f.result.awayGoals);
+        if (!maiorVitoria || diff > maiorVitoria.diff) {
+          maiorVitoria = {
+            homeId: f.homeId,
+            awayId: f.awayId,
+            homeGoals: f.result.homeGoals,
+            awayGoals: f.result.awayGoals,
+            diff
+          };
+        }
+      }
+    });
+
+    let maiorVitoriaStats = null;
+    if (maiorVitoria) {
+      const vencedorId = maiorVitoria.homeGoals > maiorVitoria.awayGoals ? maiorVitoria.homeId : maiorVitoria.awayId;
+      const perdedorId = maiorVitoria.homeGoals > maiorVitoria.awayGoals ? maiorVitoria.awayId : maiorVitoria.homeId;
+      maiorVitoriaStats = {
+        vencedor: getTeam(vencedorId),
+        perdedor: getTeam(perdedorId),
+        placar: `${maiorVitoria.homeGoals}-${maiorVitoria.awayGoals}`,
+        diff: maiorVitoria.diff
+      };
+    }
+
+    return {
+      artilheiro: { team: getTeam(artilheiro.teamId), gols: artilheiro.gp },
+      menosGols: { team: getTeam(menosGols.teamId), gols: menosGols.gc },
+      maiorVitoria: maiorVitoriaStats
+    };
+  }, [tour, userTeam]);
+
   return (
     <div className="space-y-6">
       {career?.coach.nome && <SovereigntyPanel coach={career.coach} moral={career.moralTime} />}
 
-      <div className="panel">
-        <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
-          {tour.phase === "fim"
-            ? "Campanha encerrada"
-            : tour.phase === "grupos"
-              ? "Fase de grupos"
-              : stage?.stage}
-        </p>
-        {tour.phase === "fim" ? (
-          <p className="mt-2 font-display text-2xl">
-            Campeão: <TeamBadge team={getTeam(tour.champion!)} />
-          </p>
-        ) : next ? (
-          <>
-            <p className="mt-2 font-display text-2xl">
-              {getTeam(next.homeId).short} vs {getTeam(next.awayId).short}
-            </p>
-            <p className="text-sm text-muted-foreground">{next.stage}</p>
+      {/* Layout Grid 50/50 */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* COLUNA DA ESQUERDA - MÓDULOS E AÇÕES */}
+        <div className="flex flex-col gap-3">
+          {/* Card Próximo Jogo */}
+          <div className="panel">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-display text-lg tracking-[0.2em] text-emerald-400 uppercase font-bold">
+                {tour.phase === "fim"
+                  ? "Campanha encerrada"
+                  : tour.phase === "grupos"
+                    ? "Brasileirão, Série C"
+                    : stage?.stage}
+              </p>
+              <p className="text-xs text-muted-foreground uppercase">
+                {career?.divisao === "serie-a" ? "SÉRIE A" : career?.divisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}
+              </p>
+            </div>
+            {tour.phase === "fim" ? (
+              <p className="mt-2 font-display text-2xl">
+                Campeão: <TeamBadge team={getTeam(tour.champion!)} />
+              </p>
+            ) : next ? (
+              <>
+                <div className="flex items-center justify-between gap-4 mt-2">
+                  <div className="flex items-center gap-3">
+                    <TeamBadge team={getTeam(next.homeId)} size="md" />
+                    <span className="text-2xl font-bold text-muted-foreground">vs</span>
+                    <TeamBadge team={getTeam(next.awayId)} size="md" />
+                  </div>
+                  <button
+                    data-testid="entrar-em-campo"
+                    onClick={onPlay}
+                    className="btn-primary text-sm px-4 py-2"
+                  >
+                    Entrar
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>Rodada {next.stage}</span>
+                  {tour.phase === "grupos" && tour.groups.length > 0 && (
+                    <span>
+                      Posição: {sortTable(tour.groups[0]!.table).findIndex((r) => r.teamId === tour.userTeamId) + 1}º
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">Aguardando próximo jogo...</p>
+            )}
             {career?.eventoPendenteId && (
               <p className="mt-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
-                ⚠ Uma decisão importante espera por você antes desta partida
+                ⚠ Decisão importante pendente antes da partida
               </p>
             )}
-            {career?.suborno?.nodeAtual && (
-              <p className="mt-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300">
-                💼 Alguém quer falar com você no estacionamento...
+          </div>
+
+          {/* Card Celular / Notificações */}
+          {career?.suborno?.nodeAtual && (
+            <div className="panel flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📱</span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-yellow-300">Celular</span>
+                  <span className="text-xs text-yellow-300">1</span>
+                </div>
+              </div>
+              <button
+                onClick={onOpenSuborno}
+                className="btn-primary text-[10px] px-3 py-1"
+              >
+                Ler
+              </button>
+            </div>
+          )}
+
+          {/* Card Notícias (Resumo) */}
+          {career && career.headlines.length > 0 && (
+            <div className="panel">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-sm">Últimas Notícias</h3>
+                <button className="text-xs text-blue-400">Ver todas</button>
+              </div>
+              <p className="text-xs text-gray-300 line-clamp-2">
+                {career.headlines[0]?.manchete.toUpperCase()}
               </p>
+            </div>
+          )}
+
+          {/* Botão Calendário */}
+          <button
+            onClick={() => setShowCalendar(!showCalendar)}
+            className="panel flex items-center justify-between hover:border-emerald-500/50 transition"
+          >
+            <div className="flex items-center gap-2">
+              <Calendar className="size-4 text-emerald-400" />
+              <span className="font-display text-sm">Calendário</span>
+            </div>
+            <ChevronRight className={`size-4 transition-transform ${showCalendar ? "rotate-90" : ""}`} />
+          </button>
+
+          {/* Calendário expandido */}
+          {showCalendar && (
+            <CalendarView tour={tour} userTeam={userTeam} currentDivisao={career?.divisao || "serie-c"} />
+          )}
+        </div>
+
+        {/* COLUNA DA DIREITA - CLASSIFICAÇÃO COMPACTA */}
+        {tour.phase === "grupos" && tour.groups.length > 0 && (
+          <div className="panel flex flex-col justify-between">
+            {showFullTable ? (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-bold text-sm">Classificação Completa</h3>
+                  <button onClick={() => setShowFullTable(false)} className="text-xs text-blue-400">Voltar</button>
+                </div>
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="py-1 w-8">#</th>
+                      <th className="py-1">TIME</th>
+                      <th className="w-8 text-center">P</th>
+                      <th className="w-8 text-center">J</th>
+                      <th className="w-10 text-center">SG</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortTable(tour.groups[0]!.table).map((r, i) => {
+                      const position = i + 1;
+                      const zone = position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                      return (
+                        <tr
+                          key={r.teamId}
+                          className={`${r.teamId === tour.userTeamId ? "text-accent-foreground" : ""} ${
+                            zone === "libertadores" ? "bg-blue-500/10" :
+                            zone === "copa-brasil" ? "bg-green-500/10" :
+                            zone === "rebaixamento" ? "bg-red-500/10" : ""
+                          }`}
+                        >
+                          <td className="text-center py-1 font-bold">{position}º</td>
+                          <td className="py-1">
+                            <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                            </span>
+                          </td>
+                          <td className="text-center py-1">{r.p}</td>
+                          <td className="text-center py-1">{r.j}</td>
+                          <td className="text-center py-1">{r.gp - r.gc}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {campeonatoStats && (
+                  <div className="mt-4 space-y-2 border-t border-gray-700 pt-3">
+                    <h4 className="font-bold text-xs">Estatísticas do Campeonato</h4>
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div className="bg-slate-800 p-2 rounded">
+                        <p className="text-muted-foreground">Artilheiro</p>
+                        <p className="font-bold text-yellow-300">{campeonatoStats.artilheiro.team.short}</p>
+                        <p className="text-yellow-300">{campeonatoStats.artilheiro.gols} gols</p>
+                      </div>
+                      <div className="bg-slate-800 p-2 rounded">
+                        <p className="text-muted-foreground">Menos Gols</p>
+                        <p className="font-bold text-green-300">{campeonatoStats.menosGols.team.short}</p>
+                        <p className="text-green-300">{campeonatoStats.menosGols.gols} gols</p>
+                      </div>
+                    </div>
+                    {campeonatoStats.maiorVitoria && (
+                      <div className="bg-slate-800 p-2 rounded text-[10px]">
+                        <p className="text-muted-foreground">Maior Vitória</p>
+                        <p className="font-bold text-emerald-300">{campeonatoStats.maiorVitoria.vencedor.short} {campeonatoStats.maiorVitoria.placar} {campeonatoStats.maiorVitoria.perdedor.short}</p>
+                        <p className="text-emerald-300">Diferença de {campeonatoStats.maiorVitoria.diff} gols</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="mt-3 space-y-1 text-[10px]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500/20 rounded"></div>
+                    <span className="text-blue-300">Libertadores (1º-4º)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500/20 rounded"></div>
+                    <span className="text-green-300">Copa do Brasil (5º-6º)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500/20 rounded"></div>
+                    <span className="text-red-300">Rebaixamento (18º-20º)</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-bold text-sm">Classificação (Top 5)</h3>
+                  <button onClick={() => setShowFullTable(true)} className="text-xs text-blue-400">Tabela Completa</button>
+                </div>
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="py-1 w-8">#</th>
+                      <th className="py-1">TIME</th>
+                      <th className="w-8 text-center">P</th>
+                      <th className="w-8 text-center">J</th>
+                      <th className="w-10 text-center">SG</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortTable(tour.groups[0]!.table).slice(0, 5).map((r, i) => {
+                      const position = i + 1;
+                      const zone = position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                      return (
+                        <tr
+                          key={r.teamId}
+                          className={`${r.teamId === tour.userTeamId ? "text-accent-foreground" : ""} ${
+                            zone === "libertadores" ? "bg-blue-500/10" :
+                            zone === "copa-brasil" ? "bg-green-500/10" :
+                            zone === "rebaixamento" ? "bg-red-500/10" : ""
+                          }`}
+                        >
+                          <td className="text-center py-1 font-bold">{position}º</td>
+                          <td className="py-1">
+                            <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                            </span>
+                          </td>
+                          <td className="text-center py-1">{r.p}</td>
+                          <td className="text-center py-1">{r.j}</td>
+                          <td className="text-center py-1">{r.gp - r.gc}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="mt-3 space-y-1 text-[10px]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500/20 rounded"></div>
+                    <span className="text-blue-300">Libertadores (1º-4º)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500/20 rounded"></div>
+                    <span className="text-green-300">Copa do Brasil (5º-6º)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500/20 rounded"></div>
+                    <span className="text-red-300">Rebaixamento (18º-20º)</span>
+                  </div>
+                </div>
+              </div>
             )}
-            <button
-              data-testid="entrar-em-campo"
-              onClick={onPlay}
-              className="btn-primary mt-4 w-full sm:w-auto"
-            >
-              {career?.eventoPendenteId ? "Tomar decisão →" : "Entrar em campo"}
-            </button>
-          </>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">Seu time está fora da disputa.</p>
+          </div>
         )}
       </div>
-
-      {career && career.headlines.length > 0 && <NewsFeed headlines={career.headlines} />}
-
-      {tour.phase === "grupos" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {tour.groups.map((g) => (
-            <div key={g.name} className="panel">
-              <p className="mb-2 font-display text-lg">Grupo {g.name}</p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[11px] tracking-wider text-muted-foreground uppercase">
-                    <th className="text-left font-normal">Time</th>
-                    <th className="w-8 font-normal">P</th>
-                    <th className="w-8 font-normal">J</th>
-                    <th className="w-10 font-normal">SG</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortTable(g.table).map((r, i) => (
-                    <tr
-                      key={r.teamId}
-                      className={r.teamId === tour.userTeamId ? "text-accent-foreground" : ""}
-                    >
-                      <td className="py-1">
-                        <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                          <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                        </span>
-                      </td>
-                      <td className="text-center">{r.p}</td>
-                      <td className="text-center">{r.j}</td>
-                      <td className="text-center">{r.gp - r.gc}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tour.knockout.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          {tour.knockout.map((k) => (
-            <div key={k.stage} className="panel">
-              <p className="mb-2 font-display text-lg">{k.stage}</p>
-              <ul className="space-y-2 text-sm">
-                {k.fixtures.map((f) => (
-                  <li key={f.id} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate">
-                      {getTeam(f.homeId).short} x {getTeam(f.awayId).short}
-                    </span>
-                    <span className="shrink-0 font-mono text-muted-foreground">
-                      {f.result
-                        ? `${f.result.homeGoals}-${f.result.awayGoals}${
-                            f.result.penHome !== undefined
-                              ? ` (${f.result.penHome}-${f.result.penAway})`
-                              : ""
-                          }`
-                        : "—"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {k.fixtures.every((f) => f.played) && (
-                <p className="mt-2 text-[11px] tracking-wider text-muted-foreground uppercase">
-                  Avançam: {k.fixtures.map((f) => getTeam(winnerOf(f.result!)).short).join(", ")}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button onClick={onExit} className="btn-ghost">
-        Menu principal
-      </button>
     </div>
   );
 }

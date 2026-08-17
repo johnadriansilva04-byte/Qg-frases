@@ -183,10 +183,11 @@ export function simulateMatch(
   const a = teamByIdSync(awayId);
   // Em dificuldades altas, o time do usuário precisa realmente ser mais forte
   // pra domínio: o bônus do mandante cai e o ataque do visitante fica mais letal.
+  // Aumentado lambda base e awayScale para IA não errar gols
   const homeBonus = difficulty === "lenda" ? 0.05 : difficulty === "profissional" ? 0.09 : 0.12;
-  const awayScale = difficulty === "lenda" ? 1.06 : difficulty === "profissional" ? 1.03 : 1;
+  const awayScale = difficulty === "lenda" ? 1.15 : difficulty === "profissional" ? 1.10 : 1.05;
   const goals = (att: Team, def: Team, bonus: number) => {
-    const lambda = Math.max(0.25, (att.power - def.power) / 32 + 1.15 + bonus);
+    const lambda = Math.max(0.5, (att.power - def.power) / 32 + 1.5 + bonus);
     let g = 0;
     let p = Math.exp(-lambda);
     let acc = p;

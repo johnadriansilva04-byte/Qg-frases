@@ -22,6 +22,7 @@ export const EMPTY_CAREER: CareerState = {
   headlines: [],
   ultimaRodadaProcessada: -1,
   eventoPendenteId: null,
+  divisao: "serie-c",
 };
 
 export function loadCareer(): CareerState | null {
