@@ -14,7 +14,11 @@ export function shuffle<T>(arr: T[]): T[] {
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
-export function createTournament(userTeamId: string, difficulty: Difficulty, userTeam?: Team): Tournament {
+export function createTournament(
+  userTeamId: string,
+  difficulty: Difficulty,
+  userTeam?: Team,
+): Tournament {
   const others = shuffle(TEAMS.filter((t) => t.id !== userTeamId)).slice(0, 31);
   const userTeamToUse = userTeam || teamByIdSync(userTeamId);
   const pool = shuffle([userTeamToUse, ...others]);
@@ -133,7 +137,9 @@ function emptyRow(teamId: string): GroupRow {
 export function applyResult(t: Tournament, fixture: Fixture, result: MatchResult) {
   fixture.played = true;
   fixture.result = result;
-  const group = t.groups.find((g) => g.teamIds.includes(result.homeId) && g.teamIds.includes(result.awayId));
+  const group = t.groups.find(
+    (g) => g.teamIds.includes(result.homeId) && g.teamIds.includes(result.awayId),
+  );
   if (!group) return;
   const rowH = group.table.find((r) => r.teamId === result.homeId)!;
   const rowA = group.table.find((r) => r.teamId === result.awayId)!;
@@ -161,12 +167,18 @@ export function applyResult(t: Tournament, fixture: Fixture, result: MatchResult
 
 export function sortTable(table: GroupRow[]): GroupRow[] {
   return [...table].sort(
-    (a, b) => b.p - a.p || b.gp - b.gc - (a.gp - a.gc) || b.gp - a.gp || a.teamId.localeCompare(b.teamId),
+    (a, b) =>
+      b.p - a.p || b.gp - b.gc - (a.gp - a.gc) || b.gp - a.gp || a.teamId.localeCompare(b.teamId),
   );
 }
 
 /** Simula uma partida CPU x CPU com base na força dos times e na dificuldade. */
-export function simulateMatch(homeId: string, awayId: string, difficulty: Difficulty, knockout = false): MatchResult {
+export function simulateMatch(
+  homeId: string,
+  awayId: string,
+  difficulty: Difficulty,
+  knockout = false,
+): MatchResult {
   const h = teamByIdSync(homeId);
   const a = teamByIdSync(awayId);
   // Em dificuldades altas, o time do usuário precisa realmente ser mais forte
@@ -186,7 +198,7 @@ export function simulateMatch(homeId: string, awayId: string, difficulty: Diffic
     }
     return g;
   };
-  let homeGoals = goals(h, a, homeBonus);
+  const homeGoals = goals(h, a, homeBonus);
   let awayGoals = Math.round(goals(a, h, 0) * awayScale * 10) / 10;
   // Re-roleta plausível se fracionado (mantém distribuição, força inteiros).
   if (!Number.isInteger(awayGoals)) {
