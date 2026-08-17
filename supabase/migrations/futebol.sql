@@ -893,4 +893,227 @@ SELECT cron.unschedule('tick_mesas_futebol') WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'tick_mesas_futebol');
 SELECT cron.schedule('tick_mesas_futebol', '5 seconds', $$SELECT public.tick_mesas_futebol(); SELECT public.limpar_mesas_antigas();$$);
 
+-- ============================================================================
+-- MODO CARREIRA / TREINADOR (v3)
+-- Persistência de coach, estado de campanha, escolhas e manchetes
+-- ============================================================================
+
+-- Colunas de perfil do treinador (aditivas em botao_usuarios)
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS coach_nome TEXT;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS coach_apelido TEXT;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS coach_cidade TEXT;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS coach_estilo TEXT NOT NULL DEFAULT 'equilibrado'
+  CHECK (coach_estilo IN ('ataque','equilibrado','defesa'));
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS coach_bio TEXT;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS campanhas_jogadas INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS titulos_treinador INTEGER NOT NULL DEFAULT 0;
+
+-- Estado da campanha atual (efêmero por campanha, mas persistido pra continuar depois)
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS moral_time INTEGER NOT NULL DEFAULT 65;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS bonus_proxima_partida INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS penalties_proxima_partida INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS evento_pendente_id TEXT;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS ultimas_escolhas JSONB NOT NULL DEFAULT '[]'::JSONB;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS ultima_rodada_processada INTEGER NOT NULL DEFAULT -1;
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS dificuldade_atual TEXT
+  CHECK (dificuldade_atual IN ('amador','profissional','lenda'));
+
+-- Tabela de manchetes (jornal do torneio)
+CREATE TABLE IF NOT EXISTS public.botao_manchetes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.botao_usuarios(user_id) ON DELETE CASCADE,
+  manchete TEXT NOT NULL,
+  subtitulo TEXT,
+  tag TEXT NOT NULL DEFAULT 'geral'
+    CHECK (tag IN ('seu-time','geral','polemica','zebra','coletiva')),
+  rodada INTEGER NOT NULL DEFAULT 0,
+  campanha_iniciada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_botao_manchetes_user ON public.botao_manchetes(user_id, created_at DESC);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_manchetes TO authenticated;
+GRANT SELECT ON public.botao_manchetes TO anon;
+GRANT ALL ON public.botao_manchetes TO service_role;
+
+ALTER TABLE public.botao_manchetes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "manchetes_select_dono" ON public.botao_manchetes;
+CREATE POLICY "manchetes_select_dono" ON public.botao_manchetes
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "manchetes_insert_dono" ON public.botao_manchetes;
+CREATE POLICY "manchetes_insert_dono" ON public.botao_manchetes
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "manchetes_delete_dono" ON public.botao_manchetes;
+CREATE POLICY "manchetes_delete_dono" ON public.botao_manchetes
+  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+-- Função para aplicar resultado da partida em modo carreira (pontos escassos + moral)
+-- V=+3 · E=+1 · D=-3 · Campeão +20 · Vice +15 · 3º +10 · 4º +5
+-- Título por dificuldade: Amador +100 · Prof +250 · Lenda +500
+CREATE OR REPLACE FUNCTION public.aplicar_resultado_carreira(
+  p_gols_pro INTEGER,
+  p_gols_contra INTEGER,
+  p_ultima_escolha TEXT DEFAULT NULL
+)
+RETURNS public.botao_usuarios
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid       UUID := auth.uid();
+  v_row       public.botao_usuarios;
+  v_delta_sob INTEGER := 0;
+  v_delta_mor INTEGER := 0;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  IF p_gols_pro > p_gols_contra THEN
+    v_delta_sob := 3;  v_delta_mor := 4;
+  ELSIF p_gols_pro < p_gols_contra THEN
+    v_delta_sob := -3; v_delta_mor := -6;
+  ELSE
+    v_delta_sob := 1;  v_delta_mor := -1;
+  END IF;
+
+  -- Bônus condicionais de coletiva
+  IF p_ultima_escolha = 'goleada' THEN
+    IF (p_gols_pro - p_gols_contra) >= 2 THEN v_delta_sob := v_delta_sob + 5;
+    ELSIF p_gols_pro < p_gols_contra THEN v_delta_sob := v_delta_sob - 3;
+    END IF;
+  ELSIF p_ultima_escolha = 'respeito' AND p_gols_pro > p_gols_contra THEN
+    v_delta_sob := v_delta_sob + 2;
+  END IF;
+
+  UPDATE public.botao_usuarios u
+     SET pontos_soberania      = GREATEST(0, u.pontos_soberania + v_delta_sob),
+         moral_time            = GREATEST(0, LEAST(100, u.moral_time + v_delta_mor)),
+         gols_feitos           = u.gols_feitos + p_gols_pro,
+         gols_sofridos         = u.gols_sofridos + p_gols_contra,
+         partidas_jogadas      = u.partidas_jogadas + 1,
+         vitorias              = u.vitorias + CASE WHEN p_gols_pro > p_gols_contra THEN 1 ELSE 0 END,
+         empates               = u.empates + CASE WHEN p_gols_pro = p_gols_contra THEN 1 ELSE 0 END,
+         derrotas              = u.derrotas + CASE WHEN p_gols_pro < p_gols_contra THEN 1 ELSE 0 END,
+         bonus_proxima_partida = 0,
+         penalties_proxima_partida = 0,
+         updated_at            = now()
+   WHERE u.user_id = v_uid
+  RETURNING u.* INTO v_row;
+
+  RETURN v_row;
+END; $$;
+
+-- Função para aplicar bônus/penalidade de posição final na campanha
+CREATE OR REPLACE FUNCTION public.aplicar_fim_de_campanha(
+  p_posicao TEXT,          -- 'campeao' | 'vice' | 'terceiro' | 'quarto' | 'fora'
+  p_dificuldade TEXT       -- 'amador' | 'profissional' | 'lenda'
+)
+RETURNS public.botao_usuarios
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid    UUID := auth.uid();
+  v_row    public.botao_usuarios;
+  v_bonus  INTEGER := 0;
+  v_titulo INTEGER := 0;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  v_bonus := CASE p_posicao
+    WHEN 'campeao'   THEN 20
+    WHEN 'vice'      THEN 15
+    WHEN 'terceiro'  THEN 10
+    WHEN 'quarto'    THEN 5
+    ELSE 0
+  END;
+
+  IF p_posicao = 'campeao' THEN
+    v_bonus := v_bonus + CASE p_dificuldade
+      WHEN 'amador'        THEN 100
+      WHEN 'profissional'  THEN 250
+      WHEN 'lenda'         THEN 500
+      ELSE 0
+    END;
+    v_titulo := 1;
+  END IF;
+
+  UPDATE public.botao_usuarios u
+     SET pontos_soberania    = GREATEST(0, u.pontos_soberania + v_bonus),
+         titulos_treinador   = u.titulos_treinador + v_titulo,
+         campeonatos_ganhos  = u.campeonatos_ganhos + v_titulo,
+         dificuldade_atual   = NULL,
+         evento_pendente_id  = NULL,
+         moral_time          = 65,
+         ultimas_escolhas    = '[]'::JSONB,
+         ultima_rodada_processada = -1,
+         updated_at          = now()
+   WHERE u.user_id = v_uid
+  RETURNING u.* INTO v_row;
+
+  RETURN v_row;
+END; $$;
+
+-- Função para aplicar efeito de escolha imediata (bonus_proxima_partida, moral, etc.)
+CREATE OR REPLACE FUNCTION public.aplicar_escolha_treinador(
+  p_choice_id TEXT,
+  p_delta_poder INTEGER DEFAULT 0,
+  p_delta_moral INTEGER DEFAULT 0
+)
+RETURNS public.botao_usuarios
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_row public.botao_usuarios;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  UPDATE public.botao_usuarios u
+     SET bonus_proxima_partida = u.bonus_proxima_partida + p_delta_poder,
+         moral_time            = GREATEST(0, LEAST(100, u.moral_time + p_delta_moral)),
+         ultimas_escolhas      = COALESCE(
+           (u.ultimas_escolhas::JSONB) || to_jsonb(p_choice_id),
+           to_jsonb(ARRAY[p_choice_id])
+         ),
+         evento_pendente_id    = NULL,
+         updated_at            = now()
+   WHERE u.user_id = v_uid
+  RETURNING u.* INTO v_row;
+
+  RETURN v_row;
+END; $$;
+
+-- Iniciar nova campanha (reseta o estado de carreira mas mantém coach e soberania)
+CREATE OR REPLACE FUNCTION public.iniciar_campanha(p_dificuldade TEXT)
+RETURNS public.botao_usuarios
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_row public.botao_usuarios;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  UPDATE public.botao_usuarios u
+     SET dificuldade_atual         = p_dificuldade,
+         moral_time                = 65,
+         bonus_proxima_partida     = 0,
+         penalties_proxima_partida = 0,
+         evento_pendente_id        = NULL,
+         ultimas_escolhas          = '[]'::JSONB,
+         ultima_rodada_processada  = -1,
+         campanhas_jogadas         = u.campanhas_jogadas + 1,
+         updated_at                = now()
+   WHERE u.user_id = v_uid
+  RETURNING u.* INTO v_row;
+
+  -- Limpar manchetes de campanhas anteriores
+  DELETE FROM public.botao_manchetes WHERE user_id = v_uid;
+
+  RETURN v_row;
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.aplicar_resultado_carreira(INTEGER, INTEGER, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.aplicar_fim_de_campanha(TEXT, TEXT)                TO authenticated;
+GRANT EXECUTE ON FUNCTION public.aplicar_escolha_treinador(TEXT, INTEGER, INTEGER)  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.iniciar_campanha(TEXT)                              TO authenticated;
+
 NOTIFY pgrst, 'reload schema';

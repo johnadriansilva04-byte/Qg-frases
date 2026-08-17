@@ -28,6 +28,15 @@ import { EMPTY_CAREER, loadCareer, saveCareer, addHeadlines, deleteCareer } from
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { POINTS, type CareerState, type Choice } from "./career/types";
+import {
+  loadCareerFromSupabase,
+  saveCareerToSupabase,
+  inserirManchetesRemotas,
+  aplicarResultadoRemoto,
+  aplicarFimCampanhaRemoto,
+  aplicarEscolhaRemoto,
+  iniciarCampanhaRemota,
+} from "./career/careerRemote";
 
 type Screen =
   | "auth"
@@ -144,7 +153,22 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setCareer(c);
     if (c) saveCareer(c);
     else deleteCareer();
+    // Supabase é fonte da verdade quando o usuário está logado
+    if (perfil?.user_id && c) {
+      saveCareerToSupabase(perfil.user_id, c).catch(() => {});
+    }
   };
+
+  // Ao logar (perfil ficar disponível), puxar carreira do Supabase
+  useEffect(() => {
+    if (!perfil?.user_id) return;
+    loadCareerFromSupabase(perfil.user_id).then((remote) => {
+      if (remote && remote.coach.nome) {
+        setCareer(remote);
+        saveCareer(remote);
+      }
+    }).catch(() => {});
+  }, [perfil?.user_id]);
 
   const handleLogout = async () => {
     if (emPartidaOnline) {
@@ -308,6 +332,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
     persistCareer(novaCareer);
+    // RPC remota (limpa manchetes antigas do banco + registra nova campanha)
+    if (perfil?.user_id) {
+      iniciarCampanhaRemota(difficulty).then(() => {
+        // grava manchetes de estreia no banco
+        const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
+        return inserirManchetesRemotas(perfil.user_id, semId);
+      }).catch(() => {});
+    }
     setScreen("hub");
   };
 
@@ -357,6 +389,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       eventoPendenteId: null,
     };
     persistCareer(nova);
+    // RPC remota (autoritativa) para escolha
+    if (perfil?.user_id) {
+      aplicarEscolhaRemoto(choice.id, choice.bonusPoder ?? 0, choice.bonusMoral ?? 0).catch(() => {});
+    }
 
     // Segue para a partida
     const f = nextUserFixture(tour!);
@@ -509,6 +545,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       // Se o torneio ainda não acabou e ainda tem próxima do usuário, prepara evento
       if (t.phase !== "fim" && nextUserFixture(t)) novaCareer = preparaEscolha(novaCareer);
       persistCareer(novaCareer);
+
+      // Sync remoto (autoritativo) — não bloqueia UX
+      if (perfil?.user_id) {
+        const isUserFixture = current.homeId === t.userTeamId || current.awayId === t.userTeamId;
+        if (isUserFixture) {
+          const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1] ?? null;
+          aplicarResultadoRemoto(gf, ga, lastChoice).catch(() => {});
+        }
+        if (t.phase === "fim") {
+          let posicao: "campeao" | "vice" | "terceiro" | "quarto" | "fora" = "fora";
+          if (t.champion === t.userTeamId) posicao = "campeao";
+          else {
+            const finalStage = t.knockout[t.knockout.length - 1];
+            const foiVice = finalStage?.fixtures.some(f =>
+              (f.homeId === t.userTeamId || f.awayId === t.userTeamId) && f.stage.toLowerCase().includes("final")
+            );
+            const semiStage = t.knockout[t.knockout.length - 2];
+            const foiSemi = semiStage?.fixtures.some(f => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
+            if (foiVice) posicao = "vice"; else if (foiSemi) posicao = "terceiro"; else posicao = "quarto";
+          }
+          aplicarFimCampanhaRemoto(posicao, t.difficulty).catch(() => {});
+        }
+        // Persistir manchetes novas
+        if (novas.length > 0) {
+          const semId = novas.map(({ id: _id, ...rest }) => rest);
+          inserirManchetesRemotas(perfil.user_id, semId).catch(() => {});
+        }
+      }
     }
     // ============ FIM CARREIRA ============
 
