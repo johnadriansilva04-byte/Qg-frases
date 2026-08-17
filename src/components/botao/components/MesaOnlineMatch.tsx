@@ -87,13 +87,12 @@ export function MesaOnlineMatch({
   const onFinalizadaRef = useRef(onFinalizada);
   onFinalizadaRef.current = onFinalizada;
 
-  // Ref espelhada de "é meu turno agora" — usada para garantir que apenas o
-  // jogador que detém o turno (o autor do lance) alterne o turno no servidor.
-  // Evita o bug de double-toggle: ambos os clientes simulam a física, mas só o
-  // dono do turno chama registrarGol()/trocarTurno().
   const userSide = souJogador1 ? "home" : "away";
-  const meuTurnoRef = useRef(false);
-  meuTurnoRef.current = currentTurn === userSide;
+  // Determina se ESTE cliente disparou o lance localmente (onPlay chegou com o
+  // id de um botão real). O adversário apenas simula a jogada recebida via
+  // broadcast e NÃO dispara registrarGol/trocarTurno — evita o double-toggle
+  // que deixava o turno preso no mesmo jogador após um gol.
+  const dispareiRef = useRef(false);
 
   const userTeam = useMemo(() => {
     if (!meuTime) return createCustomTeam("custom", "Meu Time", "MTI", "#FF0000", "#00FF00", 75);
@@ -259,62 +258,64 @@ export function MesaOnlineMatch({
       },
     ) => {
       if (!mesaRef.current) return;
-      // Apenas o jogador que detém o turno no servidor (autor do lance) é
-      // autoritativo para registrar gol e alternar o turno. O adversário apenas
-      // aplica a jogada recebida via broadcast; suas chamadas de servidor são
-      // ignoradas para evitar double-toggle (turno voltando para o autor).
-      const souAutor = meuTurnoRef.current;
+      const ehDiscoReal =
+        jogadaData &&
+        jogadaData.discId !== "own_goal" &&
+        jogadaData.discId !== "goal" &&
+        jogadaData.discId !== "pass_turn" &&
+        jogadaData.discId !== "no_goal";
+
       try {
-        if (
-          jogadaData &&
-          jogadaData.discId !== "own_goal" &&
-          jogadaData.discId !== "goal" &&
-          jogadaData.discId !== "pass_turn" &&
-          jogadaData.discId !== "no_goal"
-        ) {
+        if (ehDiscoReal) {
+          // Lance disparado localmente (onPointerUp). Marca que este cliente é o
+          // autor: somente ele reportará o resultado e alternará o turno no
+          // servidor. O adversário recebe este broadcast, simula e NÃO reporta.
+          dispareiRef.current = true;
           await mesaRef.current.enviarJogada({
-            id_botao: jogadaData.discId,
-            forca: Math.round(jogadaData.power * 100),
-            forca_x: jogadaData.ix,
-            forca_y: jogadaData.iy,
-            angulo: Math.round(Math.atan2(jogadaData.iy, jogadaData.ix) * (180 / Math.PI)),
+            id_botao: jogadaData!.discId,
+            forca: Math.round(jogadaData!.power * 100),
+            forca_x: jogadaData!.ix,
+            forca_y: jogadaData!.iy,
+            angulo: Math.round(Math.atan2(jogadaData!.iy, jogadaData!.ix) * (180 / Math.PI)),
             origem: { x: 0, y: 0 },
           });
         }
 
-        if (goals > 0 && souAutor) {
-          // Gol normal: credita para o autor (dono do turno). Gol contra
-          // (discId === "own_goal"): credita para o adversário.
-          const ehGolContra = jogadaData?.discId === "own_goal";
-          const autorDoGol = ehGolContra
-            ? mesa.jogador_1_id === userId
-              ? (mesa.jogador_2_id ?? mesa.jogador_1_id)
-              : mesa.jogador_1_id
-            : userId;
-          await mesaRef.current.registrarGol(autorDoGol);
-          // Avisa o adversário para resetar a bola ao centro (lado que sofreu).
-          await mesaRef.current.enviarGoalScored({
-            jogadorId: userId,
-            placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
-          });
-          await mesaRef.current.trocarTurno();
-        }
-
-        if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
-          const proximoTurno =
-            mesa.jogador_1_id === userId
-              ? mesa.jogador_2_id || mesa.jogador_1_id
-              : mesa.jogador_1_id;
-          await mesaRef.current.enviarFimDeTurno({
-            discos: posicoesFinais.discos,
-            bola: posicoesFinais.bola,
-            jogadorId: userId,
-            novoTurnoId: proximoTurno,
-          });
-          // Só o autor alterna o turno no servidor — antes faltava, o que
-          // deixava o turno travado no mesmo jogador após um lance sem gol.
-          if (souAutor) {
+        // Só o autor do lance (quem disparou o botão localmente) reporta o
+        // resultado e alterna o turno no servidor.
+        if (dispareiRef.current) {
+          if (goals > 0) {
+            // Gol normal: credita para o autor (dono do turno). Gol contra
+            // (discId === "own_goal"): credita para o adversário.
+            const ehGolContra = jogadaData?.discId === "own_goal";
+            const autorDoGol = ehGolContra
+              ? mesa.jogador_1_id === userId
+                ? (mesa.jogador_2_id ?? mesa.jogador_1_id)
+                : mesa.jogador_1_id
+              : userId;
+            await mesaRef.current.registrarGol(autorDoGol);
+            // Avisa o adversário para resetar a bola ao centro.
+            await mesaRef.current.enviarGoalScored({
+              jogadorId: userId,
+              placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
+            });
             await mesaRef.current.trocarTurno();
+            dispareiRef.current = false;
+          } else if (posicoesFinais && jogadaData?.discId === "no_goal") {
+            const proximoTurno =
+              mesa.jogador_1_id === userId
+                ? mesa.jogador_2_id || mesa.jogador_1_id
+                : mesa.jogador_1_id;
+            await mesaRef.current.enviarFimDeTurno({
+              discos: posicoesFinais.discos,
+              bola: posicoesFinais.bola,
+              jogadorId: userId,
+              novoTurnoId: proximoTurno,
+            });
+            // Antes faltava: sem trocarTurno() no lance sem gol, o turno ficava
+            // travado no mesmo jogador para sempre.
+            await mesaRef.current.trocarTurno();
+            dispareiRef.current = false;
           }
         }
       } catch (error) {
