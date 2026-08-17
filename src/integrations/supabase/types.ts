@@ -397,7 +397,86 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      criar_campeonato_online: {
+        Args: { p_nome?: string; p_max?: number }
+        Returns: Json
+      }
+      entrar_campeonato_online: {
+        Args: { p_codigo: string }
+        Returns: Json
+      }
+      sair_campeonato_online: {
+        Args: { p_codigo: string }
+        Returns: Json
+      }
+      iniciar_campeonato_online: {
+        Args: { p_codigo: string }
+        Returns: Json
+      }
+      vincular_mesa_campeonato: {
+        Args: { p_campeonato_id: number; p_rodada: number; p_mesa_id: string }
+        Returns: Json
+      }
+      abrir_mesa_campeonato: {
+        Args: { p_campeonato_id: number; p_rodada: number }
+        Returns: string
+      }
+      registrar_resultado_campeonato: {
+        Args: { p_campeonato_id: number; p_mesa_id: string; p_gols_j1: number; p_gols_j2: number }
+        Returns: Json
+      }
+      criar_mesa_futebol: {
+        Args: { p_time: string }
+        Returns: Json
+      }
+      entrar_mesa_futebol: {
+        Args: { p_mesa_id: string; p_time: string }
+        Returns: Json
+      }
+      registrar_jogada_mesa: {
+        Args: { p_mesa_id: string; p_estado_fisico?: Json | null; p_trocar_turno?: boolean }
+        Returns: Json
+      }
+      registrar_gol_mesa: {
+        Args: { p_mesa_id: string; p_jogador_id?: string | null }
+        Returns: Json
+      }
+      abandonar_partida_mesa: {
+        Args: { p_mesa_id: string }
+        Returns: Json
+      }
+      registrar_heartbeat_mesa: {
+        Args: { p_mesa_id: string }
+        Returns: Json
+      }
+      tempo_restante_mesa: {
+        Args: { p_mesa_id: string }
+        Returns: number
+      }
+      iniciar_partida_mesa: {
+        Args: { p_mesa_id: string }
+        Returns: Json
+      }
+      registrar_jogada_bloco: {
+        Args: { p_bloco_id: string }
+        Returns: Json
+      }
+      registrar_gol_bloco: {
+        Args: { p_bloco_id: string; p_jogador: string }
+        Returns: Json
+      }
+      forcar_troca_turno_bloco: {
+        Args: { p_bloco_id: string }
+        Returns: Json
+      }
+      finalizar_bloco: {
+        Args: { p_bloco_id: string; p_vencedor: string }
+        Returns: Json
+      }
+      limpar_salas_antigas: {
+        Args: Record<never, never>
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

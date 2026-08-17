@@ -141,7 +141,7 @@ export async function criarPerfilSeNaoExistir(userId: string, email: string, nom
     .insert({
       user_id: userId,
       email: email,
-      nome: nome || email.split("@")[0],
+      nome: nome || email.split("@")[0] || email,
       time_personalizado: "Meu Time",
       abreviacao_time: "MTI",
       numero_jogador: 10,

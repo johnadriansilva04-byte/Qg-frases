@@ -205,10 +205,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const persistTournament = (t: Tournament | null) => {
     setTour(t);
-    saveTournament(t);
+    if (t) saveTournament(t);
     // Salvar no Supabase se o usuário estiver logado
-    if (perfil?.user_id && t) {
-      saveTournamentToSupabase(perfil.user_id, t);
+    const uid = perfil?.user_id;
+    if (uid && t) {
+      saveTournamentToSupabase(uid, t);
     }
   };
 
@@ -612,6 +613,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (t.phase === "fim" && t.champion === t.userTeamId) {
         const titles = { ...progress.titles, [t.difficulty]: progress.titles[t.difficulty] + 1 };
         persist({
+          ...progress,
           titles,
           trophies: [
             ...progress.trophies,
@@ -966,13 +968,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
       )}
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
-        {screen !== "auth" && (
-          <Header
-            progress={progress}
-            onTrophies={() => setScreen("trophies")}
-            onHome={() => setScreen("menu")}
-          />
-        )}
+        <Header
+          progress={progress}
+          onTrophies={() => setScreen("trophies")}
+          onHome={() => setScreen("menu")}
+        />
 
         {screen === "menu" && (
           <Menu

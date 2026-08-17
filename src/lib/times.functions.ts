@@ -8,7 +8,7 @@ export interface TimeDB {
   pais: string;
   liga: string;
   is_personalizado: boolean;
-  usuario_id?: string;
+  usuario_id: string | null;
   created_at: string;
 }
 

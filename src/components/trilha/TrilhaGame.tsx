@@ -5,7 +5,7 @@ import { TrilhaBoard } from "./TrilhaBoard";
 import { GameEndAdModal } from "./GameEndAdModal";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
-import { useTrilhaPhases } from "@/hooks/useTrilhaChampionship";
+import { useTrilhaPhases, type Phase } from "@/hooks/useTrilhaChampionship";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 import { TrilhaOnlineLobby } from "./TrilhaOnlineLobby";
@@ -78,7 +78,13 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
       {showTutorial && <TutorialModal onStart={handleStartGame} onShowRules={handleShowRules} />}
       {showRules && <RulesModal onClose={handleCloseRules} />}
       {showTrophies && <TrophiesModal onClose={() => setShowTrophies(false)} phases={phases} />}
-      {showModeSelection && <ModeSelection onBack={onBack} onSelectCareer={handleSelectCareerMode} onSelectOnline={handleSelectOnlineMode} />}
+      {showModeSelection && (
+        <ModeSelection
+          onBack={onBack}
+          onSelectCareer={handleSelectCareerMode}
+          onSelectOnline={handleSelectOnlineMode}
+        />
+      )}
       {!showModeSelection && gameMode === "career" && (
         <TrilhaGameBoard
           key={`${difficulty}-${seed}`}
@@ -94,7 +100,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   );
 }
 
-function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack?: () => void; onSelectCareer: () => void; onSelectOnline: () => void }) {
+function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack: (() => void) | undefined; onSelectCareer: () => void; onSelectOnline: () => void }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">

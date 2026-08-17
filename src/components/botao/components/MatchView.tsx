@@ -19,8 +19,8 @@ type Props = {
   customTeam?: Team; // Time personalizado do usuário
   onPlay?: (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => void; // Callback chamado quando uma jogada termina (para sincronização online)
   initialTurn?: Side; // Turno inicial (para sincronização online)
-  onJogadaAdversaria?: (jogada: any) => void; // Callback para receber jogadas do adversário
-  onFimDeTurno?: (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => void; // Callback para receber fim de turno
+  onJogadaAdversaria?: (handler: (jogada: any) => void) => void; // Registra handler para receber jogadas do adversário
+  onFimDeTurno?: (handler: (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string; novoTurnoId?: string }) => void) => void; // Registra handler para receber fim de turno
   onGolAdversario?: (resetHandler: () => void) => void; // Registra handler para reset de bola quando o adversário marca gol
   score?: { home: number; away: number }; // Placar sincronizado do servidor (para modo online)
 };

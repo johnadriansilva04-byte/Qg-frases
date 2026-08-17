@@ -241,7 +241,7 @@ export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClos
 
         {/* Informação subliminar para o Google */}
         <div className="hidden">
-          <span data-ad-rewarded="true" data-ad-points={score * 2}>
+          <span data-ad-rewarded="true" data-ad-points={baseScore * 2}>
             Google AdSense - Dobrar pontos após assistir vídeo
           </span>
         </div>

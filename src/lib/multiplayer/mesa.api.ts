@@ -2,6 +2,7 @@
  * API functions para mesas_futebol (sistema v2 de persistência online)
  */
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 export type MesaFutebol = {
   id: string;
@@ -105,7 +106,7 @@ export async function registrarJogadaMesa(
 ): Promise<MesaFutebol> {
   const { data, error } = await supabase.rpc("registrar_jogada_mesa", {
     p_mesa_id: mesaId,
-    p_estado_fisico: estadoFisico as never,
+    p_estado_fisico: (estadoFisico ?? null) as Json,
     p_trocar_turno: trocarTurno,
   });
 
@@ -119,7 +120,7 @@ export async function registrarJogadaMesa(
 export async function registrarGolMesa(mesaId: string, jogadorId?: string): Promise<MesaFutebol> {
   const { data, error } = await supabase.rpc("registrar_gol_mesa", {
     p_mesa_id: mesaId,
-    p_jogador_id: jogadorId,
+    p_jogador_id: jogadorId ?? null,
   });
 
   if (error) throw error;
