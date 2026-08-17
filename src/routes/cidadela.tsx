@@ -4,6 +4,7 @@ import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react"
 import { AdSlot } from "@/components/AdSlot";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { BotaoGame } from "@/components/botao/BotaoGame";
+import { LeaderboardTreinadores } from "@/components/botao/career/LeaderboardTreinadores";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -99,6 +100,10 @@ function Cidadela() {
 
         <div className="mt-6 text-center text-xs text-muted-foreground">
           <p>Mais jogos em breve! Fique ligado.</p>
+        </div>
+
+        <div className="mt-8" data-testid="cidadela-leaderboard">
+          <LeaderboardTreinadores />
         </div>
       </main>
 

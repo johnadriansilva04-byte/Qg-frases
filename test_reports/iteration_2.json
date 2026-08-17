@@ -1,0 +1,21 @@
+{
+  "summary": "Frontend-only testing of 3 new Botao features. All 3 features PASS. (1) Leaderboard on /cidadela renders with 8 rows; THIAGO GARCIA DOS SANTOS at #1 with 804 soberania, top 3 have medal icons and highlighted rows, team badge with colors, coach name + nivel (IDOLO/APRENDIZ), title/W-L stats, and large soberania badge on right. (2) TitleCeremony via ?debug_ceremony=1 with seeded localStorage career: after clicking Futebol de Botao card, full-screen overlay shows golden pulsating trophy, 'CERIMONIA DE PREMIACAO', 'CAMPEAO DA COPA AMADOR', team name (MEU TIME), coach apelido (CACA), 3 stats (Soberania +120, Titulo 1o, Campanhas 1), heroic italic quote, and 'ERGUER A TACA' button with data-testid=ceremony-continue. canvas-confetti renders a <canvas> element and particles are visible in screenshot. (3) Ceremony closes correctly when button clicked (count goes from 1 to 0). (4) Code integration for Carreira Online in OnlineMatchV3.tsx handleFinish (lines 384-415) confirmed: calls aplicarResultadoRemoto(gf, ga, null) then inserirManchetesRemotas with generated headline; imports present in file.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Pre-existing warnings observed but non-blocking as noted by main agent: 'Multiple GoTrueClient instances' and a 400 resource error (likely Supabase RPC for unmigrated column). Leaderboard uses fallback query correctly (titulos_treinador shows as 0 due to unmigrated columns).",
+    "TitleCeremony effect deps: useEffect([]) does not depend on props; fine since instance is remounted per showCeremony. Confetti frame loop correctly cancels on unmount."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "Injected localStorage key 'botao:career:v1' with test coach (Cacá) to trigger debug ceremony flow. No backend data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "3 features validated on public URL. Leaderboard reads botao_usuarios with fallback for unmigrated coach_* columns. Debug ceremony trigger requires both ?debug_ceremony=1 AND career.coach.nome present in localStorage 'botao:career:v1' AND user must navigate into BotaoGame (click Futebol de Botao card). The 400 network error on load appears related to Supabase RPC for a not-yet-migrated column and is expected per main agent context."
+}

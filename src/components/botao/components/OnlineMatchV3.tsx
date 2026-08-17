@@ -15,6 +15,7 @@ import {
   buscarMesasAguardando,
   type MesaFutebol,
 } from "@/lib/multiplayer/mesa.api";
+import { aplicarResultadoRemoto, inserirManchetesRemotas } from "../career/careerRemote";
 
 type Screen = "lobby-list" | "jogo" | "resultado";
 
@@ -380,9 +381,38 @@ function MesaOnline({
     };
   }, [mesa.mesa_id, userId]); // Dependências estáticas apenas
 
-  const handleFinish = useCallback((result: MatchResult) => {
+  const handleFinish = useCallback(async (_result: MatchResult) => {
+    const gf = souJogador1 ? placar[0]! : placar[1]!;
+    const ga = souJogador1 ? placar[1]! : placar[0]!;
+    const nomeOponente = souJogador1
+      ? teamByIdSync(mesa.time_j2 || "MTI").short
+      : teamByIdSync(mesa.time_j1 || "MTI").short;
+    const meuNomeCurto = userTeam.short;
+
+    try {
+      // Pontos escassos + estatísticas (RPC autoritativa)
+      await aplicarResultadoRemoto(gf, ga, null);
+
+      // Manchete do resultado online
+      const tag = "seu-time" as const;
+      let manchete: string;
+      if (gf > ga) manchete = `Vitória online! ${meuNomeCurto} bate ${nomeOponente} por ${gf} a ${ga}`;
+      else if (gf < ga) manchete = `Derrota amarga: ${meuNomeCurto} cai para ${nomeOponente} (${gf}-${ga})`;
+      else manchete = `Empate equilibrado: ${meuNomeCurto} ${gf} x ${ga} ${nomeOponente}`;
+
+      await inserirManchetesRemotas(userId, [
+        {
+          manchete,
+          subtitulo: `Partida online · Mesa ${mesa.mesa_id}`,
+          tag,
+          rodada: 0,
+        },
+      ]);
+    } catch (e) {
+      console.error("[OnlineMatchV3] erro ao aplicar soberania online:", e);
+    }
     onSair();
-  }, [onSair]);
+  }, [onSair, souJogador1, placar, mesa.mesa_id, mesa.time_j1, mesa.time_j2, userId, userTeam.short]);
 
   const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => {
     if (!mesaRef.current) return;

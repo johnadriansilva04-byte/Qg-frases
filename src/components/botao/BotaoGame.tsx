@@ -28,6 +28,7 @@ import { EMPTY_CAREER, loadCareer, saveCareer, addHeadlines, deleteCareer } from
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { POINTS, type CareerState, type Choice } from "./career/types";
+import { TitleCeremony } from "./career/TitleCeremony";
 import {
   loadCareerFromSupabase,
   saveCareerToSupabase,
@@ -63,6 +64,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
   const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
   const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
+  const [showCeremony, setShowCeremony] = useState(false);
+  const [ceremonyBonus, setCeremonyBonus] = useState(0);
+
+  // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("debug_ceremony") === "1" && career?.coach.nome) {
+      setCeremonyBonus(POINTS.CAMPEAO + POINTS.TITULO_AMADOR);
+      setShowCeremony(true);
+    }
+  }, [career?.coach.nome]);
 
   // Carregar times do banco de dados ao montar
   useEffect(() => {
@@ -508,6 +520,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             : POINTS.TITULO_LENDA;
           novaSoberania += bonusTitulo;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
+          // Cerimônia de premiação!
+          setCeremonyBonus(POINTS.CAMPEAO + bonusTitulo);
+          setShowCeremony(true);
         } else {
           // Vice? Terceiro? Quarto?
           const finalStage = t.knockout[t.knockout.length - 1];
@@ -680,6 +695,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
+      {showCeremony && career?.coach.nome && (
+        <TitleCeremony
+          coach={career.coach}
+          timeName={userTeam.name}
+          difficulty={tour?.difficulty ?? difficulty}
+          soberaniaAdd={ceremonyBonus}
+          onContinue={() => setShowCeremony(false)}
+        />
+      )}
       {screen === "menu" && (
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
       )}
