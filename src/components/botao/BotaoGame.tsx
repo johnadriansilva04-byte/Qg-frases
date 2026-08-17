@@ -50,6 +50,7 @@ import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
 import { SubornoStory } from "./career/SubornoStory";
 import { CalendarView } from "./career/CalendarView";
+import { ChampionshipModule } from "./career/ChampionshipModule";
 import {
   SUBORNO_INICIAL,
   deveOfertarSuborno,
@@ -1072,7 +1073,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         )}
 
         {screen === "trophies" && (
-          <TrophyRoom progress={progress} onBack={() => setScreen("menu")} />
+          <TrophyRoom progress={progress} userTeam={userTeam} onBack={() => setScreen("menu")} />
         )}
       </div>
 
@@ -1516,6 +1517,9 @@ function Hub({
           {showCalendar && (
             <CalendarView tour={tour} userTeam={userTeam} currentDivisao={career?.divisao || "serie-c"} />
           )}
+
+          {/* Módulo de Campeonatos */}
+          <ChampionshipModule tour={tour} userTeam={userTeam} currentDivisao={career?.divisao || "serie-c"} />
         </div>
 
         {/* COLUNA DA DIREITA - CLASSIFICAÇÃO COMPACTA */}
@@ -1669,7 +1673,12 @@ function Hub({
   );
 }
 
-function TrophyRoom({ progress, onBack }: { progress: Progress; onBack: () => void }) {
+function TrophyRoom({ progress, userTeam, onBack }: { progress: Progress; userTeam: Team; onBack: () => void }) {
+  const getTeam = (teamId: string): Team => {
+    if (teamId === userTeam.id) return userTeam;
+    return teamByIdSync(teamId);
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="font-display text-3xl">Sala de troféus</h2>
@@ -1711,9 +1720,8 @@ function TrophyRoom({ progress, onBack }: { progress: Progress; onBack: () => vo
           <ul className="space-y-2 text-sm">
             {progress.trophies.map((t, i) => (
               <li key={i} className="flex items-center justify-between gap-3">
-                <TeamBadge team={teamByIdSync(t.teamId)} size="sm" />
+                <TeamBadge team={getTeam(t.teamId)} size="sm" />
                 <span className="shrink-0 text-muted-foreground">
-                  {DIFFICULTIES.find((d) => d.id === t.difficulty)?.label} ·{" "}
                   {new Date(t.date).toLocaleDateString("pt-BR")}
                 </span>
               </li>
