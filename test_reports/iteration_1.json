@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only testing (Vite/React + Supabase) of Cidadela → Futebol de Botão Modo Carreira + fix of tournament round-2 CPU/user shot bug. All 5 test scenarios from the request PASSED. Coach Setup flow (6 steps) works end-to-end. Hub renders SovereigntyPanel (Aprendiz), próxima partida (Grupo X · Rodada 1), entrar-em-campo, and JornalDoTorneio with 2 initial headlines (coletiva + seu time). Match: user could shoot MULTIPLE times in sequence — jogadas counter went 22 → 23 → 24 with both user's red discs AND CPU green/white discs visibly repositioning between screenshots. Critical bug fix (hasShotThisTurnRef reset when turn changes back to userSide in offline mode, lines 90-103 of MatchView.tsx) is verified working. localStorage keys 'botao:career:v1' (732 bytes) and 'botao:tournament:v1' (6917 bytes) are persisted with correct schema (coach.nome, soberania, moralTime, headlines[]).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Cidadela (top of all pages)", "issues": ["Empty dark placeholder rectangle at top of every page appears to be an unrendered ad/banner slot — takes vertical space with no content. Consider hiding when empty."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "None blocking — Modo Carreira and shot-bug fix are functional.",
+    "Minor UX observation: review request states Sair should return to Menu principal with a 'Continuar campanha' option; current implementation (BotaoGame.tsx:610) sends tournament-match onQuit directly to 'hub'. Both approaches recover state correctly, but the flow now bypasses the menu. The 'CONTINUAR CAMPANHA' tile IS present in the menu when navigating there via the FB header title (verified). Confirm intent with product.",
+    "PAGEERROR seen on every load: 'Node.js detected but native WebSocket not found. Suggested solution: Ensure you are running Node.js 22+ or provide a WebSocket implementation via the transport option.' — this is emitted by Supabase realtime during Vite SSR fallback. Not blocking (client rendering recovers), but should be addressed by main agent (either upgrade Node or set transport options in Supabase client).",
+    "Console warning (repeat): 'Multiple GoTrueClient instances detected in the same browser context' — Supabase client is being instantiated more than once. Non-blocking but should be consolidated into a single singleton."
+  ],
+  "critical_code_review_comments": [
+    "MatchView.tsx is 819 lines — exceeds the 700-line guideline; consider splitting into hooks (useMatchLoop, useMatchInput, useTurnTimer) and presentational Canvas.",
+    "Fix is correct and minimal: useEffect at lines 95-103 gated by !isOnline resets hasShotThisTurnRef when turn flips back to userSide. Correctly excludes online mode where the reset happens elsewhere.",
+    "turnTimer effect (lines 462-479) correctly removed turnTimer from deps and no longer calls setTurnTimer — avoids the auto-recreation loop.",
+    "Coach career storage schema is well-typed and persisted immediately after setup (verified via localStorage inspection)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no backend in scope)", "frontend": "100% of requested scenarios"},
+  "test_credentials": "N/A — offline flow, no auth required.",
+  "seed_data_creation": "None — used real user flow to generate localStorage entries.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "This is a Vite/React (not FastAPI). Only Supabase for online multiplayer. Fresh mcp_browser_automation runs get a clean localStorage — all persistence tests must be done in ONE session. To reach hub: Cidadela → 'Futebol de Botão' → 'Torneio' → 'Começar' → 3× coach-avancar → fill coach-nome → coach-avancar → click estilo-equilibrado → coach-avancar → fill coach-bio → coach-avancar. Field canvas: className='pitch-canvas', 1000×620 field, scale = canvasWidth/1000 in landscape. User discs = red with green border on the left (home side). To shoot: pointerdown on disc (field x=300 y=148 for home-1), pointermove ~150px LEFT (backwards), pointerup. Wait ~4s for user sim + CPU response. Turn counter 'JOGADAS' increments each play cycle. Cookie banner must be dismissed first (button 'Aceitar').",
+  "rca of the issue": "Original bug: in tournament mode, from round 2 onwards CPU would not play and user's second shot appeared to release without taking effect. Root cause was hasShotThisTurnRef.current being set to true after user's first shot but never reset in offline mode (only reset in online broadcast path). Combined with a turnTimer useEffect that auto-recreated due to turnTimer being in its own deps array. Fix applied by main agent adds a dedicated useEffect (MatchView.tsx L95-103) that resets hasShotThisTurnRef.current=false and jogadaEmAndamentoRef.current=false whenever turn transitions back to userSide in offline (non-simulating) mode; and refactors the turnTimer effect to remove the self-reference. Verified: 3 sequential user shots executed with CPU responding between them; jogadas counter incremented as expected; both red and CPU discs visibly repositioned in screenshots 07 and 08."
+}

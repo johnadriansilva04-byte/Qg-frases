@@ -16,12 +16,18 @@ import {
 } from "./tournament";
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
-import { OnlineMatchV2 } from "./components/OnlineMatchV2";
-import { OnlineMatchV3 } from "./components/OnlineMatchV3";
 import { AuthScreen } from "./components/AuthScreen";
 import { UserMenu } from "./components/UserMenu";
 import { useBotaoAuth } from "./online/useBotaoAuth";
 import type { Perfil } from "./online/auth";
+import { CoachSetup } from "./career/CoachSetup";
+import { NewsFeed } from "./career/NewsFeed";
+import { SovereigntyPanel } from "./career/SovereigntyPanel";
+import { ChoiceModal } from "./career/ChoiceModal";
+import { EMPTY_CAREER, loadCareer, saveCareer, addHeadlines, deleteCareer } from "./career/careerStorage";
+import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
+import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
+import { POINTS, type CareerState, type Choice } from "./career/types";
 
 type Screen =
   | "auth"
@@ -29,9 +35,11 @@ type Screen =
   | "friendly-setup"
   | "friendly-match"
   | "online"
+  | "coach-setup"
   | "tournament-setup"
   | "hub"
   | "tournament-match"
+  | "choice"
   | "trophies";
 
 interface BotaoGameProps {
@@ -45,6 +53,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
   const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
+  const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
 
   // Carregar times do banco de dados ao montar
   useEffect(() => {
@@ -131,6 +140,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   };
 
+  const persistCareer = (c: CareerState | null) => {
+    setCareer(c);
+    if (c) saveCareer(c);
+    else deleteCareer();
+  };
+
   const handleLogout = async () => {
     if (emPartidaOnline) {
       setToast("Não dá pra sair da conta durante uma partida online.");
@@ -178,6 +193,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Resetar estado do torneio
     persistTournament(null);
     setCurrent(null);
+    // Resetar carreira (mas mantendo o coach pra reuso — só limpa estado da campanha)
+    if (career) {
+      persistCareer({
+        ...career,
+        dificuldadeAtual: null,
+        bonusProximaPartida: 0,
+        penaltiesProximaPartida: 0,
+        moralTime: 65,
+        headlines: [],
+        ultimaRodadaProcessada: -1,
+        eventoPendenteId: null,
+      });
+    }
 
     // Resetar progresso local
     setProgress(loadProgress());
@@ -257,14 +285,85 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- torneio ---------- */
   const startTournament = () => {
-    persistTournament(createTournament(userTeam.id, difficulty, userTeam));
+    // Se não existir treinador ainda, entra no fluxo de criação primeiro
+    if (!career || !career.coach.nome) {
+      setScreen("coach-setup");
+      return;
+    }
+    iniciarCampanha(career);
+  };
+
+  const iniciarCampanha = (c: CareerState) => {
+    const t = createTournament(userTeam.id, difficulty, userTeam);
+    persistTournament(t);
+    const novaCareer: CareerState = {
+      ...c,
+      dificuldadeAtual: difficulty,
+      bonusProximaPartida: 0,
+      penaltiesProximaPartida: 0,
+      moralTime: 65,
+      headlines: manchetesDeEstreia(c.coach.apelido || c.coach.nome, userTeam.name),
+      ultimaRodadaProcessada: -1,
+      eventoPendenteId: null,
+      coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
+    };
+    persistCareer(novaCareer);
     setScreen("hub");
+  };
+
+  const finishCoachSetup = (coach: CareerState["coach"]) => {
+    const base = career ?? EMPTY_CAREER;
+    const nova: CareerState = { ...base, coach };
+    persistCareer(nova);
+    iniciarCampanha(nova);
+  };
+
+  // Prepara o próximo evento de escolha entre partidas (se houver)
+  const preparaEscolha = (c: CareerState): CareerState => {
+    if (c.eventoPendenteId) return c;
+    // Sortear evento antes de cada partida do usuário (60% chance)
+    if (Math.random() > 0.6) return c;
+    const evento = sortearEvento(c.ultimasEscolhas);
+    return { ...c, eventoPendenteId: evento.id };
   };
 
   const playNext = () => {
     if (!tour) return;
+    // Se houver evento pendente, mostra a escolha antes
+    if (career?.eventoPendenteId) {
+      setScreen("choice");
+      return;
+    }
     const f = nextUserFixture(tour);
     if (!f) return;
+    setCurrent(f);
+    setScreen("tournament-match");
+  };
+
+  const aplicarEscolha = (choice: Choice) => {
+    if (!career) return;
+    let bonusPoder = career.bonusProximaPartida + (choice.bonusPoder ?? 0);
+    let moral = Math.max(0, Math.min(100, career.moralTime + (choice.bonusMoral ?? 0)));
+    let soberania = career.coach.soberania;
+    // Penalty imediata (não aplica bônus/penal condicional aqui — vai no finish)
+    if (choice.penaltyPontos && choice.penaltyPontos < 0) soberania += choice.penaltyPontos;
+
+    const nova: CareerState = {
+      ...career,
+      bonusProximaPartida: bonusPoder,
+      moralTime: moral,
+      coach: { ...career.coach, soberania: Math.max(0, soberania) },
+      ultimasEscolhas: [...career.ultimasEscolhas, choice.id].slice(-8),
+      eventoPendenteId: null,
+    };
+    persistCareer(nova);
+
+    // Segue para a partida
+    const f = nextUserFixture(tour!);
+    if (!f) {
+      setScreen("hub");
+      return;
+    }
     setCurrent(f);
     setScreen("tournament-match");
   };
@@ -333,6 +432,86 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
     }
 
+    // ============ CARREIRA / SOBERANIA / MANCHETES ============
+    if (career) {
+      let novaSoberania = career.coach.soberania;
+      let moral = career.moralTime;
+
+      // Pontos escassos: V=+3 / E=+1 / D=-3
+      if (gf > ga) { novaSoberania += POINTS.VITORIA; moral = Math.min(100, moral + 4); }
+      else if (gf < ga) { novaSoberania = Math.max(0, novaSoberania + POINTS.DERROTA); moral = Math.max(0, moral - 6); }
+      else { novaSoberania += POINTS.EMPATE; moral = Math.max(0, moral - 1); }
+
+      // Bônus condicionais da última escolha:
+      const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1];
+      if (lastChoice === "goleada") {
+        if (gf - ga >= 2) novaSoberania += 5;
+        else if (gf < ga) novaSoberania = Math.max(0, novaSoberania - 3);
+      }
+      if (lastChoice === "respeito" && gf > ga) novaSoberania += 2;
+      if (lastChoice === "titular" && gf > ga) moral = Math.min(100, moral + 4);
+
+      let novoTitulos = career.coach.titulos;
+
+      // Bônus de classificação para mata-mata (só quando entra a fase)
+      const classificouAgora =
+        tour?.phase === "grupos" && t.phase === "mata-mata" &&
+        t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
+      if (classificouAgora) novaSoberania += POINTS.CLASSIFICOU_MATA;
+
+      // Fim de campanha: bônus de posição final
+      let manchetesFim: string[] = [];
+      if (t.phase === "fim") {
+        // Determina posição do usuário
+        if (t.champion === t.userTeamId) {
+          novaSoberania += POINTS.CAMPEAO;
+          novoTitulos += 1;
+          const bonusTitulo =
+            t.difficulty === "amador" ? POINTS.TITULO_AMADOR
+            : t.difficulty === "profissional" ? POINTS.TITULO_PROFISSIONAL
+            : POINTS.TITULO_LENDA;
+          novaSoberania += bonusTitulo;
+          manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
+        } else {
+          // Vice? Terceiro? Quarto?
+          const finalStage = t.knockout[t.knockout.length - 1];
+          const foiVice = finalStage?.fixtures.some(f =>
+            (f.homeId === t.userTeamId || f.awayId === t.userTeamId) && f.stage.toLowerCase().includes("final")
+          );
+          const semiStage = t.knockout[t.knockout.length - 2];
+          const foiSemi = semiStage?.fixtures.some(f => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
+          if (foiVice) { novaSoberania += POINTS.VICE; manchetesFim.push(`Vice-campeão: ${career.coach.apelido} chega perto do título`); }
+          else if (foiSemi) { novaSoberania += POINTS.TERCEIRO; manchetesFim.push(`Semifinalista: ${career.coach.apelido} termina no Top 4`); }
+          else { novaSoberania += POINTS.QUARTO; }
+        }
+      }
+
+      // Gera manchetes da rodada
+      const rodadaTexto = current.stage;
+      const jogadosNessaRodada = t.phase === "grupos"
+        ? t.groupFixtures.filter(f => f.stage === current.stage && f.played)
+        : (t.knockout[t.knockout.length - 1]?.fixtures.filter(f => f.played) ?? []);
+      const fixDoUsuario = jogadosNessaRodada.find(f => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
+      const teamName = userTeam.name;
+      const novas = gerarManchetesDaRodada(t, teamName, career.coach, rodadaTexto, jogadosNessaRodada, fixDoUsuario);
+      manchetesFim.forEach((m, i) => novas.unshift({
+        id: `end-${Date.now()}-${i}`, manchete: m, tag: "seu-time", rodada: 99,
+      }));
+
+      let novaCareer: CareerState = {
+        ...career,
+        bonusProximaPartida: 0,
+        penaltiesProximaPartida: 0,
+        moralTime: moral,
+        coach: { ...career.coach, soberania: Math.max(0, Math.round(novaSoberania)), titulos: novoTitulos },
+      };
+      novaCareer = addHeadlines(novaCareer, novas);
+      // Se o torneio ainda não acabou e ainda tem próxima do usuário, prepara evento
+      if (t.phase !== "fim" && nextUserFixture(t)) novaCareer = preparaEscolha(novaCareer);
+      persistCareer(novaCareer);
+    }
+    // ============ FIM CARREIRA ============
+
     // Atualizar gols no progresso
     const novoProgresso = {
       ...progress,
@@ -380,6 +559,33 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <AuthScreen onPronto={aoLogar} />
+      </Shell>
+    );
+  }
+
+  if (screen === "coach-setup") {
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <CoachSetup
+          timeName={userTeam.name}
+          onFinish={finishCoachSetup}
+          onBack={() => setScreen("menu")}
+        />
+      </Shell>
+    );
+  }
+
+  if (screen === "choice" && career?.eventoPendenteId) {
+    const evento = CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId);
+    if (!evento) {
+      setScreen("hub");
+      return null;
+    }
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <ChoiceModal evento={evento} onChoose={aplicarEscolha} />
       </Shell>
     );
   }
@@ -464,7 +670,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           />
         )}
 
-        {screen === "hub" && tour && <Hub tour={tour} userTeam={userTeam} onPlay={playNext} onExit={() => setScreen("menu")} />}
+        {screen === "hub" && tour && (
+          <Hub
+            tour={tour}
+            userTeam={userTeam}
+            career={career}
+            onPlay={playNext}
+            onExit={() => setScreen("menu")}
+          />
+        )}
 
         {screen === "trophies" && <TrophyRoom progress={progress} onBack={() => setScreen("menu")} />}
       </div>
@@ -704,7 +918,7 @@ function Setup(props: {
   );
 }
 
-function Hub({ tour, userTeam, onPlay, onExit }: { tour: Tournament; userTeam: Team; onPlay: () => void; onExit: () => void }) {
+function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; userTeam: Team; career: CareerState | null; onPlay: () => void; onExit: () => void }) {
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const stage = tour.knockout[tour.knockout.length - 1];
 
@@ -716,6 +930,10 @@ function Hub({ tour, userTeam, onPlay, onExit }: { tour: Tournament; userTeam: T
 
   return (
     <div className="space-y-6">
+      {career?.coach.nome && (
+        <SovereigntyPanel coach={career.coach} moral={career.moralTime} />
+      )}
+
       <div className="panel">
         <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
           {tour.phase === "fim" ? "Campanha encerrada" : tour.phase === "grupos" ? "Fase de grupos" : stage?.stage}
@@ -730,14 +948,23 @@ function Hub({ tour, userTeam, onPlay, onExit }: { tour: Tournament; userTeam: T
               {getTeam(next.homeId).short} vs {getTeam(next.awayId).short}
             </p>
             <p className="text-sm text-muted-foreground">{next.stage}</p>
-            <button onClick={onPlay} className="btn-primary mt-4 w-full sm:w-auto">
-              Entrar em campo
+            {career?.eventoPendenteId && (
+              <p className="mt-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
+                ⚠ Uma decisão importante espera por você antes desta partida
+              </p>
+            )}
+            <button data-testid="entrar-em-campo" onClick={onPlay} className="btn-primary mt-4 w-full sm:w-auto">
+              {career?.eventoPendenteId ? "Tomar decisão →" : "Entrar em campo"}
             </button>
           </>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">Seu time está fora da disputa.</p>
         )}
       </div>
+
+      {career && career.headlines.length > 0 && (
+        <NewsFeed headlines={career.headlines} />
+      )}
 
       {tour.phase === "grupos" && (
         <div className="grid gap-4 sm:grid-cols-2">

@@ -73,7 +73,6 @@ export function MatchView({
   const [ended, setEnded] = useState(false);
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
-  const [turnTimer, setTurnTimer] = useState<number | null>(null); // Timer de 10 segundos para jogar
   const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
 
   // Sincronizar turnsLeft com a prop turns (para modo online)
@@ -92,6 +91,16 @@ export function MatchView({
   useEffect(() => {
     turnsRef.current = turnsLeft;
   }, [turnsLeft]);
+
+  // FIX CRÍTICO: Resetar flag de "já chutou" sempre que virar o turno do usuário
+  // (modo offline). Sem isso, após o 1º chute o botão fica travado nas próximas jogadas.
+  useEffect(() => {
+    if (isOnline) return;
+    if (turn === userSide && !simRef.current) {
+      hasShotThisTurnRef.current = false;
+      jogadaEmAndamentoRef.current = false;
+    }
+  }, [turn, userSide, isOnline]);
 
   const scoreRef = useRef(score);
   scoreRef.current = score;
@@ -451,32 +460,23 @@ export function MatchView({
 
   // Timer de 10 segundos para jogar (apenas no modo offline)
   useEffect(() => {
-    if (isOnline || ended || simRef.current) return;
-    
-    // Limpar timer anterior
-    if (turnTimer) {
-      clearTimeout(turnTimer);
-      setTurnTimer(null);
-    }
-    
-    // Iniciar novo timer se for o turno do usuário
-    if (turn === userSide && !ended) {
-      const timer = window.setTimeout(() => {
-        // Passar a vez após 10 segundos
-        const nextTurn = turn === "home" ? "away" : "home";
-        turnRef.current = nextTurn;
-        setTurn(nextTurn);
-        setTurnTimer(null);
-      }, 10000);
-      setTurnTimer(timer);
-    }
-    
+    if (isOnline || ended) return;
+    // Só iniciar timer se for o turno do usuário e não estiver simulando
+    if (turn !== userSide) return;
+    if (simRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      // Passar a vez após 10 segundos sem chutar
+      if (simRef.current || endedRef.current) return;
+      const nextTurn = turn === "home" ? "away" : "home";
+      turnRef.current = nextTurn;
+      setTurn(nextTurn);
+    }, 10000);
+
     return () => {
-      if (turnTimer) {
-        clearTimeout(turnTimer);
-      }
+      clearTimeout(timer);
     };
-  }, [turn, userSide, ended, isOnline, turnTimer]);
+  }, [turn, userSide, ended, isOnline]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {
