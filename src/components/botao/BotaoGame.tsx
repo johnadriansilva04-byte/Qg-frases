@@ -709,6 +709,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         (f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId,
       );
       const teamName = userTeam.name;
+      // Classificação do usuário na tabela do grupo (ou liga) pra manchetes de líder/rebaixa.
+      const grupoDoUser = t.groups.find((g) => g.teamIds.includes(t.userTeamId));
+      const tabelaOrdenada = grupoDoUser ? sortTable(grupoDoUser.table) : [];
+      const posicaoUsuario = tabelaOrdenada.findIndex((r) => r.teamId === t.userTeamId) + 1;
       const novas = gerarManchetesDaRodada(
         t,
         teamName,
@@ -716,6 +720,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         rodadaTexto,
         jogadosNessaRodada,
         fixDoUsuario,
+        {
+          subornoAtivo: !!career.suborno?.nodeAtual,
+          posicaoUsuario,
+          totalTimes: tabelaOrdenada.length,
+        },
       );
       manchetesFim.forEach((m, i) =>
         novas.unshift({

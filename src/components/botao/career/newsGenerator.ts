@@ -44,6 +44,35 @@ const T_POLEMICA = [
   "Comentaristas divergem sobre o esquema tático do {T}",
   "Polêmica: torcida cobra mais garra do {T}",
   "Análise: {T} precisa ajustar a marcação",
+  "Imprensa aponta: {T} oscila demais entre casa e fora",
+  "Crítica do dia: {coach} é questionado por escalação conservadora",
+  "Ex-jogador dispara: '{T} joga com medo de perder'",
+];
+
+const T_LIDER = [
+  "{T} assume o ponteiro: 'a pressa agora é nossa'",
+  "Líder isolado! {T} abre vantagem na tabela",
+  "Com {coach} no comando, {T} dispara na liderança",
+];
+
+const T_REBAIXA = [
+  "{T} entra na zona de rebaixamento e acende o alerta",
+  "Crise: {T} acumula jogos sem vencer e cochicha demissão",
+  "Torcida do {T} pede cabeça após mais um revés",
+];
+
+const T_MATA = [
+  "Mata-mata começa: {T} encara jogo duro nas {stage}",
+  "{coach} garante: 'mata-mata é outra história, vamos pra cima'",
+  "Eliminação ronda o {T} após tropeço nas {stage}",
+  "Classificação dramática! {T} avança nas {stage}",
+];
+
+const T_SUBORNO = [
+  "Imprensa investiga reunião suspeita envolvendo comissão do {T}",
+  "Boato: estranho é visto no estacionamento após jogo do {T}",
+  "Coluna do dia: 'algo cheira mal no futebol de botão'",
+  "Diretoria do {T} nega qualquer irregularidade",
 ];
 
 const pick = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]!;
@@ -60,9 +89,11 @@ export function gerarManchetesDaRodada(
   rodadaTexto: string,
   fixturesJogados: Fixture[],
   fixtureDoUsuario: Fixture | undefined,
+  contexto?: { subornoAtivo?: boolean; posicaoUsuario?: number; totalTimes?: number },
 ): Headline[] {
   const news: Headline[] = [];
   const rodadaNum = tour.groupFixtures.filter((f) => f.played).length;
+  const faseMata = tour.phase === "mata-mata";
 
   // 1. manchete principal do usuário
   if (fixtureDoUsuario?.result) {
@@ -71,13 +102,18 @@ export function gerarManchetesDaRodada(
     const gf = isHome ? r.homeGoals : r.awayGoals;
     const ga = isHome ? r.awayGoals : r.homeGoals;
     let template: string;
-    let tag: Headline["tag"] = "seu-time";
+    const tag: Headline["tag"] = "seu-time";
     if (gf > ga) template = pick(T_USER_VIT);
     else if (gf < ga) template = pick(T_USER_DER);
     else template = pick(T_USER_EMP);
     news.push({
       id: nextId(),
-      manchete: fill(template, { coach: coach.apelido || coach.nome || "Treinador", T: userTeamName, gH: gf, gA: ga }),
+      manchete: fill(template, {
+        coach: coach.apelido || coach.nome || "Treinador",
+        T: userTeamName,
+        gH: gf,
+        gA: ga,
+      }),
       subtitulo: `${rodadaTexto} · ${userTeamName} ${gf} x ${ga}`,
       tag,
       rodada: rodadaNum,
@@ -90,19 +126,84 @@ export function gerarManchetesDaRodada(
     if (!f.result) return;
     const h = teamByIdSync(f.homeId);
     const a = teamByIdSync(f.awayId);
-    const winId = f.result.homeGoals > f.result.awayGoals ? f.homeId : f.result.awayGoals > f.result.homeGoals ? f.awayId : null;
+    const winId =
+      f.result.homeGoals > f.result.awayGoals
+        ? f.homeId
+        : f.result.awayGoals > f.result.homeGoals
+          ? f.awayId
+          : null;
     const W = winId ? teamByIdSync(winId).short : "";
     const L = winId ? teamByIdSync(winId === f.homeId ? f.awayId : f.homeId).short : "";
     const template = pick(T_GERAL);
     news.push({
       id: nextId(),
-      manchete: fill(template, { H: h.short, A: a.short, W, L, gH: f.result.homeGoals, gA: f.result.awayGoals }),
+      manchete: fill(template, {
+        H: h.short,
+        A: a.short,
+        W,
+        L,
+        gH: f.result.homeGoals,
+        gA: f.result.awayGoals,
+      }),
       tag: "geral",
       rodada: rodadaNum,
     });
   });
 
-  // 3. eventual polêmica ou coletiva
+  // 3. narrativa de classificação (pontos corridos / grupos)
+  const pos = contexto?.posicaoUsuario;
+  const total = contexto?.totalTimes ?? 0;
+  if (typeof pos === "number" && total > 0) {
+    if (pos === 1) {
+      news.push({
+        id: nextId(),
+        manchete: fill(pick(T_LIDER), {
+          T: userTeamName,
+          coach: coach.apelido || coach.nome || "Treinador",
+        }),
+        subtitulo: `Classificação · ${userTeamName} é o líder`,
+        tag: "seu-time",
+        rodada: rodadaNum,
+      });
+    } else if (pos >= total - 1) {
+      news.push({
+        id: nextId(),
+        manchete: fill(pick(T_REBAIXA), { T: userTeamName }),
+        subtitulo: `Classificação · ${userTeamName} é o ${pos}º`,
+        tag: "polemica",
+        rodada: rodadaNum,
+      });
+    }
+  }
+
+  // 4. narrativa de mata-mata
+  if (faseMata && fixtureDoUsuario) {
+    const stage = fixtureDoUsuario.stage;
+    news.push({
+      id: nextId(),
+      manchete: fill(pick(T_MATA), {
+        T: userTeamName,
+        coach: coach.apelido || coach.nome || "Treinador",
+        stage,
+      }),
+      subtitulo: `${stage} · ${userTeamName}`,
+      tag: "seu-time",
+      rodada: rodadaNum,
+    });
+  }
+
+  // 5. narrativa paralela de suborno (boatos) enquanto o enredo está ativo
+  if (contexto?.subornoAtivo && Math.random() < 0.5) {
+    news.push({
+      id: nextId(),
+      manchete: fill(pick(T_SUBORNO), { T: userTeamName }),
+      subtitulo: "Rumores · imprensa fareja polêmica",
+      tag: "polemica",
+      rodada: rodadaNum,
+    });
+  }
+
+  // 6. eventual polêmica ou coletiva
   if (Math.random() < 0.4) {
     news.push({
       id: nextId(),
