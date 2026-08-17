@@ -67,8 +67,8 @@ export interface MesaRealtimeHandlers {
   /** gol marcado - atualiza placar */
   onGoalScored?: (payload: { jogadorId: string; placar: { home: number; away: number } }) => void;
   /** fim de turno - sincroniza posições finais e passa turno */
-  onFimDeTurno?: (payload: { 
-    discos: Array<{ id: string; x: number; y: number }>; 
+  onFimDeTurno?: (payload: {
+    discos: Array<{ id: string; x: number; y: number }>;
     bola: { x: number; y: number };
     jogadorId: string;
     novoTurnoId?: string;
@@ -116,7 +116,7 @@ export class MesaRealtime {
   /** Conecta ao canal da mesa: Presence + Broadcast + Postgres Changes. */
   async conectarMesa(): Promise<MesaRow | null> {
     if (this.conectado) {
-      console.log('[MesaRealtime] Já conectado, ignorando reconexão');
+      console.log("[MesaRealtime] Já conectado, ignorando reconexão");
       return this.mesa;
     }
     this.conectado = true;
@@ -273,6 +273,32 @@ export class MesaRealtime {
     if (data) this.aplicarEstado(data as MesaRow);
   }
 
+  /** Troca o turno no servidor (RPC autoritativa) sem registrar jogada. */
+  async trocarTurno(): Promise<void> {
+    if (!this.podeJogar()) return;
+    const { data, error } = await this.supabase.rpc("registrar_jogada_mesa", {
+      p_mesa_id: this.mesaId,
+      p_estado_fisico: null,
+      p_trocar_turno: true,
+    });
+    if (error) return this.h.onErro?.(new Error(error.message));
+    if (data) this.aplicarEstado(data as MesaRow);
+  }
+
+  /** Finaliza a mesa com vencedor explícito (quando o jogo termina por jogadas). */
+  async finalizarPartida(vencedorId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from("mesas_futebol")
+      .update({
+        status: "finalizado",
+        vencedor_id: vencedorId,
+        motivo_finalizacao: "jogadas",
+        turno_atual_id: null,
+      })
+      .eq("mesa_id", this.mesaId);
+    if (error) this.h.onErro?.(new Error(error.message));
+  }
+
   /** Envia sincronização de posições finais após movimento (broadcast) */
   async enviarSyncPositions(payload: { discos: any[]; bola: any }) {
     await this.canal?.send({ type: "broadcast", event: "sync_positions", payload });
@@ -284,8 +310,8 @@ export class MesaRealtime {
   }
 
   /** Envia evento de fim de turno com posições finais (broadcast) */
-  async enviarFimDeTurno(payload: { 
-    discos: Array<{ id: string; x: number; y: number }>; 
+  async enviarFimDeTurno(payload: {
+    discos: Array<{ id: string; x: number; y: number }>;
     bola: { x: number; y: number };
     jogadorId: string;
     novoTurnoId?: string;
@@ -353,8 +379,7 @@ export class MesaRealtime {
     }
 
     const row = atual as MesaRow;
-    const souParticipante =
-      row.jogador_1_id === this.userId || row.jogador_2_id === this.userId;
+    const souParticipante = row.jogador_1_id === this.userId || row.jogador_2_id === this.userId;
 
     if (!souParticipante && !row.jogador_2_id && row.status === "aguardando") {
       const { data, error: errEntrar } = await this.supabase.rpc("entrar_mesa_futebol", {

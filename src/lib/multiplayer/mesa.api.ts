@@ -27,11 +27,11 @@ export type MesaFutebol = {
   ultimo_heartbeat_j2: string | null;
   criado_em: string;
   atualizado_em: string;
+  modalidade: "amistoso" | "campeonato";
+  campeonato_id: number | null;
 };
 
-/**
- * Criar uma nova mesa de futebol
- */
+/** Criar uma nova mesa de futebol (amistoso). */
 export async function criarMesa(time: string): Promise<string> {
   const { data, error } = await supabase.rpc("criar_mesa_futebol", {
     p_time: time,
@@ -39,6 +39,24 @@ export async function criarMesa(time: string): Promise<string> {
 
   if (error) throw error;
   return data as string;
+}
+
+/** Criar uma mesa vinculada a um campeonato (modalidade='campeonato'). */
+export async function criarMesaCampeonato(time: string, campeonatoId: number): Promise<string> {
+  const { data, error } = await supabase.rpc("criar_mesa_futebol", {
+    p_time: time,
+  });
+
+  if (error) throw error;
+  const mesaId = data as string;
+
+  // Vincular à modalidade campeonato (RLS permite aos participantes)
+  await supabase
+    .from("mesas_futebol")
+    .update({ modalidade: "campeonato", campeonato_id: campeonatoId })
+    .eq("mesa_id", mesaId);
+
+  return mesaId;
 }
 
 /**
@@ -88,7 +106,7 @@ export async function buscarMesasAguardando(): Promise<MesaFutebol[]> {
 export async function registrarJogadaMesa(
   mesaId: string,
   estadoFisico?: unknown,
-  trocarTurno = true
+  trocarTurno = true,
 ): Promise<MesaFutebol> {
   const { data, error } = await supabase.rpc("registrar_jogada_mesa", {
     p_mesa_id: mesaId,
@@ -147,4 +165,42 @@ export async function tempoRestanteMesa(mesaId: string): Promise<number> {
 
   if (error) throw error;
   return data as number;
+}
+
+/**
+ * Finalizar a mesa com vencedor explícito (quando o jogo termina por jogadas).
+ * Marca status=finalizado, vencedor_id e motivo_finalizacao='jogadas'.
+ */
+export async function finalizarMesa(
+  mesaId: string,
+  vencedorId: string,
+): Promise<MesaFutebol | null> {
+  const { data, error } = await supabase
+    .from("mesas_futebol")
+    .update({
+      status: "finalizado",
+      vencedor_id: vencedorId,
+      motivo_finalizacao: "jogadas",
+      turno_atual_id: null,
+    })
+    .eq("mesa_id", mesaId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as MesaFutebol | null;
+}
+
+/**
+ * Trocar o turno da mesa no servidor (RPC autoritativa de troca de turno).
+ */
+export async function trocarTurnoMesa(mesaId: string): Promise<MesaFutebol | null> {
+  const { data, error } = await supabase.rpc("registrar_jogada_mesa", {
+    p_mesa_id: mesaId,
+    p_estado_fisico: null,
+    p_trocar_turno: true,
+  });
+
+  if (error) throw error;
+  return data as MesaFutebol | null;
 }

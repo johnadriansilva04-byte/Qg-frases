@@ -1117,3 +1117,13 @@ GRANT EXECUTE ON FUNCTION public.aplicar_escolha_treinador(TEXT, INTEGER, INTEGE
 GRANT EXECUTE ON FUNCTION public.iniciar_campanha(TEXT)                              TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+
+-- ============================================================================
+-- EXTENSÃO: MODO CAMPEONATO ONLINE
+-- As instruções desta extensão foram separadas em:
+--   supabase/migrations/futebol_campeonato_online.sql
+-- (tabela botao_campeonatos_online + RPCs criar/entrar/sair/iniciar/
+--  vincular_mesa/registrar_resultado + colunas modalidade/campeonato_id
+--  em mesas_futebol). Execute-as logo após este arquivo.
+-- ============================================================================

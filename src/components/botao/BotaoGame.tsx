@@ -1,8 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
-import { DIFFICULTIES, type Difficulty, type Fixture, type MatchResult, type Tournament } from "./types";
-import { isUnlocked, loadProgress, saveProgress, saveProgressToSupabase, loadProgressFromSupabase, deleteProgressFromSupabase, deleteProgressLocal, saveTournament, loadTournament, saveTournamentToSupabase, loadTournamentFromSupabase, atualizarPontosSoberania, adicionarPontosVideo, type Progress } from "./storage";
+import {
+  DIFFICULTIES,
+  type Difficulty,
+  type Fixture,
+  type MatchResult,
+  type Tournament,
+} from "./types";
+import {
+  isUnlocked,
+  loadProgress,
+  saveProgress,
+  saveProgressToSupabase,
+  loadProgressFromSupabase,
+  deleteProgressFromSupabase,
+  deleteProgressLocal,
+  saveTournament,
+  loadTournament,
+  saveTournamentToSupabase,
+  loadTournamentFromSupabase,
+  atualizarPontosSoberania,
+  adicionarPontosVideo,
+  type Progress,
+} from "./storage";
 import {
   advanceKnockout,
   applyResult,
@@ -18,13 +39,21 @@ import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { AuthScreen } from "./components/AuthScreen";
 import { UserMenu } from "./components/UserMenu";
+import { OnlineMatchV3 } from "./components/OnlineMatchV3";
+import { OnlineChampionship } from "./components/OnlineChampionship";
 import { useBotaoAuth } from "./online/useBotaoAuth";
 import type { Perfil } from "./online/auth";
 import { CoachSetup } from "./career/CoachSetup";
 import { NewsFeed } from "./career/NewsFeed";
 import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
-import { EMPTY_CAREER, loadCareer, saveCareer, addHeadlines, deleteCareer } from "./career/careerStorage";
+import {
+  EMPTY_CAREER,
+  loadCareer,
+  saveCareer,
+  addHeadlines,
+  deleteCareer,
+} from "./career/careerStorage";
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { POINTS, type CareerState, type Choice } from "./career/types";
@@ -46,6 +75,7 @@ type Screen =
   | "friendly-setup"
   | "friendly-match"
   | "online"
+  | "online-championship"
   | "coach-setup"
   | "tournament-setup"
   | "hub"
@@ -71,7 +101,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (new URLSearchParams(window.location.search).get("debug_ceremony") === "1" && career?.coach.nome) {
+    if (
+      new URLSearchParams(window.location.search).get("debug_ceremony") === "1" &&
+      career?.coach.nome
+    ) {
       setCeremonyBonus(POINTS.CAMPEAO + POINTS.TITULO_AMADOR);
       setShowCeremony(true);
     }
@@ -80,14 +113,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Carregar times do banco de dados ao montar
   useEffect(() => {
     let mounted = true;
-    getAllTeams().then(teams => {
-      if (mounted && teams.length > 0) {
-        setAllTeams(teams);
-      }
-    }).catch(() => {
-      // Silenciosamente usar times padrão em caso de erro
-    });
-    return () => { mounted = false; };
+    getAllTeams()
+      .then((teams) => {
+        if (mounted && teams.length > 0) {
+          setAllTeams(teams);
+        }
+      })
+      .catch(() => {
+        // Silenciosamente usar times padrão em caso de erro
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Monitorar login automático e mudar para menu se já estiver logado
@@ -99,22 +136,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   // Salvar tela atual no localStorage
   useEffect(() => {
-    localStorage.setItem('botao_screen', screen);
+    localStorage.setItem("botao_screen", screen);
   }, [screen]);
 
   // Carregar time personalizado do usuário
   const customTeamData = useMemo(() => {
-    const timeNome = localStorage.getItem('botao_online_time_personalizado') || "Meu Time";
-    const abreviacao = localStorage.getItem('botao_online_abreviacao_time') || "MTI";
-    const cores = JSON.parse(localStorage.getItem('botao_online_cores') || '["#FF0000", "#00FF00", "#0000FF"]');
-    const numero = localStorage.getItem('botao_online_numero_jogador') || "10";
-    
+    const timeNome = localStorage.getItem("botao_online_time_personalizado") || "Meu Time";
+    const abreviacao = localStorage.getItem("botao_online_abreviacao_time") || "MTI";
+    const cores = JSON.parse(
+      localStorage.getItem("botao_online_cores") || '["#FF0000", "#00FF00", "#0000FF"]',
+    );
+    const numero = localStorage.getItem("botao_online_numero_jogador") || "10";
+
     return {
       nome: timeNome,
       short: abreviacao,
       primary: cores[0],
       secondary: cores[1],
-      numero: parseInt(numero)
+      numero: parseInt(numero),
     };
   }, [perfil]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -123,12 +162,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const userTeam = useMemo(() => {
     return createCustomTeam(
-      'custom',
+      "custom",
       customTeamData.nome,
       customTeamData.short,
       customTeamData.primary,
       customTeamData.secondary,
-      75
+      75,
     );
   }, [customTeamData]);
 
@@ -175,12 +214,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Ao logar (perfil ficar disponível), puxar carreira do Supabase
   useEffect(() => {
     if (!perfil?.user_id) return;
-    loadCareerFromSupabase(perfil.user_id).then((remote) => {
-      if (remote && remote.coach.nome) {
-        setCareer(remote);
-        saveCareer(remote);
-      }
-    }).catch(() => {});
+    loadCareerFromSupabase(perfil.user_id)
+      .then((remote) => {
+        if (remote && remote.coach.nome) {
+          setCareer(remote);
+          saveCareer(remote);
+        }
+      })
+      .catch(() => {});
   }, [perfil?.user_id]);
 
   const handleLogout = async () => {
@@ -190,19 +231,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
     await logout();
     setScreen("auth");
-    localStorage.removeItem('botao_screen'); // Limpar tela salva ao fazer logout
+    localStorage.removeItem("botao_screen"); // Limpar tela salva ao fazer logout
     setToast("Você saiu da conta.");
   };
 
   const aoLogar = async (p?: Perfil) => {
-    console.log('[BotaoGame] aoLogar chamado:', { perfil: p });
+    console.log("[BotaoGame] aoLogar chamado:", { perfil: p });
     if (p) aplicarPerfil(p);
     // Carregar progresso do Supabase se o usuário estiver logado
     if (p?.user_id) {
       const supabaseProgress = await loadProgressFromSupabase(p.user_id);
       setProgress(supabaseProgress);
       saveProgress(supabaseProgress);
-      
+
       // Carregar torneio do Supabase
       const supabaseTournament = await loadTournamentFromSupabase(p.user_id);
       if (supabaseTournament) {
@@ -214,7 +255,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   const handleDeleteCampaign = async () => {
-    if (!confirm("Tem certeza que deseja excluir toda a campanha? Esta ação não pode ser desfeita.")) {
+    if (
+      !confirm("Tem certeza que deseja excluir toda a campanha? Esta ação não pode ser desfeita.")
+    ) {
       return;
     }
 
@@ -222,7 +265,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     deleteProgressLocal();
 
     // Excluir progresso do Supabase (se usuário estiver logado)
-    const email = localStorage.getItem('botao_online_email');
+    const email = localStorage.getItem("botao_online_email");
     if (email) {
       await deleteProgressFromSupabase(email);
     }
@@ -258,7 +301,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     // Salvar progresso no Supabase
     await saveProgressToSupabase(perfil.user_id, progress);
-    
+
     // Salvar torneio no Supabase se existir
     if (tour) {
       await saveTournamentToSupabase(perfil.user_id, tour);
@@ -272,11 +315,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setToast("Faça login para ganhar pontos assistindo vídeos.");
       return false;
     }
-    
+
     // Simular assistir vídeo (na implementação real, isso seria integrado com AdSense)
     // Aqui verificaria se o vídeo está disponível antes de dar pontos
     const novosPontos = await adicionarPontosVideo(perfil.user_id, 5);
-    
+
     if (novosPontos !== null) {
       setToast(`+5 pontos! Você agora tem ${novosPontos} pontos de soberania.`);
       // Recarregar perfil para atualizar pontos
@@ -286,7 +329,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
       return true; // Vídeo assistido com sucesso
     }
-    
+
     return false; // Não foi possível assistir o vídeo
   };
 
@@ -299,24 +342,26 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (gf > ga) f.w++;
     else if (gf < ga) f.l++;
     else f.d++;
-    
+
     // Atualizar gols no progresso
     const novoProgresso = {
       ...progress,
       friendlies: f,
       gols_feitos: (progress.gols_feitos || 0) + gf,
-      gols_sofridos: (progress.gols_sofridos || 0) + ga
+      gols_sofridos: (progress.gols_sofridos || 0) + ga,
     };
-    
+
     persist(novoProgresso);
-    
+
     // Atualizar pontos de soberania se estiver logado
     if (perfil?.user_id) {
       const vitoria = gf > ga;
       atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
     }
-    
-    setToast(gf > ga ? "Vitória no amistoso!" : gf < ga ? "Derrota no amistoso." : "Empate no amistoso.");
+
+    setToast(
+      gf > ga ? "Vitória no amistoso!" : gf < ga ? "Derrota no amistoso." : "Empate no amistoso.",
+    );
     setScreen("menu");
   };
 
@@ -347,11 +392,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     persistCareer(novaCareer);
     // RPC remota (limpa manchetes antigas do banco + registra nova campanha)
     if (perfil?.user_id) {
-      iniciarCampanhaRemota(difficulty).then(() => {
-        // grava manchetes de estreia no banco
-        const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
-        return inserirManchetesRemotas(perfil.user_id, semId);
-      }).catch(() => {});
+      iniciarCampanhaRemota(difficulty)
+        .then(() => {
+          // grava manchetes de estreia no banco
+          const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
+          return inserirManchetesRemotas(perfil.user_id, semId);
+        })
+        .catch(() => {});
     }
     setScreen("hub");
   };
@@ -404,7 +451,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     persistCareer(nova);
     // RPC remota (autoritativa) para escolha
     if (perfil?.user_id) {
-      aplicarEscolhaRemoto(choice.id, choice.bonusPoder ?? 0, choice.bonusMoral ?? 0).catch(() => {});
+      aplicarEscolhaRemoto(choice.id, choice.bonusPoder ?? 0, choice.bonusMoral ?? 0).catch(
+        () => {},
+      );
     }
 
     // Segue para a partida
@@ -432,7 +481,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       // Simula apenas os jogos da mesma rodada que NÃO envolvem o usuário
       const currentRound = fx.stage.split("·")[1]?.trim();
       t.groupFixtures
-        .filter((x) => !x.played && x.stage.includes(currentRound!) && x.homeId !== t.userTeamId && x.awayId !== t.userTeamId)
+        .filter(
+          (x) =>
+            !x.played &&
+            x.stage.includes(currentRound!) &&
+            x.homeId !== t.userTeamId &&
+            x.awayId !== t.userTeamId,
+        )
         .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
 
       // só monta o mata-mata quando todos os jogos da fase de grupos terminarem
@@ -445,7 +500,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const fx = stage.fixtures.find((x) => x.id === current.id)!;
       fx.played = true;
       fx.result = r;
-      
+
       // Simula TODOS os jogos não jogados da fase atual
       stage.fixtures
         .filter((x) => !x.played)
@@ -453,9 +508,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           x.played = true;
           x.result = simulateMatch(x.homeId, x.awayId, t.difficulty, true);
         });
-      
+
       advanceKnockout(t);
-      
+
       // se o usuário caiu, roda o resto do torneio
       while (t.phase === "mata-mata" && !nextUserFixture(t)) {
         const st = t.knockout[t.knockout.length - 1]!;
@@ -467,7 +522,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         });
         advanceKnockout(t);
       }
-      
+
       if (t.phase === "fim" && t.champion === t.userTeamId) {
         const titles = { ...progress.titles, [t.difficulty]: progress.titles[t.difficulty] + 1 };
         persist({
@@ -487,9 +542,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       let moral = career.moralTime;
 
       // Pontos escassos: V=+3 / E=+1 / D=-3
-      if (gf > ga) { novaSoberania += POINTS.VITORIA; moral = Math.min(100, moral + 4); }
-      else if (gf < ga) { novaSoberania = Math.max(0, novaSoberania + POINTS.DERROTA); moral = Math.max(0, moral - 6); }
-      else { novaSoberania += POINTS.EMPATE; moral = Math.max(0, moral - 1); }
+      if (gf > ga) {
+        novaSoberania += POINTS.VITORIA;
+        moral = Math.min(100, moral + 4);
+      } else if (gf < ga) {
+        novaSoberania = Math.max(0, novaSoberania + POINTS.DERROTA);
+        moral = Math.max(0, moral - 6);
+      } else {
+        novaSoberania += POINTS.EMPATE;
+        moral = Math.max(0, moral - 1);
+      }
 
       // Bônus condicionais da última escolha:
       const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1];
@@ -504,7 +566,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
       // Bônus de classificação para mata-mata (só quando entra a fase)
       const classificouAgora =
-        tour?.phase === "grupos" && t.phase === "mata-mata" &&
+        tour?.phase === "grupos" &&
+        t.phase === "mata-mata" &&
         t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
       if (classificouAgora) novaSoberania += POINTS.CLASSIFICOU_MATA;
 
@@ -516,9 +579,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           novaSoberania += POINTS.CAMPEAO;
           novoTitulos += 1;
           const bonusTitulo =
-            t.difficulty === "amador" ? POINTS.TITULO_AMADOR
-            : t.difficulty === "profissional" ? POINTS.TITULO_PROFISSIONAL
-            : POINTS.TITULO_LENDA;
+            t.difficulty === "amador"
+              ? POINTS.TITULO_AMADOR
+              : t.difficulty === "profissional"
+                ? POINTS.TITULO_PROFISSIONAL
+                : POINTS.TITULO_LENDA;
           novaSoberania += bonusTitulo;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
           // Cerimônia de premiação!
@@ -527,35 +592,64 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         } else {
           // Vice? Terceiro? Quarto?
           const finalStage = t.knockout[t.knockout.length - 1];
-          const foiVice = finalStage?.fixtures.some(f =>
-            (f.homeId === t.userTeamId || f.awayId === t.userTeamId) && f.stage.toLowerCase().includes("final")
+          const foiVice = finalStage?.fixtures.some(
+            (f) =>
+              (f.homeId === t.userTeamId || f.awayId === t.userTeamId) &&
+              f.stage.toLowerCase().includes("final"),
           );
           const semiStage = t.knockout[t.knockout.length - 2];
-          const foiSemi = semiStage?.fixtures.some(f => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
-          if (foiVice) { novaSoberania += POINTS.VICE; manchetesFim.push(`Vice-campeão: ${career.coach.apelido} chega perto do título`); }
-          else if (foiSemi) { novaSoberania += POINTS.TERCEIRO; manchetesFim.push(`Semifinalista: ${career.coach.apelido} termina no Top 4`); }
-          else { novaSoberania += POINTS.QUARTO; }
+          const foiSemi = semiStage?.fixtures.some(
+            (f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId,
+          );
+          if (foiVice) {
+            novaSoberania += POINTS.VICE;
+            manchetesFim.push(`Vice-campeão: ${career.coach.apelido} chega perto do título`);
+          } else if (foiSemi) {
+            novaSoberania += POINTS.TERCEIRO;
+            manchetesFim.push(`Semifinalista: ${career.coach.apelido} termina no Top 4`);
+          } else {
+            novaSoberania += POINTS.QUARTO;
+          }
         }
       }
 
       // Gera manchetes da rodada
       const rodadaTexto = current.stage;
-      const jogadosNessaRodada = t.phase === "grupos"
-        ? t.groupFixtures.filter(f => f.stage === current.stage && f.played)
-        : (t.knockout[t.knockout.length - 1]?.fixtures.filter(f => f.played) ?? []);
-      const fixDoUsuario = jogadosNessaRodada.find(f => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
+      const jogadosNessaRodada =
+        t.phase === "grupos"
+          ? t.groupFixtures.filter((f) => f.stage === current.stage && f.played)
+          : (t.knockout[t.knockout.length - 1]?.fixtures.filter((f) => f.played) ?? []);
+      const fixDoUsuario = jogadosNessaRodada.find(
+        (f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId,
+      );
       const teamName = userTeam.name;
-      const novas = gerarManchetesDaRodada(t, teamName, career.coach, rodadaTexto, jogadosNessaRodada, fixDoUsuario);
-      manchetesFim.forEach((m, i) => novas.unshift({
-        id: `end-${Date.now()}-${i}`, manchete: m, tag: "seu-time", rodada: 99,
-      }));
+      const novas = gerarManchetesDaRodada(
+        t,
+        teamName,
+        career.coach,
+        rodadaTexto,
+        jogadosNessaRodada,
+        fixDoUsuario,
+      );
+      manchetesFim.forEach((m, i) =>
+        novas.unshift({
+          id: `end-${Date.now()}-${i}`,
+          manchete: m,
+          tag: "seu-time",
+          rodada: 99,
+        }),
+      );
 
       let novaCareer: CareerState = {
         ...career,
         bonusProximaPartida: 0,
         penaltiesProximaPartida: 0,
         moralTime: moral,
-        coach: { ...career.coach, soberania: Math.max(0, Math.round(novaSoberania)), titulos: novoTitulos },
+        coach: {
+          ...career.coach,
+          soberania: Math.max(0, Math.round(novaSoberania)),
+          titulos: novoTitulos,
+        },
       };
       novaCareer = addHeadlines(novaCareer, novas);
       // Se o torneio ainda não acabou e ainda tem próxima do usuário, prepara evento
@@ -574,12 +668,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           if (t.champion === t.userTeamId) posicao = "campeao";
           else {
             const finalStage = t.knockout[t.knockout.length - 1];
-            const foiVice = finalStage?.fixtures.some(f =>
-              (f.homeId === t.userTeamId || f.awayId === t.userTeamId) && f.stage.toLowerCase().includes("final")
+            const foiVice = finalStage?.fixtures.some(
+              (f) =>
+                (f.homeId === t.userTeamId || f.awayId === t.userTeamId) &&
+                f.stage.toLowerCase().includes("final"),
             );
             const semiStage = t.knockout[t.knockout.length - 2];
-            const foiSemi = semiStage?.fixtures.some(f => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
-            if (foiVice) posicao = "vice"; else if (foiSemi) posicao = "terceiro"; else posicao = "quarto";
+            const foiSemi = semiStage?.fixtures.some(
+              (f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId,
+            );
+            if (foiVice) posicao = "vice";
+            else if (foiSemi) posicao = "terceiro";
+            else posicao = "quarto";
           }
           aplicarFimCampanhaRemoto(posicao, t.difficulty).catch(() => {});
         }
@@ -596,7 +696,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const novoProgresso = {
       ...progress,
       gols_feitos: (progress.gols_feitos || 0) + gf,
-      gols_sofridos: (progress.gols_sofridos || 0) + ga
+      gols_sofridos: (progress.gols_sofridos || 0) + ga,
     };
     persist(novoProgresso);
 
@@ -612,23 +712,66 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   const qualified = (t: Tournament) =>
-    t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId) ?? false;
+    t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId) ??
+    false;
 
   /* ---------- telas ---------- */
   if (screen === "online") {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-          <Globe className="w-16 h-16 text-purple-400 mb-4 animate-pulse" />
-          <h2 className="text-2xl font-bold mb-2">Modo Online</h2>
-          <p className="text-muted-foreground mb-4">Em breve você poderá jogar contra outros jogadores em tempo real!</p>
-          <button
-            onClick={() => setScreen("menu")}
-            className="btn-primary"
-          >
-            Voltar ao menu
-          </button>
+        <div className="mx-auto w-full max-w-5xl px-4 pb-16">
+          <Header
+            progress={progress}
+            onTrophies={() => setScreen("trophies")}
+            onHome={() => setScreen("menu")}
+          />
+          {!perfil ? (
+            <div className="panel text-center py-12">
+              <Globe className="mx-auto mb-4 h-12 w-12 text-primary" />
+              <h2 className="font-display text-2xl">Amistoso Online</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Faça login para desafiar outros jogadores em tempo real.
+              </p>
+              <button onClick={() => setScreen("auth")} className="btn-primary mt-4">
+                Entrar / Cadastrar
+              </button>
+            </div>
+          ) : (
+            <OnlineMatchV3 onBack={() => setScreen("menu")} onEstadoPartida={setEmPartidaOnline} />
+          )}
+        </div>
+      </Shell>
+    );
+  }
+
+  if (screen === "online-championship") {
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <div className="mx-auto w-full max-w-5xl px-4 pb-16">
+          <Header
+            progress={progress}
+            onTrophies={() => setScreen("trophies")}
+            onHome={() => setScreen("menu")}
+          />
+          {!perfil ? (
+            <div className="panel text-center py-12">
+              <Trophy className="mx-auto mb-4 h-12 w-12 text-primary" />
+              <h2 className="font-display text-2xl">Campeonato Online</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Faça login para participar de campeonatos contra outros jogadores.
+              </p>
+              <button onClick={() => setScreen("auth")} className="btn-primary mt-4">
+                Entrar / Cadastrar
+              </button>
+            </div>
+          ) : (
+            <OnlineChampionship
+              onBack={() => setScreen("menu")}
+              onEstadoPartida={setEmPartidaOnline}
+            />
+          )}
         </div>
       </Shell>
     );
@@ -671,7 +814,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   }
 
   if (screen === "friendly-match" || screen === "tournament-match") {
-    const f = screen === "friendly-match" ? { homeId: userTeam.id, awayId: rivalTeam, stage: "Amistoso" } : current!;
+    const f =
+      screen === "friendly-match"
+        ? { homeId: userTeam.id, awayId: rivalTeam, stage: "Amistoso" }
+        : current!;
     const userSide = f.homeId === userTeam.id ? "home" : "away";
     const knockout = screen === "tournament-match" && (tour?.phase ?? "") === "mata-mata";
     return (
@@ -710,7 +856,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       )}
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
         {screen !== "auth" && (
-          <Header progress={progress} onTrophies={() => setScreen("trophies")} onHome={() => setScreen("menu")} />
+          <Header
+            progress={progress}
+            onTrophies={() => setScreen("trophies")}
+            onHome={() => setScreen("menu")}
+          />
         )}
 
         {screen === "menu" && (
@@ -718,6 +868,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             progress={progress}
             onFriendly={() => setScreen("friendly-setup")}
             onOnline={() => setScreen("online")}
+            onOnlineChampionship={() => setScreen("online-championship")}
             onTournament={() => setScreen("tournament-setup")}
             onTrophies={() => setScreen("trophies")}
             hasTour={!!tour && tour.phase !== "fim"}
@@ -742,7 +893,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onBack={() => setScreen("menu")}
           />
         )}
-
 
         {screen === "tournament-setup" && (
           <Setup
@@ -769,7 +919,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           />
         )}
 
-        {screen === "trophies" && <TrophyRoom progress={progress} onBack={() => setScreen("menu")} />}
+        {screen === "trophies" && (
+          <TrophyRoom progress={progress} onBack={() => setScreen("menu")} />
+        )}
       </div>
 
       {toast && <div className="toast font-display">{toast}</div>}
@@ -798,7 +950,9 @@ function Header({
       <button onClick={onHome} className="flex min-w-0 items-center gap-3 text-left">
         <span className="logo-chip shrink-0">FB</span>
         <span className="min-w-0">
-          <span className="block truncate font-display text-xl leading-none sm:text-2xl">Futebol de Botão</span>
+          <span className="block truncate font-display text-xl leading-none sm:text-2xl">
+            Futebol de Botão
+          </span>
           <span className="block truncate text-[11px] tracking-[0.25em] text-muted-foreground uppercase">
             Copa dos Botões
           </span>
@@ -815,6 +969,7 @@ function Menu({
   progress,
   onFriendly,
   onOnline,
+  onOnlineChampionship,
   onTournament,
   onTrophies,
   hasTour,
@@ -825,6 +980,7 @@ function Menu({
   progress: Progress;
   onFriendly: () => void;
   onOnline: () => void;
+  onOnlineChampionship: () => void;
   onTournament: () => void;
   onTrophies: () => void;
   hasTour: boolean;
@@ -844,11 +1000,17 @@ function Menu({
         <MenuCard
           icon={<Globe className="size-5" />}
           title="Amistoso Online"
-          desc="Melhor de 3 contra jogadores reais. 3 minutos por rodada."
+          desc="Partida em tempo real contra jogadores reais. Crie ou entre numa mesa."
           onClick={onOnline}
         />
         <MenuCard
           icon={<Trophy className="size-5" />}
+          title="Campeonato Online"
+          desc="Campeonato round-robin com até 8 jogadores. Pontos contam no ranking."
+          onClick={onOnlineChampionship}
+        />
+        <MenuCard
+          icon={<Medal className="size-5" />}
           title="Torneio"
           desc="Fase de grupos + mata-mata. Sorteio aleatório a cada campanha."
           onClick={onTournament}
@@ -904,15 +1066,21 @@ function MenuCard({
   destructive?: boolean;
 }) {
   return (
-    <button 
-      onClick={onClick} 
-      className={`panel group text-left ${destructive ? 'border-destructive/50 hover:border-destructive' : ''}`}
+    <button
+      onClick={onClick}
+      className={`panel group text-left ${destructive ? "border-destructive/50 hover:border-destructive" : ""}`}
     >
-      <span className={`mb-3 flex items-center gap-2 ${destructive ? 'text-destructive' : 'text-accent-foreground'}`}>{icon}</span>
+      <span
+        className={`mb-3 flex items-center gap-2 ${destructive ? "text-destructive" : "text-accent-foreground"}`}
+      >
+        {icon}
+      </span>
       <span className="block font-display text-2xl">{title}</span>
       <span className="mt-1 block text-sm text-muted-foreground">{desc}</span>
-      <span className={`mt-4 block font-display text-xs tracking-[0.2em} uppercase ${destructive ? 'text-destructive' : 'text-accent-foreground'}`}>
-        {destructive ? 'Excluir →' : 'Entrar →'}
+      <span
+        className={`mt-4 block font-display text-xs tracking-[0.2em} uppercase ${destructive ? "text-destructive" : "text-accent-foreground"}`}
+      >
+        {destructive ? "Excluir →" : "Entrar →"}
       </span>
     </button>
   );
@@ -963,7 +1131,9 @@ function Setup(props: {
       </div>
 
       <div>
-        <p className="mb-2 font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">Dificuldade</p>
+        <p className="mb-2 font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
+          Dificuldade
+        </p>
         <div className="grid gap-2 sm:grid-cols-3">
           {DIFFICULTIES.map((d) => {
             const unlocked = isUnlocked(progress, d.id);
@@ -995,7 +1165,12 @@ function Setup(props: {
         </div>
       </div>
       {showRival && (
-        <TeamPicker label="Adversário" value={rivalTeam} onChange={setRivalTeam} exclude={userTeam.id} />
+        <TeamPicker
+          label="Adversário"
+          value={rivalTeam}
+          onChange={setRivalTeam}
+          exclude={userTeam.id}
+        />
       )}
 
       <div className="flex gap-3">
@@ -1010,7 +1185,19 @@ function Setup(props: {
   );
 }
 
-function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; userTeam: Team; career: CareerState | null; onPlay: () => void; onExit: () => void }) {
+function Hub({
+  tour,
+  userTeam,
+  career,
+  onPlay,
+  onExit,
+}: {
+  tour: Tournament;
+  userTeam: Team;
+  career: CareerState | null;
+  onPlay: () => void;
+  onExit: () => void;
+}) {
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const stage = tour.knockout[tour.knockout.length - 1];
 
@@ -1022,13 +1209,15 @@ function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; use
 
   return (
     <div className="space-y-6">
-      {career?.coach.nome && (
-        <SovereigntyPanel coach={career.coach} moral={career.moralTime} />
-      )}
+      {career?.coach.nome && <SovereigntyPanel coach={career.coach} moral={career.moralTime} />}
 
       <div className="panel">
         <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
-          {tour.phase === "fim" ? "Campanha encerrada" : tour.phase === "grupos" ? "Fase de grupos" : stage?.stage}
+          {tour.phase === "fim"
+            ? "Campanha encerrada"
+            : tour.phase === "grupos"
+              ? "Fase de grupos"
+              : stage?.stage}
         </p>
         {tour.phase === "fim" ? (
           <p className="mt-2 font-display text-2xl">
@@ -1045,7 +1234,11 @@ function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; use
                 ⚠ Uma decisão importante espera por você antes desta partida
               </p>
             )}
-            <button data-testid="entrar-em-campo" onClick={onPlay} className="btn-primary mt-4 w-full sm:w-auto">
+            <button
+              data-testid="entrar-em-campo"
+              onClick={onPlay}
+              className="btn-primary mt-4 w-full sm:w-auto"
+            >
               {career?.eventoPendenteId ? "Tomar decisão →" : "Entrar em campo"}
             </button>
           </>
@@ -1054,9 +1247,7 @@ function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; use
         )}
       </div>
 
-      {career && career.headlines.length > 0 && (
-        <NewsFeed headlines={career.headlines} />
-      )}
+      {career && career.headlines.length > 0 && <NewsFeed headlines={career.headlines} />}
 
       {tour.phase === "grupos" && (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -1074,7 +1265,10 @@ function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; use
                 </thead>
                 <tbody>
                   {sortTable(g.table).map((r, i) => (
-                    <tr key={r.teamId} className={r.teamId === tour.userTeamId ? "text-accent-foreground" : ""}>
+                    <tr
+                      key={r.teamId}
+                      className={r.teamId === tour.userTeamId ? "text-accent-foreground" : ""}
+                    >
                       <td className="py-1">
                         <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
                           <TeamBadge team={getTeam(r.teamId)} size="sm" />
@@ -1106,7 +1300,9 @@ function Hub({ tour, userTeam, career, onPlay, onExit }: { tour: Tournament; use
                     <span className="shrink-0 font-mono text-muted-foreground">
                       {f.result
                         ? `${f.result.homeGoals}-${f.result.awayGoals}${
-                            f.result.penHome !== undefined ? ` (${f.result.penHome}-${f.result.penAway})` : ""
+                            f.result.penHome !== undefined
+                              ? ` (${f.result.penHome}-${f.result.penAway})`
+                              : ""
                           }`
                         : "—"}
                     </span>
@@ -1151,7 +1347,11 @@ function TrophyRoom({ progress, onBack }: { progress: Progress; onBack: () => vo
                 ))}
               </div>
               <p className="mt-3 text-[11px] tracking-wider text-muted-foreground uppercase">
-                {unlocked ? (count >= 3 ? "Nível dominado" : `Faltam ${3 - count} para liberar o próximo`) : "Bloqueado"}
+                {unlocked
+                  ? count >= 3
+                    ? "Nível dominado"
+                    : `Faltam ${3 - count} para liberar o próximo`
+                  : "Bloqueado"}
               </p>
             </div>
           );
@@ -1161,7 +1361,9 @@ function TrophyRoom({ progress, onBack }: { progress: Progress; onBack: () => vo
       <div className="panel">
         <p className="mb-3 font-display text-lg">Conquistas</p>
         {progress.trophies.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum troféu ainda. Bora buscar o primeiro.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhum troféu ainda. Bora buscar o primeiro.
+          </p>
         ) : (
           <ul className="space-y-2 text-sm">
             {progress.trophies.map((t, i) => (

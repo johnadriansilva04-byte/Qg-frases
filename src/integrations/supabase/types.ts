@@ -287,6 +287,8 @@ export type Database = {
           ultimo_heartbeat_j2: string | null
           criado_em: string
           atualizado_em: string
+          modalidade: string
+          campeonato_id: number | null
         }
         Insert: {
           id?: string
@@ -312,6 +314,8 @@ export type Database = {
           ultimo_heartbeat_j2?: string | null
           criado_em?: string
           atualizado_em?: string
+          modalidade?: string
+          campeonato_id?: number | null
         }
         Update: {
           id?: string
@@ -335,6 +339,55 @@ export type Database = {
           jogador_2_online?: boolean
           ultimo_heartbeat_j1?: string | null
           ultimo_heartbeat_j2?: string | null
+          atualizado_em?: string
+          modalidade?: string
+          campeonato_id?: number | null
+        }
+        Relationships: []
+      }
+      botao_campeonatos_online: {
+        Row: {
+          id: number
+          codigo: string
+          nome: string
+          criador_id: string
+          status: string
+          max_jogadores: number
+          fase: number
+          participantes: Json
+          confrontos: Json
+          rodada_atual: number
+          vencedor_id: string | null
+          criado_em: string
+          atualizado_em: string
+        }
+        Insert: {
+          id?: number
+          codigo: string
+          nome?: string
+          criador_id: string
+          status?: string
+          max_jogadores?: number
+          fase?: number
+          participantes?: Json
+          confrontos?: Json
+          rodada_atual?: number
+          vencedor_id?: string | null
+          criado_em?: string
+          atualizado_em?: string
+        }
+        Update: {
+          id?: number
+          codigo?: string
+          nome?: string
+          criador_id?: string
+          status?: string
+          max_jogadores?: number
+          fase?: number
+          participantes?: Json
+          confrontos?: Json
+          rodada_atual?: number
+          vencedor_id?: string | null
           atualizado_em?: string
         }
         Relationships: []

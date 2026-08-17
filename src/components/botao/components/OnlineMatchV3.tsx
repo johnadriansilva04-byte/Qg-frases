@@ -1,13 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, RefreshCw, Users, ArrowLeft, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, RefreshCw, Users, ArrowLeft } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MatchView } from "./MatchView";
-import { supabase } from "@/integrations/supabase/client";
 import { useJogador } from "@/hooks/useJogador";
 import { useBotaoAuth } from "../online/useBotaoAuth";
-import { createCustomTeam, teamByIdSync } from "../data/teams";
-import type { Difficulty, MatchResult } from "../types";
-import { MesaRealtime, type MesaRow, type JogadaPayload } from "@/lib/multiplayer/MesaRealtime";
 import {
   criarMesa,
   entrarMesa,
@@ -15,25 +10,38 @@ import {
   buscarMesasAguardando,
   type MesaFutebol,
 } from "@/lib/multiplayer/mesa.api";
-import { aplicarResultadoRemoto, inserirManchetesRemotas } from "../career/careerRemote";
+import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
 
 type Screen = "lobby-list" | "jogo" | "resultado";
 
 const STORAGE_KEYS = {
-  SCREEN: 'botao_online_v3_screen',
-  MESA_ID: 'botao_online_v3_mesa_id',
+  SCREEN: "botao_online_v3_screen",
+  MESA_ID: "botao_online_v3_mesa_id",
 };
 
-export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
+export function OnlineMatchV3({
+  onBack,
+  onEstadoPartida,
+}: {
+  onBack?: () => void;
+  onEstadoPartida?: (emPartida: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const { data: jogador } = useJogador();
-  const { perfil } = useBotaoAuth();
+  const { perfil, recarregar, aplicarPerfil } = useBotaoAuth();
   const userId = jogador?.user_id ?? perfil?.user_id ?? "";
 
-  const [mesaId, setMesaId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.MESA_ID));
-  const [screen, setScreen] = useState<Screen>(() => (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list");
+  const [mesaId, setMesaId] = useState<string | null>(() =>
+    localStorage.getItem(STORAGE_KEYS.MESA_ID),
+  );
+  const [screen, setScreen] = useState<Screen>(
+    () => (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list",
+  );
 
-  const mesaRef = useRef<MesaRealtime | null>(null);
+  // Notificar estado de partida online
+  useEffect(() => {
+    if (onEstadoPartida) onEstadoPartida(screen === "jogo");
+  }, [screen, onEstadoPartida]);
 
   // Persistir estado
   useEffect(() => {
@@ -54,7 +62,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
     const savedScreen = localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen;
 
     if (savedScreen && savedScreen !== "lobby-list" && savedMesaId) {
-      buscarMesa(savedMesaId).then(mesa => {
+      buscarMesa(savedMesaId).then((mesa) => {
         if (mesa) {
           // Verificar se o usuário é participante da mesa
           const isParticipant = mesa.jogador_1_id === userId || mesa.jogador_2_id === userId;
@@ -74,7 +82,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
   }, [userId]);
 
   const limparPersistencia = useCallback(() => {
-    Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+    Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
   }, []);
 
   // Time personalizado
@@ -100,7 +108,7 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
 
   const { data: mesaAtual } = useQuery({
     queryKey: ["mesa_atual", mesaId],
-    queryFn: () => mesaId ? buscarMesa(mesaId) : null,
+    queryFn: () => (mesaId ? buscarMesa(mesaId) : null),
     enabled: !!mesaId,
     refetchInterval: screen === "jogo" ? false : 3000, // Desativar polling durante partida
   });
@@ -138,17 +146,23 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
     },
   });
 
-  if (screen === "jogo" && mesaAtual && perfil) {
+  if (screen === "jogo" && mesaAtual && perfil && meuTime) {
     return (
-      <MesaOnline
+      <MesaOnlineMatch
         mesa={mesaAtual}
         perfil={perfil}
-        meuTime={meuTime}
         userId={userId}
+        meuTime={meuTime}
+        stageLabel="Amistoso Online"
         onSair={() => {
           setMesaId(null);
           setScreen("lobby-list");
           limparPersistencia();
+        }}
+        onFinalizada={async (_r: ResultadoMesa) => {
+          // Recarrega o perfil para refletir soberania/ranking atualizados
+          const novoPerfil = await recarregar();
+          if (novoPerfil) aplicarPerfil(novoPerfil);
         }}
       />
     );
@@ -190,7 +204,11 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
 
       <section className="surface mb-6 space-y-4 p-5">
         <h2 className="text-xl">Criar mesa</h2>
-        <button onClick={() => novaMesa.mutate()} disabled={novaMesa.isPending || !perfil} className="btn-primary">
+        <button
+          onClick={() => novaMesa.mutate()}
+          disabled={novaMesa.isPending || !perfil}
+          className="btn-primary"
+        >
           <Plus className="mr-1 h-4 w-4" /> {novaMesa.isPending ? "Criando..." : "Abrir mesa"}
         </button>
         {!perfil && (
@@ -206,7 +224,9 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
           </button>
         </div>
         {mesas.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhuma mesa disponível. Seja o primeiro a abrir.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhuma mesa disponível. Seja o primeiro a abrir.
+          </p>
         )}
         {mesas.map((mesa) => {
           const souJogador1 = mesa.jogador_1_id === userId;
@@ -224,370 +244,32 @@ export function OnlineMatchV3({ onBack }: { onBack?: () => void }) {
                 </p>
               </div>
               {souParticipante ? (
-                <button onClick={() => { setMesaId(mesa.mesa_id); setScreen("jogo"); }} className="btn-primary">
+                <button
+                  onClick={() => {
+                    setMesaId(mesa.mesa_id);
+                    setScreen("jogo");
+                  }}
+                  className="btn-primary"
+                >
                   Reentrar
                 </button>
               ) : mesa.status === "aguardando" ? (
-                <button onClick={() => entrar.mutate(mesa)} disabled={entrar.isPending} className="btn-primary">
+                <button
+                  onClick={() => entrar.mutate(mesa)}
+                  disabled={entrar.isPending}
+                  className="btn-primary"
+                >
                   <Users className="mr-1 h-4 w-4" /> Entrar
                 </button>
               ) : (
-                <span className="text-xs uppercase tracking-widest text-muted-foreground">Mesa ocupada</span>
+                <span className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Mesa ocupada
+                </span>
               )}
             </article>
           );
         })}
       </section>
     </main>
-  );
-}
-
-/** Mesa online com MesaRealtime */
-function MesaOnline({
-  mesa,
-  perfil,
-  meuTime,
-  userId,
-  onSair,
-}: {
-  mesa: MesaFutebol;
-  perfil: any;
-  meuTime: any;
-  userId: string;
-  onSair: () => void;
-}) {
-  const souJogador1 = mesa.jogador_1_id === userId;
-  
-  const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
-  const [placar, setPlacar] = useState([mesa.placar_j1, mesa.placar_j2]);
-  const [seqJogada, setSeqJogada] = useState(mesa.seq_jogada || 0); // Sequência de jogadas do servidor
-  const TOTAL_JOGADAS = 12; // Total fixo de jogadas
-  const turnsLeft = TOTAL_JOGADAS - seqJogada; // Calculado dinamicamente
-  const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300); // Default 5 minutos se não tiver valor
-  const [oponenteOnline, setOponenteOnline] = useState(false);
-  const [jogadaAdversaria, setJogadaAdversaria] = useState<JogadaPayload | null>(null);
-  const [doisJogadoresConectados, setDoisJogadoresConectados] = useState(mesa.status === "em_andamento" || (mesa.jogador_2_id !== null)); // Se já tiver 2 jogadores ou estiver em andamento
-  const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento"); // Se já estiver em andamento, não bloquear
-  const mesaRef = useRef<MesaRealtime | null>(null);
-  const jogadaAdversariaHandlerRef = useRef<((jogada: any) => void) | null>(null);
-  const fimDeTurnoHandlerRef = useRef<((payload: any) => void) | null>(null);
-  const userTeam = useMemo(() => {
-    if (!meuTime) return createCustomTeam('custom', 'Meu Time', 'MTI', '#FF0000', '#00FF00', 75);
-    return createCustomTeam(
-      meuTime.id,
-      meuTime.nome,
-      meuTime.abreviacao,
-      meuTime.cores[0],
-      meuTime.cores[1],
-      75
-    );
-  }, [meuTime]);
-
-  const opponentTeam = useMemo(() => {
-    // Buscar o time do adversário da mesa
-    const opponentTimeId = souJogador1 ? mesa.time_j2 : mesa.time_j1;
-    
-    if (!opponentTimeId) {
-      // Se ainda não tem adversário, usar time genérico
-      return createCustomTeam('opponent', 'Aguardando...', '---', '#666666', '#999999', 75);
-    }
-
-    // Se o time for personalizado (começa com "custom-"), criar com dados genéricos
-    // Na prática, precisaríamos buscar os dados do time personalizado do adversário do banco
-    if (opponentTimeId.startsWith('custom-')) {
-      return createCustomTeam(opponentTimeId, 'Adversário', 'ADV', '#FF0000', '#FFFFFF', 75);
-    }
-
-    // Buscar time do banco de dados
-    const teamFromDb = teamByIdSync(opponentTimeId);
-    if (teamFromDb) {
-      return teamFromDb;
-    }
-
-    // Fallback para time genérico
-    return createCustomTeam(opponentTimeId, 'Adversário', 'ADV', '#0000FF', '#FFFF00', 75);
-  }, [mesa.time_j1, mesa.time_j2, souJogador1]);
-
-  const homeId = souJogador1 ? userTeam.id : opponentTeam.id;
-  const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
-  const userSide = souJogador1 ? "home" : "away";
-
-  // Inicializar MesaRealtime - roda apenas uma vez quando mesa.mesa_id ou userId mudam
-  useEffect(() => {
-    if (!userId || !mesa.mesa_id) return;
-
-    const mesaRealtime = new MesaRealtime({
-      supabase,
-      mesaId: mesa.mesa_id,
-      userId,
-      handlers: {
-        onJogadaAdversaria: (jogada) => {
-          setJogadaAdversaria(jogada);
-          // Chamar o handler do MatchView se estiver disponível
-          if (jogadaAdversariaHandlerRef.current) {
-            jogadaAdversariaHandlerRef.current(jogada);
-          }
-        },
-        onEstado: (m) => {
-          setPlacar([m.placar_j1, m.placar_j2]);
-          setSeqJogada(m.seq_jogada || 0); // Sincronizar sequência do servidor
-          // O placar é sincronizado automaticamente via Postgres Changes
-        },
-        onTurno: (meuTurno, turnoAtualId) => {
-          // Lógica simples: se turno_atual_id == jogador_1_id, então home, senão away
-          const novoTurno = turnoAtualId === mesa.jogador_1_id ? "home" : "away";
-          setCurrentTurn(novoTurno);
-        },
-        onTempo: (segundos) => {
-          setTempoRestante(segundos);
-        },
-        onOponente: (online) => {
-          setOponenteOnline(online);
-        },
-        onDoisJogadoresConectados: (jogador1Id, jogador2Id) => {
-          setDoisJogadoresConectados(true);
-        },
-        onSyncPositions: (payload) => {
-          // Será aplicado no MatchView via callback
-        },
-        onPartidaIniciada: (m) => {
-          setPartidaIniciada(true);
-        },
-        onPartidaFinalizada: (m) => {
-          // Partida finalizada
-        },
-        onFimDeTurno: (payload) => {
-          // Sempre atualizar turno quando receber broadcast com novoTurnoId
-          if (payload.novoTurnoId) {
-            const novoTurno = payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away";
-            setCurrentTurn(novoTurno);
-          }
-          // Chamar o handler do MatchView se estiver disponível
-          if (fimDeTurnoHandlerRef.current) {
-            fimDeTurnoHandlerRef.current(payload);
-          }
-        },
-        onErro: (erro) => {
-          // Erro
-        },
-      },
-    });
-
-    mesaRealtime.conectarMesa();
-    mesaRef.current = mesaRealtime;
-
-    return () => {
-      mesaRealtime.desconectar();
-    };
-  }, [mesa.mesa_id, userId]); // Dependências estáticas apenas
-
-  const handleFinish = useCallback(async (_result: MatchResult) => {
-    const gf = souJogador1 ? placar[0]! : placar[1]!;
-    const ga = souJogador1 ? placar[1]! : placar[0]!;
-    const nomeOponente = souJogador1
-      ? teamByIdSync(mesa.time_j2 || "MTI").short
-      : teamByIdSync(mesa.time_j1 || "MTI").short;
-    const meuNomeCurto = userTeam.short;
-
-    try {
-      // Pontos escassos + estatísticas (RPC autoritativa)
-      await aplicarResultadoRemoto(gf, ga, null);
-
-      // Manchete do resultado online
-      const tag = "seu-time" as const;
-      let manchete: string;
-      if (gf > ga) manchete = `Vitória online! ${meuNomeCurto} bate ${nomeOponente} por ${gf} a ${ga}`;
-      else if (gf < ga) manchete = `Derrota amarga: ${meuNomeCurto} cai para ${nomeOponente} (${gf}-${ga})`;
-      else manchete = `Empate equilibrado: ${meuNomeCurto} ${gf} x ${ga} ${nomeOponente}`;
-
-      await inserirManchetesRemotas(userId, [
-        {
-          manchete,
-          subtitulo: `Partida online · Mesa ${mesa.mesa_id}`,
-          tag,
-          rodada: 0,
-        },
-      ]);
-    } catch (e) {
-      console.error("[OnlineMatchV3] erro ao aplicar soberania online:", e);
-    }
-    onSair();
-  }, [onSair, souJogador1, placar, mesa.mesa_id, mesa.time_j1, mesa.time_j2, userId, userTeam.short]);
-
-  const handlePlay = useCallback(async (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => {
-    if (!mesaRef.current) return;
-
-    try {
-      // Enviar jogada via MesaRealtime com dados reais da física (broadcast imediato)
-      if (jogadaData && jogadaData.discId !== "own_goal" && jogadaData.discId !== "goal" && jogadaData.discId !== "pass_turn" && jogadaData.discId !== "no_goal") {
-        await mesaRef.current.enviarJogada({
-          id_botao: jogadaData.discId,
-          forca: Math.round(jogadaData.power * 100),
-          forca_x: jogadaData.ix,
-          forca_y: jogadaData.iy,
-          angulo: Math.round(Math.atan2(jogadaData.iy, jogadaData.ix) * (180 / Math.PI)),
-          origem: { x: 0, y: 0 },
-        });
-      }
-
-      // Se houve gol, registrar o gol no servidor (placar será sincronizado via Postgres Changes)
-      if (goals > 0) {
-        await mesaRef.current.registrarGol();
-      }
-
-      // Se a jogada terminou sem gol e temos posições finais, enviar broadcast de fim de turno com novo turno
-      if (goals === 0 && posicoesFinais && jogadaData?.discId === "no_goal") {
-        // Calcular próximo turno
-        const proximoTurno = mesa.jogador_1_id === userId ? (mesa.jogador_2_id || mesa.jogador_1_id) : mesa.jogador_1_id;
-        
-        // Incrementar contador apenas se for o jogador 1 jogando
-        const novoSeqJogada = mesa.jogador_1_id === userId ? seqJogada + 1 : seqJogada;
-        
-        // Enviar broadcast das posições finais e novo turno (sem turnsLeft, usa seq_jogada do servidor)
-        await mesaRef.current.enviarFimDeTurno({
-          discos: posicoesFinais.discos,
-          bola: posicoesFinais.bola,
-          jogadorId: userId,
-          novoTurnoId: proximoTurno,
-        });
-        
-        // Atualizar contador localmente apenas se for o jogador 1
-        if (mesa.jogador_1_id === userId) {
-          setSeqJogada(novoSeqJogada);
-        }
-        
-        // NÃO atualizar turno localmente - o turno só muda quando receber broadcast do oponente
-      }
-    } catch (error) {
-      console.error('[OnlineMatchV3] Erro no handlePlay:', error);
-    }
-  }, [userId, placar, turnsLeft, mesa.mesa_id, mesa.jogador_1_id, mesa.jogador_2_id]);
-
-  const handleQuit = useCallback(() => {
-    if (mesaRef.current) {
-      mesaRef.current.desconectar(true);
-    }
-    onSair();
-  }, [onSair]);
-
-  const meuTurno = currentTurn === userSide;
-
-  const iniciarPartida = async () => {
-    if (!mesaRef.current) return;
-    if (!doisJogadoresConectados) {
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.rpc('iniciar_partida_mesa', {
-        p_mesa_id: mesa.mesa_id
-      });
-
-      if (error) {
-        return;
-      }
-
-      setPartidaIniciada(true);
-    } catch (error) {
-      // Erro ao iniciar partida
-    }
-  };
-
-  // Mostrar tela de espera se não tiver 2 jogadores conectados
-  if (!doisJogadoresConectados) {
-    return (
-      <div className="space-y-4">
-        <div className="surface p-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
-            <p className="text-sm text-muted-foreground">
-              Aguardando oponente... {oponenteOnline ? "Oponente conectado!" : "Aguardando conexão"}
-            </p>
-          </div>
-          <button onClick={handleQuit} className="btn-ghost">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="surface p-8 text-center">
-          <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-lg font-medium">Aguardando segundo jogador...</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Compartilhe o código da sala: <span className="font-mono font-bold">{mesa.mesa_id}</span>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Mostrar botão para iniciar partida se 2 jogadores conectados mas partida não iniciada
-  if (doisJogadoresConectados && !partidaIniciada) {
-    return (
-      <div className="space-y-4">
-        <div className="surface p-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
-            <p className="text-sm text-muted-foreground">
-              2 jogadores conectados! Pronto para começar.
-            </p>
-          </div>
-          <button onClick={handleQuit} className="btn-ghost">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="surface p-8 text-center">
-          <p className="text-lg font-medium mb-4">Ambos os jogadores estão conectados!</p>
-          <button onClick={iniciarPartida} className="btn-primary">
-            Iniciar Partida
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="surface p-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
-          <p className="text-sm text-muted-foreground">
-            Placar: {placar[0]} x {placar[1]} · Tempo: {Math.floor(tempoRestante / 60)}:{(tempoRestante % 60).toString().padStart(2, '0')}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {meuTurno ? "Seu turno" : "Turno do oponente"} · Oponente: {oponenteOnline ? "Online" : "Offline"}
-          </p>
-        </div>
-        <button onClick={handleQuit} className="btn-ghost">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      <MatchView
-        key={mesa.id}
-        homeId={homeId}
-        awayId={awayId}
-        userSide={userSide}
-        difficulty="amador"
-        turns={turnsLeft} // Sincronizado via seq_jogada do servidor
-        knockout={false}
-        stageLabel={`Partida Online - ${meuTurno ? 'Seu turno' : 'Turno do oponente'}`}
-        onFinish={handleFinish}
-        onQuit={handleQuit}
-        isOnline={true}
-        customTeam={userTeam}
-        onPlay={handlePlay}
-        initialTurn={currentTurn}
-        score={{ home: placar[0] ?? 0, away: placar[1] ?? 0 }}
-        onJogadaAdversaria={(handler) => {
-          // Guardar o handler para ser chamado quando receber jogada do MesaRealtime
-          jogadaAdversariaHandlerRef.current = handler;
-        }}
-        onFimDeTurno={(handler) => {
-          // Guardar o handler para ser chamado quando receber fim de turno do MesaRealtime
-          if (typeof handler === 'function') {
-            fimDeTurnoHandlerRef.current = handler;
-          }
-        }}
-      />
-    </div>
   );
 }
