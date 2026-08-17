@@ -224,7 +224,7 @@ BEGIN
   END IF;
 
   v_fixo := v_ids[1];
-  v_arr := v_ids[2..v_n];
+  v_arr := v_ids[2:v_n];
 
   FOR v_round IN 1..(v_n - 1) LOOP
     v_pares := '[]'::JSONB;
@@ -246,7 +246,7 @@ BEGIN
 
     -- rotaciona v_arr à esquerda
     v_tmp := v_arr[1];
-    v_arr := v_arr[2..array_length(v_arr,1)] || ARRAY[v_tmp];
+    v_arr := v_arr[2:array_length(v_arr,1)] || ARRAY[v_tmp];
   END LOOP;
 
   RETURN v_rodadas;
