@@ -29,6 +29,7 @@ import {
   applyResult,
   buildKnockout,
   createTournament,
+  createLeague,
   nextUserFixture,
   shuffle,
   simulateMatch,
@@ -47,6 +48,14 @@ import { CoachSetup } from "./career/CoachSetup";
 import { NewsFeed } from "./career/NewsFeed";
 import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
+import { SubornoStory } from "./career/SubornoStory";
+import {
+  SUBORNO_INICIAL,
+  deveOfertarSuborno,
+  iniciarOferta,
+  avancarSuborno,
+  type SubornoEscolha,
+} from "./career/subornoEngine";
 import {
   EMPTY_CAREER,
   loadCareer,
@@ -81,6 +90,7 @@ type Screen =
   | "hub"
   | "tournament-match"
   | "choice"
+  | "suborno"
   | "trophies";
 
 interface BotaoGameProps {
@@ -173,6 +183,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
+  const [formatoTorneio, setFormatoTorneio] = useState<"copa" | "pontos-corridos">("copa");
   const [current, setCurrent] = useState<Fixture | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -376,7 +387,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   const iniciarCampanha = (c: CareerState) => {
-    const t = createTournament(userTeam.id, difficulty, userTeam);
+    const t =
+      formatoTorneio === "pontos-corridos"
+        ? createLeague(userTeam.id, difficulty, 10, userTeam)
+        : createTournament(userTeam.id, difficulty, userTeam);
     persistTournament(t);
     const novaCareer: CareerState = {
       ...c,
@@ -411,17 +425,29 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   // Prepara o próximo evento de escolha entre partidas (se houver)
-  const preparaEscolha = (c: CareerState): CareerState => {
-    if (c.eventoPendenteId) return c;
-    // Sortear evento antes de cada partida do usuário (60% chance)
-    if (Math.random() > 0.6) return c;
-    const evento = sortearEvento(c.ultimasEscolhas);
-    return { ...c, eventoPendenteId: evento.id };
+  const preparaEscolha = (c: CareerState, faseAtual: string): CareerState => {
+    let next = c;
+    // Enredo de suborno (narrativa paralela). Tem prioridade e pode disparar em
+    // momentos específicos da campanha (fase de grupos, semi/final).
+    const sub = next.suborno ?? SUBORNO_INICIAL;
+    if (deveOfertarSuborno(sub, faseAtual) && !sub.nodeAtual) {
+      next = { ...next, suborno: iniciarOferta(sub) };
+    }
+    if (next.eventoPendenteId) return next;
+    // Sortear evento de carreira antes de cada partida do usuário (60% chance)
+    if (Math.random() > 0.6) return next;
+    const evento = sortearEvento(next.ultimasEscolhas);
+    return { ...next, eventoPendenteId: evento.id };
   };
 
   const playNext = () => {
     if (!tour) return;
-    // Se houver evento pendente, mostra a escolha antes
+    // O enredo de suborno, se ativo, abre antes de qualquer outra decisão.
+    if (career?.suborno?.nodeAtual) {
+      setScreen("suborno");
+      return;
+    }
+    // Se houver evento de carreira pendente, mostra a escolha antes
     if (career?.eventoPendenteId) {
       setScreen("choice");
       return;
@@ -430,6 +456,54 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!f) return;
     setCurrent(f);
     setScreen("tournament-match");
+  };
+
+  const aplicarSuborno = (escolha: SubornoEscolha) => {
+    if (!career) return;
+    const subAtual = career.suborno ?? SUBORNO_INICIAL;
+    const { state: novoSub, efeitos, finalizado } = avancarSuborno(subAtual, escolha);
+    const novo: CareerState = {
+      ...career,
+      suborno: novoSub,
+      bonusProximaPartida: career.bonusProximaPartida + (efeitos.bonusPoder ?? 0),
+      moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
+      coach: {
+        ...career.coach,
+        soberania: Math.max(0, career.coach.soberania + (efeitos.soberania ?? 0)),
+      },
+    };
+    persistCareer(novo);
+    // Se a cena resolveu o capítulo, gera manchete narrativa do desfecho.
+    if (finalizado && novoSub.desfecho) {
+      const manchete =
+        novoSub.desfecho === "caiu_em_armadilha"
+          ? "Treinador cai em esquema de suborno na final"
+          : novoSub.desfecho === "denuncia"
+            ? "Treinador denuncia propina e vira símbolo da integridade"
+            : novoSub.desfecho === "jogar_duplo"
+              ? "Operação dupla do treinador desbarata esquema"
+              : novoSub.desfecho === "aceitou"
+                ? "Sombras rondam o banco após resultados suspeitos"
+                : "Treinador recusa propina e mantém nome limpo";
+      persistCareer(addHeadlines(novo, [
+        {
+          id: `suborno-${Date.now()}`,
+          manchete,
+          tag: "polemica",
+          rodada: 99,
+        },
+      ]));
+    }
+    // Após fechar o capítulo final, segue para a partida (ou decisão de carreira).
+    if (finalizado) {
+      const f = nextUserFixture(tour!);
+      if (!f) {
+        setScreen("hub");
+        return;
+      }
+      setCurrent(f);
+      setScreen("tournament-match");
+    }
   };
 
   const aplicarEscolha = (choice: Choice) => {
@@ -492,8 +566,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
       // só monta o mata-mata quando todos os jogos da fase de grupos terminarem
       if (t.groupFixtures.every((x) => x.played)) {
-        buildKnockout(t);
-        setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
+        if (t.format === "pontos-corridos") {
+          // Liga: campeão é o líder da tabela única.
+          const tabela = sortTable(t.groups[0]!.table);
+          t.champion = tabela[0]!.teamId;
+          t.phase = "fim";
+          setToast(
+            t.champion === t.userTeamId
+              ? "CAMPEÃO DA LIGA! Pontos corridos conquistados."
+              : "Fim da liga — você não ficou em 1º.",
+          );
+        } else {
+          buildKnockout(t);
+          setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
+        }
       }
     } else {
       const stage = t.knockout[t.knockout.length - 1]!;
@@ -653,7 +739,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       };
       novaCareer = addHeadlines(novaCareer, novas);
       // Se o torneio ainda não acabou e ainda tem próxima do usuário, prepara evento
-      if (t.phase !== "fim" && nextUserFixture(t)) novaCareer = preparaEscolha(novaCareer);
+      if (t.phase !== "fim" && nextUserFixture(t)) {
+        const proximoFix = nextUserFixture(t)!;
+        novaCareer = preparaEscolha(novaCareer, proximoFix.stage);
+      }
       persistCareer(novaCareer);
 
       // Sync remoto (autoritativo) — não bloqueia UX
@@ -799,6 +888,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
+  if (screen === "suborno" && career?.suborno?.nodeAtual) {
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <SubornoStory
+          state={career.suborno}
+          onAvancar={aplicarSuborno}
+          onFechar={() => setScreen("hub")}
+        />
+      </Shell>
+    );
+  }
+
   if (screen === "choice" && career?.eventoPendenteId) {
     const evento = CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId);
     if (!evento) {
@@ -897,13 +999,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         {screen === "tournament-setup" && (
           <Setup
             title="Torneio"
-            subtitle="32 times, 8 grupos, mata-mata até a final. Três títulos liberam o próximo nível."
+            subtitle="Escolha o formato: Copa (grupos + mata-mata) ou Pontos Corridos (liga). Três títulos liberam o próximo nível."
             userTeam={userTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
             difficulty={difficulty}
             setDifficulty={setDifficulty}
             progress={progress}
+            formato={formatoTorneio}
+            setFormato={setFormatoTorneio}
             onStart={startTournament}
             onBack={() => setScreen("menu")}
           />
@@ -1096,6 +1200,8 @@ function Setup(props: {
   setDifficulty: (d: Difficulty) => void;
   progress: Progress;
   showRival?: boolean;
+  formato?: "copa" | "pontos-corridos";
+  setFormato?: (f: "copa" | "pontos-corridos") => void;
   onStart: () => void;
   onBack: () => void;
 }) {
@@ -1109,6 +1215,8 @@ function Setup(props: {
     setDifficulty,
     progress,
     showRival,
+    formato,
+    setFormato,
     onStart,
     onBack,
   } = props;
@@ -1173,6 +1281,37 @@ function Setup(props: {
         />
       )}
 
+      {formato && setFormato && (
+        <div>
+          <p className="mb-2 font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
+            Formato do torneio
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              {
+                id: "copa" as const,
+                nome: "Copa (Grupos + Mata-mata)",
+                desc: "8 grupos de 4 + oitavas até a final. Clássico.",
+              },
+              {
+                id: "pontos-corridos" as const,
+                nome: "Pontos Corridos (Liga)",
+                desc: "Turno único de 10 times. Quem somar mais, é campeão.",
+              },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFormato(f.id)}
+                className={`diff-card ${formato === f.id ? "diff-card-active" : ""}`}
+              >
+                <span className="font-display text-lg">{f.nome}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{f.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button onClick={onBack} className="btn-ghost">
           Voltar
@@ -1232,6 +1371,11 @@ function Hub({
             {career?.eventoPendenteId && (
               <p className="mt-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
                 ⚠ Uma decisão importante espera por você antes desta partida
+              </p>
+            )}
+            {career?.suborno?.nodeAtual && (
+              <p className="mt-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300">
+                💼 Alguém quer falar com você no estacionamento...
               </p>
             )}
             <button

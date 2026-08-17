@@ -70,6 +70,8 @@ export type CareerState = {
   headlines: Headline[]; // últimas manchetes
   ultimaRodadaProcessada: number; // pra saber quando gerar novo jornal
   eventoPendenteId: string | null; // choice event a ser mostrado antes da próxima
+  // Enredo de suborno (narrativa paralela). Veja subornoEngine.ts.
+  suborno?: import("./subornoEngine").SubornoState;
 };
 
 export const CAREER_KEY = "botao:career:v1";

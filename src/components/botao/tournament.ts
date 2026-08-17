@@ -1,6 +1,8 @@
 import { TEAMS, teamByIdSync, type Team } from "./data/teams";
 import type { Difficulty, Fixture, GroupRow, MatchResult, Tournament } from "./types";
 
+export type TournamentFormat = "copa" | "pontos-corridos";
+
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -53,9 +55,71 @@ export function createTournament(userTeamId: string, difficulty: Difficulty, use
   });
 
   return {
+    format: "copa",
     difficulty,
     userTeamId,
     groups,
+    groupFixtures,
+    knockout: [],
+    phase: "grupos",
+  };
+}
+
+/** Cria um campeonato de pontos corridos (liga de turno único) com `size` times. */
+export function createLeague(
+  userTeamId: string,
+  difficulty: Difficulty,
+  size = 10,
+  userTeam?: Team,
+): Tournament {
+  const userTeamToUse = userTeam || teamByIdSync(userTeamId);
+  const others = shuffle(TEAMS.filter((t) => t.id !== userTeamId)).slice(0, size - 1);
+  const pool = shuffle([userTeamToUse, ...others]);
+
+  // Tabela única (grupo "Liga") com todos os times.
+  const table = pool.map((t) => emptyRow(t.id));
+  const group = { name: "Liga", teamIds: pool.map((t) => t.id), table };
+
+  // Round-robin de turno único (circle method).
+  const ids = pool.map((t) => t.id);
+  const n = ids.length;
+  const rounds: Array<[string, string][]> = [];
+  const arr = [...ids];
+  if (n % 2 !== 0) arr.push("__BYE__");
+  const m = arr.length;
+  for (let r = 0; r < m - 1; r++) {
+    const round: [string, string][] = [];
+    for (let i = 0; i < m / 2; i++) {
+      const a = arr[i]!;
+      const b = arr[m - 1 - i]!;
+      if (a !== "__BYE__" && b !== "__BYE__") {
+        // Inverte mando a cada rodada ímpar pra balancear.
+        round.push(r % 2 === 0 ? [a, b] : [b, a]);
+      }
+    }
+    rounds.push(round);
+    // rotaciona mantendo o primeiro fixo
+    arr.splice(1, 0, arr.pop()!);
+  }
+
+  const groupFixtures: Fixture[] = [];
+  rounds.forEach((round, ri) => {
+    round.forEach(([h, aw], mi) => {
+      groupFixtures.push({
+        id: `liga-r${ri}-${mi}`,
+        homeId: h,
+        awayId: aw,
+        played: false,
+        stage: `Rodada ${ri + 1}`,
+      });
+    });
+  });
+
+  return {
+    format: "pontos-corridos",
+    difficulty,
+    userTeamId,
+    groups: [group],
     groupFixtures,
     knockout: [],
     phase: "grupos",
@@ -101,10 +165,14 @@ export function sortTable(table: GroupRow[]): GroupRow[] {
   );
 }
 
-/** Simula uma partida CPU x CPU com base na força dos times. */
+/** Simula uma partida CPU x CPU com base na força dos times e na dificuldade. */
 export function simulateMatch(homeId: string, awayId: string, difficulty: Difficulty, knockout = false): MatchResult {
   const h = teamByIdSync(homeId);
   const a = teamByIdSync(awayId);
+  // Em dificuldades altas, o time do usuário precisa realmente ser mais forte
+  // pra domínio: o bônus do mandante cai e o ataque do visitante fica mais letal.
+  const homeBonus = difficulty === "lenda" ? 0.05 : difficulty === "profissional" ? 0.09 : 0.12;
+  const awayScale = difficulty === "lenda" ? 1.06 : difficulty === "profissional" ? 1.03 : 1;
   const goals = (att: Team, def: Team, bonus: number) => {
     const lambda = Math.max(0.25, (att.power - def.power) / 32 + 1.15 + bonus);
     let g = 0;
@@ -118,8 +186,13 @@ export function simulateMatch(homeId: string, awayId: string, difficulty: Diffic
     }
     return g;
   };
-  let homeGoals = goals(h, a, 0.12);
-  let awayGoals = goals(a, h, 0);
+  let homeGoals = goals(h, a, homeBonus);
+  let awayGoals = Math.round(goals(a, h, 0) * awayScale * 10) / 10;
+  // Re-roleta plausível se fracionado (mantém distribuição, força inteiros).
+  if (!Number.isInteger(awayGoals)) {
+    const floor = Math.floor(awayGoals);
+    awayGoals = Math.random() < awayGoals - floor ? floor + 1 : floor;
+  }
   const res: MatchResult = { homeId, awayId, homeGoals, awayGoals };
   if (knockout && homeGoals === awayGoals) {
     let ph = 0;
@@ -131,7 +204,6 @@ export function simulateMatch(homeId: string, awayId: string, difficulty: Diffic
     res.penHome = ph;
     res.penAway = pa;
   }
-  void difficulty;
   return res;
 }
 

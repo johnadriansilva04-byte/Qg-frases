@@ -36,6 +36,7 @@ export type Fixture = {
 };
 
 export type Tournament = {
+  format?: "copa" | "pontos-corridos";
   difficulty: Difficulty;
   userTeamId: string;
   groups: { name: string; teamIds: string[]; table: GroupRow[] }[];
