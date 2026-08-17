@@ -17,10 +17,11 @@ type Row = {
   partidas_jogadas?: number;
 };
 
-export function LeaderboardTreinadores() {
+export function LeaderboardTreinadores({ compact = false }: { compact?: boolean } = {}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -30,28 +31,30 @@ export function LeaderboardTreinadores() {
         const base = await (supabase as any)
           .from("botao_usuarios")
           .select(
-            "user_id, nome, time_personalizado, abreviacao_time, cores, pontos_soberania, partidas_vencidas, partidas_jogadas",
+            "user_id, nome, time_personalizado, abreviacao_time, cores, pontos_soberania, partidas_vencidas, partidas_jogadas, progresso_caminpanha",
           )
           .order("pontos_soberania", { ascending: false })
           .limit(20);
         if (!alive) return;
         if (base.error) throw base.error;
-        let rows = ((base.data ?? []) as any[]) as Row[];
-
-        // Tenta enriquecer com colunas novas (falha silenciosa se ainda não existirem)
-        try {
-          const extra = await (supabase as any)
-            .from("botao_usuarios")
-            .select("user_id, coach_apelido, coach_nome, titulos_treinador")
-            .in("user_id", rows.map((r) => r.user_id));
-          if (!extra.error && extra.data) {
-            const byId = new Map<string, any>();
-            (extra.data as any[]).forEach((e) => byId.set(e.user_id, e));
-            rows = rows.map((r) => ({ ...r, ...(byId.get(r.user_id) ?? {}) }));
-          }
-        } catch {
-          /* colunas ainda não migradas — ok */
-        }
+        // Extrair coach + titulos do JSONB progresso_caminpanha (fonte da verdade da carreira)
+        const rows = ((base.data ?? []) as any[]).map((r) => {
+          const prog = r.progresso_caminpanha ?? {};
+          const coach = prog.career?.coach ?? null;
+          return {
+            user_id: r.user_id,
+            nome: r.nome,
+            time_personalizado: r.time_personalizado,
+            abreviacao_time: r.abreviacao_time,
+            cores: r.cores,
+            pontos_soberania: r.pontos_soberania,
+            partidas_vencidas: r.partidas_vencidas,
+            partidas_jogadas: r.partidas_jogadas,
+            coach_apelido: coach?.apelido ?? null,
+            coach_nome: coach?.nome ?? null,
+            titulos_treinador: coach?.titulos ?? 0,
+          } as Row;
+        });
         setRows(rows);
       } catch (e: any) {
         if (!alive) return;
@@ -90,6 +93,9 @@ export function LeaderboardTreinadores() {
     );
   }
 
+  const initialLimit = compact ? 5 : 20;
+  const visible = expanded ? rows : rows.slice(0, initialLimit);
+
   return (
     <div className="panel" data-testid="leaderboard">
       <div className="mb-4 flex items-center gap-2">
@@ -97,7 +103,7 @@ export function LeaderboardTreinadores() {
         <h3 className="font-display text-lg">Ranking Mundial de Treinadores</h3>
       </div>
       <ol className="space-y-2">
-        {rows.map((r, i) => {
+        {visible.map((r, i) => {
           const { atual } = nivelDoTreinador(r.pontos_soberania ?? 0);
           const nomeCoach = r.coach_apelido || r.coach_nome || r.nome;
           const cor = r.cores?.[0] || "#FF0000";
@@ -135,6 +141,15 @@ export function LeaderboardTreinadores() {
           );
         })}
       </ol>
+      {rows.length > initialLimit && (
+        <button
+          data-testid="leaderboard-toggle"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-4 w-full rounded-lg border border-white/10 py-2 text-xs uppercase tracking-widest text-muted-foreground transition hover:border-primary hover:text-primary"
+        >
+          {expanded ? "Mostrar menos" : `Ver todos (${rows.length})`}
+        </button>
+      )}
     </div>
   );
 }

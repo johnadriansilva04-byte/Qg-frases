@@ -29,6 +29,7 @@ import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerat
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { POINTS, type CareerState, type Choice } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
+import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
 import {
   loadCareerFromSupabase,
   saveCareerToSupabase,
@@ -832,56 +833,59 @@ function Menu({
   onSaveCampaign: () => void;
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <MenuCard
-        icon={<Swords className="size-5" />}
-        title="Amistoso"
-        desc="Partida rápida contra qualquer time. Bom pra treinar o dedo."
-        onClick={onFriendly}
-      />
-      <MenuCard
-        icon={<Globe className="size-5" />}
-        title="Amistoso Online"
-        desc="Melhor de 3 contra jogadores reais. 3 minutos por rodada."
-        onClick={onOnline}
-      />
-      <MenuCard
-        icon={<Trophy className="size-5" />}
-        title="Torneio"
-        desc="Fase de grupos + mata-mata. Sorteio aleatório a cada campanha."
-        onClick={onTournament}
-      />
-      <MenuCard
-        icon={<Medal className="size-5" />}
-        title="Sala de troféus"
-        desc={`${progress.trophies.length} título(s) · amistosos ${progress.friendlies.w}V ${progress.friendlies.d}E ${progress.friendlies.l}D`}
-        onClick={onTrophies}
-      />
-      {hasTour && (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2">
         <MenuCard
-          icon={<ChevronRight className="size-5" />}
-          title="Continuar campanha"
-          desc="Voltar para o torneio em andamento."
-          onClick={onResume}
+          icon={<Swords className="size-5" />}
+          title="Amistoso"
+          desc="Partida rápida contra qualquer time. Bom pra treinar o dedo."
+          onClick={onFriendly}
         />
-      )}
-      {hasTour && (
         <MenuCard
-          icon={<Shuffle className="size-5" />}
-          title="Salvar campanha"
-          desc="Salva o progresso atual da campanha no servidor."
-          onClick={onSaveCampaign}
+          icon={<Globe className="size-5" />}
+          title="Amistoso Online"
+          desc="Melhor de 3 contra jogadores reais. 3 minutos por rodada."
+          onClick={onOnline}
         />
-      )}
-      {hasTour && (
         <MenuCard
-          icon={<Trash2 className="size-5 text-destructive" />}
-          title="Excluir campanha"
-          desc="Apaga todo o progresso da campanha atual. Não pode desfazer."
-          onClick={onDeleteCampaign}
-          destructive
+          icon={<Trophy className="size-5" />}
+          title="Torneio"
+          desc="Fase de grupos + mata-mata. Sorteio aleatório a cada campanha."
+          onClick={onTournament}
         />
-      )}
+        <MenuCard
+          icon={<Medal className="size-5" />}
+          title="Sala de troféus"
+          desc={`${progress.trophies.length} título(s) · amistosos ${progress.friendlies.w}V ${progress.friendlies.d}E ${progress.friendlies.l}D`}
+          onClick={onTrophies}
+        />
+        {hasTour && (
+          <MenuCard
+            icon={<ChevronRight className="size-5" />}
+            title="Continuar campanha"
+            desc="Voltar para o torneio em andamento."
+            onClick={onResume}
+          />
+        )}
+        {hasTour && (
+          <MenuCard
+            icon={<Shuffle className="size-5" />}
+            title="Salvar campanha"
+            desc="Salva o progresso atual da campanha no servidor."
+            onClick={onSaveCampaign}
+          />
+        )}
+        {hasTour && (
+          <MenuCard
+            icon={<Trash2 className="size-5 text-destructive" />}
+            title="Excluir campanha"
+            desc="Apaga todo o progresso da campanha atual. Não pode desfazer."
+            onClick={onDeleteCampaign}
+            destructive
+          />
+        )}
+      </div>
+      <LeaderboardTreinadores compact />
     </div>
   );
 }

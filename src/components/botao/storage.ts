@@ -145,19 +145,19 @@ export async function atualizarPontosSoberania(userId: string, golsFeitos: numbe
 
     const { data: currentData } = await supabase
       .from('botao_usuarios')
-      .select('pontos_soberania, partidas_jogadas, partidas_vencidas, gols_feitos, gols_sofridos, vitorias, derrotas, empates')
+      .select('pontos_soberania, partidas_jogadas, partidas_vencidas, progresso_caminpanha')
       .eq('user_id', userId)
       .single();
 
     if (!currentData) return;
 
-    const novosPontos = (currentData.pontos_soberania || 0) + pontosTotais;
+    const novosPontos = Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias = vitoria ? (currentData.partidas_vencidas || 0) + 1 : (currentData.partidas_vencidas || 0);
-    const novosGolsFeitos = (currentData.gols_feitos || 0) + golsFeitos;
-    const novosGolsSofridos = (currentData.gols_sofridos || 0) + golsSofridos;
-    const novasVitoriasCount = vitoria ? (currentData.vitorias || 0) + 1 : (currentData.vitorias || 0);
-    const novasDerrotasCount = !vitoria ? (currentData.derrotas || 0) + 1 : (currentData.derrotas || 0);
+    // Gols vão dentro do JSONB (a coluna real não existe no schema atual)
+    const prog: any = currentData.progresso_caminpanha ?? {};
+    prog.gols_feitos = (prog.gols_feitos || 0) + golsFeitos;
+    prog.gols_sofridos = (prog.gols_sofridos || 0) + golsSofridos;
 
     const { error } = await supabase
       .from('botao_usuarios')
@@ -165,10 +165,7 @@ export async function atualizarPontosSoberania(userId: string, golsFeitos: numbe
         pontos_soberania: novosPontos,
         partidas_jogadas: novasPartidas,
         partidas_vencidas: novasVitorias,
-        gols_feitos: novosGolsFeitos,
-        gols_sofridos: novosGolsSofridos,
-        vitorias: novasVitoriasCount,
-        derrotas: novasDerrotasCount
+        progresso_caminpanha: prog,
       })
       .eq('user_id', userId);
 
@@ -180,39 +177,29 @@ export async function atualizarPontosSoberania(userId: string, golsFeitos: numbe
   }
 }
 
-export async function atualizarEstatisticasOnline(userId: string, resultado: 'vitoria' | 'derrota' | 'empate', golsFeitos: number, golsSofridos: number, campeonatoGanho: boolean = false) {
+export async function atualizarEstatisticasOnline(userId: string, resultado: 'vitoria' | 'derrota' | 'empate', golsFeitos: number, golsSofridos: number, _campeonatoGanho: boolean = false) {
   try {
     const { data: currentData } = await supabase
       .from('botao_usuarios')
-      .select('pontos_soberania, partidas_jogadas, partidas_vencidas, campeonatos_ganhos, gols_feitos, gols_sofridos, vitorias, derrotas, empates')
+      .select('pontos_soberania, partidas_jogadas, partidas_vencidas, progresso_caminpanha')
       .eq('user_id', userId)
       .single();
 
     if (!currentData) return;
 
-    // Calcular pontos baseados no resultado
+    // Pontuação escassa alinhada com carreira: V=+3, E=+1, D=-3
     let pontosTotais = 0;
-    if (resultado === 'vitoria') {
-      pontosTotais = 10; // +10 pontos por vitória online
-    } else if (resultado === 'empate') {
-      pontosTotais = 0; // 0 pontos por empate
-    } else {
-      pontosTotais = -5; // -5 pontos por derrota
-    }
+    if (resultado === 'vitoria') pontosTotais = 3;
+    else if (resultado === 'empate') pontosTotais = 1;
+    else pontosTotais = -3;
 
-    // Adicionar pontos pelos gols
-    pontosTotais += golsFeitos * 1;
-    pontosTotais -= golsSofridos * 2;
-
-    const novosPontos = (currentData.pontos_soberania || 0) + pontosTotais;
+    const novosPontos = Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias = resultado === 'vitoria' ? (currentData.partidas_vencidas || 0) + 1 : (currentData.partidas_vencidas || 0);
-    const novosCampeonatos = campeonatoGanho ? (currentData.campeonatos_ganhos || 0) + 1 : (currentData.campeonatos_ganhos || 0);
-    const novosGolsFeitos = (currentData.gols_feitos || 0) + golsFeitos;
-    const novosGolsSofridos = (currentData.gols_sofridos || 0) + golsSofridos;
-    const novasVitoriasCount = resultado === 'vitoria' ? (currentData.vitorias || 0) + 1 : (currentData.vitorias || 0);
-    const novasDerrotasCount = resultado === 'derrota' ? (currentData.derrotas || 0) + 1 : (currentData.derrotas || 0);
-    const novosEmpatesCount = resultado === 'empate' ? (currentData.empates || 0) + 1 : (currentData.empates || 0);
+
+    const prog: any = currentData.progresso_caminpanha ?? {};
+    prog.gols_feitos = (prog.gols_feitos || 0) + golsFeitos;
+    prog.gols_sofridos = (prog.gols_sofridos || 0) + golsSofridos;
 
     const { error } = await supabase
       .from('botao_usuarios')
@@ -220,18 +207,13 @@ export async function atualizarEstatisticasOnline(userId: string, resultado: 'vi
         pontos_soberania: novosPontos,
         partidas_jogadas: novasPartidas,
         partidas_vencidas: novasVitorias,
-        campeonatos_ganhos: novosCampeonatos,
-        gols_feitos: novosGolsFeitos,
-        gols_sofridos: novosGolsSofridos,
-        vitorias: novasVitoriasCount,
-        derrotas: novasDerrotasCount,
-        empates: novosEmpatesCount
+        progresso_caminpanha: prog,
       })
       .eq('user_id', userId);
 
     if (error) throw error;
 
-    console.log('[Estatísticas Online] Atualizadas:', { resultado, pontosTotais, novosPontos, golsFeitos, golsSofridos, campeonatoGanho });
+    console.log('[Estatísticas Online] Atualizadas:', { resultado, pontosTotais, novosPontos, golsFeitos, golsSofridos });
   } catch (error) {
     console.error('Erro ao atualizar estatísticas online:', error);
   }
