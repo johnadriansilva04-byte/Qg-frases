@@ -80,3 +80,31 @@ webhooks GitHub (Vercel usa GitHub App). Sintoma = integração Git do Vercel
 parou de responder — exige verificação no dashboard Vercel (limite do plano
 Hobby, reconexão do repo, ou branch de produção desconfigurada). Não é
 problema de código: `tsc` e `vite build` passam localmente.
+
+## Campeonato Online — RPC `abrir_mesa_campeonato` (400)
+
+**Sintoma:** ao clicar "Jogar" num confronto do Campeonato Online, a RPC
+`abrir_mesa_campeonato` retorna HTTP 400 ("nenhum confronto pendente encontrado
+para voce nesta rodada") para AMBOS os jogadores, repetidamente.
+
+**Diagnóstico (reproduzido com usuários de teste):** o confronto no JSONB estava
+válido (`status='pendente'`, `rodada=rodada_atual`, `j1_id`/`j2_id` = auth.uid()
+dos participantes). A versão original da função casava via cast
+`(v_item->>'j1_id')::UUID = v_uid` (UUID = UUID) + indexação manual
+`v_confrontos[v_i + 1]` em FOR loop. Já `entrar_campeonato_online` (que
+funciona) casava via `el->>'user_id' = v_uid::TEXT` (texto = texto).
+
+**Correção** (`supabase/migrations/20260817000000_fix_abrir_mesa_campeonato.sql`
++ espelho em `futebol_campeonato_online.sql`): reescrita set-based com
+`jsonb_array_elements WITH ORDINALITY`, comparação por TEXTO
+(`t.item->>'j1_id' = v_uid::TEXT`), `COALESCE(jsonb_array_length, 0)` contra
+NULL, e mensagens de erro com uid/total para diagnóstico. Adicionada RPC
+`debug_confronto_campeonato` que retorna o estado de cada confronto sob a ótica
+do usuário (pode ser removida após estabilizar).
+
+**Aplicação obrigatória:** como o workspace não tem `service_role` nem
+`supabase` CLI, a migração NÃO é aplicada automaticamente. O usuário deve colar
+o conteúdo de
+`supabase/migrations/20260817000000_fix_abrir_mesa_campeonato.sql` no **SQL
+Editor do Supabase** e rodar. Sem isso, o Campeonato Online continua quebrado
+(não há workaround no frontend — a criação da mesa depende desta RPC).

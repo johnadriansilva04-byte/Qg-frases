@@ -421,6 +421,10 @@ export type Database = {
         Args: { p_campeonato_id: number; p_rodada: number }
         Returns: string
       }
+      debug_confronto_campeonato: {
+        Args: { p_campeonato_id: number; p_rodada: number }
+        Returns: Json
+      }
       registrar_resultado_campeonato: {
         Args: { p_campeonato_id: number; p_mesa_id: string; p_gols_j1: number; p_gols_j2: number }
         Returns: Json
