@@ -83,8 +83,17 @@ export function MesaOnlineMatch({
       }) => void)
     | null
   >(null);
+  const golAdversarioHandlerRef = useRef<(() => void) | null>(null);
   const onFinalizadaRef = useRef(onFinalizada);
   onFinalizadaRef.current = onFinalizada;
+
+  // Ref espelhada de "é meu turno agora" — usada para garantir que apenas o
+  // jogador que detém o turno (o autor do lance) alterne o turno no servidor.
+  // Evita o bug de double-toggle: ambos os clientes simulam a física, mas só o
+  // dono do turno chama registrarGol()/trocarTurno().
+  const userSide = souJogador1 ? "home" : "away";
+  const meuTurnoRef = useRef(false);
+  meuTurnoRef.current = currentTurn === userSide;
 
   const userTeam = useMemo(() => {
     if (!meuTime) return createCustomTeam("custom", "Meu Time", "MTI", "#FF0000", "#00FF00", 75);
@@ -111,7 +120,6 @@ export function MesaOnlineMatch({
 
   const homeId = souJogador1 ? userTeam.id : opponentTeam.id;
   const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
-  const userSide = souJogador1 ? "home" : "away";
 
   // Conexão com a mesa (realtime)
   useEffect(() => {
@@ -141,6 +149,11 @@ export function MesaOnlineMatch({
           if (payload.novoTurnoId)
             setCurrentTurn(payload.novoTurnoId === mesa.jogador_1_id ? "home" : "away");
           if (fimDeTurnoHandlerRef.current) fimDeTurnoHandlerRef.current(payload);
+        },
+        onGoalScored: () => {
+          // O adversário marcou um gol: força o reset da bola/discos ao centro e
+          // dispara o handler visual no MatchView (lado que sofreu o gol).
+          if (golAdversarioHandlerRef.current) golAdversarioHandlerRef.current();
         },
         onErro: () => {},
       },
@@ -246,6 +259,11 @@ export function MesaOnlineMatch({
       },
     ) => {
       if (!mesaRef.current) return;
+      // Apenas o jogador que detém o turno no servidor (autor do lance) é
+      // autoritativo para registrar gol e alternar o turno. O adversário apenas
+      // aplica a jogada recebida via broadcast; suas chamadas de servidor são
+      // ignoradas para evitar double-toggle (turno voltando para o autor).
+      const souAutor = meuTurnoRef.current;
       try {
         if (
           jogadaData &&
@@ -264,9 +282,21 @@ export function MesaOnlineMatch({
           });
         }
 
-        if (goals > 0) {
-          await mesaRef.current.registrarGol();
-          // Após o gol, troca o turno no servidor (quem sofreu o gol recebe a bola)
+        if (goals > 0 && souAutor) {
+          // Gol normal: credita para o autor (dono do turno). Gol contra
+          // (discId === "own_goal"): credita para o adversário.
+          const ehGolContra = jogadaData?.discId === "own_goal";
+          const autorDoGol = ehGolContra
+            ? mesa.jogador_1_id === userId
+              ? (mesa.jogador_2_id ?? mesa.jogador_1_id)
+              : mesa.jogador_1_id
+            : userId;
+          await mesaRef.current.registrarGol(autorDoGol);
+          // Avisa o adversário para resetar a bola ao centro (lado que sofreu).
+          await mesaRef.current.enviarGoalScored({
+            jogadorId: userId,
+            placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
+          });
           await mesaRef.current.trocarTurno();
         }
 
@@ -275,20 +305,23 @@ export function MesaOnlineMatch({
             mesa.jogador_1_id === userId
               ? mesa.jogador_2_id || mesa.jogador_1_id
               : mesa.jogador_1_id;
-          const novoSeqJogada = mesa.jogador_1_id === userId ? seqJogada + 1 : seqJogada;
           await mesaRef.current.enviarFimDeTurno({
             discos: posicoesFinais.discos,
             bola: posicoesFinais.bola,
             jogadorId: userId,
             novoTurnoId: proximoTurno,
           });
-          if (mesa.jogador_1_id === userId) setSeqJogada(novoSeqJogada);
+          // Só o autor alterna o turno no servidor — antes faltava, o que
+          // deixava o turno travado no mesmo jogador após um lance sem gol.
+          if (souAutor) {
+            await mesaRef.current.trocarTurno();
+          }
         }
       } catch (error) {
         console.error("[MesaOnlineMatch] erro no handlePlay:", error);
       }
     },
-    [userId, mesa.jogador_1_id, mesa.jogador_2_id, seqJogada],
+    [userId, mesa.jogador_1_id, mesa.jogador_2_id, placar],
   );
 
   const handleQuit = useCallback(() => {
@@ -398,6 +431,9 @@ export function MesaOnlineMatch({
         }}
         onFimDeTurno={(handler) => {
           if (typeof handler === "function") fimDeTurnoHandlerRef.current = handler;
+        }}
+        onGolAdversario={(resetHandler) => {
+          if (typeof resetHandler === "function") golAdversarioHandlerRef.current = resetHandler;
         }}
       />
     </div>

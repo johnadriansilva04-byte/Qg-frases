@@ -367,6 +367,102 @@ BEGIN
 END; $$;
 
 -- ---------------------------------------------------------------------------
+-- RPC: abrir_mesa_campeonato(p_campeonato_id BIGINT, p_rodada INTEGER)
+-- Idempotente: cria UMA mesa compartilhada para o confronto (jogador_1=j1_id,
+-- jogador_2=j2_id) ou devolve a mesa já existente. Ambos os jogadores chamam
+-- esta mesma função e caem na mesma mesa — elimina mesas duplicadas e a race
+-- condition de quem clica primeiro. O mesa_id é gravado no confronto.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.abrir_mesa_campeonato(
+  p_campeonato_id BIGINT,
+  p_rodada INTEGER
+)
+RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid       UUID := auth.uid();
+  v_row       public.botao_campeonatos_online;
+  v_confrontos JSONB;
+  v_total     INTEGER;
+  v_idx       INTEGER;
+  v_i         INTEGER;
+  v_item      JSONB;
+  v_j1        UUID;
+  v_j2        UUID;
+  v_time1     TEXT;
+  v_time2     TEXT;
+  v_mesa_id   TEXT;
+  v_existe    INTEGER;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT c.* INTO v_row FROM public.botao_campeonatos_online c
+  WHERE c.id = p_campeonato_id FOR UPDATE;
+
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+  IF v_row.status <> 'em_andamento' THEN RAISE EXCEPTION 'campeonato nao esta em andamento'; END IF;
+
+  v_confrontos := v_row.confrontos;
+  v_total := jsonb_array_length(v_confrontos);
+
+  -- Localiza o confronto do usuário nesta rodada
+  v_idx := -1;
+  FOR v_i IN 0..(v_total - 1) LOOP
+    v_item := v_confrontos[v_i + 1];
+    IF (v_item->>'rodada')::INT = p_rodada
+       AND COALESCE((v_item->>'bye')::BOOLEAN, false) = false
+       AND v_item->>'status' = 'pendente'
+       AND ((v_item->>'j1_id')::UUID = v_uid OR (v_item->>'j2_id')::UUID = v_uid) THEN
+      v_idx := v_i;
+      EXIT;
+    END IF;
+  END LOOP;
+
+  IF v_idx = -1 THEN RAISE EXCEPTION 'nenhum confronto pendente encontrado para voce nesta rodada'; END IF;
+
+  v_item := v_confrontos[v_idx + 1];
+  v_j1 := (v_item->>'j1_id')::UUID;
+  v_j2 := (v_item->>'j2_id')::UUID;
+
+  -- Idempotente: se o confronto já tem mesa vinculada e a mesa existe, devolve
+  IF v_item ? 'mesa_id' AND v_item->>'mesa_id' IS NOT NULL THEN
+    SELECT COUNT(*) INTO v_existe FROM public.mesas_futebol m WHERE m.mesa_id = (v_item->>'mesa_id');
+    IF v_existe > 0 THEN
+      RETURN v_item->>'mesa_id';
+    END IF;
+  END IF;
+
+  -- Times dos participantes (do JSONB participantes)
+  SELECT
+    COALESCE((SELECT el->>'time_id' FROM jsonb_array_elements(v_row.participantes) el WHERE el->>'user_id' = v_j1::TEXT), 'Meu Time'),
+    COALESCE((SELECT el->>'time_id' FROM jsonb_array_elements(v_row.participantes) el WHERE el->>'user_id' = v_j2::TEXT), 'Meu Time')
+  INTO v_time1, v_time2;
+
+  -- Cria UMA mesa compartilhada com ambos os jogadores já definidos
+  v_mesa_id := 'camp_' || substring(encode(gen_random_uuid()::text::bytea, 'hex'), 1, 12);
+
+  INSERT INTO public.mesas_futebol
+    (mesa_id, jogador_1_id, jogador_2_id, time_j1, time_j2,
+     status, turno_atual_id, iniciado_em, tempo_restante_segundos,
+     modalidade, campeonato_id, jogador_1_online, jogador_2_online,
+     ultimo_heartbeat_j1, ultimo_heartbeat_j2)
+  VALUES
+    (v_mesa_id, v_j1, v_j2, v_time1, v_time2,
+     'em_andamento', v_j1, now(), 300,
+     'campeonato', p_campeonato_id, true, false,
+     now(), NULL);
+
+  -- Vincula a mesa ao confronto (mesa_id gravado)
+  v_item := jsonb_set(v_item, '{mesa_id}', to_jsonb(v_mesa_id));
+  v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx + 1], v_item);
+  UPDATE public.botao_campeonatos_online SET confrontos = v_confrontos WHERE id = v_row.id;
+
+  RETURN v_mesa_id;
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.abrir_mesa_campeonato(BIGINT, INTEGER) TO authenticated;
+
+-- ---------------------------------------------------------------------------
 -- RPC: registrar_resultado_campeonato(
 --   p_campeonato_id BIGINT, p_mesa_id TEXT, p_gols_j1 INTEGER, p_gols_j2 INTEGER
 -- )

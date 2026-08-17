@@ -21,6 +21,7 @@ type Props = {
   initialTurn?: Side; // Turno inicial (para sincronização online)
   onJogadaAdversaria?: (jogada: any) => void; // Callback para receber jogadas do adversário
   onFimDeTurno?: (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => void; // Callback para receber fim de turno
+  onGolAdversario?: (resetHandler: () => void) => void; // Registra handler para reset de bola quando o adversário marca gol
   score?: { home: number; away: number }; // Placar sincronizado do servidor (para modo online)
 };
 
@@ -42,6 +43,7 @@ export function MatchView({
   initialTurn,
   onJogadaAdversaria,
   onFimDeTurno,
+  onGolAdversario,
   score: serverScore,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
@@ -305,25 +307,29 @@ export function MatchView({
         turnRef.current = conceding;
         setTurn(conceding);
 
-        // Bloquear input por 5 segundos após o gol e passar vez se não jogar
-        setGoalCooldown(5);
-        const cooldownInterval = setInterval(() => {
-          setGoalCooldown(prev => {
-            if (prev === null || prev <= 1) {
-              clearInterval(cooldownInterval);
-              // Passar a vez automaticamente após 5 segundos
-              if (!simRef.current && !ended) {
-                const nextTurn = conceding === "home" ? "away" : "home";
-                turnRef.current = nextTurn;
-                setTurn(nextTurn);
-                // Chamar onPlay para sincronização online quando passa a vez
-                if (onPlay) onPlay(0, { discId: "pass_turn", ix: 0, iy: 0, power: 0 });
+        // Online: o turno é autoritativo do servidor (via Postgres Changes →
+        // initialTurn). Não iniciar cooldown nem auto-pass local — isso evita
+        // dessincronizar o turno com o servidor. Apenas offline tem o auto-pass.
+        if (!isOnline) {
+          setGoalCooldown(5);
+          const cooldownInterval = setInterval(() => {
+            setGoalCooldown(prev => {
+              if (prev === null || prev <= 1) {
+                clearInterval(cooldownInterval);
+                // Passar a vez automaticamente após 5 segundos
+                if (!simRef.current && !ended) {
+                  const nextTurn = conceding === "home" ? "away" : "home";
+                  turnRef.current = nextTurn;
+                  setTurn(nextTurn);
+                  // Chamar onPlay para sincronização online quando passa a vez
+                  if (onPlay) onPlay(0, { discId: "pass_turn", ix: 0, iy: 0, power: 0 });
+                }
+                return null;
               }
-              return null;
-            }
-            return prev - 1;
-          });
-        }, 1000);
+              return prev - 1;
+            });
+          }, 1000);
+        }
 
         return;
       }
@@ -441,6 +447,25 @@ export function MatchView({
       onFimDeTurno(handleFimDeTurno);
     }
   }, [isOnline, onFimDeTurno]);
+
+  // Reset de bola/discos quando o ADVERSÁRIO marca um gol (recebido via broadcast).
+  // O lado que sofreu o gol precisa recolocar a bola ao centro, mesmo que sua
+  // física local não tenha detectado o gol (divergência de simulação).
+  useEffect(() => {
+    if (!isOnline || !onGolAdversario) return;
+    const resetarAposGolAdversario = () => {
+      resetPositions(discsRef.current);
+      simRef.current = false;
+      jogadaEmAndamentoRef.current = false;
+      hasShotThisTurnRef.current = false;
+      isRemotePlayRef.current = false;
+      setGoalCooldown(null);
+      setAimPower((prev) => prev); // força re-render
+    };
+    if (typeof onGolAdversario === "function") {
+      onGolAdversario(resetarAposGolAdversario);
+    }
+  }, [isOnline, onGolAdversario]);
 
   // jogada da CPU (desabilitado no modo online)
   useEffect(() => {

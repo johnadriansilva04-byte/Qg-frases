@@ -41,22 +41,17 @@ export async function criarMesa(time: string): Promise<string> {
   return data as string;
 }
 
-/** Criar uma mesa vinculada a um campeonato (modalidade='campeonato'). */
-export async function criarMesaCampeonato(time: string, campeonatoId: number): Promise<string> {
-  const { data, error } = await supabase.rpc("criar_mesa_futebol", {
-    p_time: time,
+/** Abrir a mesa compartilhada de um confronto de campeonato (idempotente).
+ *  Ambos os jogadores chamam esta função com (campeonatoId, rodada) e caem na
+ *  mesma mesa (jogador_1=j1_id, jogador_2=j2_id). Cria na 1ª chamada; devolve
+ *  a mesa existente nas chamadas seguintes. */
+export async function abrirMesaCampeonato(campeonatoId: number, rodada: number): Promise<string> {
+  const { data, error } = await supabase.rpc("abrir_mesa_campeonato", {
+    p_campeonato_id: campeonatoId,
+    p_rodada: rodada,
   });
-
   if (error) throw error;
-  const mesaId = data as string;
-
-  // Vincular à modalidade campeonato (RLS permite aos participantes)
-  await supabase
-    .from("mesas_futebol")
-    .update({ modalidade: "campeonato", campeonato_id: campeonatoId })
-    .eq("mesa_id", mesaId);
-
-  return mesaId;
+  return data as string;
 }
 
 /**

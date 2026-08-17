@@ -21,13 +21,12 @@ import {
   iniciarCampeonato,
   buscarCampeonato,
   buscarCampeonatosAbertos,
-  vincularMesaCampeonato,
   registrarResultadoCampeonato,
   type CampeonatoOnline,
   type ConfrontoCampeonato,
   type ParticipanteCampeonato,
 } from "@/lib/multiplayer/campeonato.api";
-import { criarMesaCampeonato, buscarMesa, type MesaFutebol } from "@/lib/multiplayer/mesa.api";
+import { abrirMesaCampeonato, buscarMesa, type MesaFutebol } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
 
 type Screen = "lobby-list" | "sala" | "jogo";
@@ -211,17 +210,11 @@ export function OnlineChampionship({
     if (!campeonato || !perfil || !meuConfrontoPendente) return;
     setErro(null);
     try {
-      // Se o confronto já tem mesa vinculada, apenas entra nela
-      let mesaId = meuConfrontoPendente.mesa_id;
-      let mesa: MesaFutebol | null = mesaId ? await buscarMesa(mesaId) : null;
-
-      if (!mesa) {
-        const meuTime = obterTimePerfil(perfil);
-        mesaId = await criarMesaCampeonato(meuTime.id, campeonato.id);
-        // Vincula a mesa ao confronto
-        await vincularMesaCampeonato(campeonato.id, meuConfrontoPendente.rodada, mesaId);
-        mesa = await buscarMesa(mesaId);
-      }
+      // Idempotente: cria UMA mesa compartilhada para o confronto (ou devolve
+      // a já existente). Ambos os jogadores chamam a mesma RPC e caem na mesma
+      // mesa, com jogador_1=j1_id e jogador_2=j2_id definidos pelo confronto.
+      const mesaId = await abrirMesaCampeonato(campeonato.id, meuConfrontoPendente.rodada);
+      const mesa = await buscarMesa(mesaId);
 
       if (!mesa) {
         setErro("Não foi possível carregar a mesa.");
