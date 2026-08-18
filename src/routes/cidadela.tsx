@@ -76,8 +76,11 @@ function Cidadela() {
         setLoading(false);
         setActiveGame(game);
       }, 1800);
-    } else {
+    } else if (game === "trilha") {
       setActiveGame(game);
+    } else {
+      // Jogos em breve não fazem nada
+      console.log("Jogo em breve:", game);
     }
   };
 
@@ -139,11 +142,12 @@ function Cidadela() {
                     key={game.id}
                     onClick={() => isAvailable && handleGameSelect(game.id)}
                     disabled={!isAvailable}
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
+                    className={`flex items-start gap-4 p-4 rounded-xl border transition-all w-full text-left ${
                       isAvailable
-                        ? "border-border bg-surface/50 hover:bg-primary/10 hover:border-primary cursor-pointer"
+                        ? "border-border bg-surface/50 hover:bg-primary/10 hover:border-primary cursor-pointer active:scale-[0.98]"
                         : "border-border/50 bg-surface/30 opacity-60 cursor-not-allowed"
                     }`}
+                    style={{ minHeight: "88px" }}
                   >
                     <div className={`p-3 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       <Icon className="h-6 w-6" />

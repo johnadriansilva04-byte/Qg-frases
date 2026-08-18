@@ -113,6 +113,7 @@ export function useTrilhaPhases() {
     }
     return getInitialProgress();
   });
+  const [phaseJustCompleted, setPhaseJustCompleted] = useState<number | null>(null);
 
   const [trophies, setTrophies] = useState<Trophy[]>(() => {
     const saved = localStorage.getItem(TROPHY_KEY);
@@ -179,6 +180,7 @@ export function useTrilhaPhases() {
     if (newConsecutiveWins >= currentPhaseConfig.requiredWins) {
       console.log('[Trilha Phases] Fase completada! Avançando...');
       newCompletedPhases.push(progress.currentPhase);
+      setPhaseJustCompleted(progress.currentPhase); // Marca fase como completada
       
       // Avança para próxima fase se existir
       const nextPhase = PHASES.find((p) => p.id === progress.currentPhase + 1);
@@ -251,6 +253,10 @@ export function useTrilhaPhases() {
     setTrophies(TROPHIES);
   }, []);
 
+  const clearPhaseCompleted = useCallback(() => {
+    setPhaseJustCompleted(null);
+  }, []);
+
   const getCurrentPhaseConfig = (): Phase | null => {
     return PHASES.find((p) => p.id === progress.currentPhase) || null;
   };
@@ -303,5 +309,7 @@ export function useTrilhaPhases() {
     isAllPhasesComplete,
     getNextTrophy,
     getProgressToNextTrophy,
+    phaseJustCompleted,
+    clearPhaseCompleted,
   };
 }

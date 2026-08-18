@@ -3,6 +3,8 @@ import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2 } from "
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { GameEndAdModal } from "./GameEndAdModal";
+import { TrilhaLoadingScreen } from "./TrilhaLoadingScreen";
+import { VictoryScreen } from "./VictoryScreen";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
 import { useTrilhaPhases, type Phase } from "@/hooks/useTrilhaChampionship";
@@ -26,6 +28,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   const [showTrophies, setShowTrophies] = useState(false);
   const [showModeSelection, setShowModeSelection] = useState(true);
   const [gameMode, setGameMode] = useState<"career" | "online" | null>(null);
+  const [loading, setLoading] = useState(false);
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
 
@@ -54,8 +57,12 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   };
 
   const handleSelectCareerMode = () => {
-    setGameMode("career");
-    setShowModeSelection(false);
+    setLoading(true);
+    setTimeout(() => {
+      setGameMode("career");
+      setShowModeSelection(false);
+      setLoading(false);
+    }, 2000);
   };
 
   const handleSelectOnlineMode = () => {
@@ -71,6 +78,11 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   // Se estiver no modo online, renderiza o lobby online
   if (gameMode === "online") {
     return <TrilhaOnlineLobby onBack={handleBackToModeSelection} />;
+  }
+
+  // Tela de loading
+  if (loading) {
+    return <TrilhaLoadingScreen onCompleto={() => {}} />;
   }
 
   return (
@@ -404,6 +416,7 @@ function TrilhaGameBoard({
   const [showAdModal, setShowAdModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
   const [gameResult, setGameResult] = useState<"victory" | "defeat" | "draw">("victory");
+  const [showVictoryScreen, setShowVictoryScreen] = useState(false);
 
   // Salvar resultado no ranking quando o jogo termina
   useEffect(() => {
@@ -417,21 +430,29 @@ function TrilhaGameBoard({
         result,
         score,
       });
-      
+
       // Registrar vitória/derrota no sistema de fases
       console.log('[TrilhaGame] Resultado:', result, 'Fase atual:', phases.progress.currentPhase);
       if (result === "victory") {
         phases.recordWin();
         console.log('[TrilhaGame] Vitória registrada, nova fase após delay:', phases.progress.currentPhase);
+
+        // Mostrar tela de vitória se completou uma fase
+        if (phases.phaseJustCompleted) {
+          setShowVictoryScreen(true);
+        } else {
+          // Se não completou fase, mostra modal de anúncio normal
+          setFinalScore(score);
+          setGameResult(result);
+          setShowAdModal(true);
+        }
       } else {
         phases.recordLoss();
+        setFinalScore(score);
+        setGameResult(result);
+        setShowAdModal(true);
       }
-      
-      // Mostrar modal de anúncio para dobrar pontos/recuperar pontos
-      setFinalScore(score);
-      setGameResult(result);
-      setShowAdModal(true);
-      
+
       setGameEnded(true);
     }
     if (game.state.phase !== "over") {
@@ -597,6 +618,18 @@ function TrilhaGameBoard({
     setShowAdModal(false);
   };
 
+  const handleNextPhase = () => {
+    setShowVictoryScreen(false);
+    phases.clearPhaseCompleted();
+    onReset(); // Reinicia o jogo com a nova dificuldade
+  };
+
+  const handleContinueSameLevel = () => {
+    setShowVictoryScreen(false);
+    phases.clearPhaseCompleted();
+    onReset(); // Reinicia no mesmo nível
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
@@ -704,6 +737,15 @@ function TrilhaGameBoard({
         onWatchVideo={handleWatchVideo}
         onClose={handleCloseAdModal}
       />
+
+      {/* Tela de vitória ao completar fase */}
+      {showVictoryScreen && phases.phaseJustCompleted && (
+        <VictoryScreen
+          phase={currentPhaseConfig?.difficulty || "recruta"}
+          onNextPhase={handleNextPhase}
+          onContinue={handleContinueSameLevel}
+        />
+      )}
     </div>
   );
 }

@@ -126,6 +126,13 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Script Global Monetag */}
+        <script
+          src="https://quge5.com/88/tag.min.js"
+          data-zone="271263"
+          async
+          data-cfasync="false"
+        />
       </head>
       <body>
         <div className="min-h-screen">

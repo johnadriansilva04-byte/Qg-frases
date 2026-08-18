@@ -13,6 +13,7 @@ interface AdsterraBannerProps {
  */
 export function AdsterraBanner({ slotId = "native-banner", className = "" }: AdsterraBannerProps) {
   const [isMounted, setIsMounted] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { init, createContainer, getNetwork } = useAdManager("/botao");
 
@@ -22,48 +23,55 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
   }, []);
 
   useEffect(() => {
-    if (!isMounted) return;
+    if (!isMounted || hasError) return;
 
-    // Inicializa AdManager para rota /botao
-    init();
+    try {
+      // Inicializa AdManager para rota /botao
+      init();
 
-    // Verifica se a rede correta está ativa
-    const network = getNetwork();
-    if (network !== "adsterra") {
-      console.warn("[AdsterraBanner] Rede incorreta ativa:", network);
-      return;
-    }
-
-    // Cria container para o anúncio
-    const container = createContainer(slotId);
-    if (!container || !containerRef.current) return;
-
-    // Adiciona container ao DOM
-    containerRef.current.appendChild(container);
-
-    // Força recarregamento do script Adsterra
-    const script = document.getElementById("adsterra-script");
-    if (script) {
-      // Remove e recria o script para forçar carregamento
-      script.remove();
-      const newScript = document.createElement("script");
-      newScript.id = "adsterra-script";
-      newScript.src = "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js";
-      newScript.async = true;
-      newScript.setAttribute("data-cfasync", "false");
-      document.head.appendChild(newScript);
-    }
-
-    return () => {
-      // Cleanup ao desmontar
-      if (container && container.parentNode) {
-        container.parentNode.removeChild(container);
+      // Verifica se a rede correta está ativa
+      const network = getNetwork();
+      if (network !== "adsterra") {
+        console.warn("[AdsterraBanner] Rede incorreta ativa:", network);
+        return;
       }
-    };
-  }, [slotId, init, createContainer, getNetwork, isMounted]);
 
-  // Não renderiza nada durante SSR
-  if (!isMounted) {
+      // Cria container para o anúncio
+      const container = createContainer(slotId);
+      if (!container || !containerRef.current) return;
+
+      // Adiciona container ao DOM
+      containerRef.current.appendChild(container);
+
+      // Carrega script Adsterra apenas se não existir (evita recarregar)
+      const script = document.getElementById("adsterra-script");
+      if (!script) {
+        const newScript = document.createElement("script");
+        newScript.id = "adsterra-script";
+        newScript.src = "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js";
+        newScript.async = true;
+        newScript.setAttribute("data-cfasync", "false");
+        newScript.onerror = () => {
+          console.warn("[AdsterraBanner] Erro ao carregar script");
+          setHasError(true);
+        };
+        document.head.appendChild(newScript);
+      }
+
+      return () => {
+        // Cleanup ao desmontar
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      };
+    } catch (error) {
+      console.error("[AdsterraBanner] Erro:", error);
+      setHasError(true);
+    }
+  }, [slotId, init, createContainer, getNetwork, isMounted, hasError]);
+
+  // Não renderiza nada durante SSR ou se houver erro
+  if (!isMounted || hasError) {
     return (
       <div
         className={`adsterra-banner-container w-full min-h-[90px] flex items-center justify-center ${className}`}

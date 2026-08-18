@@ -171,24 +171,30 @@ export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClos
           )}
         </div>
 
-        {/* Google AdSense Video Ad */}
+        {/* Monetag Ad */}
         <div className="mb-6 bg-surface/50 rounded-lg p-4 border border-border">
           <div className="flex items-center justify-center gap-2 mb-3">
             <Video className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-muted-foreground">Anúncio</span>
           </div>
-          
-          {/* Google AdSense Code */}
+
+          {/* Monetag Ad Container */}
           <div className="relative min-h-[200px] flex items-center justify-center bg-black/5 rounded-lg overflow-hidden">
-            <ins
-              className="adsbygoogle block"
-              style={{ display: "block" }}
-              data-ad-client="ca-pub-2783546143377409"
-              data-ad-slot="3577664762"
-              data-ad-format="auto"
-              data-full-width-responsive="true"
-            />
-            
+            <div
+              id="monetag-gameend-ad"
+              className="w-full h-full flex items-center justify-center"
+            >
+              {/* Container para anúncio Monetag */}
+              <ins
+                className="adsbygoogle"
+                style={{ display: "block" }}
+                data-ad-client="ca-pub-2783546143377409"
+                data-ad-slot="3577664762"
+                data-ad-format="auto"
+                data-full-width-responsive="true"
+              />
+            </div>
+
             {/* Placeholder visual enquanto o anúncio carrega */}
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
               Carregando anúncio...

@@ -1162,6 +1162,8 @@ button.celular-card:hover {
   background: color-mix(in oklab, var(--color-card) 78%, transparent);
   padding: 1.5rem 1.4rem 1.6rem;
   box-shadow: 0 30px 80px -30px oklch(0 0 0 / 0.8);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .splash-brand { display: flex; align-items: center; gap: 0.7rem; }
 .splash-logo { font-size: 1.05rem; }

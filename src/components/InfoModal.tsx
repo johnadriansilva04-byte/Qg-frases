@@ -11,13 +11,16 @@ export function InfoModal({ isOpen, onClose, title, content }: InfoModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-surface border border-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-surface border border-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center gap-2">
             <HelpCircle className="size-5 text-primary" />
-            <h2 className="font-display text-lg font-bold">{title}</h2>
+            <h2 className="font-display text-base sm:text-lg font-bold">{title}</h2>
           </div>
           <button
             onClick={onClose}
@@ -29,12 +32,12 @@ export function InfoModal({ isOpen, onClose, title, content }: InfoModalProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 prose prose-sm prose-slate max-w-none text-muted-foreground">
+        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4 prose prose-sm prose-slate max-w-none text-muted-foreground">
           {content}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border px-6 py-3 bg-surface/50">
+        <div className="border-t border-border px-4 py-3 sm:px-6 sm:py-3 bg-surface/50">
           <button
             onClick={onClose}
             className="w-full btn-primary"
@@ -57,7 +60,7 @@ export function InfoButton({ onClick, label = "Saiba mais", className = "" }: In
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors ${className}`}
+      className={`flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors px-2 py-1 rounded hover:bg-primary/10 active:bg-primary/20 ${className}`}
     >
       <HelpCircle className="size-4" />
       <span>{label}</span>
