@@ -13,7 +13,6 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CookieBanner } from "../components/CookieBanner";
 import { Sidebar } from "../components/Sidebar";
-import { AdSlot } from "../components/AdSlot";
 
 function NotFoundComponent() {
   return (
@@ -126,13 +125,6 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
-        {/* Script Global Monetag */}
-        <script
-          src="https://quge5.com/88/tag.min.js"
-          data-zone="271263"
-          async
-          data-cfasync="false"
-        />
       </head>
       <body>
         <div className="min-h-screen">
@@ -163,25 +155,12 @@ function RootComponent() {
       gtag('config', 'G-64FCC805LH');
     `;
     document.head.appendChild(script2);
-
-    // Google AdSense
-    const script3 = document.createElement('script');
-    script3.async = true;
-    script3.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2783546143377409';
-    script3.crossOrigin = 'anonymous';
-    document.head.appendChild(script3);
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Banner no topo */}
-      <AdSlot rotulo="Banner Topo" altura="min-h-[90px]" />
-      
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      
-      {/* Banner no rodapé */}
-      <AdSlot rotulo="Banner Rodapé" altura="min-h-[90px]" />
       
       <CookieBanner />
     </QueryClientProvider>

@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react";
-import { AdSlot } from "@/components/AdSlot";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
@@ -171,8 +170,6 @@ function Cidadela() {
             <p>Mais jogos em breve! Fique ligado.</p>
           </div>
         </main>
-
-        <AdSlot rotulo="Banner Rodapé" altura="min-h-[90px]" />
 
         {/* Footer com links obrigatórios */}
         <footer className="w-full max-w-3xl text-center">
