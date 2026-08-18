@@ -609,7 +609,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
     }
     const f = nextUserFixture(tour);
-    if (!f) return;
+    if (!f) {
+      setScreen("hub");
+      return;
+    }
     setCurrentCopaFix(null);
     setCurrent(f);
     setScreen("tournament-match");
@@ -1369,35 +1372,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             </button>
           </div>
 
-          {/* Desafio de patrocinador: só mostra se não concluído e não há outras mensagens prioritárias */}
-          {!subornoAtivo && !narrativaAtiva && !eventoPendente && desafio && !desafio.concluido && (
-            <div className="patrocinador-msg">
-              <div className="patrocinador-bubble">
-                <p className="patrocinador-nome">{desafio.patrocinador}</p>
-                <p className="patrocinador-texto">{desafio.mensagem}</p>
-                <p className="patrocinador-recompensa">
-                  Recompensa: +{desafio.recompensa} soberania
-                </p>
-                <button 
-                  onClick={() => setScreen("hub")}
-                  className="btn-ghost mt-2 text-xs"
-                >
-                  Entendido
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Botão para ver todas as conversas */}
-          {!subornoAtivo && !narrativaAtiva && !eventoPendente && (
-            <button 
-              onClick={() => setScreen("celular-conversas")}
-              className="btn-ghost w-full mt-2 text-xs"
-            >
-              Ver todas as conversas
-            </button>
-          )}
-
+          {/* Mensagens prioritárias: suborno, narrativa, evento */}
           {subornoAtivo ? (
             <SubornoStory
               state={career!.suborno!}
@@ -1423,7 +1398,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               onChoose={aplicarEscolha}
               onBack={() => setScreen("hub")}
             />
-          ) : !desafio || desafio.concluido ? (
+          ) : desafio && !desafio.concluido ? (
+            <div className="patrocinador-msg">
+              <div className="patrocinador-bubble">
+                <p className="patrocinador-nome">{desafio.patrocinador}</p>
+                <p className="patrocinador-texto">{desafio.mensagem}</p>
+                <p className="patrocinador-recompensa">
+                  Recompensa: +{desafio.recompensa} soberania
+                </p>
+                <button 
+                  onClick={() => setScreen("hub")}
+                  className="btn-ghost mt-2 text-xs"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          ) : (
             <div className="panel text-center py-12">
               <p className="font-display text-2xl">Sem mensagens</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -1434,10 +1425,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                 Voltar ao hub
               </button>
             </div>
-          ) : (
-            <button onClick={() => setScreen("hub")} className="btn-primary mt-4 w-full">
-              Voltar ao hub
-            </button>
           )}
         </div>
       </Shell>
