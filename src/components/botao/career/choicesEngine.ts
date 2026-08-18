@@ -26,6 +26,11 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
         bonusPoder: -1,
         bonusMoral: 5,
       },
+      {
+        id: "banco",
+        texto: "Colocar no banco (reserva)",
+        descricao: "Sem alteração de força, pode entrar se necessário.",
+      },
     ],
   },
   {
@@ -103,6 +108,12 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
         texto: "Manter neutralidade",
         descricao: "Sem grandes efeitos.",
       },
+      {
+        id: "negar",
+        texto: "Negar o pedido da torcida",
+        descricao: "-3 de moral, mas diretoria aprova.",
+        bonusMoral: -3,
+      },
     ],
   },
   {
@@ -124,6 +135,11 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
         texto: "Treino leve e regenerativo",
         descricao: "+3 de moral. Sem alteração de força.",
         bonusMoral: 3,
+      },
+      {
+        id: "normal",
+        texto: "Treino padrão",
+        descricao: "Sem alterações significativas.",
       },
     ],
   },
@@ -150,6 +166,11 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
         descricao: "-2 soberania imediato (impressão de fraqueza), mas sem punição de tabela.",
         impactoFinanceiro: -2,
       },
+      {
+        id: "focar-jogo",
+        texto: "Focar apenas no jogo (sem promessas)",
+        descricao: "Sem alterações. Deixa o resultado falar.",
+      },
     ],
   },
   {
@@ -170,6 +191,13 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
         id: "reter-botao",
         texto: "Reter o botão (não vender)",
         descricao: "Sem efeito financeiro. Elenco mantém força total.",
+      },
+      {
+        id: "negociar",
+        texto: "Negociar melhor oferta",
+        descricao: "+5 soberania se conseguir, mas arrisca perder o negócio.",
+        impactoFinanceiro: 5,
+        riscoAlto: true,
       },
     ],
   },
@@ -192,6 +220,12 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
         texto: "Dizer que o time vem primeiro hoje",
         descricao: "-4 moral (relação abalada), sem efeito na força.",
         bonusMoral: -4,
+      },
+      {
+        id: "compromisso",
+        texto: "Prometer compensar depois do jogo",
+        descricao: "+2 moral, sem efeito na força.",
+        bonusMoral: 2,
       },
     ],
   },

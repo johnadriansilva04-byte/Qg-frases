@@ -270,7 +270,10 @@ export function copaDisponivelNaRodada(
   rodadaBrasileirao: number,
   copa: CopaBrasilState,
   userId: string,
+  divisao: Divisao,
 ): boolean {
+  // Copa do Brasil só disponível na Série A (não em Série B ou C)
+  if (divisao !== "serie-a") return false;
   if (copa.finished) return false;
   if (!usuarioVivoNaCopa(copa, userId)) return false;
   if (!COPA_RODADAS_GATILHO.includes(rodadaBrasileirao)) return false;

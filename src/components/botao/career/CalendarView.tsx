@@ -253,14 +253,17 @@ function RodadaCard({
                     <span className="text-xs text-muted-foreground">A definir</span>
                   )}
                 </div>
-                <div className="text-xs">
-                  {fixture.played && fixture.result ? (
-                    <span className="font-bold text-emerald-300">
-                      {fixture.result.homeGoals} - {fixture.result.awayGoals}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">{isTBD ? "—" : "a jogar"}</span>
-                  )}
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">
+                    {fixture.played && fixture.result ? (
+                      <span className="font-bold text-emerald-300">
+                        {fixture.result.homeGoals} - {fixture.result.awayGoals}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">{isTBD ? "—" : "a jogar"}</span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">{data}</div>
                 </div>
               </div>
             );

@@ -742,7 +742,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const rodada = career.rodadaAtual;
     if (career.copaBrasil) {
       const copaFix = proximoJogoCopa(career.copaBrasil, userTeam.id);
-      if (copaFix && copaDisponivelNaRodada(rodada, career.copaBrasil, userTeam.id)) {
+      if (copaFix && copaDisponivelNaRodada(rodada, career.copaBrasil, userTeam.id, career.divisao)) {
         // Splash curto de "entrada em campo" (inicializa mesa + IA).
         runWithLoading(() => {
           setCurrentCopaFix(copaFix);
@@ -1643,85 +1643,98 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   }
 
   if (screen === "celular") {
-    // Inbox unificado do celular: inicia limpo (sem mensagem automática padrão)
-    // e só dispara notificações geradas por eventos reais. Ordem de prioridade:
-    // suborno > narrativa > choice event. Quando não há nada prioritário, mostra
-    // a lista de conversas (histórico de decisões) — nunca um placeholder que
-    // possa travar ao clicar.
-    const subornoAtivo = career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
-    const narrativaAtiva = career?.narrativa?.cenaAtual ? cenaDaNarrativa(career.narrativa) : null;
-    const eventoPendente = career?.eventoPendenteId
-      ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
-      : null;
-    const nomeTreinador = career?.coach.apelido || career?.coach.nome;
+    try {
+      // Inbox unificado do celular: inicia limpo (sem mensagem automática padrão)
+      // e só dispara notificações geradas por eventos reais. Ordem de prioridade:
+      // suborno > narrativa > choice event. Quando não há nada prioritário, mostra
+      // a lista de conversas (histórico de decisões) — nunca um placeholder que
+      // possa travar ao clicar.
+      const subornoAtivo = career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
+      let narrativaAtiva = null;
+      try {
+        narrativaAtiva = career?.narrativa?.cenaAtual ? cenaDaNarrativa(career.narrativa) : null;
+      } catch (error) {
+        console.error("[Celular] Erro ao carregar narrativa:", error);
+        narrativaAtiva = null;
+      }
+      const eventoPendente = career?.eventoPendenteId
+        ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
+        : null;
+      const nomeTreinador = career?.coach.apelido || career?.coach.nome;
 
-    return (
-      <Shell>
-        <div className="mx-auto w-full max-w-5xl px-4 pb-16">
-          <Header
-            progress={progress}
-            onTrophies={() => setScreen("trophies")}
-            onHome={() => setScreen("menu")}
-          />
+      return (
+        <Shell>
+          <div className="mx-auto w-full max-w-5xl px-4 pb-16">
+            <Header
+              progress={progress}
+              onTrophies={() => setScreen("trophies")}
+              onHome={() => setScreen("menu")}
+            />
 
-          {/* Cabeçalho do celular: treinador + campanha sincronizada */}
-          <div className="celular-header">
-            <div className="celular-avatar">📱</div>
-            <div>
-              <p className="font-display text-lg">{nomeTreinador ?? "Treinador"}</p>
-              <p className="text-xs text-muted-foreground">
-                {career ? `Temporada ${career.temporada} · ${career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}` : "Aguardando campanha"}
-              </p>
+            {/* Cabeçalho do celular: treinador + campanha sincronizada */}
+            <div className="celular-header">
+              <div className="celular-avatar">📱</div>
+              <div>
+                <p className="font-display text-lg">{nomeTreinador ?? "Treinador"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {career ? `Temporada ${career.temporada} · ${career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}` : "Aguardando campanha"}
+                </p>
+              </div>
+              <button onClick={() => setScreen("hub")} className="celular-close">
+                Fechar
+              </button>
             </div>
-            <button onClick={() => setScreen("hub")} className="celular-close">
-              Fechar
-            </button>
-          </div>
 
-          {/* Mensagens prioritárias: suborno, narrativa, evento (chat em 1ª pessoa) */}
-          {subornoAtivo ? (
-            <SubornoStory
-              state={career!.suborno!}
-              onAvancar={aplicarSuborno}
-              onFechar={() => {
-                // Finalizado: volta à lista de mensagens do celular (não entra
-                // no jogo automaticamente). Em andamento: sai do celular p/ o
-                // hub (a mensagem prioritária continua acessível no card).
-                if (!career?.suborno?.nodeAtual) {
-                  setScreen("celular");
-                } else {
-                  setScreen("hub");
-                }
-              }}
-            />
-          ) : narrativaAtiva && career?.narrativa ? (
-            <NarrativeModal
-              state={career.narrativa}
-              cena={narrativaAtiva}
-              onAvancar={aplicarNarrativa}
-              onBack={() => setScreen("hub")}
-            />
-          ) : eventoPendente ? (
-            <ChoiceModal
-              evento={eventoPendente}
-              onChoose={aplicarEscolha}
-              onBack={() => setScreen("hub")}
-            />
-          ) : (
-            // Sem mensagem automática: celular limpo. Só conversas reais
-            // (decisões anteriores + desafio de patrocinador ativo viram uma
-            // conversa, não um overlay que trava).
-            <CelularConversas
-              conversas={career?.conversas ?? []}
-              desafioPatrocinador={career?.desafioPatrocinador ?? null}
-              onEnviarMensagem={handleEnviarMensagem}
-              onExcluirConversa={handleExcluirConversa}
-              onVoltar={() => setScreen("hub")}
-            />
-          )}
-        </div>
-      </Shell>
-    );
+            {/* Mensagens prioritárias: suborno, narrativa, evento (chat em 1ª pessoa) */}
+            {subornoAtivo ? (
+              <SubornoStory
+                state={career!.suborno!}
+                onAvancar={aplicarSuborno}
+                onFechar={() => {
+                  // Finalizado: volta à lista de mensagens do celular (não entra
+                  // no jogo automaticamente). Em andamento: sai do celular p/ o
+                  // hub (a mensagem prioritária continua acessível no card).
+                  if (!career?.suborno?.nodeAtual) {
+                    setScreen("celular");
+                  } else {
+                    setScreen("hub");
+                  }
+                }}
+              />
+            ) : narrativaAtiva && career?.narrativa ? (
+              <NarrativeModal
+                state={career.narrativa}
+                cena={narrativaAtiva}
+                onAvancar={aplicarNarrativa}
+                onBack={() => setScreen("hub")}
+              />
+            ) : eventoPendente ? (
+              <ChoiceModal
+                evento={eventoPendente}
+                onChoose={aplicarEscolha}
+                onBack={() => setScreen("hub")}
+              />
+            ) : (
+              // Sem mensagem automática: celular limpo. Só conversas reais
+              // (decisões anteriores + desafio de patrocinador ativo viram uma
+              // conversa, não um overlay que trava).
+              <CelularConversas
+                conversas={career?.conversas ?? []}
+                desafioPatrocinador={career?.desafioPatrocinador ?? null}
+                onEnviarMensagem={handleEnviarMensagem}
+                onExcluirConversa={handleExcluirConversa}
+                onVoltar={() => setScreen("hub")}
+              />
+            )}
+          </div>
+        </Shell>
+      );
+    } catch (error) {
+      console.error("[Celular] Erro fatal ao renderizar tela do celular:", error);
+      setScreen("hub");
+      setToast("Erro ao carregar celular. Voltando ao hub.");
+      return null;
+    }
   }
 
   if (
@@ -2203,6 +2216,13 @@ function Hub({
       ? sortTable(tour.groups[0]!.table).findIndex((r) => r.teamId === tour.userTeamId) + 1
       : 0;
 
+  // Determina o próximo jogo (prioriza Copa do Brasil se disponível)
+  const proximoJogo = copaFixPend && copaDisponivelNaRodada(career?.rodadaAtual ?? 0, copaBrasil, userTeam.id, divisao)
+    ? { fixture: copaFixPend, tipo: "Copa do Brasil" }
+    : next
+      ? { fixture: next, tipo: tour.phase === "grupos" ? "Brasileirão" : stage?.stage ?? "Mata-mata" }
+      : null;
+
   return (
     <div className="space-y-5">
       {career?.coach.nome && (
@@ -2214,15 +2234,13 @@ function Hub({
         />
       )}
 
-      {/* Próximo jogo em destaque */}
+      {/* Próximo Jogo unificado (Brasileirão ou Copa do Brasil) */}
       <div className="next-match-card">
         <div className="next-match-head">
           <span className="next-match-tag">
             {tour.phase === "fim"
               ? "Campanha encerrada"
-              : tour.phase === "grupos"
-                ? "Brasileirão"
-                : stage?.stage}
+              : proximoJogo?.tipo ?? "Aguardando"}
           </span>
           <span className="next-match-div">{divisaoShort}</span>
         </div>
@@ -2230,13 +2248,13 @@ function Hub({
           <p className="mt-3 font-display text-2xl">
             Campeão: <TeamBadge team={getTeam(tour.champion!)} />
           </p>
-        ) : next ? (
+        ) : proximoJogo ? (
           <>
             <div className="mt-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <TeamBadge team={getTeam(next.homeId)} size="md" />
+                <TeamBadge team={getTeam(proximoJogo.fixture.homeId)} size="md" />
                 <span className="font-display text-2xl text-muted-foreground">×</span>
-                <TeamBadge team={getTeam(next.awayId)} size="md" />
+                <TeamBadge team={getTeam(proximoJogo.fixture.awayId)} size="md" />
               </div>
               <button
                 data-testid="entrar-em-campo"
@@ -2247,7 +2265,7 @@ function Hub({
               </button>
             </div>
             <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-              <span>{next.stage}</span>
+              <span>{proximoJogo.fixture.stage}</span>
               {userPos > 0 && <span>Posição: {userPos}º</span>}
               {temCelular && <span className="text-amber-300">Celular com mensagens</span>}
             </div>
@@ -2256,40 +2274,6 @@ function Hub({
           <p className="mt-2 text-sm text-muted-foreground">Aguardando próximo jogo...</p>
         )}
       </div>
-
-      {/* Status da Copa do Brasil (paralela ao Brasileirão) */}
-      {copaBrasil && (
-        <div className="copa-status-card">
-          <div className="copa-status-head">
-            <span className="copa-status-tag">Copa do Brasil</span>
-            <span className="copa-status-badge">
-              {copaBrasil.finished
-                ? copaBrasil.champion === userTeam.id
-                  ? "CAMPEÃO"
-                  : "Encerrada"
-                : vivoNaCopa
-                  ? "Em jogo"
-                  : "Eliminado"}
-            </span>
-          </div>
-          {copaFixPend ? (
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <TeamBadge team={getTeam(copaFixPend.homeId)} size="sm" />
-                <span className="font-display text-lg text-muted-foreground">×</span>
-                <TeamBadge team={getTeam(copaFixPend.awayId)} size="sm" />
-              </div>
-              <span className="text-[11px] text-muted-foreground">{copaFixPend.stage}</span>
-            </div>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {copaBrasil.finished
-                ? "Torneio concluído nesta temporada."
-                : "Próxima fase será disponibilizada no calendário do Brasileirão."}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Layout principal: 2 colunas sem blocos vazios */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">

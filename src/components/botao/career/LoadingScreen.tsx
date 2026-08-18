@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { AdsterraBanner } from "@/components/AdsterraBanner";
 
 /**
  * LoadingScreen — Tela de carregamento leve, 100% código (CSS/JS), zero
@@ -140,6 +141,11 @@ export function LoadingScreen({
         <div className="splash-intro" key={introIdx}>
           <p className="splash-intro-title">{intro.titulo}</p>
           <p className="splash-intro-corpo">{intro.corpo}</p>
+        </div>
+
+        {/* Adsterra Banner durante loading */}
+        <div className="mt-4">
+          <AdsterraBanner slotId="loading-banner" className="w-full" />
         </div>
       </div>
     </div>
