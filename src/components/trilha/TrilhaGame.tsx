@@ -11,6 +11,7 @@ import { useTrilhaPhases, type Phase } from "@/hooks/useTrilhaChampionship";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
 import { addRankingEntry, getTrilhaScore } from "@/lib/ranking";
 import { TrilhaOnlineLobby } from "./TrilhaOnlineLobby";
+import { useAdManager } from "@/lib/adManager";
 
 const TUTORIAL_KEY = "trilha_tutorial_seen";
 
@@ -31,6 +32,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   const [loading, setLoading] = useState(false);
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
+  const { markFirstGamePlayed } = useAdManager("/trilha");
 
   // Inicia fases automaticamente se não começou
   useEffect(() => {
@@ -431,6 +433,9 @@ function TrilhaGameBoard({
         score,
       });
 
+      // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
+      markFirstGamePlayed();
+
       // Registrar vitória/derrota no sistema de fases
       console.log('[TrilhaGame] Resultado:', result, 'Fase atual:', phases.progress.currentPhase);
       if (result === "victory") {
@@ -458,7 +463,7 @@ function TrilhaGameBoard({
     if (game.state.phase !== "over") {
       setGameEnded(false);
     }
-  }, [game.state.phase, game.state.winner, difficulty, gameEnded, phases]);
+  }, [game.state.phase, game.state.winner, difficulty, gameEnded, phases, markFirstGamePlayed]);
   
   const targets = useMemo(() => {
     if (game.state.phase === "placing") {

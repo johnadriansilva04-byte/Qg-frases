@@ -43,7 +43,8 @@ function createSupabaseClient() {
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
     console.error(`[Supabase] ${message}`);
-    throw new Error(message);
+    // Não throw mais, retorna null para permitir fallback
+    return null;
   }
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
@@ -63,14 +64,49 @@ function createSupabaseClient() {
   });
 }
 
-let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
+let _supabase: ReturnType<typeof createSupabaseClient> | null = null;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>, {
   get(_, prop, receiver) {
-    if (!_supabase) _supabase = createSupabaseClient();
+    if (!_supabase) {
+      _supabase = createSupabaseClient();
+      if (!_supabase) {
+        // Retornar mock se Supabase não estiver configurado
+        console.warn('[Supabase] Cliente não configurado, usando mock');
+        return createMockSupabase();
+      }
+    }
     return Reflect.get(_supabase, prop, receiver);
   },
 });
+
+// Mock do Supabase para quando não estiver configurado
+function createMockSupabase() {
+  return {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: () => Promise.resolve({ data: null, error: { message: 'Supabase não configurado' } }),
+          order: () => ({
+            limit: () => Promise.resolve({ data: [], error: null })
+          })
+        }),
+        order: () => ({
+          limit: () => Promise.resolve({ data: [], error: null })
+        })
+      }),
+      insert: () => Promise.resolve({ data: null, error: { message: 'Supabase não configurado' } }),
+      update: () => Promise.resolve({ data: null, error: { message: 'Supabase não configurado' } }),
+      delete: () => Promise.resolve({ data: null, error: { message: 'Supabase não configurado' } }),
+    }),
+    rpc: () => Promise.resolve({ data: null, error: { message: 'Supabase não configurado' } }),
+    auth: {
+      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      signIn: () => Promise.resolve({ data: { user: null, session: null }, error: { message: 'Supabase não configurado' } }),
+      signOut: () => Promise.resolve({ error: null }),
+    },
+  };
+}
 

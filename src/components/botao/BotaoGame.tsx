@@ -182,7 +182,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
 
   // Inicializa AdManager para rota /botao (Adsterra)
-  const { init: initAdManager, cleanup: cleanupAdManager } = useAdManager("/botao");
+  const { init: initAdManager, cleanup: cleanupAdManager, markFirstGamePlayed } = useAdManager("/botao");
 
   useEffect(() => {
     initAdManager();
@@ -568,6 +568,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- amistoso ---------- */
   const finishFriendly = (r: MatchResult) => {
+    // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
+    markFirstGamePlayed();
+
     const userIsHome = r.homeId === userTeam.id;
     const gf = userIsHome ? r.homeGoals : r.awayGoals;
     const ga = userIsHome ? r.awayGoals : r.homeGoals;
@@ -1119,6 +1122,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const finishTournamentMatch = (r: MatchResult) => {
     if (!tour || !current) return;
     const t: Tournament = structuredClone(tour);
+
+    // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
+    markFirstGamePlayed();
 
     const userIsHome = r.homeId === userTeam.id;
     const gf = userIsHome ? r.homeGoals : r.awayGoals;

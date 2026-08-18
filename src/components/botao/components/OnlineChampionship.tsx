@@ -28,6 +28,7 @@ import {
 } from "@/lib/multiplayer/campeonato.api";
 import { abrirMesaCampeonato, buscarMesa, type MesaFutebol } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
+import { useAdManager } from "@/lib/adManager";
 
 type Screen = "lobby-list" | "sala" | "jogo";
 
@@ -71,6 +72,7 @@ export function OnlineChampionship({
   const queryClient = useQueryClient();
   const { perfil, recarregar, aplicarPerfil } = useBotaoAuth();
   const { data: jogador } = useJogador();
+  const { markFirstGamePlayed } = useAdManager("/botao");
   const userId = jogador?.user_id ?? perfil?.user_id ?? "";
 
   const [codigo, setCodigo] = useState<string | null>(() => localStorage.getItem(STORAGE.CODIGO));
@@ -232,6 +234,9 @@ export function OnlineChampionship({
 
   const handleFinalizada = useCallback(
     async (r: ResultadoMesa) => {
+      // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
+      markFirstGamePlayed();
+
       if (!campeonato || !confrontoAtivo || !mesaAtiva) return;
       try {
         const j1 = confrontoAtivo.j1_id;
@@ -250,7 +255,7 @@ export function OnlineChampionship({
         queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
       }
     },
-    [campeonato, confrontoAtivo, mesaAtiva, recarregar, aplicarPerfil, queryClient, codigo],
+    [campeonato, confrontoAtivo, mesaAtiva, recarregar, aplicarPerfil, queryClient, codigo, markFirstGamePlayed],
   );
 
   // ============ Tela de jogo (mesa ativa) ============

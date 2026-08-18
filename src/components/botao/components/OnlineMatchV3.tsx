@@ -12,6 +12,7 @@ import {
 } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
 import { aplicarApostaSoberania } from "../career/careerRemote";
+import { useAdManager } from "@/lib/adManager";
 
 type Screen = "lobby-list" | "jogo" | "resultado";
 
@@ -30,6 +31,7 @@ export function OnlineMatchV3({
   const queryClient = useQueryClient();
   const { data: jogador } = useJogador();
   const { perfil, recarregar, aplicarPerfil } = useBotaoAuth();
+  const { markFirstGamePlayed } = useAdManager("/botao");
   const userId = jogador?.user_id ?? perfil?.user_id ?? "";
 
   const [mesaId, setMesaId] = useState<string | null>(() =>
@@ -165,6 +167,9 @@ export function OnlineMatchV3({
           limparPersistencia();
         }}
         onFinalizada={async (r: ResultadoMesa) => {
+          // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
+          markFirstGamePlayed();
+
           // Aplica aposta de soberania (se houver) antes de recarregar perfil.
           if (apostaSoberania > 0) {
             const venceu = r.vencedorId === userId;

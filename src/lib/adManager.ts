@@ -69,6 +69,61 @@ class AdManager {
   private currentNetwork: AdNetwork = "none";
   private loadedScripts: Set<string> = new Set();
   private activeContainers: Set<string> = new Set();
+  private isFirstVisit: boolean = true;
+  private hasPlayedFirstGame: boolean = false;
+  private readonly FIRST_VISIT_KEY = "sov_first_visit";
+  private readonly FIRST_GAME_KEY = "sov_first_game_played";
+
+  constructor() {
+    this.checkFirstVisit();
+  }
+
+  /**
+   * Verifica se é a primeira visita do usuário
+   */
+  private checkFirstVisit(): void {
+    if (typeof window === "undefined") return;
+
+    const hasVisited = localStorage.getItem(this.FIRST_VISIT_KEY);
+    const hasPlayedGame = localStorage.getItem(this.FIRST_GAME_KEY);
+
+    this.isFirstVisit = !hasVisited;
+    this.hasPlayedFirstGame = !!hasPlayedGame;
+
+    if (this.isFirstVisit) {
+      localStorage.setItem(this.FIRST_VISIT_KEY, Date.now().toString());
+    }
+  }
+
+  /**
+   * Marca que o usuário jogou o primeiro jogo
+   */
+  markFirstGamePlayed(): void {
+    if (typeof window === "undefined") return;
+
+    localStorage.setItem(this.FIRST_GAME_KEY, Date.now().toString());
+    this.hasPlayedFirstGame = true;
+    this.isFirstVisit = false;
+  }
+
+  /**
+   * Verifica se anúncios devem ser mostrados
+   */
+  shouldShowAds(): boolean {
+    // Não mostrar anúncios na primeira visita
+    if (this.isFirstVisit) {
+      console.log("[AdManager] Primeira visita - anúncios bloqueados");
+      return false;
+    }
+
+    // Só mostrar anúncios após o primeiro jogo
+    if (!this.hasPlayedFirstGame) {
+      console.log("[AdManager] Primeiro jogo ainda não jogado - anúncios bloqueados");
+      return false;
+    }
+
+    return true;
+  }
 
   /**
    * Determina qual rede usar baseado na rota atual
@@ -95,6 +150,12 @@ class AdManager {
    * Carrega o script da rede especificada
    */
   loadScript(network: AdNetwork): void {
+    // Verifica se deve mostrar anúncios
+    if (!this.shouldShowAds()) {
+      console.log("[AdManager] Anúncios bloqueados (primeira visita ou primeiro jogo não jogado)");
+      return;
+    }
+
     // Verifica se está no browser (SSR-safe)
     if (typeof window === "undefined" || typeof document === "undefined") {
       console.warn("[AdManager] Tentativa de carregar script no SSR - ignorando");
@@ -233,6 +294,12 @@ class AdManager {
    * Inicializa anúncios para uma rota
    */
   initForRoute(path: string): void {
+    // Verifica se deve mostrar anúncios
+    if (!this.shouldShowAds()) {
+      console.log(`[AdManager] Anúncios desativados para rota ${path} (primeira visita ou primeiro jogo não jogado)`);
+      return;
+    }
+
     const network = this.getNetworkForRoute(path);
 
     // Se a rede mudou, limpa tudo e carrega nova
@@ -287,5 +354,7 @@ export function useAdManager(path: string) {
     createContainer,
     getNetwork: () => adManager.getNetworkForRoute(path),
     isSlotAllowed: (slotId: string) => adManager.isSlotAllowed(path, slotId),
+    markFirstGamePlayed: () => adManager.markFirstGamePlayed(),
+    shouldShowAds: () => adManager.shouldShowAds(),
   };
 }
