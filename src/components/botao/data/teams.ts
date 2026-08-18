@@ -56,7 +56,7 @@ let cachedTeams: Team[] | null = null;
 /** Cache síncrono dos times do banco, populado por loadTeamsFromDB().
  * Permite que teamByIdSync resolva times do torneio (IDs do banco) em vez de
  * cair para o fallback local — corrige exibições duplicadas (ex.: "FB vs FB"). */
-let cachedTeamsSync: Team[] = [];
+let cachedTeamsSyncData: Team[] = [];
 
 async function loadTeamsFromDB(): Promise<Team[]> {
   if (cachedTeams) return cachedTeams;
@@ -72,7 +72,7 @@ async function loadTeamsFromDB(): Promise<Team[]> {
       secondary: t.cores[1] || '#ffffff',
       power: 75, // Poder padrão, pode ser ajustado no futuro
     }));
-    cachedTeamsSync = cachedTeams;
+    cachedTeamsSyncData = cachedTeams;
     return cachedTeams;
   } catch (error) {
     console.error('Erro ao carregar times do banco:', error);
@@ -83,6 +83,11 @@ async function loadTeamsFromDB(): Promise<Team[]> {
 /** Pré-carrega os times do banco no cache síncrono (chamar na inicialização). */
 export async function preloadTeams(): Promise<void> {
   await loadTeamsFromDB();
+}
+
+/** Acesso síncrono ao cache de times do banco (pode estar vazio antes do load). */
+export function cachedTeamsSync(): Team[] {
+  return cachedTeamsSyncData;
 }
 
 export async function getAllTeams(): Promise<Team[]> {
@@ -96,7 +101,7 @@ export async function teamById(id: string): Promise<Team> {
 
 export function teamByIdSync(id: string): Team {
   // Cache do banco primeiro (IDs do torneio), depois fallback local.
-  const fromDb = cachedTeamsSync.find((t) => t.id === id);
+  const fromDb = cachedTeamsSyncData.find((t) => t.id === id);
   if (fromDb) return fromDb;
   return TEAMS.find((t) => t.id === id) ?? TEAMS[0]!;
 }

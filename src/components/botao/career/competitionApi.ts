@@ -51,6 +51,9 @@ export function calcularStats(tour: Tournament, userTeam: Team): StatsData | nul
   } | null = null;
   for (const f of tour.groupFixtures) {
     if (!f.result || !f.played) continue;
+    // Ignora confrontos inválidos (mesmo time dos dois lados) que gerariam
+    // exibições duplicadas como "FB vs FB" no card de maior goleada.
+    if (f.homeId === f.awayId) continue;
     const diff = Math.abs(f.result.homeGoals - f.result.awayGoals);
     if (!maiorVitoria || diff > maiorVitoria.diff) {
       maiorVitoria = {

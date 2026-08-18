@@ -575,6 +575,9 @@ function SalaCampeonato({
                     <ul className="space-y-1 text-sm">
                       {lista.map((c, idx) => {
                         const envolvido = c.j1_id === userId || c.j2_id === userId;
+                        // Confronto inválido (mesmo jogador dos dois lados):
+                        // evita exibir "FB x FB" — pula a linha.
+                        if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
                         return (
                           <li
                             key={idx}

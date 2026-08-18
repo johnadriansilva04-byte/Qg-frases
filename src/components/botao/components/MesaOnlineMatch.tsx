@@ -14,7 +14,7 @@ import { X } from "lucide-react";
 import { MatchView } from "@/components/botao/components/MatchView";
 import { ChatOverlay, type ChatMsg } from "@/components/botao/components/ChatOverlay";
 import { supabase } from "@/integrations/supabase/client";
-import { createCustomTeam, teamByIdSync } from "@/components/botao/data/teams";
+import { createCustomTeam, cachedTeamsSync, TEAMS } from "@/components/botao/data/teams";
 import type { MatchResult } from "@/components/botao/types";
 import { MesaRealtime, type JogadaPayload } from "@/lib/multiplayer/MesaRealtime";
 import type { MesaFutebol } from "@/lib/multiplayer/mesa.api";
@@ -134,8 +134,15 @@ export function MesaOnlineMatch({
 
   const opponentTeam = useMemo(() => {
     const opTimeId = souJogador1 ? mesa.time_j2 : mesa.time_j1;
+    const opUid = souJogador1 ? mesa.jogador_2_id : mesa.jogador_1_id;
+    // Guarda contra mesa inconsistente: se o "oponente" é o próprio usuário
+    // (ambos slots apontam para o mesmo jogador), exibe um time neutro em vez de
+    // duplicar o time do usuário (bug "FB vs FB" no placar).
+    if (!opUid || opUid === userId) {
+      return createCustomTeam("opponent", "Aguardando...", "---", "#666666", "#999999", 75);
+    }
     // Prioriza o perfil real do oponente (nome/cores sincronizados do Supabase).
-    if (perfilOponente) {
+    if (perfilOponente && perfilOponente.user_id !== userId) {
       return createCustomTeam(
         opTimeId || `custom-${perfilOponente.user_id}`,
         perfilOponente.time_personalizado || "Adversário",
@@ -147,12 +154,19 @@ export function MesaOnlineMatch({
     }
     if (!opTimeId)
       return createCustomTeam("opponent", "Aguardando...", "---", "#666666", "#999999", 75);
+    if (opTimeId === userTeam.id)
+      return createCustomTeam("opponent", "Adversário", "ADV", "#FF0000", "#FFFFFF", 75);
     if (opTimeId.startsWith("custom-"))
       return createCustomTeam(opTimeId, "Adversário", "ADV", "#FF0000", "#FFFFFF", 75);
-    const teamFromDb = teamByIdSync(opTimeId);
+    // timeByIdSync sempre retorna algo (fallback TEAMS[0]); só usá-lo se o id
+    // realmente existir no cache do banco, senão mostra "ADV" em vez de um
+    // time real que poderia coincidir com a sigla do usuário.
+    const teamFromDb = cachedTeamsSync().find((t) => t.id === opTimeId);
     if (teamFromDb) return teamFromDb;
+    const teamLocal = TEAMS.find((t) => t.id === opTimeId);
+    if (teamLocal) return teamLocal;
     return createCustomTeam(opTimeId, "Adversário", "ADV", "#0000FF", "#FFFF00", 75);
-  }, [mesa.time_j1, mesa.time_j2, souJogador1, perfilOponente]);
+  }, [mesa.time_j1, mesa.time_j2, mesa.jogador_1_id, mesa.jogador_2_id, souJogador1, perfilOponente, userId, userTeam.id]);
 
   const homeId = souJogador1 ? userTeam.id : opponentTeam.id;
   const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
