@@ -293,17 +293,44 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   };
 
+  // Carregar carreira ao iniciar (localStorage primeiro, depois Supabase)
+  useEffect(() => {
+    // Tenta carregar do localStorage primeiro
+    const localCareer = loadCareer();
+    if (localCareer && localCareer.coach.nome) {
+      console.log("[BotaoGame] Carreira carregada do localStorage:", localCareer);
+      setCareer(localCareer);
+    }
+  }, []);
+
   // Ao logar (perfil ficar disponível), puxar carreira do Supabase
   useEffect(() => {
     if (!perfil?.user_id) return;
     loadCareerFromSupabase(perfil.user_id)
       .then((remote) => {
+        console.log("[BotaoGame] Carreira carregada do Supabase:", remote);
         if (remote && remote.coach.nome) {
           setCareer(remote);
           saveCareer(remote);
+        } else {
+          console.log("[BotaoGame] Carreira não encontrada no Supabase ou sem nome do coach");
+          // Se não encontrou no Supabase, mantém a carreira local se existir
+          const localCareer = loadCareer();
+          if (localCareer && localCareer.coach.nome) {
+            console.log("[BotaoGame] Mantendo carreira local:", localCareer);
+            setCareer(localCareer);
+          }
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error("[BotaoGame] Erro ao carregar carreira do Supabase:", error);
+        // Em caso de erro, mantém a carreira local se existir
+        const localCareer = loadCareer();
+        if (localCareer && localCareer.coach.nome) {
+          console.log("[BotaoGame] Mantendo carreira local após erro:", localCareer);
+          setCareer(localCareer);
+        }
+      });
   }, [perfil?.user_id]);
 
   const handleLogout = async () => {
