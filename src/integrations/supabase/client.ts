@@ -65,6 +65,7 @@ function createSupabaseClient() {
 }
 
 let _supabase: ReturnType<typeof createSupabaseClient> | null = null;
+let _mockSupabase: ReturnType<typeof createMockSupabase> | null = null;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -75,7 +76,10 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
       if (!_supabase) {
         // Retornar mock se Supabase não estiver configurado
         console.warn('[Supabase] Cliente não configurado, usando mock');
-        return createMockSupabase();
+        if (!_mockSupabase) {
+          _mockSupabase = createMockSupabase();
+        }
+        return Reflect.get(_mockSupabase, prop, receiver);
       }
     }
     return Reflect.get(_supabase, prop, receiver);

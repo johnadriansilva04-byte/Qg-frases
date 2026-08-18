@@ -14,6 +14,20 @@ export function useBotaoAuth() {
     let syncInProgress = false; // Flag para evitar chamadas simultâneas
     let lastUserId: string | null = null; // Rastrear o último usuário sync
 
+    // Verificar se Supabase está configurado
+    try {
+      const isMock = !supabase || typeof supabase.auth !== 'object' || typeof supabase.auth.onAuthStateChange !== 'function';
+      if (isMock) {
+        console.log('[useBotaoAuth] Supabase não configurado, pulando auth');
+        setCarregando(false);
+        return;
+      }
+    } catch (e) {
+      console.log('[useBotaoAuth] Supabase não configurado, pulando auth');
+      setCarregando(false);
+      return;
+    }
+
     const sync = async (u: User | null) => {
       // Guarda para evitar chamadas simultâneas
       if (syncInProgress) {

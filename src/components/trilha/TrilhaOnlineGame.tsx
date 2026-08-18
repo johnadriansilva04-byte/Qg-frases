@@ -16,8 +16,23 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [supabaseNotConfigured, setSupabaseNotConfigured] = useState(false);
 
   useEffect(() => {
+    // Verificar se Supabase está configurado
+    try {
+      const isMock = !supabase || typeof supabase.from !== 'function';
+      if (isMock) {
+        setSupabaseNotConfigured(true);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      setSupabaseNotConfigured(true);
+      setLoading(false);
+      return;
+    }
+
     // Obter usuário atual
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -80,6 +95,27 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       clearInterval(heartbeatInterval);
     };
   }, [mesaId, userId]);
+
+  if (supabaseNotConfigured) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <h2 className="texto-marca text-2xl mb-4">Modo Online Indisponível</h2>
+          <p className="text-muted-foreground mb-6">
+            O modo online precisa do Supabase configurado. Por enquanto, jogue no modo carreira local!
+          </p>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Voltar
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const isMyTurn = mesa && userId && (
     (mesa.turn === 1 && mesa.jogador_1_id === userId) ||

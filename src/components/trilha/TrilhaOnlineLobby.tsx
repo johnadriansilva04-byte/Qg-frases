@@ -21,6 +21,7 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
   const [entrandoMesa, setEntrandoMesa] = useState<string | null>(null);
   const [dificuldadeSelecionada, setDificuldadeSelecionada] = useState<string>("recruta");
   const [mesaAtual, setMesaAtual] = useState<string | null>(null);
+  const [supabaseNotConfigured, setSupabaseNotConfigured] = useState(false);
 
   const DIFICULDADES = [
     { id: "recruta", label: "Recruta", description: "Ideal para iniciantes" },
@@ -29,6 +30,21 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
   ];
 
   useEffect(() => {
+    // Verificar se Supabase está configurado
+    try {
+      // Tenta acessar uma propriedade para verificar se é mock
+      const isMock = !supabase || typeof supabase.from !== 'function';
+      if (isMock) {
+        setSupabaseNotConfigured(true);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      setSupabaseNotConfigured(true);
+      setLoading(false);
+      return;
+    }
+
     carregarMesas();
 
     // Assinar mudanças em tempo real
@@ -112,6 +128,27 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
 
   if (mesaAtual) {
     return <TrilhaOnlineGame mesaId={mesaAtual} onBack={() => setMesaAtual(null)} />;
+  }
+
+  if (supabaseNotConfigured) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <h2 className="texto-marca text-2xl mb-4">Modo Online Indisponível</h2>
+          <p className="text-muted-foreground mb-6">
+            O modo online precisa do Supabase configurado. Por enquanto, jogue no modo carreira local!
+          </p>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Voltar
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
