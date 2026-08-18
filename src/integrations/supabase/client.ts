@@ -106,6 +106,9 @@ function createMockSupabase() {
       getUser: () => Promise.resolve({ data: { user: null }, error: null }),
       signIn: () => Promise.resolve({ data: { user: null, session: null }, error: { message: 'Supabase não configurado' } }),
       signOut: () => Promise.resolve({ error: null }),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => {} } }
+      }),
     },
   };
 }
