@@ -306,3 +306,45 @@ export async function iniciarCampanhaRemota(
     console.error("[careerRemote] iniciarCampanha error:", e);
   }
 }
+
+/**
+ * Aplica uma aposta de soberania em partida online. O usuário arrisca parte da
+ * soberania: venceu = recebe o dobro da aposta; perdeu = perde a aposta;
+ * empate = recebe a aposta de volta (0 a perder). Retorna o novo saldo.
+ */
+export async function aplicarApostaSoberania(
+  aposta: number,
+  venceu: boolean,
+  empate: boolean,
+): Promise<number | null> {
+  try {
+    if (aposta <= 0) return null;
+    const { data: sess } = await supabase.auth.getUser();
+    const uid = sess?.user?.id;
+    if (!uid) return null;
+
+    const { data: cur } = await (supabase as any)
+      .from("botao_usuarios")
+      .select("pontos_soberania")
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (!cur) return null;
+
+    const atual = cur.pontos_soberania ?? 0;
+    // Nunca arrisca mais do que o saldo disponível.
+    const risco = Math.min(aposta, atual);
+    let delta = 0;
+    if (empate) delta = 0;
+    else if (venceu) delta = risco; // ganha o equivalente à aposta (dobro)
+    else delta = -risco;
+
+    const novoSaldo = Math.max(0, atual + delta);
+    await (supabase as any).from("botao_usuarios")
+      .update({ pontos_soberania: novoSaldo })
+      .eq("user_id", uid);
+    return novoSaldo;
+  } catch (e) {
+    console.error("[careerRemote] aplicarApostaSoberania error:", e);
+    return null;
+  }
+}

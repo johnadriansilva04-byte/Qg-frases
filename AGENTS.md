@@ -287,11 +287,13 @@ time/botões/tática no estilo PS2. Tudo persistido no Supabase (`futebol.sql`).
   - `src/components/botao/career/ProfileSetup.tsx`: `<input type="file">` no
     avatar do resumo, preview `<img>`, hover com overlay de upload, valida
     `image/*` e ≤2MB; `trocarEscudo()` faz upload + salva via RPC.
-  - `OnlineMatchV3`/`OnlineChampionship`: `meuTime.escudoUrl` exibido no card.
-- **Aplicação obrigatória**: a migração SQL NÃO é aplicada automaticamente (sem
-  `service_role`/CLI). O usuário deve rodar o trecho de `futebol.sql` (coluna
-  + bucket + policies + RPC) no SQL Editor do Supabase. Sem isso, o upload
-  falha (bucket inexistente / coluna ausente).
+  - `OnlineMatchV3`/`OnlineChampionship`: `meuTime` exibido no card.
+- **REMOVIDO (2026-08-18)**: a feature de escudo/foto quebrava o RPC
+  `atualizar_perfil_clube` em produção (o parâmetro `p_escudo` não existia no
+  banco deployado, fazendo toda chamada de salvar perfil falhar). Revertido
+  para a assinatura original de 7 parâmetros (sem `p_escudo`): perfil salva
+  apenas nome do time, abreviação, cores, tática e nomes dos botões. Blocos SQL
+  de `escudo_url`, bucket storage e policies foram removidos de `futebol.sql`.
 
 ## SQL consolidado — commit e9cf53b (2026-08-18)
 - Toda a schema de futebol vive em **`supabase/migrations/futebol.sql`** (único
@@ -312,3 +314,29 @@ time/botões/tática no estilo PS2. Tudo persistido no Supabase (`futebol.sql`).
 - Decisões pendentes **não** devem aparecer como histórico/narrativa em 3ª
   pessoa. São acessadas no fluxo do botão "celular" como mensagens em 1ª pessoa
   (comunicação direta do clube, estilo chat/notificação corporativa).
+
+## Refatoração UI/UX + sistema de patrocinador (2026-08-18)
+- **Desafio de patrocinador** (`career/patrocinadorEngine.ts`): a cada partida
+  o patrocinador propõe uma meta (vitória por margem, não levar gols, etc.).
+  Cumprir = +soberania (`aplicarDesafioPatrocinador` em `finishTournamentMatch`/
+  `finishFriendly`). `CareerState.desafioPatrocinador` persiste no JSONB.
+- **Celular do Treinador** (`screen="celular"`): sempre acessível no hub. O
+  desafio do patrocinador aparece como bubble de chat em 1ª pessoa (estilo
+  WhatsApp corporativo), com nome do patrocinador, mensagem e recompensa.
+  `mensagensPendentes` inclui o desafio ativo.
+- **Aposta de soberania (online)**: `OnlineMatchV3` permite apostar soberania na
+  partida. `aplicarApostaSoberania()` (careerRemote) aplica: venceu = +aposta,
+  perdeu = -aposta, empate = 0 (devolve). Nunca arrisca mais que o saldo.
+- **Nomes dos botões no campo**: `Team.botoesNomes` (5 nomes) propagado de
+  `perfil.botoes_nomes` → `userTeam`/`meuTime` → `MatchView.drawDiscs`, que
+  desenha o nome do jogador (até 10 chars) no disco do lado do usuário
+  (home ou away conforme `userSide`). Goleiro não recebe rótulo.
+- **Bug "FB vs FB" (stats duplicadas)**: `teamByIdSync` agora consulta
+  `cachedTeamsSync` (populado por `getAllTeams()`/`loadTeamsFromDB()` na
+  montagem) antes do fallback local `TEAMS`. Assim times do torneio (IDs do
+  banco) resolvem corretamente em vez de cair todos em `TEAMS[0]`.
+- **Navegação de campeonatos** (`ChampionshipModule`): submenu
+  "Copa do Brasil | Brasileirão" + sub-seleção Série A/B/C (a "você" marca a
+  divisão do usuário). Stats (`StatsModule`) rotuladas pela divisão selecionada.
+- `exactOptionalPropertyTypes`: props opcionais precisam de `| undefined`
+  explícito (ex.: `botoesNomes?: string[] | undefined`).

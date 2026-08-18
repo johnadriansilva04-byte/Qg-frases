@@ -63,6 +63,33 @@ export type Headline = {
   rodada: number;
 };
 
+/**
+ * Desafio de patrocinador: mensagem em primeira pessoa no celular do
+ * treinador estipulando uma meta para a próxima partida. Ao atingir a meta,
+ * o treinador ganha soberania (recompensa). Cada desafio tem um tipo de meta.
+ */
+export type TipoMetaPatrocinador =
+  | "vencer"
+  | "vencer_margem"
+  | "gols_feitos"
+  | "nao_sofrer"
+  | "empatar_ou_vencer";
+
+export type DesafioPatrocinador = {
+  id: string;
+  patrocinador: string;
+  mensagem: string;
+  meta: TipoMetaPatrocinador;
+  /** Parâmetro numérico da meta (ex.: margem mínima de gols, qtd de gols). */
+  alvo?: number | undefined;
+  /** Soberania premiada ao concluir. */
+  recompensa: number;
+  /** Rodada em que o desafio foi proposto. */
+  rodada: number;
+  /** Indica se já foi concluído/contabilizado. */
+  concluido: boolean;
+};
+
 export type CareerState = {
   coach: Coach;
   dificuldadeAtual: Difficulty | null;
@@ -87,6 +114,8 @@ export type CareerState = {
   rodadasDesdeEventoNarrativo: number;
   // Número da temporada (carreira infinita enquanto houver soberania).
   temporada: number;
+  // Desafio de patrocinador ativo (mensagem no celular com meta → soberania).
+  desafioPatrocinador?: DesafioPatrocinador | null | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

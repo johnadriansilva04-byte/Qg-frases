@@ -40,14 +40,14 @@ function obterTimePerfil(perfil: {
   time_personalizado: string;
   abreviacao_time: string;
   cores: string[];
-  escudo_url?: string | null;
+  botoes_nomes?: string[] | null;
 }) {
   return {
     id: `custom-${perfil.user_id}`,
     nome: perfil.time_personalizado,
     abreviacao: perfil.abreviacao_time,
     cores: perfil.cores,
-    escudoUrl: perfil.escudo_url ?? null,
+    botoesNomes: perfil.botoes_nomes ?? undefined,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, LogIn, UserPlus, Trash2, Save, Shirt, Users, RotateCcw, Upload } from "lucide-react";
+import { ChevronLeft, LogIn, UserPlus, Trash2, Save, Shirt, Users, RotateCcw } from "lucide-react";
 import {
   cadastrar,
   cachePerfil,
@@ -8,7 +8,7 @@ import {
   limparCache,
   type Perfil,
 } from "../online/auth";
-import { atualizarPerfilClube, uploadEscudo } from "@/lib/botao/api";
+import { atualizarPerfilClube } from "@/lib/botao/api";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BOTOES_NOMES_DEFAULT,
@@ -57,8 +57,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
   const [botoes, setBotoes] = useState<[string, string, string, string, string]>(
     normalizarBotoesNomes(perfil?.botoes_nomes),
   );
-  const [escudoUrl, setEscudoUrl] = useState<string | null>(perfil?.escudo_url ?? null);
-  const [enviandoEscudo, setEnviandoEscudo] = useState(false);
 
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -92,7 +90,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
           const atualizado = await atualizarPerfilClube(p.user_id, {
             tatica,
             botoes: botoes,
-            escudo: escudoUrl,
           });
           if (atualizado) {
             const perfilFinal: Perfil = {
@@ -152,7 +149,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         cores,
         tatica,
         botoes: botoes,
-        escudo: escudoUrl,
       });
       if (!atualizado) throw new Error("Não foi possível salvar.");
       const perfilFinal: Perfil = {
@@ -164,7 +160,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         numero_jogador: perfil.numero_jogador,
         tatica: atualizado.tatica ?? tatica,
         botoes_nomes: atualizado.botoes_nomes ?? botoes,
-        escudo_url: atualizado.escudo_url ?? escudoUrl,
       };
       cachePerfil(perfilFinal);
       onPronto(perfilFinal);
@@ -172,34 +167,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
       setErro(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
       setSalvando(false);
-    }
-  };
-
-  // Upload do escudo: envia para o bucket Storage e guarda a URL pública.
-  const trocarEscudo = async (file: File | undefined) => {
-    if (!file || !perfil?.user_id) return;
-    if (file.size > 2_000_000) {
-      setErro("A imagem deve ter no máximo 2MB.");
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      setErro("Selecione um arquivo de imagem válido.");
-      return;
-    }
-    setErro(null);
-    setEnviandoEscudo(true);
-    try {
-      const url = await uploadEscudo(perfil.user_id, file);
-      // Atualiza a URL no banco imediatamente.
-      const atualizado = await atualizarPerfilClube(perfil.user_id, { escudo: url });
-      const novaUrl = atualizado?.escudo_url ?? url;
-      setEscudoUrl(novaUrl);
-      const perfilFinal: Perfil = { ...perfil, escudo_url: novaUrl };
-      cachePerfil(perfilFinal);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao enviar escudo.");
-    } finally {
-      setEnviandoEscudo(false);
     }
   };
 
@@ -356,36 +323,15 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
 
       {/* Resumo do treinador */}
       <div className="panel flex flex-wrap items-center gap-4">
-        <label
-          className="group relative size-16 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition hover:border-primary"
-          title="Trocar escudo"
-        >
-          {escudoUrl ? (
-            <img src={escudoUrl} alt="Escudo" className="size-full object-cover" />
-          ) : (
-            <span className="flex size-full items-center justify-center text-xs font-bold">
-              {abreviacao.slice(0, 3) || "MTI"}
-            </span>
-          )}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-            <Upload className="size-4 text-white" />
-          </span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={enviandoEscudo}
-            onChange={(e) => trocarEscudo(e.target.files?.[0])}
-          />
-        </label>
+        <div className="flex size-16 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+          <span className="text-xs font-bold">{abreviacao.slice(0, 3) || "MTI"}</span>
+        </div>
         <div className="min-w-0">
           <p className="font-display text-xl truncate">{time || "Meu Time"}</p>
           <p className="text-sm text-muted-foreground truncate">
             {nome || "Treinador"} · Nº {numero} · Soberania {perfil?.pontos_soberania ?? 0}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {enviandoEscudo ? "Enviando escudo..." : "Clique no escudo para trocar a foto"}
-          </p>
+          <p className="text-xs text-muted-foreground">Treinador</p>
         </div>
         <div className="ml-auto flex gap-1.5">
           {cores.map((c, i) => (

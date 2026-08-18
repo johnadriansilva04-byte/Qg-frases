@@ -35,13 +35,13 @@ type Props = {
   mesa: MesaFutebol;
   perfil: Perfil;
   userId: string;
-  /** Time do usuário logado (id, nome, abreviacao, cores, escudo). */
+  /** Time do usuário logado (id, nome, abreviacao, cores). */
   meuTime: {
     id: string;
     nome: string;
     abreviacao: string;
     cores: string[];
-    escudoUrl?: string | null;
+    botoesNomes?: string[] | undefined;
   };
   /** Chamado quando a partida termina (status=finalizado) ou ao sair. */
   onSair: () => void;
@@ -111,6 +111,7 @@ export function MesaOnlineMatch({
       meuTime.cores[0] ?? "#FF0000",
       meuTime.cores[1] ?? "#00FF00",
       75,
+      meuTime.botoesNomes,
     );
   }, [meuTime]);
 

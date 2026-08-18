@@ -102,6 +102,7 @@ import {
 } from "./career/careerStorage";
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
+import { gerarDesafioPatrocinador, cumpriuDesafio } from "./career/patrocinadorEngine";
 import { POINTS, type CareerState, type Choice, type Divisao, type Headline } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
@@ -202,6 +203,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         short: perfil.abreviacao_time,
         primary: perfil.cores[0],
         secondary: perfil.cores[1],
+        botoesNomes: perfil.botoes_nomes ?? undefined,
       };
     }
     const timeNome = localStorage.getItem("botao_online_time_personalizado") || "Meu Time";
@@ -209,11 +211,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const cores = JSON.parse(
       localStorage.getItem("botao_online_cores") || '["#FF0000", "#00FF00", "#0000FF"]',
     );
+    let botoesNomes: string[] | undefined;
+    try {
+      const raw = localStorage.getItem("botao_online_botoes_nomes");
+      if (raw) botoesNomes = JSON.parse(raw);
+    } catch {}
     return {
       nome: timeNome,
       short: abreviacao,
       primary: cores[0],
       secondary: cores[1],
+      botoesNomes,
     };
   }, [perfil]);
 
@@ -232,6 +240,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       customTeamData.primary,
       customTeamData.secondary,
       Math.max(40, Math.min(99, 75 + bonus - penal)),
+      customTeamData.botoesNomes,
     );
   }, [customTeamData, career?.bonusProximaPartida, career?.penaltiesProximaPartida]);
 
@@ -436,6 +445,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
     }
 
+    // Patrocinador: valida a meta da partida no modo carreira também.
+    if (career?.desafioPatrocinador) {
+      const rDesafio = aplicarDesafioPatrocinador(career, gf, ga, true);
+      persistCareer(rDesafio.estado);
+    }
+
     setToast(
       gf > ga ? "Vitória no amistoso!" : gf < ga ? "Derrota no amistoso." : "Empate no amistoso.",
     );
@@ -474,6 +489,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       temporada: c.temporada ?? 1,
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
+      // Patrocinador propõe a primeira meta do celular (desafio por partida).
+      desafioPatrocinador: gerarDesafioPatrocinador(0),
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
     persistCareer(novaCareer);
@@ -497,6 +514,37 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const nova: CareerState = { ...base, coach };
     persistCareer(nova);
     iniciarCampanha(nova);
+  };
+
+  /**
+   * Avalia o desafio de patrocinador pendente contra o resultado da partida.
+   * Se a meta for cumprida, soma a recompensa à soberania e gera um novo
+   * desafio (se houver próxima partida). Retorna o estado atualizado.
+   */
+  const aplicarDesafioPatrocinador = (
+    c: CareerState,
+    golsPro: number,
+    golsContra: number,
+    temProxima: boolean,
+  ): { estado: CareerState; ganhou: number } => {
+    const desafio = c.desafioPatrocinador;
+    if (!desafio || desafio.concluido) {
+      return { estado: c, ganhou: 0 };
+    }
+    if (cumpriuDesafio(desafio, golsPro, golsContra)) {
+      const recompensa = desafio.recompensa;
+      const novoDesafio = temProxima ? gerarDesafioPatrocinador(c.rodadaAtual) : null;
+      const estado: CareerState = {
+        ...c,
+        coach: { ...c.coach, soberania: c.coach.soberania + recompensa },
+        desafioPatrocinador: novoDesafio,
+      };
+      setToast(`Patrocinador satisfeito! +${recompensa} de soberania.`);
+      return { estado, ganhou: recompensa };
+    }
+    // Não cumpriu: marca como concluído e propõe novo desafio se houver próxima.
+    const novoDesafio = temProxima ? gerarDesafioPatrocinador(c.rodadaAtual) : null;
+    return { estado: { ...c, desafioPatrocinador: novoDesafio }, ganhou: 0 };
   };
 
   // Prepara o próximo evento de escolha/narrativa entre partidas (se houver).
@@ -628,6 +676,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
       suborno: undefined,
+      desafioPatrocinador: gerarDesafioPatrocinador(0),
       coach: {
         ...career.coach,
         soberania: novaSoberania,
@@ -1084,6 +1133,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         const proximoFix = nextUserFixture(t)!;
         novaCareer = preparaEscolha(novaCareer, proximoFix.stage);
       }
+      // Patrocinador: avalia a meta contra o resultado e propõe novo desafio
+      // se ainda houver partida por vir.
+      const temProxima = t.phase !== "fim" && !!nextUserFixture(t);
+      const rDesafio = aplicarDesafioPatrocinador(novaCareer, gf, ga, temProxima);
+      novaCareer = rDesafio.estado;
       persistCareer(novaCareer);
 
       // Fim de temporada (liga concluída): economia de Soberania decide se o
@@ -1248,14 +1302,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   }
 
   if (screen === "celular") {
-    // Inbox unificado do celular: suborno, narrativa dinâmica e decisões —
-    // todas em primeira pessoa (chat). Ordem de prioridade: suborno > narrativa
-    // > choice event. Ao resolver, segue para a partida automaticamente.
+    // Inbox unificado do celular: suborno, narrativa dinâmica, decisões e o
+    // desafio do patrocinador (meta ativa por partida) — tudo em primeira
+    // pessoa (chat). Ordem de prioridade: suborno > narrativa > choice event.
     const subornoAtivo = career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
     const narrativaAtiva = career?.narrativa?.cenaAtual ? cenaDaNarrativa(career.narrativa) : null;
     const eventoPendente = career?.eventoPendenteId
       ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
       : null;
+    const desafio = career?.desafioPatrocinador;
+    const nomeTreinador = career?.coach.apelido || career?.coach.nome;
 
     return (
       <Shell>
@@ -1265,6 +1321,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onTrophies={() => setScreen("trophies")}
             onHome={() => setScreen("menu")}
           />
+
+          {/* Cabeçalho do celular: treinador + campanha sincronizada */}
+          <div className="celular-header">
+            <div className="celular-avatar">📱</div>
+            <div>
+              <p className="font-display text-lg">{nomeTreinador ?? "Treinador"}</p>
+              <p className="text-xs text-muted-foreground">
+                {career ? `Temporada ${career.temporada} · ${career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}` : "Aguardando campanha"}
+              </p>
+            </div>
+            <button onClick={() => setScreen("hub")} className="celular-close">
+              Fechar
+            </button>
+          </div>
+
+          {/* Desafio de patrocinador: sempre visível como chat em 1ª pessoa */}
+          {desafio && !desafio.concluido && (
+            <div className="patrocinador-msg">
+              <div className="patrocinador-bubble">
+                <p className="patrocinador-nome">{desafio.patrocinador}</p>
+                <p className="patrocinador-texto">{desafio.mensagem}</p>
+                <p className="patrocinador-recompensa">
+                  Recompensa: +{desafio.recompensa} soberania
+                </p>
+              </div>
+            </div>
+          )}
+
           {subornoAtivo ? (
             <SubornoStory
               state={career!.suborno!}
@@ -1290,16 +1374,21 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               onChoose={aplicarEscolha}
               onBack={() => setScreen("hub")}
             />
-          ) : (
+          ) : !desafio || desafio.concluido ? (
             <div className="panel text-center py-12">
               <p className="font-display text-2xl">Sem mensagens</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Seu celular está em dia. Volte quando houver novidades do clube.
+                Tudo em dia por aqui. O próximo desafio de patrocinador chega
+                antes da próxima partida.
               </p>
               <button onClick={() => setScreen("hub")} className="btn-primary mt-4">
                 Voltar ao hub
               </button>
             </div>
+          ) : (
+            <button onClick={() => setScreen("hub")} className="btn-primary mt-4 w-full">
+              Voltar ao hub
+            </button>
           )}
         </div>
       </Shell>
@@ -1763,12 +1852,14 @@ function Hub({
   const temporada = career?.temporada ?? 1;
   const custoManutencao = CUSTO_MANUTENCAO[divisao];
 
-  // Contagem de mensagens não lidas no celular (narrativa + suborno + decisões).
+  // Contagem de mensagens não lidas no celular (narrativa + suborno + decisões +
+  // desafio de patrocinador). O desafio fica sempre acessível no celular.
+  const temDesafioPatrocinador = !!career?.desafioPatrocinador && !career.desafioPatrocinador.concluido;
   const mensagensPendentes =
     (career?.eventoPendenteId ? 1 : 0) +
     (career?.suborno?.nodeAtual ? 1 : 0) +
     (career?.narrativa?.cenaAtual ? 1 : 0);
-  const temCelular = mensagensPendentes > 0;
+  const temCelular = mensagensPendentes > 0 || temDesafioPatrocinador;
 
   const userPos =
     tour.phase === "grupos" && tour.groups.length > 0
@@ -1867,29 +1958,25 @@ function Hub({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* COLUNA ESQUERDA — ações e celular */}
         <div className="flex flex-col gap-3">
-          {/* Celular / mensagens em primeira pessoa */}
-          {temCelular ? (
-            <button onClick={onOpenCelular} className="celular-card">
-              <span className="celular-emoji">📱</span>
-              <div className="celular-info">
-                <span className="celular-title">Celular do Treinador</span>
-                <span className="celular-sub">
-                  {mensagensPendentes} mensagem{mensagensPendentes !== 1 ? "s" : ""} nova
-                  {mensagensPendentes !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <span className="celular-badge">{mensagensPendentes}</span>
-              <span className="celular-cta">Abrir</span>
-            </button>
-          ) : (
-            <div className="celular-card celular-card-idle">
-              <span className="celular-emoji">📱</span>
-              <div className="celular-info">
-                <span className="celular-title">Celular do Treinador</span>
-                <span className="celular-sub">Sem mensagens no momento</span>
-              </div>
+          {/* Celular / mensagens em primeira pessoa — sempre acessível
+              (patrocinador deixa uma meta ativa por partida). */}
+          <button onClick={onOpenCelular} className="celular-card">
+            <span className="celular-emoji">📱</span>
+            <div className="celular-info">
+              <span className="celular-title">Celular do Treinador</span>
+              <span className="celular-sub">
+                {mensagensPendentes > 0
+                  ? `${mensagensPendentes} mensagem${mensagensPendentes !== 1 ? "s" : ""} nova${mensagensPendentes !== 1 ? "s" : ""}`
+                  : temDesafioPatrocinador
+                    ? "Desafio de patrocinador ativo"
+                    : "Tudo em dia por aqui"}
+              </span>
             </div>
-          )}
+            {mensagensPendentes > 0 && (
+              <span className="celular-badge">{mensagensPendentes}</span>
+            )}
+            <span className="celular-cta">Abrir</span>
+          </button>
 
           {/* Notícias (resumo) */}
           {career && career.headlines.length > 0 && (

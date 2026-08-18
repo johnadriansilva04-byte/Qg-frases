@@ -40,7 +40,6 @@ export type UsuarioBotao = {
   empates: number;
   tatica?: string | null;
   botoes_nomes?: string[] | null;
-  escudo_url?: string | null;
 };
 
 export type Lobby = {
@@ -414,33 +413,11 @@ export type PerfilClubeInput = {
   cores?: string[];
   tatica?: string;
   botoes?: string[];
-  escudo?: string | null;
 };
 
 /**
- * Faz upload do escudo/brasão do clube para o bucket público `escudos` do
- * Supabase Storage. O caminho é isolado por usuário (auth.uid()) para que as
- * policies RLS permitam somente o dono gravar/excluir. Retorna a URL pública.
- */
-export async function uploadEscudo(userId: string, file: File): Promise<string> {
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
-  const caminho = `${userId}/escudo.${ext}`;
-  const { error } = await supabase.storage.from("escudos").upload(caminho, file, {
-    cacheControl: "3600",
-    upsert: true,
-    contentType: file.type || "image/png",
-  });
-  if (error) {
-    console.error("[API] Erro ao fazer upload do escudo:", error);
-    throw error;
-  }
-  const { data } = supabase.storage.from("escudos").getPublicUrl(caminho);
-  return data.publicUrl;
-}
-
-/**
  * Atualiza a personalização do clube do usuário (nome, time, cores, tática,
- * nomes dos botões e escudo) via RPC `atualizar_perfil_clube` (SECURITY DEFINER,
+ * nomes dos botões) via RPC `atualizar_perfil_clube` (SECURITY DEFINER,
  * valida auth.uid()). Retorna o perfil atualizado.
  */
 export async function atualizarPerfilClube(
@@ -455,7 +432,6 @@ export async function atualizarPerfilClube(
     p_cores: input.cores ?? null,
     p_tatica: input.tatica ?? null,
     p_botoes: input.botoes ?? null,
-    p_escudo: input.escudo ?? null,
   });
   if (error) {
     console.error("[API] Erro ao atualizar perfil do clube:", error);

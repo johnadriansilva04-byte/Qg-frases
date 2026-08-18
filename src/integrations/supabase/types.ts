@@ -77,7 +77,6 @@ export type Database = {
           updated_at: string;
           tatica: string | null;
           botoes_nomes: string[] | null;
-          escudo_url: string | null;
         };
         Insert: {
           id?: string;
@@ -102,7 +101,6 @@ export type Database = {
           updated_at?: string;
           tatica?: string | null;
           botoes_nomes?: string[] | null;
-          escudo_url?: string | null;
         };
         Update: {
           id?: string;
@@ -126,7 +124,6 @@ export type Database = {
           updated_at?: string;
           tatica?: string | null;
           botoes_nomes?: string[] | null;
-          escudo_url?: string | null;
         };
         Relationships: [];
       };
@@ -493,7 +490,6 @@ export type Database = {
           p_cores?: string[] | null;
           p_tatica?: string | null;
           p_botoes?: string[] | null;
-          p_escudo?: string | null;
         };
         Returns: {
           id: string;
@@ -518,7 +514,6 @@ export type Database = {
           empates: number;
           tatica: string | null;
           botoes_nomes: string[] | null;
-          escudo_url: string | null;
         };
       };
       reiniciar_mesa: {

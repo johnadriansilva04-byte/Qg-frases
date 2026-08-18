@@ -11,6 +11,8 @@ export type Team = {
   secondary: string;
   /** força base 60-90, usada pela IA e sorteios */
   power: number;
+  /** Nomes dos 5 botões do usuário (GK + 4 de linha), p/ exibir no campo. */
+  botoesNomes?: string[] | undefined;
 };
 
 // Times locais como fallback
@@ -51,10 +53,14 @@ export const TEAMS: Team[] = [
 
 // Cache de times do banco de dados
 let cachedTeams: Team[] | null = null;
+/** Cache síncrono dos times do banco, populado por loadTeamsFromDB().
+ * Permite que teamByIdSync resolva times do torneio (IDs do banco) em vez de
+ * cair para o fallback local — corrige exibições duplicadas (ex.: "FB vs FB"). */
+let cachedTeamsSync: Team[] = [];
 
 async function loadTeamsFromDB(): Promise<Team[]> {
   if (cachedTeams) return cachedTeams;
-  
+
   try {
     const timesDB = await buscarTodosTimes();
     cachedTeams = timesDB.map((t) => ({
@@ -66,11 +72,17 @@ async function loadTeamsFromDB(): Promise<Team[]> {
       secondary: t.cores[1] || '#ffffff',
       power: 75, // Poder padrão, pode ser ajustado no futuro
     }));
+    cachedTeamsSync = cachedTeams;
     return cachedTeams;
   } catch (error) {
     console.error('Erro ao carregar times do banco:', error);
     return TEAMS;
   }
+}
+
+/** Pré-carrega os times do banco no cache síncrono (chamar na inicialização). */
+export async function preloadTeams(): Promise<void> {
+  await loadTeamsFromDB();
 }
 
 export async function getAllTeams(): Promise<Team[]> {
@@ -83,6 +95,9 @@ export async function teamById(id: string): Promise<Team> {
 }
 
 export function teamByIdSync(id: string): Team {
+  // Cache do banco primeiro (IDs do torneio), depois fallback local.
+  const fromDb = cachedTeamsSync.find((t) => t.id === id);
+  if (fromDb) return fromDb;
   return TEAMS.find((t) => t.id === id) ?? TEAMS[0]!;
 }
 
@@ -92,7 +107,8 @@ export function createCustomTeam(
   short: string,
   primary: string,
   secondary: string,
-  power: number = 75
+  power: number = 75,
+  botoesNomes?: string[],
 ): Team {
-  return { id, name, short, city: "Personalizado", primary, secondary, power };
+  return { id, name, short, city: "Personalizado", primary, secondary, power, botoesNomes };
 }

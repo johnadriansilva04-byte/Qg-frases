@@ -221,7 +221,17 @@ export function MatchView({
       else ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
 
       drawField(ctx);
-      drawDiscs(ctx, discsRef.current, home.primary, home.secondary, away.primary, away.secondary);
+      drawDiscs(
+        ctx,
+        discsRef.current,
+        home.primary,
+        home.secondary,
+        away.primary,
+        away.secondary,
+        // Rótulos dos botões aparecem no lado do usuário (home ou away).
+        userSide === "home" ? home.botoesNomes : away.botoesNomes,
+        userSide,
+      );
       const aim = aimRef.current;
       if (aim) {
         const d = discsRef.current.find((x) => x.id === aim.discId);
@@ -837,6 +847,8 @@ function drawDiscs(
   hs: string,
   ap: string,
   as: string,
+  userNomes?: string[],
+  userSide: "home" | "away" = "home",
 ) {
   for (const d of discs) {
     ctx.save();
@@ -877,6 +889,21 @@ function drawDiscs(
         ctx.arc(d.x, d.y, d.r * 0.4, 0, Math.PI * 2);
         ctx.fillStyle = secondary;
         ctx.fill();
+      }
+      // Rótulo do botão (nome do jogador) para o lado do usuário.
+      if (d.side === userSide && !d.keeper) {
+        const idx = Number(d.id.replace(`${userSide}-`, "")) - 1;
+        const nome = userNomes?.[idx];
+        if (nome) {
+          ctx.font = "700 18px var(--font-display, system-ui)";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "rgba(0,0,0,0.75)";
+          ctx.strokeText(nome.slice(0, 10), d.x, d.y);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(nome.slice(0, 10), d.x, d.y);
+        }
       }
     }
     ctx.restore();

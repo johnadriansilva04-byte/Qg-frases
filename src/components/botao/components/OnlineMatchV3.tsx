@@ -11,6 +11,7 @@ import {
   type MesaFutebol,
 } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
+import { aplicarApostaSoberania } from "../career/careerRemote";
 
 type Screen = "lobby-list" | "jogo" | "resultado";
 
@@ -37,6 +38,9 @@ export function OnlineMatchV3({
   const [screen, setScreen] = useState<Screen>(
     () => (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list",
   );
+  // Aposta de soberania no modo online (opcional, 0 = não apostar).
+  const [apostaSoberania, setApostaSoberania] = useState<number>(0);
+  const soberaniaAtual = perfil?.pontos_soberania ?? 0;
 
   // Notificar estado de partida online
   useEffect(() => {
@@ -97,7 +101,7 @@ export function OnlineMatchV3({
       liga: "Personalizado",
       is_personalizado: true,
       usuario_id: perfil.user_id,
-      escudoUrl: perfil.escudo_url ?? null,
+      botoesNomes: perfil.botoes_nomes ?? undefined,
     };
   }, [perfil]);
 
@@ -160,7 +164,13 @@ export function OnlineMatchV3({
           setScreen("lobby-list");
           limparPersistencia();
         }}
-        onFinalizada={async (_r: ResultadoMesa) => {
+        onFinalizada={async (r: ResultadoMesa) => {
+          // Aplica aposta de soberania (se houver) antes de recarregar perfil.
+          if (apostaSoberania > 0) {
+            const venceu = r.vencedorId === userId;
+            await aplicarApostaSoberania(apostaSoberania, venceu, r.empate);
+            setApostaSoberania(0);
+          }
           // Recarrega o perfil para refletir soberania/ranking atualizados
           const novoPerfil = await recarregar();
           if (novoPerfil) aplicarPerfil(novoPerfil);
@@ -184,25 +194,17 @@ export function OnlineMatchV3({
         <h2 className="text-xl">Seu time</h2>
         {meuTime && (
           <div className="flex items-center gap-3 p-3 border rounded-lg">
-            {meuTime.escudoUrl ? (
-              <img
-                src={meuTime.escudoUrl}
-                alt="Escudo"
-                className="size-12 shrink-0 rounded-full border border-border object-cover"
-              />
-            ) : (
+            <span
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
+              style={{ background: meuTime.cores[0] }}
+            >
               <span
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
-                style={{ background: meuTime.cores[0] }}
+                className="flex h-8 w-8 items-center justify-center rounded-full"
+                style={{ background: meuTime.cores[1] }}
               >
-                <span
-                  className="flex h-8 w-8 items-center justify-center rounded-full"
-                  style={{ background: meuTime.cores[1] }}
-                >
-                  <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
-                </span>
+                <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
               </span>
-            )}
+            </span>
             <div>
               <p className="font-display text-lg">{meuTime.nome}</p>
               <p className="text-sm text-muted-foreground">
@@ -215,6 +217,46 @@ export function OnlineMatchV3({
 
       <section className="surface mb-6 space-y-4 p-5">
         <h2 className="text-xl">Criar mesa</h2>
+        <p className="text-sm text-muted-foreground">
+          Soberania disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm font-medium">Apostar soberania:</label>
+          <input
+            type="number"
+            min={0}
+            max={soberaniaAtual}
+            value={apostaSoberania}
+            onChange={(e) =>
+              setApostaSoberania(
+                Math.max(0, Math.min(soberaniaAtual, Number(e.target.value) || 0)),
+              )
+            }
+            className="w-28 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+          />
+          <div className="flex gap-1">
+            {[5, 10, 25].map((v) => (
+              <button
+                key={v}
+                onClick={() => setApostaSoberania(Math.min(soberaniaAtual, v))}
+                className="btn-ghost px-2 py-1 text-xs"
+              >
+                {v}
+              </button>
+            ))}
+            <button
+              onClick={() => setApostaSoberania(0)}
+              className="btn-ghost px-2 py-1 text-xs"
+            >
+              Limpar
+            </button>
+          </div>
+          {apostaSoberania > 0 && (
+            <span className="text-xs text-emerald-400">
+              Vence: +{apostaSoberania} · Perde: -{Math.min(apostaSoberania, soberaniaAtual)}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => novaMesa.mutate()}
           disabled={novaMesa.isPending || !perfil}

@@ -989,39 +989,7 @@ ALTER TABLE public.botao_usuarios ADD CONSTRAINT check_botoes_nomes CHECK (
   AND jsonb_typeof(botoes_nomes) = 'array'
 );
 
--- URL do escudo/brasão do clube (foto enviada pelo usuário, salva no Storage).
-ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS escudo_url TEXT;
-
--- ============================================================================
--- STORAGE BUCKET: escudos (fotos/brasões dos clubes dos usuários)
--- ============================================================================
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('escudos', 'escudos', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Política: usuário autenticado só pode gravar/ler/excluir no seu próprio caminho
-DROP POLICY IF EXISTS "escudos_upload_dono" ON storage.objects;
-CREATE POLICY "escudos_upload_dono" ON storage.objects
-  FOR INSERT TO authenticated
-  WITH CHECK (bucket_id = 'escudos' AND (storage.foldername(name))[1] = auth.uid()::text);
-
-DROP POLICY IF EXISTS "escudos_read_public" ON storage.objects;
-CREATE POLICY "escudos_read_public" ON storage.objects
-  FOR SELECT TO anon, authenticated
-  USING (bucket_id = 'escudos');
-
-DROP POLICY IF EXISTS "escudos_update_dono" ON storage.objects;
-CREATE POLICY "escudos_update_dono" ON storage.objects
-  FOR UPDATE TO authenticated
-  USING (bucket_id = 'escudos' AND (storage.foldername(name))[1] = auth.uid()::text)
-  WITH CHECK (bucket_id = 'escudos' AND (storage.foldername(name))[1] = auth.uid()::text);
-
-DROP POLICY IF EXISTS "escudos_delete_dono" ON storage.objects;
-CREATE POLICY "escudos_delete_dono" ON storage.objects
-  FOR DELETE TO authenticated
-  USING (bucket_id = 'escudos' AND (storage.foldername(name))[1] = auth.uid()::text);
-
--- Função para atualizar a personalização do clube (nome/time/cores/tática/botões/escudo).
+-- Função para atualizar a personalização do clube (nome/time/cores/tática/botões).
 -- Usuário só pode editar o próprio perfil (auth.uid() = p_uid).
 CREATE OR REPLACE FUNCTION public.atualizar_perfil_clube(
   p_uid         UUID,
@@ -1030,8 +998,7 @@ CREATE OR REPLACE FUNCTION public.atualizar_perfil_clube(
   p_abreviacao  TEXT DEFAULT NULL,
   p_cores       TEXT[] DEFAULT NULL,
   p_tatica      TEXT DEFAULT NULL,
-  p_botoes      JSONB DEFAULT NULL,
-  p_escudo      TEXT DEFAULT NULL
+  p_botoes      JSONB DEFAULT NULL
 ) RETURNS public.botao_usuarios
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_row public.botao_usuarios;
@@ -1047,7 +1014,6 @@ BEGIN
     cores             = COALESCE(p_cores, cores),
     tatica            = COALESCE(p_tatica, tatica),
     botoes_nomes      = COALESCE(p_botoes, botoes_nomes),
-    escudo_url        = COALESCE(p_escudo, escudo_url),
     updated_at        = now()
   WHERE user_id = p_uid
   RETURNING * INTO v_row;
@@ -1055,7 +1021,7 @@ BEGIN
   RETURN v_row;
 END; $$;
 
-GRANT EXECUTE ON FUNCTION public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB) TO authenticated;
 
 -- Tabela de manchetes (jornal do torneio)
 CREATE TABLE IF NOT EXISTS public.botao_manchetes (

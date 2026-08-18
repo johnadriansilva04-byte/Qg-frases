@@ -496,6 +496,77 @@ button.celular-card:hover {
   color: color-mix(in oklab, var(--gold) 80%, white);
 }
 
+/* ---- Cabeçalho do celular (chat com o treinador) ---- */
+.celular-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: calc(var(--radius) + 6px);
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+  background:
+    linear-gradient(120deg, color-mix(in oklab, var(--gold) 10%, transparent), transparent 70%),
+    var(--glass-card);
+  margin-bottom: 0.9rem;
+}
+.celular-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  font-size: 1.3rem;
+  background: color-mix(in oklab, var(--gold) 16%, transparent);
+  border: 1px solid color-mix(in oklab, var(--gold) 40%, transparent);
+}
+.celular-close {
+  margin-left: auto;
+  font-family: var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--card) 60%, transparent);
+}
+
+/* ---- Mensagem do patrocinador (chat em 1ª pessoa) ---- */
+.patrocinador-msg {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 0.9rem;
+}
+.patrocinador-bubble {
+  max-width: 85%;
+  padding: 0.8rem 1rem;
+  border-radius: 14px 14px 14px 4px;
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--gold) 14%, transparent), transparent 70%),
+    var(--glass-card);
+  border: 1px solid color-mix(in oklab, var(--gold) 35%, transparent);
+  box-shadow: 0 14px 34px -22px oklch(0 0 0 / 0.7);
+}
+.patrocinador-nome {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+  color: color-mix(in oklab, var(--gold) 85%, white);
+  margin-bottom: 0.3rem;
+}
+.patrocinador-texto {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--foreground);
+}
+.patrocinador-recompensa {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: oklch(0.7 0.18 145);
+}
+
 /* ---- Abas de competição (Copa do Brasil | Brasileirão) ---- */
 .comp-tab {
   display: inline-flex;
