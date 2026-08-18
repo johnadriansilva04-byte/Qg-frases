@@ -1329,24 +1329,31 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "career-menu") {
     return (
       <Shell>
-        <CareerMenu
-          career={career}
-          onLoadCareer={() => {
-            if (career) {
-              setScreen("hub");
-            }
-          }}
-          onNewCareer={() => {
-            if (!career?.coach.nome) {
-              setScreen("coach-setup");
-            } else {
-              setScreen("tournament-setup");
-            }
-          }}
-          onSaveCampaign={handleSaveCampaign}
-          onDeleteCareer={handleDeleteCampaign}
-          onBack={() => setScreen("menu")}
-        />
+        <div className="mx-auto w-full max-w-5xl px-4 pb-16">
+          <Header
+            progress={progress}
+            onTrophies={() => setScreen("trophies")}
+            onHome={() => setScreen("menu")}
+          />
+          <CareerMenu
+            career={career}
+            onLoadCareer={() => {
+              if (career) {
+                setScreen("hub");
+              }
+            }}
+            onNewCareer={() => {
+              if (!career?.coach.nome) {
+                setScreen("coach-setup");
+              } else {
+                setScreen("tournament-setup");
+              }
+            }}
+            onSaveCampaign={handleSaveCampaign}
+            onDeleteCareer={handleDeleteCampaign}
+            onBack={() => setScreen("menu")}
+          />
+        </div>
       </Shell>
     );
   }
@@ -1556,7 +1563,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onFriendly={() => setScreen("friendly-setup")}
             onOnline={() => setScreen("online")}
             onOnlineChampionship={() => setScreen("online-championship")}
-            onTournament={() => setScreen("tournament-setup")}
+            onCareerMenu={() => setScreen("career-menu")}
             onTrophies={() => setScreen("trophies")}
             onProfile={() => setScreen("profile")}
             hasTour={!!tour && tour.phase !== "fim"}
@@ -1659,7 +1666,7 @@ function Menu({
   onFriendly,
   onOnline,
   onOnlineChampionship,
-  onTournament,
+  onCareerMenu,
   onTrophies,
   onProfile,
   hasTour,
@@ -1671,7 +1678,7 @@ function Menu({
   onFriendly: () => void;
   onOnline: () => void;
   onOnlineChampionship: () => void;
-  onTournament: () => void;
+  onCareerMenu: () => void;
   onTrophies: () => void;
   onProfile: () => void;
   hasTour: boolean;
@@ -1714,7 +1721,7 @@ function Menu({
           icon={<Medal className="size-5" />}
           title="Modo Carreira"
           desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos."
-          onClick={() => setScreen("career-menu")}
+          onClick={onCareerMenu}
           accent="fuchsia"
         />
         <MenuCard
