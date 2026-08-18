@@ -86,6 +86,7 @@ import {
 } from "./career/narrativeEngine";
 import { NarrativeModal } from "./career/NarrativeModal";
 import { CelularConversas } from "./career/CelularConversas";
+import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
 import {
   SUBORNO_INICIAL,
@@ -1325,6 +1326,31 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
+  if (screen === "career-menu") {
+    return (
+      <Shell>
+        <CareerMenu
+          career={career}
+          onLoadCareer={() => {
+            if (career) {
+              setScreen("hub");
+            }
+          }}
+          onNewCareer={() => {
+            if (!career?.coach.nome) {
+              setScreen("coach-setup");
+            } else {
+              setScreen("tournament-setup");
+            }
+          }}
+          onSaveCampaign={handleSaveCampaign}
+          onDeleteCareer={handleDeleteCampaign}
+          onBack={() => setScreen("menu")}
+        />
+      </Shell>
+    );
+  }
+
   if (screen === "coach-setup") {
     return (
       <Shell>
@@ -1688,7 +1714,7 @@ function Menu({
           icon={<Medal className="size-5" />}
           title="Modo Carreira"
           desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos."
-          onClick={onTournament}
+          onClick={() => setScreen("career-menu")}
           accent="fuchsia"
         />
         <MenuCard
@@ -1698,33 +1724,6 @@ function Menu({
           onClick={onTrophies}
           accent="gold"
         />
-        {hasTour && (
-          <MenuCard
-            icon={<ChevronRight className="size-5" />}
-            title="Continuar campanha"
-            desc="Voltar para o torneio em andamento."
-            onClick={onResume}
-            accent="emerald"
-          />
-        )}
-        {hasTour && (
-          <MenuCard
-            icon={<Shuffle className="size-5" />}
-            title="Salvar campanha"
-            desc="Salva o progresso atual da campanha no servidor."
-            onClick={onSaveCampaign}
-            accent="sky"
-          />
-        )}
-        {hasTour && (
-          <MenuCard
-            icon={<Trash2 className="size-5 text-destructive" />}
-            title="Excluir campanha"
-            desc="Apaga todo o progresso da campanha atual. Não pode desfazer."
-            onClick={onDeleteCampaign}
-            destructive
-          />
-        )}
       </div>
       <LeaderboardTreinadores compact />
     </div>
