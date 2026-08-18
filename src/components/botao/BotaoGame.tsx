@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy,
   Swords,
@@ -205,12 +205,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
   }, []);
 
-  // Monitorar login automático e mudar para menu se já estiver logado
+  // Login automático: se o navegador já tem sessão conhecida (perfil pronto),
+  // leva direto ao destino certo — sem passar pela tela de login. Se há uma
+  // carreira ativa (torneio em andamento), abre o lobby (hub); senão, menu.
+  // Roda uma única vez para não sobrescrever a navegação do usuário. Usuários
+  // sem sessão permanecem no menu (jogável offline) — não força a tela de login.
+  const autoLoginDone = useRef(false);
   useEffect(() => {
-    if (!carregando && perfil && screen === "auth") {
-      setScreen("menu");
+    if (autoLoginDone.current) return;
+    if (carregando) return;
+    autoLoginDone.current = true;
+    if (perfil) {
+      // Logado: se há campanha em andamento, vai ao lobby; senão, menu.
+      const carreiraAtiva = !!tour && tour.phase !== "fim" && !!career?.coach.nome;
+      setScreen(carreiraAtiva ? "hub" : "menu");
     }
-  }, [perfil, carregando, screen]);
+    // Sem sessão: mantém o menu inicial (jogo offline acessível).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregando, perfil]);
 
   // Inicializa a IA central (detecção de hardware + pré-carga do WebLLM se
   // potente). Não bloqueia a UI — roda em background. Zero crash: se falhar,
@@ -700,22 +712,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const playNext = () => {
     if (!tour || !career) return;
-    // Decisões pendentes vão ao celular (chat em 1ª pessoa). Ordem:
-    // suborno -> narrativa -> choice event.
-    if (career.suborno?.nodeAtual) {
-      setScreen("celular");
-      return;
-    }
-    if (career.narrativa?.cenaAtual) {
-      setScreen("celular");
-      return;
-    }
-    if (career.eventoPendenteId) {
-      setScreen("celular");
-      return;
-    }
     // Sanção de W.O. pendente: a partida sequer é disputada — registra derrota
     // por W.O. automaticamente (1x0 a favor do adversário) e segue o campeonato.
+    // (Mensagens do celular — suborno/narrativa/evento — NÃO bloqueiam a entrada
+    //  em campo: o jogador as resolve no módulo Celular, independente da partida.)
     if (career.woProximaPartida) {
       aplicarWO();
       return;
@@ -978,8 +978,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     else if (choice.desfalqueBotao) setToast(`Próxima partida: desfalque de ${choice.desfalqueBotao} botão(ões).`);
     else if (choice.perdaPontos) setToast(`Punição: -${choice.perdaPontos} pts na tabela.`);
 
-    // Segue para o hub (não inicia o jogo automaticamente)
-    setScreen("hub");
+    // Volta à lista de mensagens do celular (não inicia o jogo automaticamente
+    // nem vai ao hub). O jogador decide quando entrar em campo / voltar ao lobby.
+    setScreen("celular");
   };
 
   // Handlers para o sistema de conversas do celular
@@ -1665,8 +1666,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               state={career!.suborno!}
               onAvancar={aplicarSuborno}
               onFechar={() => {
+                // Finalizado: volta à lista de mensagens do celular (não entra
+                // no jogo automaticamente). Em andamento: sai do celular p/ o
+                // hub (a mensagem prioritária continua acessível no card).
                 if (!career?.suborno?.nodeAtual) {
-                  playNext();
+                  setScreen("celular");
                 } else {
                   setScreen("hub");
                 }
@@ -1729,9 +1733,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           state={career.suborno}
           onAvancar={aplicarSuborno}
           onFechar={() => {
-            // Se o suborno foi finalizado (nodeAtual é null), vai para a partida
+            // Finalizado: volta ao celular (lista de mensagens). Em andamento:
+            // sai para o hub. Nunca entra no jogo automaticamente.
             if (!career.suborno?.nodeAtual) {
-              playNext();
+              setScreen("celular");
             } else {
               setScreen("hub");
             }

@@ -20,6 +20,9 @@ export function CelularConversas({
 }: Props) {
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
   const [textoInput, setTextoInput] = useState("");
+  // IDs de conversas já abertas nesta sessão — limpa o indicador de "não lida"
+  // ao abrir, evitando um ponto verde travado que nunca some.
+  const [lidas, setLidas] = useState<Set<string>>(new Set());
 
   // Conversa virtual do patrocinador (desafio ativo), quando houver. É montada
   // a partir do estado real — nunca gera mensagem automática sem evento.
@@ -50,6 +53,16 @@ export function CelularConversas({
     : conversasValidas;
 
   const conversaAtiva = todasConversas.find((c) => c.id === conversaSelecionada) ?? null;
+
+  const abrirConversa = (id: string) => {
+    setConversaSelecionada(id);
+    setLidas((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
 
   const handleEnviar = () => {
     if (!textoInput.trim() || !conversaSelecionada || conversaSelecionada === "conv-patrocinador")
@@ -173,7 +186,7 @@ export function CelularConversas({
                 {todasConversas.map((conv) => (
                   <button
                     key={conv.id}
-                    onClick={() => setConversaSelecionada(conv.id)}
+                    onClick={() => abrirConversa(conv.id)}
                     className="w-full text-left p-3 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
                   >
                     <div className="flex items-center gap-3">
@@ -181,7 +194,7 @@ export function CelularConversas({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-bold text-slate-100">{conv.nome}</p>
-                          {conv.naoLida && (
+                          {conv.naoLida && !lidas.has(conv.id) && (
                             <span className="w-2 h-2 rounded-full bg-green-400" />
                           )}
                         </div>
