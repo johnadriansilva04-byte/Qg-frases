@@ -108,7 +108,7 @@ function computeSovereigntyDelta(golsPro: number, golsContra: number, ultimaEsco
   let delta = 0;
   let moralDelta = 0;
   if (golsPro > golsContra) { delta = 3; moralDelta = 4; }
-  else if (golsPro < golsContra) { delta = -3; moralDelta = -6; }
+  else if (golsPro < golsContra) { delta = 0; moralDelta = -6; }
   else { delta = 1; moralDelta = -1; }
   if (ultimaEscolha === "goleada") {
     if (golsPro - golsContra >= 2) delta += 5;
@@ -183,11 +183,13 @@ export async function aplicarFimCampanhaRemoto(
     const uid = sess?.user?.id;
     if (!uid) return null;
 
-    const bonusPos = { campeao: 20, vice: 15, terceiro: 10, quarto: 5, fora: 0 }[posicao];
-    const bonusTit = posicao === "campeao"
-      ? ({ amador: 100, profissional: 250, lenda: 500 }[dificuldade])
+    // Campeão ganha entre +100 e +200 de Soberania (base + bônus por dificuldade).
+    const bonusPos =
+      posicao === "campeao" ? 100 : posicao === "vice" ? 15 : posicao === "terceiro" ? 10 : posicao === "quarto" ? 5 : 0;
+    const bonusDif = posicao === "campeao"
+      ? (dificuldade === "lenda" ? 100 : dificuldade === "profissional" ? 50 : 0)
       : 0;
-    const totalBonus = bonusPos + bonusTit;
+    const totalBonus = bonusPos + bonusDif;
 
     const { data: cur } = await (supabase as any)
       .from("botao_usuarios")

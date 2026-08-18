@@ -1,22 +1,59 @@
 import { useState } from "react";
 import { Smartphone, ChevronLeft, Trash2, Send, MessageSquare } from "lucide-react";
-import type { ConversaCelular } from "./types";
+import type { ConversaCelular, DesafioPatrocinador } from "./types";
 
 type Props = {
   conversas: ConversaCelular[];
+  /** Desafio de patrocinador ativo: vira uma conversa "virtual" no topo. */
+  desafioPatrocinador?: DesafioPatrocinador | null;
   onEnviarMensagem: (conversaId: string, texto: string) => void;
   onExcluirConversa: (conversaId: string) => void;
   onVoltar: () => void;
 };
 
-export function CelularConversas({ conversas, onEnviarMensagem, onExcluirConversa, onVoltar }: Props) {
+export function CelularConversas({
+  conversas,
+  desafioPatrocinador,
+  onEnviarMensagem,
+  onExcluirConversa,
+  onVoltar,
+}: Props) {
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
   const [textoInput, setTextoInput] = useState("");
 
-  const conversaAtiva = conversas.find((c) => c.id === conversaSelecionada);
+  // Conversa virtual do patrocinador (desafio ativo), quando houver. É montada
+  // a partir do estado real — nunca gera mensagem automática sem evento.
+  const convPatrocinador: ConversaCelular | null = desafioPatrocinador && !desafioPatrocinador.concluido
+    ? {
+        id: "conv-patrocinador",
+        tipo: "patrocinador",
+        nome: desafioPatrocinador.patrocinador,
+        avatar: "💰",
+        cargo: "Patrocinador",
+        mensagens: [
+          {
+            id: "pat-msg",
+            texto: `${desafioPatrocinador.mensagem}\n\nRecompensa: +${desafioPatrocinador.recompensa} de soberania.`,
+            remetente: "outro",
+            timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          },
+        ],
+        naoLida: true,
+      }
+    : null;
+
+  // Filtra conversas malformadas (sem mensagens) que poderiam quebrar a UI ao
+  // clicar — só exibe conversas válidas com ao menos 1 mensagem.
+  const conversasValidas = conversas.filter((c) => c && c.mensagens && c.mensagens.length > 0);
+  const todasConversas = convPatrocinador
+    ? [convPatrocinador, ...conversasValidas]
+    : conversasValidas;
+
+  const conversaAtiva = todasConversas.find((c) => c.id === conversaSelecionada) ?? null;
 
   const handleEnviar = () => {
-    if (!textoInput.trim() || !conversaSelecionada) return;
+    if (!textoInput.trim() || !conversaSelecionada || conversaSelecionada === "conv-patrocinador")
+      return;
     onEnviarMensagem(conversaSelecionada, textoInput);
     setTextoInput("");
   };
@@ -38,13 +75,18 @@ export function CelularConversas({ conversas, onEnviarMensagem, onExcluirConvers
                 <p className="truncate text-sm font-bold text-white">{conversaAtiva.nome}</p>
                 <p className="truncate text-[10px] text-amber-300">{conversaAtiva.cargo}</p>
               </div>
-              <button 
-                onClick={() => onExcluirConversa(conversaAtiva.id)}
-                className="text-slate-400 hover:text-red-400 transition"
-                aria-label="Excluir conversa"
-              >
-                <Trash2 className="size-4" />
-              </button>
+              {conversaAtiva.id !== "conv-patrocinador" && (
+                <button
+                  onClick={() => {
+                    onExcluirConversa(conversaAtiva.id);
+                    setConversaSelecionada(null);
+                  }}
+                  className="text-slate-400 hover:text-red-400 transition"
+                  aria-label="Excluir conversa"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
             </div>
 
             {/* Mensagens */}
@@ -64,24 +106,32 @@ export function CelularConversas({ conversas, onEnviarMensagem, onExcluirConvers
               ))}
             </div>
 
-            {/* Input de mensagem */}
-            <div className="phone-chat-input">
-              <input
-                type="text"
-                value={textoInput}
-                onChange={(e) => setTextoInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleEnviar()}
-                placeholder="Digite sua mensagem..."
-                className="phone-input"
-              />
-              <button 
-                onClick={handleEnviar}
-                disabled={!textoInput.trim()}
-                className="phone-send"
-              >
-                <Send className="size-4" />
-              </button>
-            </div>
+            {/* Input de mensagem (apenas para conversas do usuário, não a virtual do patrocinador) */}
+            {conversaAtiva.id !== "conv-patrocinador" ? (
+              <div className="phone-chat-input">
+                <input
+                  type="text"
+                  value={textoInput}
+                  onChange={(e) => setTextoInput(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleEnviar()}
+                  placeholder="Digite sua mensagem..."
+                  className="phone-input"
+                />
+                <button
+                  onClick={handleEnviar}
+                  disabled={!textoInput.trim()}
+                  className="phone-send"
+                >
+                  <Send className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="phone-chat-input">
+                <button onClick={onVoltar} className="btn-ghost w-full text-xs">
+                  Entendido — voltar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -101,22 +151,26 @@ export function CelularConversas({ conversas, onEnviarMensagem, onExcluirConvers
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold text-white">Mensagens</p>
-              <p className="truncate text-[10px] text-slate-400">{conversas.length} conversas</p>
+              <p className="truncate text-[10px] text-slate-400">
+                {todasConversas.length} conversa{todasConversas.length !== 1 ? "s" : ""}
+              </p>
             </div>
             <Smartphone className="size-4 text-slate-400" />
           </div>
 
           {/* Lista de conversas */}
           <div className="phone-chat-body">
-            {conversas.length === 0 ? (
+            {todasConversas.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="size-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-400">Nenhuma conversa</p>
-                <p className="text-xs text-slate-500 mt-1">As mensagens aparecerão aqui</p>
+                <p className="text-sm text-slate-400">Celular limpo</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  As notificações chegam sozinhas conforme sua carreira avança.
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {conversas.map((conv) => (
+                {todasConversas.map((conv) => (
                   <button
                     key={conv.id}
                     onClick={() => setConversaSelecionada(conv.id)}
@@ -132,11 +186,9 @@ export function CelularConversas({ conversas, onEnviarMensagem, onExcluirConvers
                           )}
                         </div>
                         <p className="text-xs text-slate-400 truncate">{conv.cargo}</p>
-                        {conv.mensagens.length > 0 && (
-                          <p className="text-xs text-slate-500 truncate mt-1">
-                            {conv.mensagens[conv.mensagens.length - 1]?.texto}
-                          </p>
-                        )}
+                        <p className="text-xs text-slate-500 truncate mt-1">
+                          {conv.mensagens[conv.mensagens.length - 1]?.texto}
+                        </p>
                       </div>
                     </div>
                   </button>

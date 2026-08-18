@@ -1923,14 +1923,71 @@ END; $$;
 
 COMMIT;
 
-GRANT EXECUTE ON FUNCTION public.criar_campeonato_online(TEXT, INTEGER)                         TO authenticated;
-GRANT EXECUTE ON FUNCTION public.entrar_campeonato_online(TEXT)                                  TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sair_campeonato_online(TEXT)                                    TO authenticated;
-GRANT EXECUTE ON FUNCTION public.iniciar_campeonato_online(TEXT)                                 TO authenticated;
-GRANT EXECUTE ON FUNCTION public.vincular_mesa_campeonato(BIGINT, INTEGER, TEXT)                TO authenticated;
-GRANT EXECUTE ON FUNCTION public.registrar_resultado_campeonato(BIGINT, TEXT, INTEGER, INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION public._gerar_confrontos_campeonato(UUID[])                           TO service_role;
+-- ===========================================================================
+-- BANCO DE FRASES DA IA (templates procedurais — fallback on-device)
+-- ===========================================================================
+-- Quando o aparelho do jogador não roda WebLLM (celular fraco), o AIService
+-- cai neste banco de frases no Supabase para montar textos procedurais com
+-- variáveis reais do jogo (nomes de times, placares, treinador). Custo ZERO
+-- de API e garante que o jogo rode liso em qualquer aparelho.
+CREATE TABLE IF NOT EXISTS public.botao_frases_ia (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Tipo de prompt: a "voz" do jogo reaproveitada em vários contextos.
+  prompt_type TEXT NOT NULL CHECK (prompt_type IN ('comentarista','coletiva','medico','redes_sociais','noticia')),
+  -- Categoria livre dentro do prompt_type (ex.: 'vitoria', 'derrota', 'goleada').
+  categoria TEXT NOT NULL DEFAULT 'geral',
+  -- Texto com placeholders {T}, {coach}, {W}, {L}, {gH}, {gA}, {diff}, etc.
+  template_text TEXT NOT NULL,
+  ativo BOOLEAN NOT NULL DEFAULT true,
+  ordem INTEGER NOT NULL DEFAULT 0
+);
+
+-- Unicidade por (prompt_type, categoria, ordem) para permitir seed idempotente
+-- (ON CONFLICT DO NOTHING evita duplicar frases ao re-rodar a migração).
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_botao_frases_ia_seed
+  ON public.botao_frases_ia(prompt_type, categoria, ordem);
+
+CREATE INDEX IF NOT EXISTS idx_botao_frases_ia_tipo ON public.botao_frases_ia(prompt_type, categoria, ativo);
+
+GRANT SELECT ON public.botao_frases_ia TO authenticated;
+GRANT SELECT ON public.botao_frases_ia TO anon;
+GRANT ALL ON public.botao_frases_ia TO service_role;
+
+ALTER TABLE public.botao_frases_ia ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "frases_ia_read_all" ON public.botao_frases_ia;
+CREATE POLICY "frases_ia_read_all" ON public.botao_frases_ia
+  FOR SELECT TO anon, authenticated USING (ativo = true);
 
 COMMIT;
+
+-- Seed inicial de frases (idempotente: ON CONFLICT DO NOTHING na unicidade).
+INSERT INTO public.botao_frases_ia (prompt_type, categoria, template_text, ordem) VALUES
+-- COMENTARISTA sarcástica (Galvão Bueno debochado)
+('comentarista', 'vitoria',     'E OLHE O FOGUETE! {T} sai de campo encantando a galera, {coach} fazendo pose de gênio no banco!', 1),
+('comentarista', 'vitoria',     'HÉEEE... {coach} acerta a tática e o {T} passeia! Será genética ou foi sorte? Você decide!', 2),
+('comentarista', 'derrota',     'GENTEEE, que vexame! {T} leva de {gA} e {coach} faz cara de quem caiu da chaleira. Coitado!', 3),
+('comentarista', 'derrota',     'O {T} fez o quê? Perdeu de {gA}? {coach} já deve estar arrumando as malas, né não?', 4),
+('comentarista', 'goleada',     'DESTRUIÇÃO TOTAL! {W} goleia e o {L} some do mapa. Que noite esquecível pra {coachL}!', 5),
+('comentarista', 'empate',      'EMPATOU! {coach} sai de campo com aquela cara de quem não entendeu se é bom ou ruim. Patético!', 6),
+('comentarista', 'suborno',     'Olha o detalhe: dizem que rolou envelope no vestiário do {T}. Coincidência? Eu duvido!', 7),
+('comentarista', 'crise',       'Crise financeira no {T}? Se {coach} não vencer logo, a diretoria vai vender até o botão goleador!', 8),
+-- COLETIVA pós-jogo (imprensa ácida)
+('coletiva', 'vitoria',         '— {coach}, essa goleada de {gH} a {gA} foi planejada ou o adversário entregou de bandeja?', 1),
+('coletiva', 'derrota',         '— {coach}, o {T} foi humilhado hoje. O senhor continua afirmando que o time tá pronto pra grande coisa?', 2),
+('coletiva', 'empate',          '— {coach}, empate em casa contra o lanterna. Como o senhor explica isso pro torcedor que paga seu salário?', 3),
+-- MÉDICO irônico
+('medico', 'lesao',             '— Treinador, aqui é o Dr. Maurício. Seu craque reclamou de cãibra. Pode ser lesão, pode ser preguiça. Pode escalar?', 1),
+('medico', 'preparo',           '— O departamento médico alerta: o elenco tá em risco de lesão muscular. Dizem que treino é coisa de amador, né {coach}?', 2),
+-- REDES SOCIAIS (torcedores)
+('redes_sociais', 'vitoria',    '@TorcedorFiel: {coach} é o REI! {T} é CAMPEÃO! Quem duvidou peça desculpa!', 1),
+('redes_sociais', 'derrota',    '@DesesperadoFC: {coach} FORA! Que vergonha alheia perder pro {L} em casa!', 2),
+('redes_sociais', 'goleada',    '@BotaoEC: {W} {gH} x {gA} {L}! QUEMassacre! Futebol de botão não pra frangote!', 3),
+('redes_sociais', 'polemica',   '@BastidorFC: ouviram? Envelope rolando no {T}. Tá tudo comprado, eu hein!', 4),
+-- NOTICIA (portal de bastidores)
+('noticia', 'escandalo',        'Vazou! Bastidores do {T} em ebulição após reunião secreta da diretoria com empresário', 1),
+('noticia', 'suborno',          'Imprensa apura: esquema de propina ronda o {T} e {coach} é citado nos bastidores', 2),
+('noticia', 'crise',            'Crise no {T}: salário atrasado e torcida cobra cabeça de {coach}', 3)
+ON CONFLICT (prompt_type, categoria, ordem) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';

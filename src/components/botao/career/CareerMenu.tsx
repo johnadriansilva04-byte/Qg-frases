@@ -1,11 +1,11 @@
-import { ChevronRight, Play, Save, Trash2, ArrowLeft } from "lucide-react";
+import { Play, Save, Trash2, ArrowLeft, Plus } from "lucide-react";
 import type { CareerState } from "./types";
 
 type Props = {
   career: CareerState | null;
   onLoadCareer: () => void;
   onNewCareer: () => void;
-  onSaveCareer: () => void;
+  onSaveCampaign: () => void;
   onDeleteCareer: () => void;
   onBack: () => void;
 };
@@ -14,7 +14,7 @@ export function CareerMenu({
   career,
   onLoadCareer,
   onNewCareer,
-  onSaveCareer,
+  onSaveCampaign,
   onDeleteCareer,
   onBack,
 }: Props) {
@@ -63,7 +63,21 @@ export function CareerMenu({
             </button>
 
             <button
-              onClick={onSaveCareer}
+              onClick={onNewCareer}
+              className="menu-card w-full"
+            >
+              <span className="menu-card-icon menu-accent-fuchsia">
+                <Plus className="size-5" />
+              </span>
+              <span className="mt-3 block font-display text-2xl leading-tight">Nova Carreira</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Começa do zero: cria um novo registro (zera campanha atual no servidor)
+              </span>
+              <span className="menu-card-cta">Começar →</span>
+            </button>
+
+            <button
+              onClick={onSaveCampaign}
               className="menu-card w-full"
             >
               <span className="menu-card-icon menu-accent-sky">
@@ -103,7 +117,7 @@ export function CareerMenu({
               className="menu-card w-full"
             >
               <span className="menu-card-icon menu-accent-fuchsia">
-                <Play className="size-5" />
+                <Plus className="size-5" />
               </span>
               <span className="mt-3 block font-display text-2xl leading-tight">Iniciar Nova Campanha</span>
               <span className="mt-1 block text-sm text-muted-foreground">

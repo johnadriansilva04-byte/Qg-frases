@@ -88,6 +88,10 @@ import { NarrativeModal } from "./career/NarrativeModal";
 import { CelularConversas } from "./career/CelularConversas";
 import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
+import { LoadingScreen } from "./career/LoadingScreen";
+import { NewsPortal } from "./career/NewsPortal";
+import { AIService } from "./ai/AIService";
+import { coletivaPosJogo, relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
 import {
   SUBORNO_INICIAL,
   deveOfertarSuborno,
@@ -105,7 +109,7 @@ import {
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { gerarDesafioPatrocinador, cumpriuDesafio } from "./career/patrocinadorEngine";
-import { POINTS, type CareerState, type Choice, type Divisao, type Headline } from "./career/types";
+import { POINTS, type CareerState, type Choice, type ConversaCelular, type Divisao, type Headline } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
 import { formacaoById } from "./career/formacoes";
@@ -123,6 +127,7 @@ type Screen =
   | "auth"
   | "menu"
   | "profile"
+  | "career-menu"
   | "friendly-setup"
   | "friendly-match"
   | "online"
@@ -134,10 +139,21 @@ type Screen =
   | "choice"
   | "suborno"
   | "celular"
+  | "celular-conversas"
   | "trophies";
 
 interface BotaoGameProps {
   onBack?: () => void;
+}
+
+/**
+ * Bônus de Soberania do campeão: entre +100 e +200. A base é 100 e somamos até
+ * 100 de bônus conforme a dificuldade (amador 0, profissional 50, lenda 100).
+ */
+function bonusCampeao(dificuldade: Difficulty): number {
+  const bonus =
+    dificuldade === "lenda" ? 100 : dificuldade === "profissional" ? 50 : 0;
+  return POINTS.CAMPEAO_BASE + bonus;
 }
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
@@ -155,6 +171,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [veredito, setVeredito] = useState<VereditoTemporada | null>(null);
   // Fixture de copa ativa (para distinguir do fixture de liga no finishTournament).
   const [currentCopaFix, setCurrentCopaFix] = useState<Fixture | null>(null);
+  // Tela de carregamento (splash) controlada por contexto: inicia de carreira,
+  // entrada em campo, consultas ao Supabase e inicialização da IA.
+  const [loading, setLoading] = useState(false);
+  const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
 
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
@@ -163,7 +183,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       new URLSearchParams(window.location.search).get("debug_ceremony") === "1" &&
       career?.coach.nome
     ) {
-      setCeremonyBonus(POINTS.CAMPEAO + POINTS.TITULO_AMADOR);
+      setCeremonyBonus(POINTS.CAMPEAO_BASE + POINTS.CAMPEAO_BONUS_MAX);
       setShowCeremony(true);
     }
   }, [career?.coach.nome]);
@@ -191,6 +211,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setScreen("menu");
     }
   }, [perfil, carregando, screen]);
+
+  // Inicializa a IA central (detecção de hardware + pré-carga do WebLLM se
+  // potente). Não bloqueia a UI — roda em background. Zero crash: se falhar,
+  // o Motor de Templates Procedurais assume automaticamente.
+  useEffect(() => {
+    AIService.init().catch(() => {});
+  }, []);
 
   // Salvar tela atual no localStorage
   useEffect(() => {
@@ -263,6 +290,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const t = setTimeout(() => setToast(null), 3200);
     return () => clearTimeout(t);
   }, [toast]);
+
+  /**
+   * Mostra a tela de carregamento (splash) e executa o callback ao completar.
+   * Usado em transições pesadas: início de carreira, entrada em campo, consultas
+   * ao Supabase e inicialização da IA.
+   */
+  const runWithLoading = (onComplete: () => void, duracao = 2200) => {
+    setLoadingOnComplete(() => () => {
+      setLoading(false);
+      onComplete();
+    });
+    setLoading(true);
+    void duracao;
+  };
 
   const persist = (p: Progress) => {
     setProgress(p);
@@ -425,6 +466,53 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setToast("Campanha salva com sucesso!");
   };
 
+  /**
+   * Cria uma NOVA carreira: zera o estado da campanha atual (no local E no
+   * Supabase, criando um novo registro de progresso_caminpanha limpo) e envia
+   * o treinador à seleção de dificuldade para iniciar uma nova temporada.
+   * Mantém apenas os dados de conta (coach nome/apelido) p/ reuso.
+   */
+  const handleNewCareer = async () => {
+    if (!perfil?.user_id) {
+      // Offline: vai direto à criação do treinador/setup.
+      if (!career?.coach.nome) setScreen("coach-setup");
+      else setScreen("tournament-setup");
+      return;
+    }
+    const ok = confirm(
+      "Iniciar uma NOVA carreira? A campanha atual será substituída por um novo registro no servidor (a conta/treinador é mantido).",
+    );
+    if (!ok) return;
+
+    // Se não há treinador ainda, cria antes de iniciar a campanha.
+    if (!career?.coach.nome) {
+      setScreen("coach-setup");
+      return;
+    }
+
+    try {
+      // Zera a campanha no Supabase (novo registro limpo no JSONB) e reinicia
+      // localmente o estado de carreira (mantém o coach para reaproveitar).
+      await iniciarCampanhaRemota(difficulty).catch(() => {});
+      const zerada: CareerState = {
+        ...(career ?? EMPTY_CAREER),
+        ...EMPTY_CAREER,
+        coach: { ...(career?.coach ?? EMPTY_CAREER.coach) },
+        temporada: 1,
+        conversas: [],
+      };
+      persistCareer(zerada);
+      persistTournament(null);
+      setCurrent(null);
+      setCurrentCopaFix(null);
+      setToast("Nova carreira criada! Escolha a dificuldade para começar.");
+      setScreen("tournament-setup");
+    } catch (e) {
+      console.error("[BotaoGame] handleNewCareer error:", e);
+      setToast("Não foi possível criar a nova carreira. Tente novamente.");
+    }
+  };
+
   const handleAssistirVideo = async (): Promise<boolean> => {
     if (!perfil?.user_id) {
       setToast("Faça login para ganhar pontos assistindo vídeos.");
@@ -493,7 +581,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setScreen("coach-setup");
       return;
     }
-    iniciarCampanha(career);
+    // Splash de carregamento: consulta Supabase + inicialização da IA + mesa.
+    runWithLoading(() => iniciarCampanha(career));
   };
 
   const iniciarCampanha = async (c: CareerState) => {
@@ -625,14 +714,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setScreen("celular");
       return;
     }
+    // Sanção de W.O. pendente: a partida sequer é disputada — registra derrota
+    // por W.O. automaticamente (1x0 a favor do adversário) e segue o campeonato.
+    if (career.woProximaPartida) {
+      aplicarWO();
+      return;
+    }
     // Copa do Brasil paralela: se disponível nesta rodada, joga a copa.
     const rodada = career.rodadaAtual;
     if (career.copaBrasil) {
       const copaFix = proximoJogoCopa(career.copaBrasil, userTeam.id);
       if (copaFix && copaDisponivelNaRodada(rodada, career.copaBrasil, userTeam.id)) {
-        setCurrentCopaFix(copaFix);
-        setCurrent(copaFix);
-        setScreen("tournament-match");
+        // Splash curto de "entrada em campo" (inicializa mesa + IA).
+        runWithLoading(() => {
+          setCurrentCopaFix(copaFix);
+          setCurrent(copaFix);
+          setScreen("tournament-match");
+        }, 1400);
         return;
       }
     }
@@ -643,7 +741,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
     setCurrentCopaFix(null);
     setCurrent(f);
-    setScreen("tournament-match");
+    // Splash curto de "entrada em campo".
+    runWithLoading(() => setScreen("tournament-match"), 1400);
+  };
+
+  /**
+   * Aplica uma derrota por W.O. (sanção de decisão): registra 1x0 contra o
+   * usuário, simula a rodada e avança o campeonato, sem abrir a partida.
+   */
+  const aplicarWO = () => {
+    if (!tour || !career) return;
+    const f = nextUserFixture(tour);
+    if (!f) {
+      setScreen("hub");
+      return;
+    }
+    const userIsHome = f.homeId === userTeam.id;
+    const r: MatchResult = {
+      homeId: f.homeId,
+      awayId: f.awayId,
+      homeGoals: userIsHome ? 0 : 1,
+      awayGoals: userIsHome ? 1 : 0,
+    };
+    setToast("W.O. decretado! Derrota automática por decisão anterior.");
+    // Limpa a sanção de W.O. antes de finalizar (evita loop).
+    if (career.woProximaPartida) {
+      persistCareer({ ...career, woProximaPartida: undefined });
+    }
+    finishTournamentMatch(r);
   };
 
   // Avança a narrativa dinâmica aplicando efeitos e, no desfecho, gera manchete.
@@ -794,6 +919,39 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     let soberania = career.coach.soberania;
     // Penalty imediata (não aplica bônus/penal condicional aqui — vai no finish)
     if (choice.penaltyPontos && choice.penaltyPontos < 0) soberania += choice.penaltyPontos;
+    // Impacto financeiro imediato (venda de botão, suborno aceito, multa…).
+    if (choice.impactoFinanceiro) soberania += choice.impactoFinanceiro;
+
+    // Sanções pendentes para a próxima partida real (W.O. / desfalque / perda de pts).
+    const woProximaPartida = choice.wo ? true : career.woProximaPartida;
+    const desfalqueBotaoProxima =
+      (career.desfalqueBotaoProxima ?? 0) + (choice.desfalqueBotao ?? 0);
+    const perdaPontosProxima =
+      (career.perdaPontosProxima ?? 0) + (choice.perdaPontos ?? 0);
+
+    const evento = CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId);
+    const timestamp = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    // Registra a decisão como conversa de celular (histórico em 1ª pessoa),
+    // sem poluir com mensagens automáticas — só decisões reais do treinador.
+    const novaConversa = evento
+      ? [
+          {
+            id: `conv-${Date.now()}`,
+            tipo: "evento" as const,
+            nome: evento.titulo,
+            avatar: "💬",
+            cargo: "Decisão de carreira",
+            mensagens: [
+              { id: `m-${Date.now()}`, texto: evento.descricao, remetente: "outro" as const, timestamp },
+              { id: `r-${Date.now()}`, texto: choice.texto, remetente: "eu" as const, timestamp },
+            ],
+            naoLida: false,
+          },
+        ]
+      : [];
 
     const nova: CareerState = {
       ...career,
@@ -802,6 +960,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       coach: { ...career.coach, soberania: Math.max(0, soberania) },
       ultimasEscolhas: [...career.ultimasEscolhas, choice.id].slice(-8),
       eventoPendenteId: null,
+      woProximaPartida,
+      desfalqueBotaoProxima,
+      perdaPontosProxima,
+      conversas: [...novaConversa, ...career.conversas].slice(0, 30),
     };
     persistCareer(nova);
     // RPC remota (autoritativa) para escolha
@@ -810,6 +972,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         () => {},
       );
     }
+
+    // Feedback de sanções graves.
+    if (choice.wo) setToast("Decisão gravíssima: a próxima partida será por W.O.!");
+    else if (choice.desfalqueBotao) setToast(`Próxima partida: desfalque de ${choice.desfalqueBotao} botão(ões).`);
+    else if (choice.perdaPontos) setToast(`Punição: -${choice.perdaPontos} pts na tabela.`);
 
     // Segue para o hub (não inicia o jogo automaticamente)
     setScreen("hub");
@@ -891,7 +1058,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Campeão da copa: bônus de Soberania + manchete.
     let novas: Headline[] = [];
     if (copa.finished && copa.champion === userTeam.id) {
-      novaSoberania += POINTS.CAMPEAO;
+      novaSoberania += bonusCampeao(tour?.difficulty ?? difficulty);
       novas = [
         {
           id: `copa-campeao-${Date.now()}`,
@@ -972,23 +1139,25 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           t.champion = tabela[0]!.teamId;
           t.phase = "fim";
 
-          // Lógica de promoção/rebaixamento (2 primeiros sobem, 2 últimos caem)
+          // Promoção/rebaixamento por divisão (regras do Brasileirão):
+          //  Série C: apenas os 2 primeiros sobem p/ Série B (sem vaga direta em copas).
+          //  Série B: os 2 primeiros sobem p/ A; os 2 últimos caem p/ C.
+          //  Série A: rebaixamento dos últimos p/ B (e vaga em copas continentais/Copa do Brasil).
           if (career) {
             const userPosition = tabela.findIndex((r) => r.teamId === t.userTeamId);
-            const novaDivisao =
-              userPosition <= 1
-                ? career.divisao === "serie-c"
-                  ? "serie-b"
-                  : career.divisao === "serie-b"
-                    ? "serie-a"
-                    : "serie-a"
-                : userPosition >= 18
-                  ? career.divisao === "serie-a"
-                    ? "serie-b"
-                    : career.divisao === "serie-b"
-                      ? "serie-c"
-                      : "serie-c"
-                  : career.divisao;
+            const total = tabela.length;
+            const zonaAcesso = 2; // top 2 sobem (C→B, B→A)
+            const zonaRebaixa = 2; // últimos 2 caem (A→B, B→C). Série C não cai.
+            let novaDivisao = career.divisao;
+            let promovido = false;
+            let rebaixado = false;
+            if (userPosition >= 0 && userPosition < zonaAcesso && career.divisao !== "serie-a") {
+              novaDivisao = career.divisao === "serie-c" ? "serie-b" : "serie-a";
+              promovido = true;
+            } else if (userPosition >= total - zonaRebaixa && career.divisao !== "serie-c") {
+              novaDivisao = career.divisao === "serie-a" ? "serie-b" : "serie-c";
+              rebaixado = true;
+            }
 
             const careerAtualizado: CareerState = {
               ...career,
@@ -997,16 +1166,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             persistCareer(careerAtualizado);
             setCareer(careerAtualizado);
 
-            if (novaDivisao !== career.divisao) {
-              if (userPosition <= 1) {
-                setToast(
-                  `PROMOÇÃO! Você subiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE A"}!`,
-                );
-              } else if (userPosition >= 18) {
-                setToast(
-                  `REBAIXAMENTO! Você caiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}.`,
-                );
-              }
+            if (promovido) {
+              const label =
+                novaDivisao === "serie-a" ? "SÉRIE A" : "SÉRIE B";
+              setToast(`PROMOÇÃO! Você subiu para a ${label}!`);
+            } else if (rebaixado) {
+              const label =
+                novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
+              setToast(`REBAIXAMENTO! Você caiu para a ${label}.`);
             }
           }
 
@@ -1069,7 +1236,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       let novaSoberania = career.coach.soberania;
       let moral = career.moralTime;
 
-      // Pontos escassos: V=+3 / E=+1 / D=-3
+      // Pontos escassos: V=+3 / E=+1 / D=0
       if (gf > ga) {
         novaSoberania += POINTS.VITORIA;
         moral = Math.min(100, moral + 4);
@@ -1104,18 +1271,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (t.phase === "fim") {
         // Determina posição do usuário
         if (t.champion === t.userTeamId) {
-          novaSoberania += POINTS.CAMPEAO;
+          const bonus = bonusCampeao(t.difficulty);
+          novaSoberania += bonus;
           novoTitulos += 1;
-          const bonusTitulo =
-            t.difficulty === "amador"
-              ? POINTS.TITULO_AMADOR
-              : t.difficulty === "profissional"
-                ? POINTS.TITULO_PROFISSIONAL
-                : POINTS.TITULO_LENDA;
-          novaSoberania += bonusTitulo;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
           // Cerimônia de premiação!
-          setCeremonyBonus(POINTS.CAMPEAO + bonusTitulo);
+          setCeremonyBonus(bonus);
           setShowCeremony(true);
         } else {
           // Vice? Terceiro? Quarto?
@@ -1180,8 +1341,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       let novaCareer: CareerState = {
         ...career,
         bonusProximaPartida: 0,
-        penaltiesProximaPartida: 0,
+        penaltiesProximaPartida:
+          // Sanção de desfalque vira penalidade de poder na próxima partida
+          // (elenco reduzido). Aplicada uma única vez e consumida.
+          (career.desfalqueBotaoProxima ?? 0) * 3,
         moralTime: moral,
+        // Sanções consumidas após a partida real (W.O. já foi tratado em playNext).
+        woProximaPartida: undefined,
+        desfalqueBotaoProxima: undefined,
+        // Perda de pontos da tabela (punição CBJF) é refletida na soberania como
+        // desconto simbólico — a pontuação da tabela é derivada dos resultados.
+        perdaPontosProxima: undefined,
         // Avança a rodada do Brasileirão para distribuir narrativas/Copa.
         rodadaAtual: (career.rodadaAtual ?? 0) + 1,
         rodadasDesdeEventoNarrativo: (career.rodadasDesdeEventoNarrativo ?? 0) + 1,
@@ -1263,6 +1433,68 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     persistTournament(t);
     setCurrent(null);
+
+    // Geração de conteúdo pós-jogo pela IA central (reaproveita AIService em:
+    // coletiva, relatório médico e redes sociais). Dispara e esquece: quando
+    // chega, anexa como conversas de celular na carreira. Fallback procedural
+    // garante que sempre haja texto (celular fraco / IA ausente).
+    (async () => {
+      try {
+        if (!career) return;
+        const adversario = current.homeId === userTeam.id ? current.awayId : current.homeId;
+        const advTeam = teamByIdSync(adversario);
+        const resultado = {
+          golsPro: gf,
+          golsContra: ga,
+          timeNome: userTeam.name,
+          coach: career.coach.apelido || "Treinador",
+          adversarioNome: advTeam?.name,
+          rodada: career.rodadaAtual,
+        };
+        const [, relMed, redes] = await Promise.all([
+          coletivaPosJogo(resultado),
+          relatorioMedico(resultado),
+          redesSociaisRodada(resultado),
+        ]);
+        const agora = new Date().toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const novasConv: ConversaCelular[] = [];
+        if (relMed) {
+          novasConv.push({
+            id: `ia-med-${Date.now()}`,
+            tipo: "medico",
+            nome: "Dr. Maurício",
+            avatar: "🩺",
+            cargo: "Departamento Médico",
+            mensagens: [{ id: `m-med-${Date.now()}`, texto: relMed, remetente: "outro", timestamp: agora }],
+            naoLida: true,
+          });
+        }
+        for (let i = 0; i < (redes?.length ?? 0); i++) {
+          const t = redes[i]!;
+          novasConv.push({
+            id: `ia-redes-${Date.now()}-${i}`,
+            tipo: "evento",
+            nome: "Torcida (Redes Sociais)",
+            avatar: "📱",
+            cargo: "Menções da rodada",
+            mensagens: [{ id: `m-red-${Date.now()}-${i}`, texto: t, remetente: "outro", timestamp: agora }],
+            naoLida: true,
+          });
+        }
+        if (novasConv.length > 0) {
+          setCareer((prev) => {
+            if (!prev) return prev;
+            return { ...prev, conversas: [...novasConv, ...prev.conversas].slice(0, 30) };
+          });
+        }
+      } catch {
+        // fallback silencioso: o jogo segue sem conteúdo IA
+      }
+    })();
+
     setScreen("hub");
   };
 
@@ -1369,13 +1601,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                 setScreen("hub");
               }
             }}
-            onNewCareer={() => {
-              if (!career?.coach.nome) {
-                setScreen("coach-setup");
-              } else {
-                setScreen("tournament-setup");
-              }
-            }}
+            onNewCareer={handleNewCareer}
             onSaveCampaign={handleSaveCampaign}
             onDeleteCareer={handleDeleteCampaign}
             onBack={() => setScreen("menu")}
@@ -1398,15 +1624,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   }
 
   if (screen === "celular") {
-    // Inbox unificado do celular: suborno, narrativa dinâmica, decisões e o
-    // desafio do patrocinador (meta ativa por partida) — tudo em primeira
-    // pessoa (chat). Ordem de prioridade: suborno > narrativa > choice event.
+    // Inbox unificado do celular: inicia limpo (sem mensagem automática padrão)
+    // e só dispara notificações geradas por eventos reais. Ordem de prioridade:
+    // suborno > narrativa > choice event. Quando não há nada prioritário, mostra
+    // a lista de conversas (histórico de decisões) — nunca um placeholder que
+    // possa travar ao clicar.
     const subornoAtivo = career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
     const narrativaAtiva = career?.narrativa?.cenaAtual ? cenaDaNarrativa(career.narrativa) : null;
     const eventoPendente = career?.eventoPendenteId
       ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
       : null;
-    const desafio = career?.desafioPatrocinador;
     const nomeTreinador = career?.coach.apelido || career?.coach.nome;
 
     return (
@@ -1432,7 +1659,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             </button>
           </div>
 
-          {/* Mensagens prioritárias: suborno, narrativa, evento */}
+          {/* Mensagens prioritárias: suborno, narrativa, evento (chat em 1ª pessoa) */}
           {subornoAtivo ? (
             <SubornoStory
               state={career!.suborno!}
@@ -1458,33 +1685,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               onChoose={aplicarEscolha}
               onBack={() => setScreen("hub")}
             />
-          ) : desafio && !desafio.concluido ? (
-            <div className="patrocinador-msg">
-              <div className="patrocinador-bubble">
-                <p className="patrocinador-nome">{desafio.patrocinador}</p>
-                <p className="patrocinador-texto">{desafio.mensagem}</p>
-                <p className="patrocinador-recompensa">
-                  Recompensa: +{desafio.recompensa} soberania
-                </p>
-                <button 
-                  onClick={() => setScreen("hub")}
-                  className="btn-ghost mt-2 text-xs"
-                >
-                  Entendido
-                </button>
-              </div>
-            </div>
           ) : (
-            <div className="panel text-center py-12">
-              <p className="font-display text-2xl">Sem mensagens</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Tudo em dia por aqui. O próximo desafio de patrocinador chega
-                antes da próxima partida.
-              </p>
-              <button onClick={() => setScreen("hub")} className="btn-primary mt-4">
-                Voltar ao hub
-              </button>
-            </div>
+            // Sem mensagem automática: celular limpo. Só conversas reais
+            // (decisões anteriores + desafio de patrocinador ativo viram uma
+            // conversa, não um overlay que trava).
+            <CelularConversas
+              conversas={career?.conversas ?? []}
+              desafioPatrocinador={career?.desafioPatrocinador ?? null}
+              onEnviarMensagem={handleEnviarMensagem}
+              onExcluirConversa={handleExcluirConversa}
+              onVoltar={() => setScreen("hub")}
+            />
           )}
         </div>
       </Shell>
@@ -1559,6 +1770,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
+      {loading && (
+        <LoadingScreen onCompleto={loadingOnComplete} />
+      )}
       {veredito && career && (
         <SeasonTransition
           veredito={veredito}
@@ -2063,16 +2277,13 @@ function Hub({
             <span className="celular-cta">Abrir</span>
           </button>
 
-          {/* Notícias (resumo) */}
-          {career && career.headlines.length > 0 && (
-            <div className="panel">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="font-display text-sm font-bold tracking-wide">Últimas Notícias</h3>
-              </div>
-              <p className="line-clamp-2 text-xs text-foreground/80">
-                {career.headlines[0]?.manchete}
-              </p>
-            </div>
+          {/* Portal de Notícias & Bastidores (carrossel contínuo) */}
+          {career && (
+            <NewsPortal
+              headlines={career.headlines}
+              userTeam={userTeam}
+              coachNome={career.coach.apelido || career.coach.nome}
+            />
           )}
 
           {/* Calendário */}
@@ -2109,48 +2320,60 @@ function Hub({
           {tour.phase === "grupos" && tour.groups.length > 0 && (
             <div className="panel">
               <h3 className="mb-2 font-display text-sm font-bold tracking-wide">Classificação</h3>
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="w-8 py-1">#</th>
-                    <th className="py-1">TIME</th>
-                    <th className="w-8 text-center">P</th>
-                    <th className="w-8 text-center">J</th>
-                    <th className="w-10 text-center">SG</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortTable(tour.groups[0]!.table)
-                    .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
-                    .map((r, i) => {
-                    const position = i + 1;
-                    const zone =
-                      position <= 4
-                        ? "libertadores"
-                        : position <= 6
-                          ? "copa-brasil"
-                          : position >= 18
-                            ? "rebaixamento"
-                            : "";
-                    return (
-                      <tr
-                        key={r.teamId}
-                        className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
-                      >
-                        <td className="py-1 text-center font-bold">{position}º</td>
-                        <td className="py-1">
-                          <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                            <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                          </span>
-                        </td>
-                        <td className="py-1 text-center">{r.p}</td>
-                        <td className="py-1 text-center">{r.j}</td>
-                        <td className="py-1 text-center">{r.gp - r.gc}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="w-8 py-1">#</th>
+                      <th className="py-1">TIME</th>
+                      <th className="w-7 text-center">P</th>
+                      <th className="w-6 text-center">J</th>
+                      <th className="w-5 text-center">V</th>
+                      <th className="w-5 text-center">E</th>
+                      <th className="w-5 text-center">D</th>
+                      <th className="w-6 text-center">GP</th>
+                      <th className="w-6 text-center">GC</th>
+                      <th className="w-7 text-center">SG</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortTable(tour.groups[0]!.table)
+                      .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
+                      .map((r, i) => {
+                      const position = i + 1;
+                      const zone =
+                        position <= 4
+                          ? "libertadores"
+                          : position <= 6
+                            ? "copa-brasil"
+                            : position >= 18
+                              ? "rebaixamento"
+                              : "";
+                      return (
+                        <tr
+                          key={r.teamId}
+                          className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
+                        >
+                          <td className="py-1 text-center font-bold">{position}º</td>
+                          <td className="py-1">
+                            <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                            </span>
+                          </td>
+                          <td className="py-1 text-center font-bold">{r.p}</td>
+                          <td className="py-1 text-center">{r.j}</td>
+                          <td className="py-1 text-center text-emerald-300">{r.v}</td>
+                          <td className="py-1 text-center text-muted-foreground">{r.e}</td>
+                          <td className="py-1 text-center text-rose-300">{r.d}</td>
+                          <td className="py-1 text-center">{r.gp}</td>
+                          <td className="py-1 text-center">{r.gc}</td>
+                          <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <ZoneLegend />
             </div>
           )}

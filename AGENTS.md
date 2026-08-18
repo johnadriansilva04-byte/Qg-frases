@@ -9,6 +9,87 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
+## Sistema de IA Centralizada (AIService) — 2026-08-18
+
+Arquitetura da "Comentarista Sarcástica" (voz do jogo), on-device + fallback
+procedural. Custo ZERO de API.
+
+### Módulos (`src/components/botao/ai/`)
+- `AIService.ts`: fachada singleton `AIService.generateText(ctx, promptType)`.
+  Detecta hardware; se `potente` e a lib `webllm` estiver disponível, usa IA
+  local (SmolLM2-360M/Qwen2.5-0.5B). Senão, cai em `gerarTemplate` (procedural).
+  `AIService.init()` pré-aquece o veredito de hardware. Estrutura modular/
+  expansível para outros modos.
+- `hardwareDetect.ts`: `detectarHardware()`/`vereditoHardware()` testam
+  `navigator.deviceMemory`, `hardwareConcurrency` e WebGPU (`gpu` no adapter).
+  Veredito: `"potente"` (≥4 cores, ≥4GB, WebGPU) | `"fraco"`.
+- `templateEngine.ts`: `gerarTemplate(promptType, ctx)` — busca frases em
+  `botao_frases_ia` (Supabase, cacheado) e preenche placeholders `{T},{coach},
+  {W},{L},{gH},{gA},{diff}`. Fallback local se a tabela estiver vazia/offline.
+- `aiContent.ts`: `coletivaPosJogo`, `relatorioMedico`, `redesSociaisRodada`,
+  `bundlePosJogo` — reaproveitam o AIService (item 8 do spec: coletiva, médico,
+  redes sociais). Disparados no `finishTournamentMatch` (fire-and-forget) e
+  anexados como `ConversaCelular` (tipo `"medico"`/`"evento"`).
+- `types.ts`: `PromptType` (`comentarista|coletiva|medico|redes_sociais|noticia`),
+  `AIContext` (todos os campos `| undefined` por `exactOptionalPropertyTypes`),
+  `SYSTEM_PROMPT_COMENTARISTA`.
+
+### SQL (`supabase/migrations/futebol.sql`)
+- Tabela `botao_frases_ia` (prompt_type, categoria, template_text, ativo, ordem)
+  com unique index `(prompt_type, categoria, ordem)` para seed idempotente
+  (`ON CONFLICT (...) DO NOTHING`). RLS read-all (anon+authenticated). Seed com
+  ~20 frases sarcásticas. **Aplicação obrigatória pelo usuário no SQL Editor.**
+
+### Pacote opcional `webllm`
+- NÃO é dependência obrigatória. Importado dinamicamente com especificador em
+  variável + `/* @vite-ignore */` (`const modName="webllm"; import(modName)`),
+  para o bundler (rolldown/vite) não tentar resolver estaticamente e quebrar o
+  build. Declaração de ambiente em `src/types/webllm.d.ts` silencia o tsc.
+  Se ausente em runtime → catch → fallback procedural. **Zero Crash Guarantee.**
+
+### Tipos Supabase (`src/integrations/supabase/types.ts`)
+- Adicionada tabela `botao_frases_ia` (Row/Insert/Update) ao `Database.Tables`.
+
+## Splash/Loading + Portal de Notícias — 2026-08-18
+- `LoadingScreen.tsx`: overlay 100% CSS/JS, zero imagens. Barra 0→100%
+  (easeOutCubic), `%` animado, textos introdutórios/dicas REAIS rotativos
+  (soberania, celular, W.O., portal). Props `passos`/`intros`/`duracao`/
+  `onCompleto`. Integrado no `BotaoGame` via estado `loading` + `runWithLoading`
+  (início de carreira, entrada em campo). Renderizado no Shell.
+- `NewsPortal.tsx`: carrossel continuous-loop (avança a cada 3.5s), mescla
+  `headlines` reais da carreira + notícias IA geradas via `AIService` (noticia).
+  Substituiu o bloco estático "Últimas Notícias" no Hub.
+
+## Hotfixes UI/UX — 2026-08-18
+- `CareerMenu`: opção "Nova Carreira" (Plus icon) além de "Carregar".
+  Prop `onNewCareer` → `handleNewCareer` no BotaoGame. Props alinhadas
+  (`onSaveCampaign` — antes `onSaveCareer` causava mismatch).
+- `Screen` type: adicionados `"career-menu"` e `"celular-conversas"`.
+- Bug do celular: removida mensagem automática padrão que travava a tela;
+  `CelularConversas` robusto (guards, conversa virtual de patrocinador,
+  inicia limpo — só notificações de eventos reais).
+
+## Economia & Regras — 2026-08-18
+- `POINTS`: V=+3, E=+1, D=0. `bonusCampeao(dificuldade)` → 100-200 Soberania.
+  `careerRemote.computeSovereigntyDelta` D=0; `aplicarFimCampanhaRemoto`
+  bonusPos 100-200.
+- Promoção/rebaixamento por divisão: Série C (2 sobem), Série B (2 sobem/2
+  caem), Série A (rebaixa últimos, vagas Copa/Libertadores).
+- Calendário unificado (`CalendarView`): mescla Brasileirão + Copa do Brasil
+  numa linha do tempo (`COPA_RODADAS_GATILHO`).
+- Tabela: colunas P J V E D GP GC SG.
+- AdSense no intervalo (`MatchView`): estado `halftime` + overlay `AdSlot` no
+  meio das jogadas (container formato TV, classes `halftime-tv-*`).
+- Sanções: `Choice` com `wo`/`desfalqueBotao`/`perdaPontos`/`impactoFinanceiro`;
+  `CareerState` com `woProximaPartida`/`desfalqueBotaoProxima`/
+  `perdaPontosProxima` (reset em nova carreira/fim de partida).
+
+## TypeScript — verificação (2026-08-18)
+- `tsc --noEmit`: 0 erros fora do módulo `trilha` (que tem 10 erros
+  pré-existentes: tabelas/RPCs `mesas_trilha` não tipadas no Supabase —
+  independentes desta tarefa). `vite build`: OK.
+
+
 ## Módulo Online (Futebol de Botão) — como funciona
 
 O modo Online foi liberado (sem telas de "Em breve"). Há dois modos:

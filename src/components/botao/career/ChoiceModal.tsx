@@ -15,6 +15,10 @@ const SENDER: Record<string, { nome: string; cargo: string; initials: string }> 
   "escalar-jovem": { nome: "Sebastião", cargo: "Coordenador da Base", initials: "CB" },
   torcida: { nome: "Beto", cargo: "Líder da Torcida", initials: "LT" },
   "treino-intensivo": { nome: "Professor Léo", cargo: "Preparador Físico", initials: "PF" },
+  "presidente-ultimato": { nome: "Presidente", cargo: "Dono do Clube", initials: "PC" },
+  "empresario-proposta": { nome: "Wagner", cargo: "Empresário", initials: "WG" },
+  "namorada-cobranca": { nome: "Júlia", cargo: "Namorada", initials: "JU" },
+  "subornador-abordagem": { nome: "Intermediário", cargo: "Subornador", initials: "???" },
 };
 
 function senderFor(evento: ChoiceEvent) {

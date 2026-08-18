@@ -1140,6 +1140,235 @@ button.celular-card:hover {
   margin-top: 0.4rem;
 }
 
+/* ===========================================================================
+ * SPLASH / LOADING (tela de carregamento — zero imagens, 100% CSS/JS)
+ * =========================================================================== */
+.splash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: oklch(0.14 0.05 285);
+  background-image: radial-gradient(60rem 40rem at 15% -10%, oklch(0.7 0.21 350 / 0.18), transparent 60%),
+    radial-gradient(50rem 38rem at 100% 0%, oklch(0.62 0.22 295 / 0.22), transparent 60%),
+    radial-gradient(55rem 42rem at 50% 120%, oklch(0.55 0.19 265 / 0.2), transparent 60%);
+  backdrop-filter: blur(6px);
+}
+.splash-card {
+  width: min(92vw, 30rem);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--color-border);
+  background: color-mix(in oklab, var(--color-card) 78%, transparent);
+  padding: 1.5rem 1.4rem 1.6rem;
+  box-shadow: 0 30px 80px -30px oklch(0 0 0 / 0.8);
+}
+.splash-brand { display: flex; align-items: center; gap: 0.7rem; }
+.splash-logo { font-size: 1.05rem; }
+.splash-brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.splash-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
+}
+.splash-sub {
+  font-size: 0.62rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+.splash-bar-wrap { margin-top: 1.3rem; }
+.splash-bar {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  overflow: hidden;
+}
+.splash-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background-image: var(--gradiente-marca);
+  transition: width 0.12s linear;
+  box-shadow: 0 0 18px color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+.splash-bar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  color: var(--color-muted-foreground);
+}
+.splash-bar-pct { font-family: var(--font-display); font-weight: 700; color: var(--color-foreground); }
+.splash-bar-step { margin-left: auto; text-align: right; }
+.splash-intro {
+  margin-top: 1.15rem;
+  min-height: 4.6rem;
+  animation: splash-fade 0.5s ease;
+}
+.splash-intro-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: var(--color-foreground);
+}
+.splash-intro-corpo {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-muted-foreground);
+}
+@keyframes splash-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===========================================================================
+ * PORTAL DE NOTÍCIAS (carrossel contínuo)
+ * =========================================================================== */
+.news-portal {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background: color-mix(in oklab, var(--color-card) 80%, transparent);
+  overflow: hidden;
+}
+.news-portal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in oklab, var(--color-background) 60%, transparent);
+}
+.news-portal-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+.news-portal-live {
+  margin-left: auto;
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: oklch(0.72 0.2 25);
+  background: color-mix(in oklab, oklch(0.62 0.24 27) 18%, transparent);
+  border: 1px solid color-mix(in oklab, oklch(0.62 0.24 27) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+.news-portal-ticker {
+  display: flex;
+  align-items: center;
+  padding: 0.7rem 0.8rem;
+  min-height: 3.2rem;
+}
+.news-portal-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  animation: news-slide 0.5s ease;
+  max-width: 100%;
+}
+.news-portal-text {
+  font-size: 0.82rem;
+  color: var(--color-foreground);
+  line-height: 1.35;
+}
+.news-portal-rodada {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-display);
+}
+@keyframes news-slide {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.news-portal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 1.2rem;
+}
+.news-chip {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 0.35rem;
+  padding: 0.12rem 0.4rem;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.news-chip-time { background: color-mix(in oklab, var(--color-primary) 18%, transparent); color: var(--color-primary); border-color: color-mix(in oklab, var(--color-primary) 40%, transparent); }
+.news-chip-geral { background: color-mix(in oklab, var(--color-foreground) 10%, transparent); color: var(--color-foreground); border-color: var(--color-border); }
+.news-chip-polemica { background: color-mix(in oklab, oklch(0.82 0.16 80) 15%, transparent); color: oklch(0.84 0.16 80); border-color: color-mix(in oklab, oklch(0.82 0.16 80) 35%, transparent); }
+.news-chip-zebra { background: color-mix(in oklab, oklch(0.65 0.2 300) 18%, transparent); color: oklch(0.78 0.16 300); border-color: color-mix(in oklab, oklch(0.65 0.2 300) 35%, transparent); }
+.news-chip-coletiva { background: color-mix(in oklab, oklch(0.6 0.16 230) 15%, transparent); color: oklch(0.78 0.14 230); border-color: color-mix(in oklab, oklch(0.6 0.16 230) 35%, transparent); }
+.news-chip-ia { background: color-mix(in oklab, var(--color-success) 16%, transparent); color: var(--color-success); border-color: color-mix(in oklab, var(--color-success) 35%, transparent); }
+
+/* ===========================================================================
+ * TV ADSENSE NO INTERVALO (container em formato de TV)
+ * =========================================================================== */
+.halftime-tv {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: oklch(0 0 0 / 0.82);
+  padding: 1rem;
+}
+.halftime-tv-frame {
+  width: min(92%, 30rem);
+  border-radius: 1rem;
+  border: 6px solid oklch(0.22 0.04 285);
+  background: oklch(0.14 0.05 285);
+  box-shadow: 0 0 0 2px oklch(0.32 0.05 285), 0 20px 60px -20px oklch(0 0 0 / 0.9);
+  overflow: hidden;
+}
+.halftime-tv-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  background: oklch(0.2 0.05 285);
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+.halftime-tv-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: oklch(0.62 0.24 27); animation: ht-blink 1.2s infinite; }
+@keyframes ht-blink { 50% { opacity: 0.3; } }
+.halftime-tv-continue {
+  margin: 0.7rem auto 0;
+  display: block;
+  font-family: var(--font-display);
+}
+
+/* Realce de fase da Copa do Brasil no calendário unificado */
+.cal-rodada-copa {
+  border-left: 3px solid oklch(0.8 0.15 80) !important;
+  background: color-mix(in oklab, oklch(0.8 0.15 80) 8%, transparent);
+}
+.cal-copa-chip {
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: oklch(0.84 0.16 80);
+  background: color-mix(in oklab, oklch(0.82 0.16 80) 18%, transparent);
+  border: 1px solid color-mix(in oklab, oklch(0.82 0.16 80) 35%, transparent);
+  border-radius: 0.3rem;
+  padding: 0.08rem 0.35rem;
+}
+
 
 
 

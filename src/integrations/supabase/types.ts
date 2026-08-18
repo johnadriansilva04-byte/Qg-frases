@@ -392,6 +392,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      botao_frases_ia: {
+        Row: {
+          id: number;
+          prompt_type: string;
+          categoria: string | null;
+          template_text: string;
+          variaveis: Json | null;
+          ativo: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          prompt_type: string;
+          categoria?: string | null;
+          template_text: string;
+          variaveis?: Json | null;
+          ativo?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          prompt_type?: string;
+          categoria?: string | null;
+          template_text?: string;
+          variaveis?: Json | null;
+          ativo?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

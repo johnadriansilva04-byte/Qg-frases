@@ -46,6 +46,14 @@ export type Choice = {
   bonusMoral?: number; // afeta soberania se ganhar
   penaltyPontos?: number; // desconta soberania se resultado ruim
   riscoAlto?: boolean;
+  /** Derrota por W.O. na próxima partida (sanção grave — sem jogar). */
+  wo?: boolean;
+  /** Desfalca N botões na próxima partida (joga com elenco reduzido). */
+  desfalqueBotao?: number;
+  /** Perde N pontos na tabela de classificação (punição da diretoria/CBJF). */
+  perdaPontos?: number;
+  /** Impacto financeiro (Soberania) imediato, positivo ou negativo. */
+  impactoFinanceiro?: number;
 };
 
 export type ChoiceEvent = {
@@ -92,7 +100,15 @@ export type DesafioPatrocinador = {
 
 export type ConversaCelular = {
   id: string;
-  tipo: "patrocinador" | "namorada" | "suborno" | "narrativa" | "evento";
+  tipo:
+    | "patrocinador"
+    | "namorada"
+    | "suborno"
+    | "narrativa"
+    | "evento"
+    | "presidente"
+    | "empresario"
+    | "medico";
   nome: string;
   avatar: string;
   cargo: string;
@@ -133,6 +149,12 @@ export type CareerState = {
   desafioPatrocinador?: DesafioPatrocinador | null | undefined;
   // Conversas do celular (patrocinador, namorada, suborno, etc.)
   conversas: ConversaCelular[];
+  // Sanções de decisões pendentes a aplicar na próxima partida real.
+  // wo=true força derrota por W.O. (sem jogar); desfalqueBotao remove N botões;
+  // perdaPontos desconta pontos da tabela na próxima partida (punição CBJF).
+  woProximaPartida?: boolean | undefined;
+  desfalqueBotaoProxima?: number | undefined;
+  perdaPontosProxima?: number | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";
@@ -140,14 +162,16 @@ export const CAREER_KEY = "botao:career:v1";
 export const POINTS = {
   VITORIA: 3,
   EMPATE: 1,
-  DERROTA: -3,
-  CAMPEAO: 20,
+  DERROTA: 0,
+  // Campeão ganha entre +100 e +200 de Soberania (base + bônus por dificuldade).
+  CAMPEAO_BASE: 100,
+  CAMPEAO_BONUS_MAX: 100, // somado ao base conforme dificuldade → 100..200
   VICE: 15,
   TERCEIRO: 10,
   QUARTO: 5,
   CLASSIFICOU_MATA: 5,
   VENCEU_GRUPO: 3,
-  TITULO_AMADOR: 100,
-  TITULO_PROFISSIONAL: 250,
-  TITULO_LENDA: 500,
+  TITULO_AMADOR: 0,
+  TITULO_PROFISSIONAL: 0,
+  TITULO_LENDA: 0,
 };

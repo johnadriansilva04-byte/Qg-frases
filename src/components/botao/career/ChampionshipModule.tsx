@@ -131,7 +131,12 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
                         <th className="py-1">TIME</th>
                         <th className="w-8 text-center">P</th>
                         <th className="w-8 text-center">J</th>
-                        <th className="w-10 text-center">SG</th>
+                        <th className="w-6 text-center">V</th>
+                        <th className="w-6 text-center">E</th>
+                        <th className="w-6 text-center">D</th>
+                        <th className="w-8 text-center">GP</th>
+                        <th className="w-8 text-center">GC</th>
+                        <th className="w-8 text-center">SG</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -152,9 +157,14 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
                                 <TeamBadge team={getTeam(r.teamId)} size="sm" />
                               </span>
                             </td>
-                            <td className="py-1 text-center">{r.p}</td>
+                            <td className="py-1 text-center font-bold">{r.p}</td>
                             <td className="py-1 text-center">{r.j}</td>
-                            <td className="py-1 text-center">{r.gp - r.gc}</td>
+                            <td className="py-1 text-center text-emerald-300">{r.v}</td>
+                            <td className="py-1 text-center text-muted-foreground">{r.e}</td>
+                            <td className="py-1 text-center text-rose-300">{r.d}</td>
+                            <td className="py-1 text-center">{r.gp}</td>
+                            <td className="py-1 text-center">{r.gc}</td>
+                            <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
                           </tr>
                         );
                       })}

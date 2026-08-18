@@ -127,6 +127,107 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
       },
     ],
   },
+  {
+    id: "presidente-ultimato",
+    titulo: "Ultimato da diretoria",
+    descricao:
+      "Treinador, aqui é o Presidente. As contas do clube não fecham e a torcida tá impaciente. " +
+      "Vou ser direto: se essa rodada não vier vitória, não respondo pela sua continuidade no cargo. " +
+      "Como o senhor quer encarar esse jogo?",
+    escolhas: [
+      {
+        id: "prometer-goleada",
+        texto: "Prometer goleada ao presidente",
+        descricao: "+1 força, mas se perder: -8 soberania e -3 pontos na tabela (punição).",
+        bonusPoder: 1,
+        perdaPontos: 3,
+        penaltyPontos: 8,
+        riscoAlto: true,
+      },
+      {
+        id: "pedir-tempo",
+        texto: "Pedir tempo pra reestruturar",
+        descricao: "-2 soberania imediato (impressão de fraqueza), mas sem punição de tabela.",
+        impactoFinanceiro: -2,
+      },
+    ],
+  },
+  {
+    id: "empresario-proposta",
+    titulo: "Proposta de empresário",
+    descricao:
+      "Treinador, aqui é o Wagner, empresário. Tenho uma proposta boa pra um dos seus botões, " +
+      "vende agora e a gente forra o caixa. Só que o elenco já tá curto. Decide rápido.",
+    escolhas: [
+      {
+        id: "vender-botao",
+        texto: "Vender o botão (fechar caixa)",
+        descricao: "+15 soberania imediato, mas joga a próxima partida com 1 botão a menos (desfalque).",
+        impactoFinanceiro: 15,
+        desfalqueBotao: 1,
+      },
+      {
+        id: "reter-botao",
+        texto: "Reter o botão (não vender)",
+        descricao: "Sem efeito financeiro. Elenco mantém força total.",
+      },
+    ],
+  },
+  {
+    id: "namorada-cobranca",
+    titulo: "Mensagem da namorada",
+    descricao:
+      "Amor, aqui é a Júlia. Você de novo enrolado no estádio? Tá ficando difícil lidar com " +
+      "essas semanas sem te ver. Promete que hoje sai cedo e a gente conversa?",
+    escolhas: [
+      {
+        id: "priorizar-familia",
+        texto: "Prometer sair cedo (priorizar ela)",
+        descricao: "+5 moral, mas -1 força (cabeça longe do jogo).",
+        bonusPoder: -1,
+        bonusMoral: 5,
+      },
+      {
+        id: "focar-time",
+        texto: "Dizer que o time vem primeiro hoje",
+        descricao: "-4 moral (relação abalada), sem efeito na força.",
+        bonusMoral: -4,
+      },
+    ],
+  },
+  {
+    id: "subornador-abordagem",
+    titulo: "Abordagem suspeita",
+    descricao:
+      "Treinador, desculpa te incomodar. Sou eu, o 'intermediário'. Olha, tem uma graninha " +
+      "extra pra você se o jogo de hoje... digamos... não sair do jeito que a torcida espera. " +
+      "Ninguém precisa saber. Topa?",
+    escolhas: [
+      {
+        id: "aceitar-suborno",
+        texto: "Aceitar o envelope",
+        descricao: "+25 soberania imediato, mas joga a próxima partida DESFALCADO e perde 5 pontos na tabela. Risco de W.O. se lesar de novo.",
+        impactoFinanceiro: 25,
+        desfalqueBotao: 1,
+        perdaPontos: 5,
+        riscoAlto: true,
+      },
+      {
+        id: "recusar-suborno",
+        texto: "Recusar e ameaçar denunciar",
+        descricao: "+6 soberania (imagem limpa) e a diretoria confia mais em você.",
+        impactoFinanceiro: 6,
+        bonusMoral: 2,
+      },
+      {
+        id: "jogar-duplo",
+        texto: "Fingir que topa e recolher provas",
+        descricao: "Sem dinheiro, mas +4 soberania ao denunciar depois. Arriscado.",
+        impactoFinanceiro: 4,
+        riscoAlto: true,
+      },
+    ],
+  },
 ];
 
 export function sortearEvento(idsUsadosRecentes: string[]): ChoiceEvent {

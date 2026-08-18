@@ -12,6 +12,7 @@ import { planAiShot } from "../engine/ai";
 import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
+import { AdSlot } from "@/components/AdSlot";
 
 type Props = {
   homeId: string;
@@ -100,6 +101,10 @@ export function MatchView({
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
   const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
+  // Intervalo da partida (halftime): exibe um container TV com anúncio AdSense
+  // quando a partida cruza a metade das jogadas. Dispara uma única vez.
+  const [halftime, setHalftime] = useState(false);
+  const halftimeShownRef = useRef(false);
 
   // Sincronizar turnsLeft com a prop turns (para modo online)
   useEffect(() => {
@@ -117,6 +122,18 @@ export function MatchView({
   useEffect(() => {
     turnsRef.current = turnsLeft;
   }, [turnsLeft]);
+
+  // Dispara o intervalo (halftime) quando a partida cruza a metade das jogadas.
+  // No modo online não interrompe (evita dessincronizar o oponente).
+  useEffect(() => {
+    if (isOnline) return;
+    if (halftimeShownRef.current || ended) return;
+    const metade = Math.floor(turns / 2);
+    if (turnsLeft <= metade && turnsLeft > 0) {
+      halftimeShownRef.current = true;
+      setHalftime(true);
+    }
+  }, [turnsLeft, turns, isOnline, ended]);
 
   // FIX CRÍTICO: Resetar flag de "já chutou" sempre que virar o turno do usuário
   // (modo offline). Sem isso, após o 1º chute o botão fica travado nas próximas jogadas.
@@ -758,6 +775,28 @@ export function MatchView({
               <p className="font-mono text-sm text-muted-foreground">
                 {away.short}: {pens.away.map((v) => (v ? "●" : "○")).join(" ")}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Intervalo da partida: container TV com anúncio Google AdSense.
+            Pausa o jogo até o treinador continuar (botão "Voltar ao jogo"). */}
+        {halftime && !ended && (
+          <div className="halftime-tv">
+            <div className="halftime-tv-frame">
+              <div className="halftime-tv-bar">
+                <span className="halftime-tv-dot" />
+                Intervalo · Patrocínio
+              </div>
+              <div className="p-3">
+                <AdSlot rotulo="Intervalo" nota="Anúncio do intervalo" altura="min-h-[120px]" />
+              </div>
+              <button
+                onClick={() => setHalftime(false)}
+                className="halftime-tv-continue btn-primary"
+              >
+                Voltar ao jogo
+              </button>
             </div>
           </div>
         )}
