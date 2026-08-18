@@ -460,6 +460,219 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_wallets: {
+        Row: {
+          id: string;
+          user_id: string;
+          balance: number;
+          frozen: boolean;
+          frozen_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          balance?: number;
+          frozen?: boolean;
+          frozen_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          balance?: number;
+          frozen?: boolean;
+          frozen_reason?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bank_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          transaction_type: string;
+          amount: number;
+          balance_after: number;
+          description: string | null;
+          source_module: string;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          transaction_type: string;
+          amount: number;
+          balance_after: number;
+          description?: string | null;
+          source_module: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          transaction_type?: string;
+          amount?: number;
+          balance_after?: number;
+          description?: string | null;
+          source_module?: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      bank_reserves: {
+        Row: {
+          id: string;
+          reserve_type: string;
+          allocated_amount: number;
+          max_cap: number;
+          yield_rate: number;
+          status: string;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          reserve_type: string;
+          allocated_amount?: number;
+          max_cap: number;
+          yield_rate?: number;
+          status?: string;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          reserve_type?: string;
+          allocated_amount?: number;
+          max_cap?: number;
+          yield_rate?: number;
+          status?: string;
+          metadata?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      anti_cheat_log: {
+        Row: {
+          id: string;
+          user_id: string;
+          session_id: string;
+          action_type: string;
+          module: string;
+          time_spent_seconds: number;
+          screens_viewed: number;
+          is_suspicious: boolean;
+          suspicion_reason: string | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          session_id: string;
+          action_type: string;
+          module: string;
+          time_spent_seconds: number;
+          screens_viewed?: number;
+          is_suspicious?: boolean;
+          suspicion_reason?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          session_id?: string;
+          action_type?: string;
+          module?: string;
+          time_spent_seconds?: number;
+          screens_viewed?: number;
+          is_suspicious?: boolean;
+          suspicion_reason?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      sov_market_products: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          price_sov: number;
+          category: string;
+          stock: number;
+          is_active: boolean;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          price_sov: number;
+          category: string;
+          stock?: number;
+          is_active?: boolean;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          price_sov?: number;
+          category?: string;
+          stock?: number;
+          is_active?: boolean;
+          metadata?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      sov_market_transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          product_id: string;
+          amount_sov: number;
+          status: string;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          product_id: string;
+          amount_sov: number;
+          status?: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          product_id?: string;
+          amount_sov?: number;
+          status?: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -621,6 +834,29 @@ export type Database = {
       };
       abandonar_partida_trilha: {
         Args: { p_mesa_id: string };
+        Returns: Json;
+      };
+      create_or_update_wallet: {
+        Args: { p_user_id: string };
+        Returns: string;
+      };
+      record_transaction: {
+        Args: {
+          p_user_id: string;
+          p_transaction_type: string;
+          p_amount: number;
+          p_description: string | null;
+          p_source_module: string;
+          p_metadata?: Json;
+        };
+        Returns: string;
+      };
+      update_reserve_allocation: {
+        Args: { p_reserve_type: string; p_amount: number; p_operation: string };
+        Returns: boolean;
+      };
+      adjust_yield_rate: {
+        Args: Record<never, never>;
         Returns: Json;
       };
     };
