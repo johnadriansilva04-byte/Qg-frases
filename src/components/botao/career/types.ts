@@ -2,6 +2,9 @@ import type { Difficulty } from "../types";
 
 export type TacticalStyle = "ataque" | "equilibrado" | "defesa";
 
+/** Divisão do Brasileirão em que o treinador está disputando a temporada. */
+export type Divisao = "serie-a" | "serie-b" | "serie-c";
+
 export type Coach = {
   nome: string;
   apelido: string;
@@ -70,6 +73,8 @@ export type CareerState = {
   headlines: Headline[]; // últimas manchetes
   ultimaRodadaProcessada: number; // pra saber quando gerar novo jornal
   eventoPendenteId: string | null; // choice event a ser mostrado antes da próxima
+  // Divisão atual do Brasileirão (promoção/rebaixamento entre séries).
+  divisao: Divisao;
   // Enredo de suborno (narrativa paralela). Veja subornoEngine.ts.
   suborno?: import("./subornoEngine").SubornoState;
 };

@@ -1,45 +1,122 @@
-import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { Smartphone, Send, ChevronLeft } from "lucide-react";
 import type { Choice, ChoiceEvent } from "./types";
 
 type Props = {
   evento: ChoiceEvent;
   onChoose: (choice: Choice) => void;
+  onBack?: () => void;
 };
 
-export function ChoiceModal({ evento, onChoose }: Props) {
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8" data-testid="choice-modal">
-      <div className="panel border-primary/30">
-        <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-primary">
-          <AlertTriangle className="size-4" />
-          <span>Decisão do treinador</span>
-        </div>
-        <h3 className="font-display text-2xl">{evento.titulo}</h3>
-        <p className="mt-2 text-sm text-muted-foreground">{evento.descricao}</p>
+/** Remetente e tom em primeira pessoa para cada tipo de decisão. */
+const SENDER: Record<string, { nome: string; cargo: string; initials: string }> = {
+  "craque-dor": { nome: "Dr. Maurício", cargo: "Departamento Médico", initials: "DM" },
+  coletiva: { nome: "Carlos", cargo: "Assessoria de Imprensa", initials: "AI" },
+  "escalar-jovem": { nome: "Sebastião", cargo: "Coordenador da Base", initials: "CB" },
+  torcida: { nome: "Beto", cargo: "Líder da Torcida", initials: "LT" },
+  "treino-intensivo": { nome: "Professor Léo", cargo: "Preparador Físico", initials: "PF" },
+};
 
-        <div className="mt-5 grid gap-2">
-          {evento.escolhas.map((c) => (
-            <button
-              key={c.id}
-              data-testid={`choice-${c.id}`}
-              onClick={() => onChoose(c)}
-              className={`rounded-xl border p-4 text-left transition hover:border-primary hover:bg-primary/5 ${
-                c.riscoAlto ? "border-yellow-500/40 bg-yellow-500/5" : "border-white/10 bg-slate-900/40"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-display text-base">{c.texto}</span>
-                {c.riscoAlto && (
-                  <span className="rounded border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-yellow-300">
-                    Risco alto
-                  </span>
-                )}
+function senderFor(evento: ChoiceEvent) {
+  return SENDER[evento.id] ?? { nome: "Diretoria", cargo: "Clube", initials: "CL" };
+}
+
+/**
+ * Tela do celular: decisões chegam como mensagens de comunicação pessoal,
+ * em primeira pessoa, como num bate-papo corporativo do clube — nunca como
+ * narração genérica em terceira pessoa.
+ */
+export function ChoiceModal({ evento, onChoose, onBack }: Props) {
+  const sender = senderFor(evento);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const handleChoose = (c: Choice) => {
+    setConfirmId(c.id);
+    // Pequeno delay para o usuário ver o "envio" da resposta.
+    setTimeout(() => onChoose(c), 220);
+  };
+
+  return (
+    <div className="mx-auto max-w-md px-4 py-6" data-testid="choice-modal">
+      <div className="phone-frame">
+        <div className="phone-notch" />
+
+        <div className="phone-screen">
+          {/* Cabeçalho do chat */}
+          <div className="phone-chat-head">
+            {onBack && (
+              <button onClick={onBack} className="phone-back" aria-label="Voltar">
+                <ChevronLeft className="size-5" />
+              </button>
+            )}
+            <div className="phone-avatar">{sender.initials}</div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-white">{sender.nome}</p>
+              <p className="truncate text-[10px] text-emerald-300">● online · {sender.cargo}</p>
+            </div>
+            <Smartphone className="size-4 text-slate-400" />
+          </div>
+
+          {/* Conversa */}
+          <div className="phone-chat-body">
+            <div className="phone-chat-day">Hoje</div>
+
+            <Bubble sender="them" titulo={evento.titulo}>
+              {evento.descricao}
+            </Bubble>
+
+            <div className="phone-chat-quick">
+              <span className="phone-quick-label">Responder:</span>
+              <div className="space-y-2">
+                {evento.escolhas.map((c) => (
+                  <button
+                    key={c.id}
+                    data-testid={`choice-${c.id}`}
+                    onClick={() => handleChoose(c)}
+                    disabled={confirmId !== null}
+                    className={`phone-reply ${confirmId === c.id ? "phone-reply-sent" : ""} ${
+                      c.riscoAlto ? "phone-reply-risk" : ""
+                    }`}
+                  >
+                    <span className="phone-reply-text">{c.texto}</span>
+                    {c.riscoAlto && <span className="phone-reply-flag">risco</span>}
+                    {confirmId === c.id && <Send className="size-3.5 text-emerald-300" />}
+                  </button>
+                ))}
               </div>
-              {c.descricao && <p className="mt-1 text-xs text-muted-foreground">{c.descricao}</p>}
-            </button>
-          ))}
+            </div>
+
+            {confirmId && (
+              <Bubble sender="me">
+                {evento.escolhas.find((c) => c.id === confirmId)?.texto}
+              </Bubble>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+function Bubble({
+  sender,
+  children,
+  titulo,
+}: {
+  sender: "me" | "them";
+  children: React.ReactNode;
+  titulo?: string;
+}) {
+  return (
+    <div className={`phone-bubble-wrap ${sender === "me" ? "phone-bubble-me" : "phone-bubble-them"}`}>
+      <div className="phone-bubble">
+        {titulo && <p className="phone-bubble-title">{titulo}</p>}
+        <p className="whitespace-pre-line text-sm leading-relaxed">{children}</p>
+      </div>
+      <span className="phone-bubble-time">
+        {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+      </span>
+    </div>
+  );
+}
+

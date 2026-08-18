@@ -384,3 +384,630 @@ button.panel:hover {
   animation: spin-slow 8s linear infinite;
 }
 
+/* ============================================================= */
+/*  Premium sports-dashboard design system — Futebol de Botão    */
+/* ============================================================= */
+
+:root {
+  --glass-card: color-mix(in oklab, var(--card) 86%, transparent);
+  --glass-card-strong: color-mix(in oklab, var(--card) 94%, transparent);
+  --ring-soft: oklch(1 0 0 / 8%);
+  --gold-soft: color-mix(in oklab, var(--gold) 28%, transparent);
+}
+
+/* ---- Próximo jogo em destaque ---- */
+.next-match-card {
+  position: relative;
+  border: 1px solid color-mix(in oklab, var(--gold) 35%, transparent);
+  border-radius: calc(var(--radius) + 8px);
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--gold) 10%, transparent) 0%, transparent 55%),
+    var(--glass-card-strong);
+  padding: 1.1rem 1.2rem;
+  box-shadow: 0 20px 50px -28px oklch(0 0 0 / 0.8), inset 0 1px 0 var(--ring-soft);
+}
+.next-match-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.next-match-tag {
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  color: color-mix(in oklab, var(--gold) 88%, white);
+}
+.next-match-div {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--gold) 40%, transparent);
+  color: color-mix(in oklab, var(--gold) 85%, white);
+  background: color-mix(in oklab, var(--gold) 12%, transparent);
+}
+
+/* ---- Card de celular / mensagens ---- */
+.celular-card {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+  border-radius: calc(var(--radius) + 6px);
+  background:
+    linear-gradient(120deg, color-mix(in oklab, var(--gold) 8%, transparent), transparent 60%),
+    var(--glass-card);
+  padding: 0.85rem 1rem;
+  box-shadow: 0 16px 40px -28px oklch(0 0 0 / 0.7);
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+button.celular-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold);
+}
+.celular-card-idle {
+  opacity: 0.7;
+  border-style: dashed;
+  background: var(--glass-card);
+}
+.celular-emoji {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 4px 10px oklch(0 0 0 / 0.4));
+}
+.celular-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.celular-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  font-size: 0.9rem;
+}
+.celular-sub {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+.celular-badge {
+  display: grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: oklch(0.62 0.24 27);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  box-shadow: 0 6px 16px -6px oklch(0.62 0.24 27 / 0.8);
+}
+.celular-cta {
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  color: color-mix(in oklab, var(--gold) 80%, white);
+}
+
+/* ---- Abas de competição (Copa do Brasil | Brasileirão) ---- */
+.comp-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  color: var(--muted-foreground);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  transition: all 0.16s ease;
+}
+.comp-tab:hover {
+  border-color: color-mix(in oklab, var(--gold) 50%, transparent);
+  color: var(--foreground);
+}
+.comp-tab-active {
+  border-color: var(--gold);
+  background: color-mix(in oklab, var(--gold) 14%, transparent);
+  color: color-mix(in oklab, var(--gold) 88%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--gold) 45%, transparent);
+}
+
+/* ---- Sub-abas de divisão (Série A/B/C) ---- */
+.div-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  transition: all 0.16s ease;
+}
+.div-tab:hover {
+  border-color: color-mix(in oklab, var(--gold) 45%, transparent);
+}
+.div-tab-active {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: oklch(0.2 0.03 150);
+}
+.div-tab-badge {
+  font-size: 0.55rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: oklch(0.2 0.03 150);
+  color: var(--gold);
+  text-transform: lowercase;
+}
+
+/* ---- Painel de estatísticas (módulos PS2) ---- */
+.stats-panel {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 6px);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--gold) 5%, transparent), transparent 40%),
+    var(--glass-card);
+  padding: 1.1rem 1.15rem;
+  box-shadow: 0 18px 44px -30px oklch(0 0 0 / 0.75);
+}
+.stats-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--ring-soft);
+}
+.stat-pill {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+}
+
+.stat-card {
+  position: relative;
+  border: 1px solid var(--ring-soft);
+  border-radius: calc(var(--radius) + 4px);
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  padding: 0.85rem 0.9rem;
+  overflow: hidden;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+}
+.stat-card-gold::before { background: oklch(0.84 0.15 86); }
+.stat-card-green::before { background: oklch(0.78 0.16 165); }
+.stat-card-flame::before { background: oklch(0.7 0.19 45); }
+.stat-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--gold) 40%, transparent);
+  box-shadow: 0 16px 36px -22px oklch(0 0 0 / 0.7);
+}
+.stat-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.stat-card-icon {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 0.5rem;
+}
+.stat-card-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* ---- Linhas de classificação com zonas ---- */
+.zone-row {
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease;
+}
+.zone-libertadores { border-left-color: oklch(0.7 0.15 230); background: oklch(0.7 0.15 230 / 0.08); }
+.zone-copa-brasil { border-left-color: oklch(0.78 0.16 165); background: oklch(0.78 0.16 165 / 0.08); }
+.zone-rebaixamento { border-left-color: oklch(0.62 0.24 27); background: oklch(0.62 0.24 27 / 0.08); }
+.zone-row.is-user { font-weight: 700; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--gold) 40%, transparent); }
+.zone-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 0.2rem;
+}
+.zone-swatch.zone-libertadores { background: oklch(0.7 0.15 230 / 0.35); }
+.zone-swatch.zone-copa-brasil { background: oklch(0.78 0.16 165 / 0.35); }
+.zone-swatch.zone-rebaixamento { background: oklch(0.62 0.24 27 / 0.35); }
+
+/* ---- Chips das fases da Copa do Brasil ---- */
+.copa-phase-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0.3rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--ring-soft);
+  background: color-mix(in oklab, var(--card) 75%, transparent);
+}
+.copa-phase-num {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: color-mix(in oklab, var(--gold) 80%, white);
+}
+.copa-phase-name {
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+/* ---- Calendário ---- */
+.cal-rodada {
+  border: 1px solid var(--ring-soft);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  padding: 0.7rem 0.85rem;
+}
+.cal-user-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--gold) 18%, transparent);
+  color: color-mix(in oklab, var(--gold) 88%, white);
+}
+.cal-jogo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--card) 60%, transparent);
+}
+.cal-jogo-user {
+  border: 1px solid color-mix(in oklab, var(--gold) 35%, transparent);
+  background: color-mix(in oklab, var(--gold) 8%, transparent);
+}
+
+/* ============================================================= */
+/*  Celular / chat em primeira pessoa                            */
+/* ============================================================= */
+.phone-frame {
+  position: relative;
+  max-width: 24rem;
+  margin-inline: auto;
+  border-radius: 2.5rem;
+  border: 4px solid oklch(0.2 0.02 150);
+  background: oklch(0.12 0.01 150);
+  padding: 0.7rem;
+  box-shadow: 0 30px 70px -30px oklch(0 0 0 / 0.85);
+}
+.phone-notch {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  width: 6rem;
+  height: 1.5rem;
+  border-radius: 0 0 1rem 1rem;
+  background: oklch(0.2 0.02 150);
+}
+.phone-screen {
+  border-radius: 1.5rem;
+  background: oklch(0.16 0.01 150);
+  min-height: 26rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.phone-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  background: color-mix(in oklab, var(--gold) 14%, oklch(0.14 0.01 150));
+  border-bottom: 1px solid var(--ring-soft);
+}
+.phone-back {
+  color: oklch(0.85 0.02 150);
+  transition: color 0.15s ease;
+}
+.phone-back:hover { color: var(--gold); }
+.phone-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--gold) 30%, transparent);
+  color: color-mix(in oklab, var(--gold) 90%, white);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--gold) 40%, transparent);
+}
+.phone-chat-body {
+  flex: 1;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  overflow-y: auto;
+}
+.phone-chat-day {
+  text-align: center;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: oklch(0.6 0.02 150);
+}
+.phone-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+}
+.phone-bubble-them { align-self: flex-start; }
+.phone-bubble-me { align-self: flex-end; align-items: flex-end; }
+.phone-bubble {
+  border-radius: 1rem 1rem 1rem 0.3rem;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  border: 1px solid var(--ring-soft);
+  padding: 0.65rem 0.8rem;
+  color: oklch(0.95 0.01 150);
+}
+.phone-bubble-me .phone-bubble {
+  border-radius: 1rem 1rem 0.3rem 1rem;
+  background: color-mix(in oklab, var(--gold) 26%, oklch(0.2 0.03 150));
+  border-color: color-mix(in oklab, var(--gold) 40%, transparent);
+}
+.phone-bubble-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  color: color-mix(in oklab, var(--gold) 85%, white);
+  margin-bottom: 0.25rem;
+}
+.phone-bubble-time {
+  margin-top: 0.25rem;
+  font-size: 0.55rem;
+  color: oklch(0.55 0.02 150);
+}
+.phone-chat-quick {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.phone-quick-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: oklch(0.6 0.02 150);
+}
+.phone-reply {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--ring-soft);
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  color: oklch(0.92 0.01 150);
+  transition: all 0.15s ease;
+}
+.phone-reply:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--gold) 45%, transparent);
+  background: color-mix(in oklab, var(--gold) 8%, transparent);
+}
+.phone-reply:disabled { opacity: 0.6; cursor: default; }
+.phone-reply-risk {
+  border-color: color-mix(in oklab, oklch(0.7 0.19 60) 40%, transparent);
+}
+.phone-reply-sent {
+  border-color: color-mix(in oklab, var(--gold) 50%, transparent);
+  background: color-mix(in oklab, var(--gold) 14%, transparent);
+}
+.phone-reply-text {
+  flex: 1;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+.phone-reply-flag {
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, oklch(0.7 0.19 60) 22%, transparent);
+  color: oklch(0.8 0.16 70);
+}
+
+/* ---- Menu cards aprimorados ---- */
+.panel.group:hover .group\:text-accent-foreground {
+  color: color-mix(in oklab, var(--gold) 88%, white);
+}
+
+/* ---- Scrollbar do chat ---- */
+.phone-chat-body::-webkit-scrollbar { width: 4px; }
+.phone-chat-body::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 0.15);
+  border-radius: 999px;
+}
+
+/* ---- Animação de entrada das bolhas ---- */
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.phone-bubble-wrap { animation: bubble-in 0.25s ease-out; }
+
+/* ---- Menu cards premium ---- */
+.menu-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 6px);
+  background:
+    linear-gradient(150deg, color-mix(in oklab, var(--gold) 5%, transparent), transparent 50%),
+    var(--glass-card);
+  padding: 1.2rem 1.25rem;
+  box-shadow: 0 18px 44px -30px oklch(0 0 0 / 0.75);
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.menu-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--gold);
+  opacity: 0.5;
+  transition: opacity 0.2s ease, width 0.2s ease;
+}
+.menu-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--gold) 45%, transparent);
+  box-shadow: 0 26px 56px -28px oklch(0 0 0 / 0.8);
+}
+.menu-card:hover::after { opacity: 1; width: 6px; }
+.menu-card-destructive {
+  border-color: color-mix(in oklab, var(--destructive) 45%, transparent);
+}
+.menu-card-destructive::after { background: var(--destructive); }
+.menu-card-destructive:hover {
+  border-color: var(--destructive);
+}
+
+.menu-card-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.9rem;
+  background: color-mix(in oklab, var(--gold) 14%, transparent);
+  color: color-mix(in oklab, var(--gold) 88%, white);
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+}
+.menu-accent-gold .menu-card-icon { background: color-mix(in oklab, var(--gold) 14%, transparent); color: color-mix(in oklab, var(--gold) 88%, white); border-color: color-mix(in oklab, var(--gold) 30%, transparent); }
+.menu-accent-gold::after { background: var(--gold); }
+.menu-accent-sky .menu-card-icon { background: oklch(0.7 0.15 230 / 0.16); color: oklch(0.75 0.15 230); border-color: oklch(0.7 0.15 230 / 0.35); }
+.menu-accent-sky::after { background: oklch(0.7 0.15 230); }
+.menu-accent-emerald .menu-card-icon { background: oklch(0.78 0.16 165 / 0.16); color: oklch(0.8 0.16 165); border-color: oklch(0.78 0.16 165 / 0.35); }
+.menu-accent-emerald::after { background: oklch(0.78 0.16 165); }
+.menu-accent-fuchsia .menu-card-icon { background: oklch(0.7 0.2 320 / 0.16); color: oklch(0.75 0.2 320); border-color: oklch(0.7 0.2 320 / 0.35); }
+.menu-accent-fuchsia::after { background: oklch(0.7 0.2 320); }
+.menu-accent-amber .menu-card-icon { background: oklch(0.82 0.15 84 / 0.16); color: oklch(0.85 0.15 84); border-color: oklch(0.82 0.15 84 / 0.35); }
+.menu-accent-amber::after { background: oklch(0.82 0.15 84); }
+.menu-card-icon-destructive {
+  background: oklch(0.62 0.24 27 / 0.16);
+  color: var(--destructive);
+  border-color: oklch(0.62 0.24 27 / 0.35);
+}
+.menu-card-cta {
+  display: block;
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  color: color-mix(in oklab, var(--gold) 80%, white);
+}
+
+/* ---- Painel de soberania do treinador ---- */
+.sovereignty-panel {
+  position: relative;
+  border: 1px solid color-mix(in oklab, var(--gold) 28%, transparent);
+  border-radius: calc(var(--radius) + 8px);
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--gold) 9%, transparent), transparent 55%),
+    var(--glass-card-strong);
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 22px 54px -30px oklch(0 0 0 / 0.8);
+}
+.sovereignty-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sovereignty-icon {
+  font-size: 1.85rem;
+  filter: drop-shadow(0 6px 14px oklch(0 0 0 / 0.4));
+}
+.sovereignty-eyebrow {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.sovereignty-name {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+.sovereignty-rank {
+  color: color-mix(in oklab, var(--gold) 85%, white);
+}
+.stat-tile {
+  border-radius: var(--radius);
+  border: 1px solid var(--ring-soft);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  padding: 0.55rem 0.6rem;
+}
+.stat-tile-accent {
+  background: color-mix(in oklab, var(--gold) 12%, transparent);
+  border-color: color-mix(in oklab, var(--gold) 30%, transparent);
+}
+.sovereignty-bar {
+  height: 0.5rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.1);
+}
+.sovereignty-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), color-mix(in oklab, var(--gold) 60%, white));
+  transition: width 0.4s ease;
+}
+
+
+
+

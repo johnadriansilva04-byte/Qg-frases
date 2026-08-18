@@ -69,6 +69,69 @@ blocos, limpar_salas). Assinaturas alinhadas ao SQL em
   antes para o TS aplicar control-flow narrowing.
 - `tsc --noEmit`: **0 erros** | `vite build`: OK.
 
+## Modo Carreira — refatoração UI/UX + correções (2026-08-18)
+
+### Fundação
+- `CareerState` em `types.ts` ganhou `Divisao = "serie-a" | "serie-b" | "serie-c"` e
+  campo `divisao: Divisao | null`. Imports mortos de `seasonApi`/`seasonTypes`
+  removidos de `BotaoGame.tsx`. `tsc --noEmit` 0 erros.
+
+### Camada de competições (`career/competitionApi.ts` — NOVO)
+- `resolveTeam(teamId, userTeam)`: devolve `userTeam` só quando `teamId === userTeam.id`,
+  senão `teamByIdSync(teamId)`. **Corrige o bug "FB vs FB"** — antes o `getTeam` do
+  `ChampionshipModule` retornava sempre `userTeam` para qualquer id.
+- `calcularStats(tour, userTeam)`: estatísticas REAIS derivadas da tabela e partidas
+  disputadas (artilheiro = maior `gp`, goleiro = menor `gc`, maior goleada = maior
+  diff em `groupFixtures` jogados). Usa `for...of` (não `forEach`) para o TS acompanhar
+  o narrowing do acumulador mutável.
+- `gerarCopaBrasil(userTeam, difficulty)`: mata-mata de 16 times. 2ª fase definida,
+  fases seguintes como confrontos TBD (placeholders) que se resolvem ao avançar.
+  Rounds ganham rótulos em `COPA_BRASIL_STAGES` para o calendário.
+- `dataDaRodada(indice)`: data simbólica (hoje + indice×7 dias) p/ o calendário.
+- `DIVISAO_LABEL`/`DIVISAO_SHORT`: mapas `Record<Divisao, string>`.
+
+### Navegação de campeonatos (`ChampionshipModule.tsx`)
+- Submenu funcional: **Copa do Brasil** | **Brasileirão**.
+- Ao selecionar Brasileirão, abre sub-toggle Série A/B/C (default = divisão do
+  usuário, marcada com badge "você"). Estatísticas centralizadas no `StatsModule`.
+
+### Estatísticas centralizadas (`StatsModule.tsx` — estilo PS2)
+- Painel único (`stats-panel`) com 3 módulos/cards distintos: Artilharia,
+  Defesa menos vazada, Maior goleada. Acento de cor por divisão
+  (`DIVISAO_ACCENT` — emerald/sky/fuchsia). Props: `{ title, stats, divisao }`.
+
+### Calendário (`CalendarView.tsx`)
+- Filtro de competição (Brasileirão | Copa do Brasil). Mostra rodadas da liga
+  + rounds da Copa do Brasil com datas. Props: `{ tour, userTeam, currentDivisao, copaBrasil }`.
+
+### Decisões do jogo → celular/chat em 1ª pessoa
+- `playNext` agora roteia decisões pendentes para a tela `celular` (não mais
+  narração bloqueante "⚠ Decisão pendente"). Tela `celular` (NOVA em `Screen`) é
+  inbox unificado: prioriza `eventoPendente` (chat), senão mostra `suborno`.
+- `ChoiceModal.tsx` reescrito como chat de celular (phone-frame, bolhas, avatar
+  do remetente). `SENDER` mapeia cada `ChoiceEvent.id` a um remetente/cargo.
+- `choicesEngine.ts`: descrições reescritas em **1ª pessoa** diretas ao treinador
+  ("Treinador, aqui é o Dr. Maurício..."), nunca mais narração em 3ª pessoa.
+- Tela antiga `choice` removida (superseded pela `celular`). Tela `suborno`
+  mantida como fallback.
+
+### UI/UX premium (`styles.css` — design system novo)
+- Classes: `next-match-card`, `celular-card`, `comp-tab`/`div-tab`, `stats-panel`/
+  `stat-card` (gold/green/flame), `zone-row` (libertadores/copa-brasil/rebaixamento),
+  `phone-frame`/`phone-bubble`/`phone-reply`, `cal-rodada`/`cal-jogo`,
+  `copa-phase-chip`, `menu-card` (accents gold/sky/emerald/fuchsia/amber),
+  `sovereignty-panel`/`stat-tile`. Usa `color-mix(in oklab, ...)` e `oklch()`.
+- `Hub` reescrito: 2 colunas (`lg:grid-cols-[1fr_1.1fr]`) sem blocos vazios;
+  stats duplicadas removidas (centralizadas no `ChampionshipModule`).
+- `MenuCard` ganhou prop `accent` e barras de cor laterais. `SovereigntyPanel`
+  redesenhado como hero com tiles e barra de progresso.
+
+### Verificação
+- `tsc --noEmit` → 0 erros. `vite build` → OK.
+- O `vite dev` sob o proxy do work-host exibe erro de hidratação do
+  `@tanstack/react-start/.../client.tsx` — **ambiental, não relacionado ao código**
+  (não ocorre no build de produção). Verificar no dashboard Vercel.
+
 ## Deploy Vercel — observação importante
 
 O script `build` é só `vite build` (não roda `tsc`). Ainda assim, o Vercel

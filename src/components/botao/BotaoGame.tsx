@@ -50,7 +50,8 @@ import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
 import { SubornoStory } from "./career/SubornoStory";
 import { CalendarView } from "./career/CalendarView";
-import { ChampionshipModule } from "./career/ChampionshipModule";
+import { ChampionshipModule, ZoneLegend } from "./career/ChampionshipModule";
+import { gerarCopaBrasil, resolveTeam } from "./career/competitionApi";
 import {
   SUBORNO_INICIAL,
   deveOfertarSuborno,
@@ -67,7 +68,7 @@ import {
 } from "./career/careerStorage";
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
-import { POINTS, type CareerState, type Choice } from "./career/types";
+import { POINTS, type CareerState, type Choice, type Divisao } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
 import {
@@ -79,17 +80,6 @@ import {
   aplicarEscolhaRemoto,
   iniciarCampanhaRemota,
 } from "./career/careerRemote";
-import {
-  getOrCreateCurrentSeason,
-  inscreverSeason,
-  criarCompeticao,
-  gerarBrasileirao,
-  gerarCopaBrasil,
-  gerarLibertadores,
-  getSeasonState,
-  processarCustoMensal,
-} from "./career/seasonApi";
-import { type SeasonState } from "./career/seasonTypes";
 
 type Screen =
   | "auth"
@@ -104,6 +94,7 @@ type Screen =
   | "tournament-match"
   | "choice"
   | "suborno"
+  | "celular"
   | "trophies";
 
 interface BotaoGameProps {
@@ -120,7 +111,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
-  const [seasonState, setSeasonState] = useState<SeasonState | null>(null);
 
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
@@ -462,9 +452,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const playNext = () => {
     if (!tour) return;
-    // Se houver evento de carreira pendente, mostra a escolha antes
+    // Decisões pendentes não são mais uma narração bloqueante: o usuário é
+    // levado ao celular, onde lê a mensagem (chat em 1ª pessoa) e responde.
     if (career?.eventoPendenteId) {
-      setScreen("choice");
+      setScreen("celular");
       return;
     }
     const f = nextUserFixture(tour);
@@ -933,6 +924,58 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
+  if (screen === "celular") {
+    // Inbox unificado do celular: decisões (chat em 1ª pessoa) e enredo de suborno.
+    // Prioriza a decisão pendente; ao resolves, segue para a partida automaticamente.
+    const eventoPendente = career?.eventoPendenteId
+      ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
+      : null;
+    const subornoAtivo =
+      career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
+
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
+        <div className="mx-auto w-full max-w-5xl px-4 pb-16">
+          <Header
+            progress={progress}
+            onTrophies={() => setScreen("trophies")}
+            onHome={() => setScreen("menu")}
+          />
+          {eventoPendente ? (
+            <ChoiceModal
+              evento={eventoPendente}
+              onChoose={aplicarEscolha}
+              onBack={() => setScreen("hub")}
+            />
+          ) : subornoAtivo ? (
+            <SubornoStory
+              state={career!.suborno!}
+              onAvancar={aplicarSuborno}
+              onFechar={() => {
+                if (!career?.suborno?.nodeAtual) {
+                  playNext();
+                } else {
+                  setScreen("hub");
+                }
+              }}
+            />
+          ) : (
+            <div className="panel text-center py-12">
+              <p className="font-display text-2xl">Sem mensagens</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Seu celular está em dia. Volte quando houver novidades do clube.
+              </p>
+              <button onClick={() => setScreen("hub")} className="btn-primary mt-4">
+                Voltar ao hub
+              </button>
+            </div>
+          )}
+        </div>
+      </Shell>
+    );
+  }
+
   if (screen === "suborno" && career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho)) {
     return (
       <Shell>
@@ -949,20 +992,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             }
           }}
         />
-      </Shell>
-    );
-  }
-
-  if (screen === "choice" && career?.eventoPendenteId) {
-    const evento = CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId);
-    if (!evento) {
-      setScreen("hub");
-      return null;
-    }
-    return (
-      <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
-        <ChoiceModal evento={evento} onChoose={aplicarEscolha} />
       </Shell>
     );
   }
@@ -1068,7 +1097,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             career={career}
             onPlay={playNext}
             onExit={() => setScreen("menu")}
-            onOpenSuborno={() => setScreen("suborno")}
+            onOpenCelular={() => setScreen("celular")}
           />
         )}
 
@@ -1149,30 +1178,35 @@ function Menu({
           title="Amistoso"
           desc="Partida rápida contra qualquer time. Bom pra treinar o dedo."
           onClick={onFriendly}
+          accent="sky"
         />
         <MenuCard
           icon={<Globe className="size-5" />}
           title="Amistoso Online"
           desc="Partida em tempo real contra jogadores reais. Crie ou entre numa mesa."
           onClick={onOnline}
+          accent="emerald"
         />
         <MenuCard
           icon={<Trophy className="size-5" />}
           title="Campeonato Online"
           desc="Campeonato round-robin com até 8 jogadores. Pontos contam no ranking."
           onClick={onOnlineChampionship}
+          accent="amber"
         />
         <MenuCard
           icon={<Medal className="size-5" />}
           title="Modo Carreira"
-          desc="Fase de grupos + mata-mata. Sorteio aleatório a cada campanha."
+          desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos."
           onClick={onTournament}
+          accent="fuchsia"
         />
         <MenuCard
-          icon={<Medal className="size-5" />}
+          icon={<Trophy className="size-5" />}
           title="Sala de troféus"
           desc={`${progress.trophies.length} título(s) · amistosos ${progress.friendlies.w}V ${progress.friendlies.d}E ${progress.friendlies.l}D`}
           onClick={onTrophies}
+          accent="gold"
         />
         {hasTour && (
           <MenuCard
@@ -1180,6 +1214,7 @@ function Menu({
             title="Continuar campanha"
             desc="Voltar para o torneio em andamento."
             onClick={onResume}
+            accent="emerald"
           />
         )}
         {hasTour && (
@@ -1188,6 +1223,7 @@ function Menu({
             title="Salvar campanha"
             desc="Salva o progresso atual da campanha no servidor."
             onClick={onSaveCampaign}
+            accent="sky"
           />
         )}
         {hasTour && (
@@ -1211,28 +1247,33 @@ function MenuCard({
   desc,
   onClick,
   destructive,
+  accent = "gold",
 }: {
   icon: React.ReactNode;
   title: string;
   desc: string;
   onClick: () => void;
   destructive?: boolean;
+  accent?: "gold" | "sky" | "emerald" | "fuchsia" | "amber";
 }) {
+  const accentMap = {
+    gold: "menu-accent-gold",
+    sky: "menu-accent-sky",
+    emerald: "menu-accent-emerald",
+    fuchsia: "menu-accent-fuchsia",
+    amber: "menu-accent-amber",
+  };
   return (
     <button
       onClick={onClick}
-      className={`panel group text-left ${destructive ? "border-destructive/50 hover:border-destructive" : ""}`}
+      className={`menu-card group ${destructive ? "menu-card-destructive" : accentMap[accent]}`}
     >
-      <span
-        className={`mb-3 flex items-center gap-2 ${destructive ? "text-destructive" : "text-accent-foreground"}`}
-      >
+      <span className={`menu-card-icon ${destructive ? "menu-card-icon-destructive" : accentMap[accent]}`}>
         {icon}
       </span>
-      <span className="block font-display text-2xl">{title}</span>
+      <span className="mt-3 block font-display text-2xl leading-tight">{title}</span>
       <span className="mt-1 block text-sm text-muted-foreground">{desc}</span>
-      <span
-        className={`mt-4 block font-display text-xs tracking-[0.2em} uppercase ${destructive ? "text-destructive" : "text-accent-foreground"}`}
-      >
+      <span className={`menu-card-cta ${destructive ? "text-destructive" : ""}`}>
         {destructive ? "Excluir →" : "Entrar →"}
       </span>
     </button>
@@ -1344,330 +1385,191 @@ function Hub({
   career,
   onPlay,
   onExit,
-  onOpenSuborno,
+  onOpenCelular,
 }: {
   tour: Tournament;
   userTeam: Team;
   career: CareerState | null;
   onPlay: () => void;
   onExit: () => void;
-  onOpenSuborno: () => void;
+  onOpenCelular: () => void;
 }) {
-  const [showFullTable, setShowFullTable] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const stage = tour.knockout[tour.knockout.length - 1];
 
-  // Função auxiliar para buscar time, usando o time personalizado do usuário se necessário
-  const getTeam = (teamId: string): Team => {
-    if (teamId === userTeam.id) return userTeam;
-    return teamByIdSync(teamId);
-  };
+  const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
 
-  // Calcular estatísticas do campeonato
-  const campeonatoStats = useMemo(() => {
-    if (tour.phase !== "grupos" || tour.groups.length === 0) return null;
-    
-    const tabela = sortTable(tour.groups[0]!.table);
-    const artilheiro = tabela.reduce((max, r) => (r.gp > max.gp ? r : max), tabela[0]!);
-    const menosGols = tabela.reduce((min, r) => (r.gc < min.gc ? r : min), tabela[0]!);
-    
-    // Encontrar maior vitória
-    let maiorVitoria: any = null;
-    tour.groupFixtures.forEach(f => {
-      if (f.result && f.played) {
-        const diff = Math.abs(f.result.homeGoals - f.result.awayGoals);
-        if (!maiorVitoria || diff > maiorVitoria.diff) {
-          maiorVitoria = {
-            homeId: f.homeId,
-            awayId: f.awayId,
-            homeGoals: f.result.homeGoals,
-            awayGoals: f.result.awayGoals,
-            diff
-          };
-        }
-      }
-    });
+  // Copa do Brasil: sorteada uma vez por temporada (memoizada por userTeam + difficulty).
+  const copaBrasil = useMemo(
+    () => gerarCopaBrasil(userTeam, tour.difficulty),
+    [userTeam, tour.difficulty],
+  );
 
-    let maiorVitoriaStats = null;
-    if (maiorVitoria) {
-      const vencedorId = maiorVitoria.homeGoals > maiorVitoria.awayGoals ? maiorVitoria.homeId : maiorVitoria.awayId;
-      const perdedorId = maiorVitoria.homeGoals > maiorVitoria.awayGoals ? maiorVitoria.awayId : maiorVitoria.homeId;
-      maiorVitoriaStats = {
-        vencedor: getTeam(vencedorId),
-        perdedor: getTeam(perdedorId),
-        placar: `${maiorVitoria.homeGoals}-${maiorVitoria.awayGoals}`,
-        diff: maiorVitoria.diff
-      };
-    }
+  const divisao = career?.divisao ?? "serie-c";
+  const divisaoShort = divisao === "serie-a" ? "SÉRIE A" : divisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
 
-    return {
-      artilheiro: { team: getTeam(artilheiro.teamId), gols: artilheiro.gp },
-      menosGols: { team: getTeam(menosGols.teamId), gols: menosGols.gc },
-      maiorVitoria: maiorVitoriaStats
-    };
-  }, [tour, userTeam]);
+  // Contagem de mensagens não lidas no celular (decisões + suborno).
+  const mensagensPendentes =
+    (career?.eventoPendenteId ? 1 : 0) + (career?.suborno?.nodeAtual ? 1 : 0);
+  const temCelular = mensagensPendentes > 0;
+
+  const userPos =
+    tour.phase === "grupos" && tour.groups.length > 0
+      ? sortTable(tour.groups[0]!.table).findIndex((r) => r.teamId === tour.userTeamId) + 1
+      : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {career?.coach.nome && <SovereigntyPanel coach={career.coach} moral={career.moralTime} />}
 
-      {/* Layout Grid 50/50 */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* COLUNA DA ESQUERDA - MÓDULOS E AÇÕES */}
-        <div className="flex flex-col gap-3">
-          {/* Card Próximo Jogo */}
-          <div className="panel">
-            <div className="flex items-center justify-between mb-2">
-              <p className="font-display text-lg tracking-[0.2em] text-emerald-400 uppercase font-bold">
-                {tour.phase === "fim"
-                  ? "Campanha encerrada"
-                  : tour.phase === "grupos"
-                    ? "Brasileirão, Série C"
-                    : stage?.stage}
-              </p>
-              <p className="text-xs text-muted-foreground uppercase">
-                {career?.divisao === "serie-a" ? "SÉRIE A" : career?.divisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}
-              </p>
-            </div>
-            {tour.phase === "fim" ? (
-              <p className="mt-2 font-display text-2xl">
-                Campeão: <TeamBadge team={getTeam(tour.champion!)} />
-              </p>
-            ) : next ? (
-              <>
-                <div className="flex items-center justify-between gap-4 mt-2">
-                  <div className="flex items-center gap-3">
-                    <TeamBadge team={getTeam(next.homeId)} size="md" />
-                    <span className="text-2xl font-bold text-muted-foreground">vs</span>
-                    <TeamBadge team={getTeam(next.awayId)} size="md" />
-                  </div>
-                  <button
-                    data-testid="entrar-em-campo"
-                    onClick={onPlay}
-                    className="btn-primary text-sm px-4 py-2"
-                  >
-                    Entrar
-                  </button>
-                </div>
-                <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>Rodada {next.stage}</span>
-                  {tour.phase === "grupos" && tour.groups.length > 0 && (
-                    <span>
-                      Posição: {sortTable(tour.groups[0]!.table).findIndex((r) => r.teamId === tour.userTeamId) + 1}º
-                    </span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">Aguardando próximo jogo...</p>
-            )}
-            {career?.eventoPendenteId && (
-              <p className="mt-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
-                ⚠ Decisão importante pendente antes da partida
-              </p>
-            )}
-          </div>
-
-          {/* Card Celular / Notificações */}
-          {career?.suborno?.nodeAtual && (
-            <div className="panel flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">📱</span>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-yellow-300">Celular</span>
-                  <span className="text-xs text-yellow-300">1</span>
-                </div>
+      {/* Próximo jogo em destaque */}
+      <div className="next-match-card">
+        <div className="next-match-head">
+          <span className="next-match-tag">
+            {tour.phase === "fim"
+              ? "Campanha encerrada"
+              : tour.phase === "grupos"
+                ? "Brasileirão"
+                : stage?.stage}
+          </span>
+          <span className="next-match-div">{divisaoShort}</span>
+        </div>
+        {tour.phase === "fim" ? (
+          <p className="mt-3 font-display text-2xl">
+            Campeão: <TeamBadge team={getTeam(tour.champion!)} />
+          </p>
+        ) : next ? (
+          <>
+            <div className="mt-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <TeamBadge team={getTeam(next.homeId)} size="md" />
+                <span className="font-display text-2xl text-muted-foreground">×</span>
+                <TeamBadge team={getTeam(next.awayId)} size="md" />
               </div>
               <button
-                onClick={onOpenSuborno}
-                className="btn-primary text-[10px] px-3 py-1"
+                data-testid="entrar-em-campo"
+                onClick={onPlay}
+                className="btn-primary px-5 py-2.5 text-sm"
               >
-                Ler
+                Entrar em campo
               </button>
+            </div>
+            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+              <span>{next.stage}</span>
+              {userPos > 0 && <span>Posição: {userPos}º</span>}
+              {temCelular && <span className="text-amber-300">Celular com mensagens</span>}
+            </div>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">Aguardando próximo jogo...</p>
+        )}
+      </div>
+
+      {/* Layout principal: 2 colunas sem blocos vazios */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        {/* COLUNA ESQUERDA — ações e celular */}
+        <div className="flex flex-col gap-3">
+          {/* Celular / mensagens em primeira pessoa */}
+          {temCelular ? (
+            <button onClick={onOpenCelular} className="celular-card">
+              <span className="celular-emoji">📱</span>
+              <div className="celular-info">
+                <span className="celular-title">Celular do Treinador</span>
+                <span className="celular-sub">
+                  {mensagensPendentes} mensagem{mensagensPendentes !== 1 ? "s" : ""} nova{mensagensPendentes !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <span className="celular-badge">{mensagensPendentes}</span>
+              <span className="celular-cta">Abrir</span>
+            </button>
+          ) : (
+            <div className="celular-card celular-card-idle">
+              <span className="celular-emoji">📱</span>
+              <div className="celular-info">
+                <span className="celular-title">Celular do Treinador</span>
+                <span className="celular-sub">Sem mensagens no momento</span>
+              </div>
             </div>
           )}
 
-          {/* Card Notícias (Resumo) */}
+          {/* Notícias (resumo) */}
           {career && career.headlines.length > 0 && (
             <div className="panel">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-sm">Últimas Notícias</h3>
-                <button className="text-xs text-blue-400">Ver todas</button>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="font-display text-sm font-bold tracking-wide">Últimas Notícias</h3>
               </div>
-              <p className="text-xs text-gray-300 line-clamp-2">
-                {career.headlines[0]?.manchete.toUpperCase()}
+              <p className="line-clamp-2 text-xs text-foreground/80">
+                {career.headlines[0]?.manchete}
               </p>
             </div>
           )}
 
-          {/* Botão Calendário */}
+          {/* Calendário */}
           <button
             onClick={() => setShowCalendar(!showCalendar)}
-            className="panel flex items-center justify-between hover:border-emerald-500/50 transition"
+            className="panel flex items-center justify-between hover:border-emerald-500/50"
           >
             <div className="flex items-center gap-2">
               <Calendar className="size-4 text-emerald-400" />
-              <span className="font-display text-sm">Calendário</span>
+              <span className="font-display text-sm tracking-wide">Calendário da Temporada</span>
             </div>
             <ChevronRight className={`size-4 transition-transform ${showCalendar ? "rotate-90" : ""}`} />
           </button>
-
-          {/* Calendário expandido */}
           {showCalendar && (
-            <CalendarView tour={tour} userTeam={userTeam} currentDivisao={career?.divisao || "serie-c"} />
+            <CalendarView tour={tour} userTeam={userTeam} currentDivisao={divisao} copaBrasil={copaBrasil} />
           )}
 
-          {/* Módulo de Campeonatos */}
-          <ChampionshipModule tour={tour} userTeam={userTeam} currentDivisao={career?.divisao || "serie-c"} />
+          <button onClick={onExit} className="btn-ghost w-full">
+            Voltar ao menu
+          </button>
         </div>
 
-        {/* COLUNA DA DIREITA - CLASSIFICAÇÃO COMPACTA */}
-        {tour.phase === "grupos" && tour.groups.length > 0 && (
-          <div className="panel flex flex-col justify-between">
-            {showFullTable ? (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-bold text-sm">Classificação Completa</h3>
-                  <button onClick={() => setShowFullTable(false)} className="text-xs text-blue-400">Voltar</button>
-                </div>
-                <table className="w-full text-xs text-left">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="py-1 w-8">#</th>
-                      <th className="py-1">TIME</th>
-                      <th className="w-8 text-center">P</th>
-                      <th className="w-8 text-center">J</th>
-                      <th className="w-10 text-center">SG</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortTable(tour.groups[0]!.table).map((r, i) => {
-                      const position = i + 1;
-                      const zone = position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
-                      return (
-                        <tr
-                          key={r.teamId}
-                          className={`${r.teamId === tour.userTeamId ? "text-accent-foreground" : ""} ${
-                            zone === "libertadores" ? "bg-blue-500/10" :
-                            zone === "copa-brasil" ? "bg-green-500/10" :
-                            zone === "rebaixamento" ? "bg-red-500/10" : ""
-                          }`}
-                        >
-                          <td className="text-center py-1 font-bold">{position}º</td>
-                          <td className="py-1">
-                            <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                            </span>
-                          </td>
-                          <td className="text-center py-1">{r.p}</td>
-                          <td className="text-center py-1">{r.j}</td>
-                          <td className="text-center py-1">{r.gp - r.gc}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {campeonatoStats && (
-                  <div className="mt-4 space-y-2 border-t border-gray-700 pt-3">
-                    <h4 className="font-bold text-xs">Estatísticas do Campeonato</h4>
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      <div className="bg-slate-800 p-2 rounded">
-                        <p className="text-muted-foreground">Artilheiro</p>
-                        <p className="font-bold text-yellow-300">{campeonatoStats.artilheiro.team.short}</p>
-                        <p className="text-yellow-300">{campeonatoStats.artilheiro.gols} gols</p>
-                      </div>
-                      <div className="bg-slate-800 p-2 rounded">
-                        <p className="text-muted-foreground">Menos Gols</p>
-                        <p className="font-bold text-green-300">{campeonatoStats.menosGols.team.short}</p>
-                        <p className="text-green-300">{campeonatoStats.menosGols.gols} gols</p>
-                      </div>
-                    </div>
-                    {campeonatoStats.maiorVitoria && (
-                      <div className="bg-slate-800 p-2 rounded text-[10px]">
-                        <p className="text-muted-foreground">Maior Vitória</p>
-                        <p className="font-bold text-emerald-300">{campeonatoStats.maiorVitoria.vencedor.short} {campeonatoStats.maiorVitoria.placar} {campeonatoStats.maiorVitoria.perdedor.short}</p>
-                        <p className="text-emerald-300">Diferença de {campeonatoStats.maiorVitoria.diff} gols</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="mt-3 space-y-1 text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500/20 rounded"></div>
-                    <span className="text-blue-300">Libertadores (1º-4º)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500/20 rounded"></div>
-                    <span className="text-green-300">Copa do Brasil (5º-6º)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-500/20 rounded"></div>
-                    <span className="text-red-300">Rebaixamento (18º-20º)</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-bold text-sm">Classificação (Top 5)</h3>
-                  <button onClick={() => setShowFullTable(true)} className="text-xs text-blue-400">Tabela Completa</button>
-                </div>
-                <table className="w-full text-xs text-left">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="py-1 w-8">#</th>
-                      <th className="py-1">TIME</th>
-                      <th className="w-8 text-center">P</th>
-                      <th className="w-8 text-center">J</th>
-                      <th className="w-10 text-center">SG</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortTable(tour.groups[0]!.table).slice(0, 5).map((r, i) => {
-                      const position = i + 1;
-                      const zone = position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
-                      return (
-                        <tr
-                          key={r.teamId}
-                          className={`${r.teamId === tour.userTeamId ? "text-accent-foreground" : ""} ${
-                            zone === "libertadores" ? "bg-blue-500/10" :
-                            zone === "copa-brasil" ? "bg-green-500/10" :
-                            zone === "rebaixamento" ? "bg-red-500/10" : ""
-                          }`}
-                        >
-                          <td className="text-center py-1 font-bold">{position}º</td>
-                          <td className="py-1">
-                            <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                            </span>
-                          </td>
-                          <td className="text-center py-1">{r.p}</td>
-                          <td className="text-center py-1">{r.j}</td>
-                          <td className="text-center py-1">{r.gp - r.gc}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <div className="mt-3 space-y-1 text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500/20 rounded"></div>
-                    <span className="text-blue-300">Libertadores (1º-4º)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500/20 rounded"></div>
-                    <span className="text-green-300">Copa do Brasil (5º-6º)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-500/20 rounded"></div>
-                    <span className="text-red-300">Rebaixamento (18º-20º)</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* COLUNA DIREITA — campeonatos + classificação (centraliza stats) */}
+        <div className="flex flex-col gap-3">
+          <ChampionshipModule tour={tour} userTeam={userTeam} currentDivisao={divisao} />
+
+          {tour.phase === "grupos" && tour.groups.length > 0 && (
+            <div className="panel">
+              <h3 className="mb-2 font-display text-sm font-bold tracking-wide">Classificação</h3>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="w-8 py-1">#</th>
+                    <th className="py-1">TIME</th>
+                    <th className="w-8 text-center">P</th>
+                    <th className="w-8 text-center">J</th>
+                    <th className="w-10 text-center">SG</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortTable(tour.groups[0]!.table).map((r, i) => {
+                    const position = i + 1;
+                    const zone =
+                      position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                    return (
+                      <tr
+                        key={r.teamId}
+                        className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
+                      >
+                        <td className="py-1 text-center font-bold">{position}º</td>
+                        <td className="py-1">
+                          <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                            <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                          </span>
+                        </td>
+                        <td className="py-1 text-center">{r.p}</td>
+                        <td className="py-1 text-center">{r.j}</td>
+                        <td className="py-1 text-center">{r.gp - r.gc}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <ZoneLegend />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -8,11 +8,12 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
     id: "craque-dor",
     titulo: "Craque com desconforto muscular",
     descricao:
-      "Seu principal jogador reclamou de dor após o treino. O departamento médico deixou a decisão nas suas mãos.",
+      "Treinador, aqui é o Dr. Maurício. O craque sentiu um incômodo muscular depois do treino de hoje. " +
+      "Não é lesão confirmada, mas não quero assumir o risco sozinho. Como quer encaminhar isso pra próxima partida?",
     escolhas: [
       {
         id: "arriscar",
-        texto: "Escalar mesmo assim (arriscar)",
+        texto: "Escala mesmo assim (arriscar)",
         descricao: "+2 força ofensiva na próxima partida, mas moral cai se não vencer.",
         bonusPoder: 2,
         penaltyPontos: 1,
@@ -30,7 +31,9 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
   {
     id: "coletiva",
     titulo: "Coletiva de imprensa",
-    descricao: "Os jornalistas querem saber como você encara o próximo adversário.",
+    descricao:
+      "Treinador, é o Carlos, da assessoria. Os jornalistas já estão na sala de imprensa perguntando " +
+      "como a gente encara o próximo adversário. Qual o recado que eu repasso pra eles?",
     escolhas: [
       {
         id: "goleada",
@@ -56,7 +59,9 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
   {
     id: "escalar-jovem",
     titulo: "A joia da base pede oportunidade",
-    descricao: "Um moleque da base vem treinando muito. O clube pressiona por uma chance.",
+    descricao:
+      "Treinador, aqui é o Sebastião, da base. Tem um moleque que tá treinando demais, " +
+      "o menino tá pedindo uma chance. O clube tá cobrando uma oportunidade. O que eu falo pra ele?",
     escolhas: [
       {
         id: "titular",
@@ -83,7 +88,9 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
   {
     id: "torcida",
     titulo: "Bandeira da torcida organizada",
-    descricao: "A torcida organizada quer estender uma faixa gigante no estádio, mas está desalinhada com os dirigentes.",
+    descricao:
+      "Treinador, sou o Beto, da torcida organizada. A gente quer estender uma faixa gigante no estádio, " +
+      "mas os dirigentes tão implicando com a gente. Conta com o seu apoio aí?",
     escolhas: [
       {
         id: "apoiar",
@@ -101,7 +108,9 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
   {
     id: "treino-intensivo",
     titulo: "Preparação intensiva",
-    descricao: "Você pode aplicar um treino puxado antes da rodada. Rende, mas cansa.",
+    descricao:
+      "Treinador, é o Professor Léo, preparador físico. Posso aplicar um treino puxado antes da rodada. " +
+      "Rende bem, mas o pessoal vai chegar cansado. Como prefere?",
     escolhas: [
       {
         id: "puxar",
