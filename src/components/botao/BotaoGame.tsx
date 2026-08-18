@@ -10,8 +10,11 @@ import {
   Trash2,
   Calendar,
   UserCircle,
+  ArrowLeft,
 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
+import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { useAdManager } from "@/lib/adManager";
 import {
   DIFFICULTIES,
   type Difficulty,
@@ -176,6 +179,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [loading, setLoading] = useState(false);
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
 
+  // Inicializa AdManager para rota /botao (Adsterra)
+  const { init: initAdManager, cleanup: cleanupAdManager } = useAdManager("/botao");
+
+  useEffect(() => {
+    initAdManager();
+    return () => {
+      cleanupAdManager();
+    };
+  }, [initAdManager, cleanupAdManager]);
+
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -216,9 +229,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (carregando) return;
     autoLoginDone.current = true;
     if (perfil) {
-      // Logado: se há campanha em andamento, vai ao lobby; senão, menu.
+      // Logado: mostra loading antes de navegar para o destino correto
       const carreiraAtiva = !!tour && tour.phase !== "fim" && !!career?.coach.nome;
-      setScreen(carreiraAtiva ? "hub" : "menu");
+      runWithLoading(() => {
+        setScreen(carreiraAtiva ? "hub" : "menu");
+      }, 1500);
     }
     // Sem sessão: mantém o menu inicial (jogo offline acessível).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1599,7 +1614,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             career={career}
             onLoadCareer={() => {
               if (career) {
-                setScreen("hub");
+                runWithLoading(() => setScreen("hub"), 1500);
               }
             }}
             onNewCareer={handleNewCareer}
@@ -1816,6 +1831,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onResume={() => setScreen("hub")}
             onDeleteCampaign={handleDeleteCampaign}
             onSaveCampaign={handleSaveCampaign}
+            {...(onBack ? { onBack } : {})}
           />
         )}
 
@@ -1919,6 +1935,7 @@ function Menu({
   onResume,
   onDeleteCampaign,
   onSaveCampaign,
+  onBack,
 }: {
   progress: Progress;
   onFriendly: () => void;
@@ -1931,9 +1948,19 @@ function Menu({
   onResume: () => void;
   onDeleteCampaign: () => void;
   onSaveCampaign: () => void;
+  onBack?: () => void;
 }) {
   return (
     <div className="space-y-6">
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="size-4" />
+          Voltar à Cidadela
+        </button>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <MenuCard
           icon={<UserCircle className="size-5" />}

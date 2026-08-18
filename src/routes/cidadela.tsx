@@ -1,9 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react";
 import { AdSlot } from "@/components/AdSlot";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { BotaoGame } from "@/components/botao/BotaoGame";
+import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
+import { CidadelaIntro } from "@/components/CidadelaIntro";
+import { InfoModal, InfoButton } from "@/components/InfoModal";
+import { SEO_CONTENT } from "@/data/seoContent";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -37,7 +41,63 @@ const GAMES = [
 ];
 
 function Cidadela() {
-  const [activeGame, setActiveGame] = useState<Game>(null);
+  const [activeGame, setActiveGame] = useState<Game>(() => {
+    const saved = localStorage.getItem("cidadela_active_game");
+    return (saved as Game) || null;
+  });
+  const [loading, setLoading] = useState(false);
+  const [showIntro, setShowIntro] = useState(() => {
+    const seen = localStorage.getItem("cidadela_intro_seen");
+    return !seen;
+  });
+  const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
+
+  // Persistir o jogo ativo no localStorage
+  useEffect(() => {
+    if (activeGame) {
+      localStorage.setItem("cidadela_active_game", activeGame);
+    } else {
+      localStorage.removeItem("cidadela_active_game");
+    }
+  }, [activeGame]);
+
+  const handleContinueIntro = () => {
+    localStorage.setItem("cidadela_intro_seen", "true");
+    setShowIntro(false);
+  };
+
+  const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
+  const closeModal = () => setActiveModal(null);
+
+  const handleGameSelect = (game: Game) => {
+    if (game === "botao") {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setActiveGame(game);
+      }, 1800);
+    } else {
+      setActiveGame(game);
+    }
+  };
+
+  if (showIntro) {
+    return <CidadelaIntro onContinue={handleContinueIntro} />;
+  }
+
+  if (loading) {
+    return (
+      <LoadingScreen
+        passos={["Carregando Futebol de Botão...", "Inicializando IA Comentarista...", "Preparando times...", "Carregando campeonatos...", "Pronto!"]}
+        intros={[{
+          titulo: "Bem-vindo ao Futebol de Botão",
+          corpo: "Prepare-se para entrar em campo. A IA está gerando notícias e analisando dados do campeonato."
+        }]}
+        duracao={1800}
+        onCompleto={() => {}}
+      />
+    );
+  }
 
   if (activeGame === "trilha") {
     return <TrilhaGame onBack={() => setActiveGame(null)} />;
@@ -48,71 +108,101 @@ function Cidadela() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
-      <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
-        <header className="mb-6 text-center">
-          <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
-            🏰 Cidadela de Jogos
-          </h1>
-          <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Uma cidade de jogos para se divertir e bater recorde
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Jogue clássicos como Trilha, quebre seus recordes e desafie a IA
-          </p>
-        </header>
+    <>
+      <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
+        <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
+          <header className="mb-6 text-center">
+            <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
+              🏰 Cidadela de Jogos
+            </h1>
+            <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
+              Uma cidade de jogos para se divertir e bater recorde
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Jogue clássicos como Trilha, quebre seus recordes e desafie a IA
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <InfoButton onClick={() => openModal("sobre")} label="Sobre a Pracinha" />
+              <InfoButton onClick={() => openModal("como")} label="Como Jogar" />
+              <InfoButton onClick={() => openModal("soberania")} label="Soberania" />
+            </div>
+          </header>
 
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-foreground">Jogos Disponíveis</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {GAMES.map((game) => {
-              const Icon = game.icon;
-              const isAvailable = game.status === "disponível";
-              return (
-                <button
-                  key={game.id}
-                  onClick={() => isAvailable && setActiveGame(game.id)}
-                  disabled={!isAvailable}
-                  className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
-                    isAvailable
-                      ? "border-border bg-surface/50 hover:bg-primary/10 hover:border-primary cursor-pointer"
-                      : "border-border/50 bg-surface/30 opacity-60 cursor-not-allowed"
-                  }`}
-                >
-                  <div className={`p-3 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <h3 className="font-semibold text-foreground">{game.label}</h3>
-                    <p className="text-sm text-muted-foreground">{game.description}</p>
-                    <span className={`inline-block mt-2 text-xs px-2 py-1 rounded-full ${
-                      isAvailable ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
-                    }`}>
-                      {game.status === "disponível" ? "Disponível" : "Em breve"}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-4 text-foreground">Jogos Disponíveis</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {GAMES.map((game) => {
+                const Icon = game.icon;
+                const isAvailable = game.status === "disponível";
+                return (
+                  <button
+                    key={game.id}
+                    onClick={() => isAvailable && handleGameSelect(game.id)}
+                    disabled={!isAvailable}
+                    className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
+                      isAvailable
+                        ? "border-border bg-surface/50 hover:bg-primary/10 hover:border-primary cursor-pointer"
+                        : "border-border/50 bg-surface/30 opacity-60 cursor-not-allowed"
+                    }`}
+                  >
+                    <div className={`p-3 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h3 className="font-semibold text-foreground">{game.label}</h3>
+                      <p className="text-sm text-muted-foreground">{game.description}</p>
+                      <span className={`inline-block mt-2 text-xs px-2 py-1 rounded-full ${
+                        isAvailable ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {game.status === "disponível" ? "Disponível" : "Em breve"}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        <div className="mt-6 text-center text-xs text-muted-foreground">
-          <p>Mais jogos em breve! Fique ligado.</p>
-        </div>
-      </main>
+          <div className="mt-6 text-center text-xs text-muted-foreground">
+            <p>Mais jogos em breve! Fique ligado.</p>
+          </div>
+        </main>
 
-      <footer className="my-4 text-center text-xs text-muted-foreground/70">
-        <p>© 2026 QG Frases — Seu mural de frases rápidas.</p>
-        <div className="mt-2 flex justify-center gap-4">
-          <Link to="/privacidade" className="hover:text-primary transition">
-            Privacidade
-          </Link>
-          <Link to="/termos" className="hover:text-primary transition">
-            Termos
-          </Link>
-        </div>
-      </footer>
-    </div>
+        <AdSlot rotulo="Banner Rodapé" altura="min-h-[90px]" />
+
+        {/* Footer com links obrigatórios */}
+        <footer className="w-full max-w-3xl text-center">
+          <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
+            <Link to="/privacidade" className="hover:text-primary transition-colors">
+              Política de Privacidade
+            </Link>
+            <span>•</span>
+            <Link to="/termos" className="hover:text-primary transition-colors">
+              Termos de Uso
+            </Link>
+          </div>
+        </footer>
+      </div>
+
+      {/* Modais de Informação */}
+      <InfoModal
+        isOpen={activeModal === "sobre"}
+        onClose={closeModal}
+        title="Sobre a Pracinha Online"
+        content={SEO_CONTENT.sobrePracinha}
+      />
+      <InfoModal
+        isOpen={activeModal === "como"}
+        onClose={closeModal}
+        title="Como Jogar"
+        content={SEO_CONTENT.comoJogar}
+      />
+      <InfoModal
+        isOpen={activeModal === "soberania"}
+        onClose={closeModal}
+        title="Economia da Soberania"
+        content={SEO_CONTENT.soberania}
+      />
+    </>
   );
 }

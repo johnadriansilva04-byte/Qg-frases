@@ -422,6 +422,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      mesas_trilha: {
+        Row: {
+          id: string;
+          mesa_id: string;
+          jogador_1_id: string;
+          jogador_2_id: string | null;
+          status: string;
+          turno_atual: string | null;
+          tabuleiro: Json;
+          pecas_capturadas: Json;
+          criado_em: string;
+          atualizado_em: string;
+        };
+        Insert: {
+          id?: string;
+          mesa_id: string;
+          jogador_1_id: string;
+          jogador_2_id?: string | null;
+          status?: string;
+          turno_atual?: string | null;
+          tabuleiro: Json;
+          pecas_capturadas?: Json;
+          criado_em?: string;
+          atualizado_em?: string;
+        };
+        Update: {
+          id?: string;
+          mesa_id?: string;
+          jogador_1_id?: string;
+          jogador_2_id?: string | null;
+          status?: string;
+          turno_atual?: string | null;
+          tabuleiro?: Json;
+          pecas_capturadas?: Json;
+          atualizado_em?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -548,6 +586,40 @@ export type Database = {
         };
       };
       reiniciar_mesa: {
+        Args: { p_mesa_id: string };
+        Returns: Json;
+      };
+      listar_mesas_trilha_disponiveis: {
+        Args: { p_dificuldade?: string | null };
+        Returns: Json;
+      };
+      criar_mesa_trilha: {
+        Args: { p_dificuldade: string };
+        Returns: string;
+      };
+      entrar_mesa_trilha: {
+        Args: { p_mesa_id: string };
+        Returns: string;
+      };
+      registrar_heartbeat_mesa_trilha: {
+        Args: { p_mesa_id: string };
+        Returns: Json;
+      };
+      registrar_jogada_trilha: {
+        Args: {
+          p_mesa_id: string;
+          p_from: number | null;
+          p_to: number;
+          p_remove?: number | null;
+          p_board: Json;
+          p_hand_p1: Json;
+          p_hand_p2: Json;
+          p_phase: string;
+          p_pending_capture: boolean;
+        };
+        Returns: Json;
+      };
+      abandonar_partida_trilha: {
         Args: { p_mesa_id: string };
         Returns: Json;
       };

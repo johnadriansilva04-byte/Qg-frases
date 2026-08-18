@@ -59,7 +59,7 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
       });
 
       if (error) throw error;
-      setMesas(data || []);
+      setMesas((Array.isArray(data) ? data as unknown as Mesa[] : []));
     } catch (error) {
       console.error('Erro ao carregar mesas:', error);
     } finally {

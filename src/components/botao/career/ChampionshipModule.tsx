@@ -22,8 +22,20 @@ interface ChampionshipModuleProps {
 
 export function ChampionshipModule({ tour, userTeam, currentDivisao }: ChampionshipModuleProps) {
   const [competicao, setCompeticao] = useState<Competicao>("brasileirao");
-  const [selectedDivisao, setSelectedDivisao] = useState<Divisao>(currentDivisao);
+  const [selectedDivisao, setSelectedDivisao] = useState<Divisao | null>(null);
   const [showTable, setShowTable] = useState(false);
+
+  // Resetar seleção de série quando mudar de competição
+  const handleCompeticaoChange = (novaCompeticao: Competicao) => {
+    setCompeticao(novaCompeticao);
+    setSelectedDivisao(null); // Limpa a seleção de série ao mudar de competição
+    setShowTable(false);
+  };
+
+  // Selecionar série e mostrar estatísticas
+  const handleDivisaoSelect = (div: Divisao) => {
+    setSelectedDivisao(div);
+  };
 
   const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
 
@@ -44,13 +56,13 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
         <div className="grid grid-cols-2 gap-2">
           <CompTab
             active={competicao === "copa-brasil"}
-            onClick={() => setCompeticao("copa-brasil")}
+            onClick={() => handleCompeticaoChange("copa-brasil")}
             icon={<Crown className="size-3.5" />}
             label="Copa do Brasil"
           />
           <CompTab
             active={competicao === "brasileirao"}
-            onClick={() => setCompeticao("brasileirao")}
+            onClick={() => handleCompeticaoChange("brasileirao")}
             icon={<Shield className="size-3.5" />}
             label="Brasileirão"
           />
@@ -64,7 +76,7 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
               {(["serie-a", "serie-b", "serie-c"] as Divisao[]).map((div) => (
                 <button
                   key={div}
-                  onClick={() => setSelectedDivisao(div)}
+                  onClick={() => handleDivisaoSelect(div)}
                   className={`div-tab ${selectedDivisao === div ? "div-tab-active" : ""}`}
                   data-user-div={div === currentDivisao ? "1" : undefined}
                 >
@@ -99,8 +111,8 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
         </div>
       ) : (
         <>
-          {/* Painel central de estatísticas (módulos PS2) */}
-          {stats && (
+          {/* Painel central de estatísticas (módulos PS2) - só aparece quando série é selecionada */}
+          {selectedDivisao && stats && (
             <StatsModule
               title={`Estatísticas · ${DIVISAO_LABEL[selectedDivisao]}`}
               stats={stats}
@@ -108,8 +120,8 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
             />
           )}
 
-          {/* Tabela de classificação da divisão */}
-          {tour.phase === "grupos" && tour.groups.length > 0 && (
+          {/* Tabela de classificação da divisão - só aparece quando série é selecionada */}
+          {selectedDivisao && tour.phase === "grupos" && tour.groups.length > 0 && (
             <div className="panel">
               <button
                 onClick={() => setShowTable(!showTable)}

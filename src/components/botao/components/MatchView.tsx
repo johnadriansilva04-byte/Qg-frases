@@ -12,7 +12,7 @@ import { planAiShot } from "../engine/ai";
 import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
-import { AdSlot } from "@/components/AdSlot";
+import { AdsterraBanner } from "@/components/AdsterraBanner";
 
 type Props = {
   homeId: string;
@@ -789,7 +789,10 @@ export function MatchView({
                 Intervalo · Patrocínio
               </div>
               <div className="p-3">
-                <AdSlot rotulo="Intervalo" nota="Anúncio do intervalo" altura="min-h-[120px]" />
+                <AdsterraBanner slotId="intervalo" className="min-h-[120px]" />
+              </div>
+              <div className="my-4 text-center text-xs text-muted-foreground">
+                Publicidade
               </div>
               <button
                 onClick={() => setHalftime(false)}
