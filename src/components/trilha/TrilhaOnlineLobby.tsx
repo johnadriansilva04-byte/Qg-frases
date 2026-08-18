@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, Users, Clock, Trophy, Play, Plus, RefreshCw } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
 
 interface Mesa {
@@ -30,16 +30,7 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
   ];
 
   useEffect(() => {
-    // Verificar se Supabase está configurado
-    try {
-      // Tenta acessar uma propriedade para verificar se é mock
-      const isMock = !supabase || typeof supabase.from !== 'function';
-      if (isMock) {
-        setSupabaseNotConfigured(true);
-        setLoading(false);
-        return;
-      }
-    } catch (e) {
+    if (!isSupabaseConfigured()) {
       setSupabaseNotConfigured(true);
       setLoading(false);
       return;

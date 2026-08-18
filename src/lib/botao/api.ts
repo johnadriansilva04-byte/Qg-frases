@@ -1,5 +1,5 @@
 /**
- * Camada de acesso ao banco (Lovable Cloud).
+ * Camada de acesso ao banco (Supabase).
  * Todas as consultas usam exclusivamente as tabelas botao_usuarios,
  * botao_times, botao_lobbies e botao_blocos.
  */

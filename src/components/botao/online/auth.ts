@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { assertSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 
 export type Perfil = {
   id: string;
@@ -95,6 +95,7 @@ export function limparCache() {
 }
 
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
+  assertSupabaseConfigured();
   const { data } = await supabase
     .from("botao_usuarios")
     .select("*")
@@ -104,6 +105,7 @@ export async function buscarPerfil(userId: string): Promise<Perfil | null> {
 }
 
 export async function entrar(email: string, senha: string) {
+  assertSupabaseConfigured();
   const { error } = await supabase.auth.signInWithPassword({
     email: email,
     password: senha,
@@ -120,6 +122,7 @@ export async function cadastrar(input: {
   numero: number;
   cores: string[];
 }) {
+  assertSupabaseConfigured();
   const erro = validarCadastro(input);
   if (erro) throw new Error(erro);
 
@@ -187,6 +190,7 @@ export async function cadastrar(input: {
 }
 
 export async function sair() {
+  assertSupabaseConfigured();
   await supabase.auth.signOut();
   limparCache();
 }

@@ -9,6 +9,22 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
+## Setup Supabase sem mock — 2026-08-18
+- `src/integrations/supabase/client.ts` é env-driven (`VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`/`VITE_SUPABASE_PUBLISHABLE_KEY`; SSR aceita sem
+  `VITE_`) e **não usa mock**. Se faltar config, `isSupabaseConfigured()` é
+  false, `getSupabaseConfigError()` explica e qualquer uso do proxy `supabase`
+  lança erro limpo.
+- `useBotaoAuth` depende do evento `INITIAL_SESSION` de `onAuthStateChange`
+  (não chamar `getUser()` antes, pois isso causava loading infinito).
+- `/cidadela` lê `localStorage` só no cliente (`hydrated` gate) para evitar
+  erro SSR/hidratação. `vite dev` atrás do proxy do work-host pode falhar no
+  entry `@tanstack/react-start` (ambiental); validar com curl ou build.
+- Validação atual: `tsc --noEmit` 0 erros; `npm run build` OK (preset Nitro
+  `vercel`; ESLint global ainda tem dívidas Prettier em arquivos antigos não
+  tocados).
+
+
 ## Sistema de IA Centralizada (AIService) — 2026-08-18
 
 Arquitetura da "Comentarista Sarcástica" (voz do jogo), on-device + fallback

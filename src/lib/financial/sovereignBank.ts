@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import type {
   SovereignBankConfig,
   SovereignBankState,
@@ -49,9 +50,17 @@ export class SovereignBank {
     }
 
     this.state = {
-      reserves: data || [],
-      current_yield_rates: {},
-      utilization_ratios: {},
+      reserves: (data || []) as BankReserve[],
+      current_yield_rates: {
+        total_supply: 0,
+        online_pvp: 0,
+        offline_ia: 0,
+      },
+      utilization_ratios: {
+        total_supply: 0,
+        online_pvp: 0,
+        offline_ia: 0,
+      },
       is_inflation_control_mode: false,
       last_adjustment: new Date().toISOString(),
     };
@@ -89,8 +98,11 @@ export class SovereignBank {
     }
 
     // Atualizar estado com novos yield rates
-    if (data) {
-      data.forEach((item: { reserve_type: string; new_yield_rate: number }) => {
+    const rates = Array.isArray(data)
+      ? (data as { reserve_type: string; new_yield_rate: number }[])
+      : null;
+    if (rates) {
+      rates.forEach((item) => {
         this.state!.current_yield_rates[item.reserve_type as ReserveType] = item.new_yield_rate;
       });
 
@@ -263,7 +275,7 @@ export class SovereignBank {
         p_amount: context.amount,
         p_description: context.description || null,
         p_source_module: context.source_module,
-        p_metadata: context.metadata || {},
+        p_metadata: (context.metadata || {}) as unknown as Json,
       });
 
       if (error) {

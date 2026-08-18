@@ -168,9 +168,9 @@ export interface AntiCheatContext {
 export interface AntiCheatValidation {
   is_valid: boolean;
   is_suspicious: boolean;
-  suspicion_reason?: string;
+  suspicion_reason?: string | undefined;
   should_block: boolean;
-  penalty_amount?: number;
+  penalty_amount?: number | undefined;
 }
 
 // Configuração de aposta
@@ -186,10 +186,10 @@ export interface BetConfig {
 // Resultado de aposta
 export interface BetResult {
   success: boolean;
-  bet_id?: string;
-  winnings?: number;
-  loss?: number;
-  error?: string;
+  bet_id?: string | undefined;
+  winnings?: number | undefined;
+  loss?: number | undefined;
+  error?: string | undefined;
 }
 
 // Custos do modo carreira

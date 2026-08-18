@@ -324,15 +324,17 @@ export class BettingSystem {
       .order("created_at", { ascending: false })
       .limit(20);
 
-    const todayWins = (todayData || []).filter((d) => d.transaction_type === "bet_win");
-    const todayLosses = (todayData || []).filter((d) => d.transaction_type === "bet_loss");
+    const todayBets = todayData ?? [];
+    const allBets = allData ?? [];
+    const todayWins = todayBets.filter((d) => d.transaction_type === "bet_win");
+    const todayLosses = todayBets.filter((d) => d.transaction_type === "bet_loss");
 
     const todayWon = todayWins.reduce((sum, d) => sum + d.amount, 0);
     const todayLost = todayLosses.reduce((sum, d) => sum + Math.abs(d.amount), 0);
     const todayProfit = todayWon - todayLost;
 
-    const totalWins = (allData || []).filter((d) => d.transaction_type === "bet_win");
-    const totalLosses = (allData || []).filter((d) => d.transaction_type === "bet_loss");
+    const totalWins = allBets.filter((d) => d.transaction_type === "bet_win");
+    const totalLosses = allBets.filter((d) => d.transaction_type === "bet_loss");
 
     const totalWon = totalWins.reduce((sum, d) => sum + d.amount, 0);
     const totalLost = totalLosses.reduce((sum, d) => sum + Math.abs(d.amount), 0);
@@ -340,26 +342,26 @@ export class BettingSystem {
 
     return {
       today: {
-        bets: todayData?.length || 0,
+        bets: todayBets.length,
         won: todayWon,
         lost: todayLost,
         profit: todayProfit,
-        win_rate: todayData?.length > 0 ? (todayWins.length / todayData.length) * 100 : 0,
+        win_rate: todayBets.length > 0 ? (todayWins.length / todayBets.length) * 100 : 0,
       },
       total: {
-        bets: allData?.length || 0,
+        bets: allBets.length,
         won: totalWon,
         lost: totalLost,
         profit: totalProfit,
-        win_rate: allData?.length > 0 ? (totalWins.length / allData.length) * 100 : 0,
+        win_rate: allBets.length > 0 ? (totalWins.length / allBets.length) * 100 : 0,
       },
       limits: {
         min_bet: this.MIN_BET,
         max_bet: this.MAX_BET,
         max_daily_bets: this.MAX_DAILY_BETS,
-        remaining_daily_bets: this.MAX_DAILY_BETS - (todayData?.length || 0),
+        remaining_daily_bets: this.MAX_DAILY_BETS - todayBets.length,
       },
-      recent_bets: allData || [],
+      recent_bets: allBets,
     };
   }
 }

@@ -35,7 +35,7 @@ export function SovMarket() {
     if (error) {
       console.error("[SovMarket] Erro ao carregar produtos:", error);
     } else {
-      setProducts(data || []);
+      setProducts((data || []) as SovMarketProduct[]);
     }
     setLoading(false);
   };

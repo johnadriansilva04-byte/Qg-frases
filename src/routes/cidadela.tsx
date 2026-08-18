@@ -14,12 +14,14 @@ export const Route = createFileRoute("/cidadela")({
       { title: "Cidadela de Jogos | QG Frases" },
       {
         name: "description",
-        content: "Conheça nossa cidadela de jogos clássicos. Trilha, dado, forca, jogo da velha e muito mais.",
+        content:
+          "Conheça nossa cidadela de jogos clássicos. Trilha, dado, forca, jogo da velha e muito mais.",
       },
       { property: "og:title", content: "Cidadela de Jogos | QG Frases" },
       {
         property: "og:description",
-        content: "Conheça nossa cidadela de jogos clássicos. Trilha, dado, forca, jogo da velha e muito mais.",
+        content:
+          "Conheça nossa cidadela de jogos clássicos. Trilha, dado, forca, jogo da velha e muito mais.",
       },
       { property: "og:url", content: "https://pracinha.online/cidadela" },
       { property: "og:image", content: "https://pracinha.online/og-image.png" },
@@ -31,37 +33,78 @@ export const Route = createFileRoute("/cidadela")({
 type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | null;
 
 const GAMES = [
-  { id: "trilha" as Game, label: "Trilha", description: "Jogo de estratégia tática", icon: Target, status: "disponível" },
-  { id: "botao" as Game, label: "Futebol de Botão", description: "Campeonato com física realista", icon: Trophy, status: "disponível" },
-  { id: "dado" as Game, label: "Dado Virtual", description: "Role o dado da sorte", icon: Dice2, status: "em breve" },
-  { id: "forca" as Game, label: "Jogo da Forca", description: "Adivinhe a palavra secreta", icon: Skull, status: "em breve" },
-  { id: "velha" as Game, label: "Jogo da Velha", description: "Clássico de estratégia", icon: CircleDot, status: "em breve" },
-  { id: "snake" as Game, label: "Snake", description: "Relíquia da Nokia", icon: Gamepad2, status: "em breve" },
+  {
+    id: "trilha" as Game,
+    label: "Trilha",
+    description: "Jogo de estratégia tática",
+    icon: Target,
+    status: "disponível",
+  },
+  {
+    id: "botao" as Game,
+    label: "Futebol de Botão",
+    description: "Campeonato com física realista",
+    icon: Trophy,
+    status: "disponível",
+  },
+  {
+    id: "dado" as Game,
+    label: "Dado Virtual",
+    description: "Role o dado da sorte",
+    icon: Dice2,
+    status: "em breve",
+  },
+  {
+    id: "forca" as Game,
+    label: "Jogo da Forca",
+    description: "Adivinhe a palavra secreta",
+    icon: Skull,
+    status: "em breve",
+  },
+  {
+    id: "velha" as Game,
+    label: "Jogo da Velha",
+    description: "Clássico de estratégia",
+    icon: CircleDot,
+    status: "em breve",
+  },
+  {
+    id: "snake" as Game,
+    label: "Snake",
+    description: "Relíquia da Nokia",
+    icon: Gamepad2,
+    status: "em breve",
+  },
 ];
 
 function Cidadela() {
-  const [activeGame, setActiveGame] = useState<Game>(() => {
-    const saved = localStorage.getItem("cidadela_active_game");
-    return (saved as Game) || null;
-  });
+  const [hydrated, setHydrated] = useState(false);
+  const [activeGame, setActiveGame] = useState<Game>(null);
   const [loading, setLoading] = useState(false);
-  const [showIntro, setShowIntro] = useState(() => {
-    const seen = localStorage.getItem("cidadela_intro_seen");
-    return !seen;
-  });
+  const [showIntro, setShowIntro] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
 
-  // Persistir o jogo ativo no localStorage
+  // Lê preferências locais só no cliente para evitar quebra/hidratação no SSR.
   useEffect(() => {
+    const saved = window.localStorage.getItem("cidadela_active_game");
+    const seen = window.localStorage.getItem("cidadela_intro_seen");
+    setActiveGame((saved as Game) || null);
+    setShowIntro(!seen);
+    setHydrated(true);
+  }, []);
+
+  // Persistir o jogo ativo no localStorage depois da hidratação.
+  useEffect(() => {
+    if (!hydrated) return;
     if (activeGame) {
-      localStorage.setItem("cidadela_active_game", activeGame);
+      window.localStorage.setItem("cidadela_active_game", activeGame);
     } else {
-      localStorage.removeItem("cidadela_active_game");
+      window.localStorage.removeItem("cidadela_active_game");
     }
-  }, [activeGame]);
+  }, [activeGame, hydrated]);
 
   const handleContinueIntro = () => {
-    localStorage.setItem("cidadela_intro_seen", "true");
+    window.localStorage.setItem("cidadela_intro_seen", "true");
     setShowIntro(false);
   };
 
@@ -83,6 +126,10 @@ function Cidadela() {
     }
   };
 
+  if (!hydrated) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
   if (showIntro) {
     return <CidadelaIntro onContinue={handleContinueIntro} />;
   }
@@ -90,11 +137,20 @@ function Cidadela() {
   if (loading) {
     return (
       <LoadingScreen
-        passos={["Carregando Futebol de Botão...", "Inicializando IA Comentarista...", "Preparando times...", "Carregando campeonatos...", "Pronto!"]}
-        intros={[{
-          titulo: "Bem-vindo ao Futebol de Botão",
-          corpo: "Prepare-se para entrar em campo. A IA está gerando notícias e analisando dados do campeonato."
-        }]}
+        passos={[
+          "Carregando Futebol de Botão...",
+          "Inicializando IA Comentarista...",
+          "Preparando times...",
+          "Carregando campeonatos...",
+          "Pronto!",
+        ]}
+        intros={[
+          {
+            titulo: "Bem-vindo ao Futebol de Botão",
+            corpo:
+              "Prepare-se para entrar em campo. A IA está gerando notícias e analisando dados do campeonato.",
+          },
+        ]}
         duracao={1800}
         onCompleto={() => {}}
       />
@@ -148,15 +204,21 @@ function Cidadela() {
                     }`}
                     style={{ minHeight: "88px" }}
                   >
-                    <div className={`p-3 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                    <div
+                      className={`p-3 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                    >
                       <Icon className="h-6 w-6" />
                     </div>
                     <div className="flex-1 text-left">
                       <h3 className="font-semibold text-foreground">{game.label}</h3>
                       <p className="text-sm text-muted-foreground">{game.description}</p>
-                      <span className={`inline-block mt-2 text-xs px-2 py-1 rounded-full ${
-                        isAvailable ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
-                      }`}>
+                      <span
+                        className={`inline-block mt-2 text-xs px-2 py-1 rounded-full ${
+                          isAvailable
+                            ? "bg-success/20 text-success"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
                         {game.status === "disponível" ? "Disponível" : "Em breve"}
                       </span>
                     </div>

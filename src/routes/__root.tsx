@@ -10,7 +10,6 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CookieBanner } from "../components/CookieBanner";
 import { Sidebar } from "../components/Sidebar";
 
@@ -39,9 +38,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -87,12 +83,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { property: "og:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
-      { property: "og:description", content: "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique." },
+      {
+        property: "og:description",
+        content:
+          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique.",
+      },
       { property: "og:url", content: "https://pracinha.online" },
       { property: "og:image", content: "https://pracinha.online/og-image.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
-      { name: "twitter:description", content: "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique." },
+      {
+        name: "twitter:description",
+        content:
+          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique.",
+      },
     ],
     links: [
       {
@@ -142,12 +146,12 @@ function RootComponent() {
 
   useEffect(() => {
     // Google Analytics
-    const script1 = document.createElement('script');
+    const script1 = document.createElement("script");
     script1.async = true;
-    script1.src = 'https://www.googletagmanager.com/gtag/js?id=G-64FCC805LH';
+    script1.src = "https://www.googletagmanager.com/gtag/js?id=G-64FCC805LH";
     document.head.appendChild(script1);
 
-    const script2 = document.createElement('script');
+    const script2 = document.createElement("script");
     script2.innerHTML = `
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
@@ -161,7 +165,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      
+
       <CookieBanner />
     </QueryClientProvider>
   );

@@ -68,6 +68,8 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
       console.error("[AdsterraBanner] Erro:", error);
       setHasError(true);
     }
+
+    return undefined;
   }, [slotId, init, createContainer, getNetwork, isMounted, hasError]);
 
   // Não renderiza nada durante SSR ou se houver erro

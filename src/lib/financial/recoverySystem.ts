@@ -222,7 +222,7 @@ export class RecoverySystem {
     return {
       needs_recovery: true,
       current_balance: balance,
-      target_balance,
+      target_balance: targetBalance,
       progress,
       remaining: Math.max(0, targetBalance - balance),
     };

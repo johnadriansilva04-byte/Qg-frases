@@ -10,7 +10,7 @@ import type {
   AntiCheatAction,
   SourceModule,
 } from "./types";
-import { DEFAULT_SOVEREIGN_BANK_CONFIG } from "./types";
+import { DEFAULT_CAREER_COSTS, DEFAULT_SOVEREIGN_BANK_CONFIG } from "./types";
 
 export class AntiCheatSystem {
   private config = DEFAULT_SOVEREIGN_BANK_CONFIG;
@@ -141,10 +141,10 @@ export class AntiCheatSystem {
 
     return {
       is_valid: !shouldBlock,
-      is_suspicious,
+      is_suspicious: isSuspicious,
       suspicion_reason: suspicionReasons || undefined,
-      should_block,
-      penalty_amount: shouldBlock ? this.config.penalty_for_bankruptcy : undefined,
+      should_block: shouldBlock,
+      penalty_amount: shouldBlock ? DEFAULT_CAREER_COSTS.penalty_for_bankruptcy : undefined,
     };
   }
 
@@ -260,7 +260,7 @@ export class AntiCheatSystem {
 
     // Detectar tempos de jogo muito consistentes (indicativo de bot)
     const gameTimes = recentLogs
-      .filter((log) => log.action === "game_end")
+      .filter((log) => log.action_type === "game_end")
       .map((log) => log.time_spent_seconds);
 
     if (gameTimes.length > 5) {

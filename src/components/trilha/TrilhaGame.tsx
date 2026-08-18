@@ -412,6 +412,7 @@ function TrilhaGameBoard({
   onShowTrophies: () => void;
 }) {
   const game = useLocalGame(difficulty, 1);
+  const { markFirstGamePlayed } = useAdManager("/trilha");
   
   const [selected, setSelected] = useState<number | null>(null);
   const [gameEnded, setGameEnded] = useState(false);

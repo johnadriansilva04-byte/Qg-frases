@@ -9,7 +9,7 @@ import {
   type Perfil,
 } from "../online/auth";
 import { atualizarPerfilClube } from "@/lib/botao/api";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
 import {
   BOTOES_NOMES_DEFAULT,
   FORMACAO_DEFAULT,
@@ -61,6 +61,7 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const supabaseConfigErro = getSupabaseConfigError();
 
   const formacao = formacaoById(tatica);
 
@@ -219,6 +220,12 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         </div>
 
         <div className="panel space-y-4">
+          {supabaseConfigErro && (
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              {supabaseConfigErro} O modo offline continua disponível sem login.
+            </p>
+          )}
+
           <Campo label="Email">
             <input
               className="field-input"
@@ -260,7 +267,7 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
 
           <button
             onClick={submitAuth}
-            disabled={salvando || cooldown > 0}
+            disabled={salvando || cooldown > 0 || !!supabaseConfigErro}
             className="btn-primary w-full disabled:opacity-60"
           >
             {modo === "login" ? <LogIn className="size-4" /> : <UserPlus className="size-4" />}

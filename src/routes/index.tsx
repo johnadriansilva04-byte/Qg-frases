@@ -104,13 +104,13 @@ function Index() {
                     {section.icon === "book" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#bookGrad)" />
-                        <path d="M32 16 L32 48" stroke="#fff" stroke-width="2" opacity="0.5"/>
-                        <path d="M12 20 L28 18" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M12 28 L28 26" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M12 36 L28 34" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M36 18 L52 20" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M36 26 L52 28" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M36 34 L52 36" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M32 16 L32 48" stroke="#fff" strokeWidth="2" opacity="0.5"/>
+                        <path d="M12 20 L28 18" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M12 28 L28 26" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M12 36 L28 34" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M36 18 L52 20" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M36 26 L52 28" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M36 34 L52 36" stroke="#fff" strokeWidth="2" opacity="0.4"/>
                         <defs>
                           <linearGradient id="bookGrad" x1="8" y1="12" x2="56" y2="52" gradientUnits="userSpaceOnUse">
                             <stop stopColor="#3b82f6"/>
@@ -122,11 +122,11 @@ function Index() {
                     {section.icon === "pen" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <rect x="8" y="24" width="40" height="28" rx="2" fill="#fff" opacity="0.3"/>
-                        <path d="M12 28 L44 28" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M12 34 L36 34" stroke="#fff" stroke-width="2" opacity="0.4"/>
-                        <path d="M12 40 L40 40" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                        <path d="M12 28 L44 28" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M12 34 L36 34" stroke="#fff" strokeWidth="2" opacity="0.4"/>
+                        <path d="M12 40 L40 40" stroke="#fff" strokeWidth="2" opacity="0.4"/>
                         <path d="M36 8 L56 28 L48 56 L28 36 L36 8Z" fill="url(#penGrad)" />
-                        <path d="M36 8 L56 28" stroke="#fff" stroke-width="2" opacity="0.5"/>
+                        <path d="M36 8 L56 28" stroke="#fff" strokeWidth="2" opacity="0.5"/>
                         <defs>
                           <linearGradient id="penGrad" x1="36" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
                             <stop stopColor="#22c55e"/>
