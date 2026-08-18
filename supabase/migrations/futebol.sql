@@ -99,6 +99,8 @@ INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga) VALUES
 ('por', 'Porto', 'POR', ARRAY['#003893', '#FFFFFF', '#000000']::TEXT[], 'Portugal', 'Primeira Liga')
 ON CONFLICT (id) DO NOTHING;
 
+COMMIT;
+
 -- Trigger para criar perfil automaticamente quando usuário é criado no auth
 -- Corrigido para garantir que o time só seja criado se o usuário foi inserido com sucesso
 -- E para evitar duplicatas usando ON CONFLICT
@@ -198,6 +200,8 @@ CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+COMMIT;
+
 -- Tabela de Lobbies (salas principais)
 CREATE TABLE IF NOT EXISTS public.botao_lobbies (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -257,6 +261,8 @@ CREATE INDEX IF NOT EXISTS idx_botao_blocos_status ON public.botao_blocos(status
 CREATE INDEX IF NOT EXISTS idx_botao_blocos_jogador1 ON public.botao_blocos(jogador1_session);
 CREATE INDEX IF NOT EXISTS idx_botao_blocos_jogador2 ON public.botao_blocos(jogador2_session);
 
+COMMIT;
+
 -- Permissões
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_times TO authenticated;
 GRANT SELECT ON public.botao_times TO anon;
@@ -273,6 +279,8 @@ GRANT ALL ON public.botao_lobbies TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_blocos TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.botao_blocos TO anon;
 GRANT ALL ON public.botao_blocos TO service_role;
+
+COMMIT;
 
 -- RLS
 ALTER TABLE public.botao_times ENABLE ROW LEVEL SECURITY;
@@ -330,6 +338,8 @@ CREATE POLICY "Autenticados podem atualizar blocos" ON public.botao_blocos FOR U
 
 DROP POLICY IF EXISTS "Autenticados podem deletar blocos" ON public.botao_blocos;
 CREATE POLICY "Autenticados podem deletar blocos" ON public.botao_blocos FOR DELETE USING (true);
+
+COMMIT;
 
 -- Função para alternar turno em bloco
 DROP FUNCTION IF EXISTS public.alternar_turno_bloco(UUID);
@@ -511,6 +521,8 @@ BEGIN
 END;
 $$;
 
+COMMIT;
+
 -- ============================================================================
 -- SISTEMA DE MESAS DE FUTEBOL ONLINE COM SINCRONIZAÇÃO EM TEMPO REAL (v2)
 -- ============================================================================
@@ -564,6 +576,8 @@ ALTER TABLE public.mesas_futebol ADD COLUMN IF NOT EXISTS estado_fisico JSONB;
 ALTER TABLE public.mesas_futebol ALTER COLUMN time_j2 DROP NOT NULL;
 ALTER TABLE public.mesas_futebol ALTER COLUMN time_j2 SET DEFAULT NULL;
 
+COMMIT;
+
 -- Índices para mesas_futebol
 CREATE INDEX IF NOT EXISTS idx_mesas_futebol_mesa_id ON public.mesas_futebol(mesa_id);
 CREATE INDEX IF NOT EXISTS idx_mesas_futebol_status ON public.mesas_futebol(status);
@@ -574,6 +588,8 @@ CREATE INDEX IF NOT EXISTS idx_mesas_futebol_j2 ON public.mesas_futebol(jogador_
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.mesas_futebol TO authenticated;
 GRANT SELECT ON public.mesas_futebol TO anon;
 GRANT ALL ON public.mesas_futebol TO service_role;
+
+COMMIT;
 
 -- RLS para mesas_futebol
 ALTER TABLE public.mesas_futebol ENABLE ROW LEVEL SECURITY;
@@ -598,6 +614,8 @@ CREATE POLICY "mesas_delete_participante" ON public.mesas_futebol
   FOR DELETE TO authenticated
   USING (auth.uid() = jogador_1_id OR auth.uid() = jogador_2_id);
 
+COMMIT;
+
 -- ============================================================================
 -- FUNÇÕES PARA CONTROLE DE PRESENÇA E INÍCIO DE PARTIDA
 -- ============================================================================
@@ -614,6 +632,8 @@ DROP TRIGGER IF EXISTS trigger_atualizar_mesa ON public.mesas_futebol;
 CREATE TRIGGER trigger_atualizar_mesa
 BEFORE UPDATE ON public.mesas_futebol
 FOR EACH ROW EXECUTE FUNCTION public.atualizar_timestamp_mesa();
+
+COMMIT;
 
 -- Função para criar mesa
 CREATE OR REPLACE FUNCTION public.criar_mesa_futebol(p_time TEXT)
@@ -927,6 +947,8 @@ GRANT EXECUTE ON FUNCTION public.iniciar_partida_mesa(TEXT)                     
 GRANT EXECUTE ON FUNCTION public.tempo_restante_mesa(TEXT)                      TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.tick_mesas_futebol()                           TO service_role;
 
+COMMIT;
+
 -- ============================================================================
 -- REALTIME (Postgres Changes na mesa) + CRON do relógio
 -- ============================================================================
@@ -944,6 +966,8 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 SELECT cron.unschedule('tick_mesas_futebol') WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'tick_mesas_futebol');
 SELECT cron.schedule('tick_mesas_futebol', '5 seconds', $$SELECT public.tick_mesas_futebol(); SELECT public.limpar_mesas_antigas();$$);
+
+COMMIT;
 
 -- ============================================================================
 -- MODO CARREIRA / TREINADOR (v3)
@@ -969,6 +993,8 @@ ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS ultimas_escolhas JSON
 ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS ultima_rodada_processada INTEGER NOT NULL DEFAULT -1;
 ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS dificuldade_atual TEXT
   CHECK (dificuldade_atual IN ('amador','profissional','lenda'));
+
+COMMIT;
 
 -- ============================================================================
 -- PERSONALIZAÇÃO PS2: tática/formação + nomes individuais dos botões
@@ -1023,6 +1049,8 @@ END; $$;
 
 GRANT EXECUTE ON FUNCTION public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB) TO authenticated;
 
+COMMIT;
+
 -- Tabela de manchetes (jornal do torneio)
 CREATE TABLE IF NOT EXISTS public.botao_manchetes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1055,6 +1083,8 @@ CREATE POLICY "manchetes_insert_dono" ON public.botao_manchetes
 DROP POLICY IF EXISTS "manchetes_delete_dono" ON public.botao_manchetes;
 CREATE POLICY "manchetes_delete_dono" ON public.botao_manchetes
   FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+COMMIT;
 
 -- Função para aplicar resultado da partida em modo carreira (pontos escassos + moral)
 -- V=+3 · E=+1 · D=-3 · Campeão +20 · Vice +15 · 3º +10 · 4º +5
@@ -1221,6 +1251,8 @@ GRANT EXECUTE ON FUNCTION public.aplicar_fim_de_campanha(TEXT, TEXT)            
 GRANT EXECUTE ON FUNCTION public.aplicar_escolha_treinador(TEXT, INTEGER, INTEGER)  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.iniciar_campanha(TEXT)                              TO authenticated;
 
+COMMIT;
+
 NOTIFY pgrst, 'reload schema';
 
 
@@ -1237,6 +1269,8 @@ NOTIFY pgrst, 'reload schema';
 -- ============================================================================
 -- MODO CAMPEONATO ONLINE (multi-jogador) — consolidado em futebol.sql
 -- ============================================================================
+
+COMMIT;
 
 -- MODO CAMPEONATO ONLINE (multi-jogador) — extensão aditiva
 -- Reaproveita mesas_futebol (1 mesa = 1 partida) e adiciona um campeonato
@@ -1267,6 +1301,8 @@ CREATE INDEX IF NOT EXISTS idx_botao_campeonatos_codigo ON public.botao_campeona
 CREATE INDEX IF NOT EXISTS idx_botao_campeonatos_status ON public.botao_campeonatos_online(status);
 CREATE INDEX IF NOT EXISTS idx_botao_campeonatos_criador ON public.botao_campeonatos_online(criador_id);
 
+COMMIT;
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_campeonatos_online TO authenticated;
 GRANT SELECT ON public.botao_campeonatos_online TO anon;
 GRANT ALL ON public.botao_campeonatos_online TO service_role;
@@ -1285,6 +1321,8 @@ DROP POLICY IF EXISTS "campeonato_update_participantes" ON public.botao_campeona
 CREATE POLICY "campeonato_update_participantes" ON public.botao_campeonatos_online
   FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
+COMMIT;
+
 -- Trigger de atualizado_em
 CREATE OR REPLACE FUNCTION public.atualizar_timestamp_campeonato()
 RETURNS trigger LANGUAGE plpgsql AS $$
@@ -1297,6 +1335,8 @@ DROP TRIGGER IF EXISTS trigger_atualizar_campeonato ON public.botao_campeonatos_
 CREATE TRIGGER trigger_atualizar_campeonato
 BEFORE UPDATE ON public.botao_campeonatos_online
 FOR EACH ROW EXECUTE FUNCTION public.atualizar_timestamp_campeonato();
+
+COMMIT;
 
 -- Realtime para campeonatos
 ALTER TABLE public.botao_campeonatos_online REPLICA IDENTITY FULL;
@@ -1312,6 +1352,8 @@ ALTER TABLE public.mesas_futebol
   CHECK (modalidade IN ('amistoso','campeonato'));
 ALTER TABLE public.mesas_futebol
   ADD COLUMN IF NOT EXISTS campeonato_id BIGINT REFERENCES public.botao_campeonatos_online(id) ON DELETE CASCADE;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------------
 -- RPC: criar_campeonato_online(p_nome TEXT, p_max INTEGER DEFAULT 4)
@@ -1351,6 +1393,8 @@ BEGIN
 
   RETURN v_row;
 END; $$;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------------
 -- RPC: entrar_campeonato_online(p_codigo TEXT)
@@ -1399,6 +1443,8 @@ BEGIN
   RETURN v_row;
 END; $$;
 
+COMMIT;
+
 -- ---------------------------------------------------------------------------
 -- RPC: sair_campeonato_online(p_codigo TEXT)
 -- Remove o usuário da sala se ainda não começou.
@@ -1432,6 +1478,8 @@ BEGIN
 
   RETURN v_row;
 END; $$;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------------
 -- Helper: gerar confrontos round-robin (circle method) em JS puro no cliente.
@@ -1490,6 +1538,8 @@ BEGIN
 
   RETURN v_rodadas;
 END; $$;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------------
 -- RPC: iniciar_campeonato_online(p_codigo TEXT)
@@ -1553,6 +1603,8 @@ BEGIN
   RETURN v_row;
 END; $$;
 
+COMMIT;
+
 -- ---------------------------------------------------------------------------
 -- RPC: vincular_mesa_campeonato(p_campeonato_id BIGINT, p_rodada INTEGER, p_mesa_id TEXT)
 -- Marca a mesa recém-criada no confronto correspondente (jogador é participante).
@@ -1604,6 +1656,8 @@ BEGIN
 
   RETURN v_row;
 END; $$;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------------
 -- RPC: abrir_mesa_campeonato(p_campeonato_id BIGINT, p_rodada INTEGER)
@@ -1699,6 +1753,8 @@ BEGIN
 
   RETURN v_mesa_id;
 END; $$;
+
+COMMIT;
 
 GRANT EXECUTE ON FUNCTION public.abrir_mesa_campeonato(BIGINT, INTEGER) TO authenticated;
 
@@ -1858,6 +1914,8 @@ BEGIN
   RETURN v_row;
 END; $$;
 
+COMMIT;
+
 GRANT EXECUTE ON FUNCTION public.criar_campeonato_online(TEXT, INTEGER)                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.entrar_campeonato_online(TEXT)                                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.sair_campeonato_online(TEXT)                                    TO authenticated;
@@ -1865,5 +1923,7 @@ GRANT EXECUTE ON FUNCTION public.iniciar_campeonato_online(TEXT)                
 GRANT EXECUTE ON FUNCTION public.vincular_mesa_campeonato(BIGINT, INTEGER, TEXT)                TO authenticated;
 GRANT EXECUTE ON FUNCTION public.registrar_resultado_campeonato(BIGINT, TEXT, INTEGER, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION public._gerar_confrontos_campeonato(UUID[])                           TO service_role;
+
+COMMIT;
 
 NOTIFY pgrst, 'reload schema';
