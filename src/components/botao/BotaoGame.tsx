@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { AdsterraSocialBar } from "@/components/AdsterraSocialBar";
 import { useAdManager } from "@/lib/adManager";
+import { adManager } from "@/lib/adManager";
 import {
   DIFFICULTIES,
   type Difficulty,
@@ -185,9 +187,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   useEffect(() => {
     initAdManager();
     return () => {
-      cleanupAdManager();
+      // Limpa apenas scripts da Adsterra ao sair
+      adManager.cleanupAdsterra();
     };
-  }, [initAdManager, cleanupAdManager]);
+  }, [initAdManager]);
 
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
@@ -1790,6 +1793,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
+      {/* Social Bar da Adsterra - global no Futebol de Botão */}
+      <AdsterraSocialBar />
+
       {loading && (
         <LoadingScreen onCompleto={loadingOnComplete} />
       )}

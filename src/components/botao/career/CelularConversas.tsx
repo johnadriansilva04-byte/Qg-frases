@@ -54,6 +54,11 @@ export function CelularConversas({
 
   const conversaAtiva = todasConversas.find((c) => c.id === conversaSelecionada) ?? null;
 
+  // Guarda contra conversa selecionada que não existe mais
+  if (conversaSelecionada && !conversaAtiva) {
+    setConversaSelecionada(null);
+  }
+
   const abrirConversa = (id: string) => {
     setConversaSelecionada(id);
     setLidas((prev) => {
