@@ -90,6 +90,12 @@ class AdManager {
    * Carrega o script da rede especificada
    */
   loadScript(network: AdNetwork): void {
+    // Verifica se está no browser (SSR-safe)
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      console.warn("[AdManager] Tentativa de carregar script no SSR - ignorando");
+      return;
+    }
+
     if (network === "none") return;
     if (this.loadedScripts.has(network)) return;
 
@@ -127,6 +133,11 @@ class AdManager {
    * Remove um script específico
    */
   removeScript(network: AdNetwork): void {
+    // Verifica se está no browser (SSR-safe)
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
     const config = AD_SCRIPTS[network];
     if (!config) return;
 
@@ -142,6 +153,11 @@ class AdManager {
    * Cria container para anúncio
    */
   createContainer(network: AdNetwork, slotId: string): HTMLElement | null {
+    // Verifica se está no browser (SSR-safe)
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return null;
+    }
+
     if (network === "none") return null;
 
     const config = AD_SCRIPTS[network];
@@ -168,6 +184,11 @@ class AdManager {
    * Remove todos os containers de anúncios
    */
   cleanupContainers(): void {
+    // Verifica se está no browser (SSR-safe)
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
     this.activeContainers.forEach((containerId) => {
       const container = document.getElementById(containerId);
       if (container) {

@@ -7,15 +7,24 @@ type Props = { rotulo: string; nota?: string; altura?: string; children?: ReactN
 /**
  * ESPAÇO DE ANÚNCIO (Google AdSense / Ad Manager).
  * Gerenciado pelo AdManager para isolamento entre redes.
+ * SSR-safe - roda apenas client-side.
  */
 export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
+  const [isMounted, setIsMounted] = useState(false);
   const adSlot = rotulo === "Banner Topo" ? "9981926633" : rotulo === "Banner Rodapé" ? "7935061808" : rotulo;
   const adRef = useRef<HTMLDivElement>(null);
   const adLoadedRef = useRef(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const { init, getNetwork, isSlotAllowed } = useAdManager(window.location.pathname);
+  const { init, getNetwork, isSlotAllowed } = useAdManager(typeof window !== "undefined" ? window.location.pathname : "/");
 
   useEffect(() => {
+    // Garante que rode apenas no client-side
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     // Inicializa AdManager para rota atual
     init();
 
@@ -79,12 +88,24 @@ export function AdSlot({ rotulo, nota, altura = "min-h-[90px]" }: Props) {
         observerRef.current.disconnect();
       }
     };
-  }, [adSlot, init, getNetwork, isSlotAllowed, rotulo]);
+  }, [adSlot, init, getNetwork, isSlotAllowed, rotulo, isMounted]);
 
   // Não renderiza se a rede não for AdSense
   const network = getNetwork();
   if (network !== "adsense") {
     return null;
+  }
+
+  // Não renderiza nada durante SSR
+  if (!isMounted) {
+    return (
+      <div 
+        className={`w-full max-w-[728px] ${altura} flex flex-col items-center justify-center rounded-2xl border border-border bg-surface/70 px-4 py-3 text-center backdrop-blur-md my-6 mx-auto`}
+        style={{ display: 'block', maxWidth: '728px', maxHeight: '90px' }}
+      >
+        <div className="mb-2 text-xs text-muted-foreground">Publicidade</div>
+      </div>
+    );
   }
 
   return (

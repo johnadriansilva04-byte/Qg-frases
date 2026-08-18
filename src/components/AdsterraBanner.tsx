@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adManager, useAdManager } from "@/lib/adManager";
 
 interface AdsterraBannerProps {
@@ -9,12 +9,21 @@ interface AdsterraBannerProps {
 /**
  * Componente Native Banner da Adsterra
  * Uso exclusivo no Futebol de Botão
+ * Rode apenas client-side (SSR-safe)
  */
 export function AdsterraBanner({ slotId = "native-banner", className = "" }: AdsterraBannerProps) {
+  const [isMounted, setIsMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { init, createContainer, getNetwork } = useAdManager("/botao");
 
   useEffect(() => {
+    // Garante que rode apenas no client-side
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     // Inicializa AdManager para rota /botao
     init();
 
@@ -51,7 +60,19 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
         container.parentNode.removeChild(container);
       }
     };
-  }, [slotId, init, createContainer, getNetwork]);
+  }, [slotId, init, createContainer, getNetwork, isMounted]);
+
+  // Não renderiza nada durante SSR
+  if (!isMounted) {
+    return (
+      <div
+        className={`adsterra-banner-container w-full min-h-[90px] flex items-center justify-center ${className}`}
+        style={{ display: "block" }}
+      >
+        <div className="text-xs text-muted-foreground">Publicidade</div>
+      </div>
+    );
+  }
 
   return (
     <div
