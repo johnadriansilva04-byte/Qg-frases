@@ -85,6 +85,7 @@ import {
   type NarrativaEscolha,
 } from "./career/narrativeEngine";
 import { NarrativeModal } from "./career/NarrativeModal";
+import { CelularConversas } from "./career/CelularConversas";
 import { SeasonTransition } from "./career/SeasonTransition";
 import {
   SUBORNO_INICIAL,
@@ -491,6 +492,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       narrativa: NARRATIVA_INICIAL,
       // Patrocinador propõe a primeira meta do celular (desafio por partida).
       desafioPatrocinador: gerarDesafioPatrocinador(0),
+      conversas: [],
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
     persistCareer(novaCareer);
@@ -677,6 +679,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       narrativa: NARRATIVA_INICIAL,
       suborno: undefined,
       desafioPatrocinador: gerarDesafioPatrocinador(0),
+      conversas: [],
       coach: {
         ...career.coach,
         soberania: novaSoberania,
@@ -701,6 +704,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         campanhasJogadas: career.coach.campanhasJogadas + 1,
       },
       temporada: 1,
+      conversas: [],
     };
     persistCareer(novaCareer);
     persistTournament(null);
@@ -776,14 +780,43 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       );
     }
 
-    // Segue para a partida
-    const f = nextUserFixture(tour!);
-    if (!f) {
-      setScreen("hub");
-      return;
-    }
-    setCurrent(f);
-    setScreen("tournament-match");
+    // Segue para o hub (não inicia o jogo automaticamente)
+    setScreen("hub");
+  };
+
+  // Handlers para o sistema de conversas do celular
+  const handleEnviarMensagem = (conversaId: string, texto: string) => {
+    if (!career) return;
+    const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const novasConversas = career.conversas.map((conv) => {
+      if (conv.id === conversaId) {
+        return {
+          ...conv,
+          mensagens: [
+            ...conv.mensagens,
+            {
+              id: `msg-${Date.now()}`,
+              texto,
+              remetente: "eu" as const,
+              timestamp,
+            },
+          ],
+          naoLida: false,
+        };
+      }
+      return conv;
+    });
+    const novo: CareerState = { ...career, conversas: novasConversas };
+    persistCareer(novo);
+    setCareer(novo);
+  };
+
+  const handleExcluirConversa = (conversaId: string) => {
+    if (!career) return;
+    const novasConversas = career.conversas.filter((c) => c.id !== conversaId);
+    const novo: CareerState = { ...career, conversas: novasConversas };
+    persistCareer(novo);
+    setCareer(novo);
   };
 
   // Processa o resultado de um jogo da Copa do Brasil (paralela ao
@@ -1336,8 +1369,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             </button>
           </div>
 
-          {/* Desafio de patrocinador: sempre visível como chat em 1ª pessoa */}
-          {desafio && !desafio.concluido && (
+          {/* Desafio de patrocinador: só mostra se não concluído e não há outras mensagens prioritárias */}
+          {!subornoAtivo && !narrativaAtiva && !eventoPendente && desafio && !desafio.concluido && (
             <div className="patrocinador-msg">
               <div className="patrocinador-bubble">
                 <p className="patrocinador-nome">{desafio.patrocinador}</p>
@@ -1345,8 +1378,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                 <p className="patrocinador-recompensa">
                   Recompensa: +{desafio.recompensa} soberania
                 </p>
+                <button 
+                  onClick={() => setScreen("hub")}
+                  className="btn-ghost mt-2 text-xs"
+                >
+                  Entendido
+                </button>
               </div>
             </div>
+          )}
+
+          {/* Botão para ver todas as conversas */}
+          {!subornoAtivo && !narrativaAtiva && !eventoPendente && (
+            <button 
+              onClick={() => setScreen("celular-conversas")}
+              className="btn-ghost w-full mt-2 text-xs"
+            >
+              Ver todas as conversas
+            </button>
           )}
 
           {subornoAtivo ? (
@@ -1391,6 +1440,22 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             </button>
           )}
         </div>
+      </Shell>
+    );
+  }
+
+  if (
+    screen === "celular-conversas" &&
+    career
+  ) {
+    return (
+      <Shell>
+        <CelularConversas
+          conversas={career.conversas}
+          onEnviarMensagem={handleEnviarMensagem}
+          onExcluirConversa={handleExcluirConversa}
+          onVoltar={() => setScreen("hub")}
+        />
       </Shell>
     );
   }
@@ -2035,7 +2100,9 @@ function Hub({
                   </tr>
                 </thead>
                 <tbody>
-                  {sortTable(tour.groups[0]!.table).map((r, i) => {
+                  {sortTable(tour.groups[0]!.table)
+                    .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
+                    .map((r, i) => {
                     const position = i + 1;
                     const zone =
                       position <= 4

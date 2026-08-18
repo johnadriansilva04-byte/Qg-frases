@@ -26,6 +26,7 @@ export const EMPTY_CAREER: CareerState = {
   rodadaAtual: 0,
   rodadasDesdeEventoNarrativo: 0,
   temporada: 1,
+  conversas: [],
 };
 
 export function loadCareer(): CareerState | null {

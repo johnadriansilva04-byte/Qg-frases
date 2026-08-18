@@ -135,7 +135,9 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
                       </tr>
                     </thead>
                     <tbody>
-                      {sortTable(tour.groups[0]!.table).map((r, i) => {
+                      {sortTable(tour.groups[0]!.table)
+                        .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
+                        .map((r, i) => {
                         const position = i + 1;
                         const zone =
                           position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";

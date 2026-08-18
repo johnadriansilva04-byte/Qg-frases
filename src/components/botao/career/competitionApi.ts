@@ -39,8 +39,12 @@ export function calcularStats(tour: Tournament, userTeam: Team): StatsData | nul
   const tabela = sortTable(tour.groups[0]!.table);
   if (tabela.length === 0) return null;
 
-  const artilheiro = tabela.reduce((max, r) => (r.gp > max.gp ? r : max), tabela[0]!);
-  const menosGols = tabela.reduce((min, r) => (r.gc < min.gc ? r : min), tabela[0]!);
+  // Remove duplicatas da tabela (mesmo teamId) para evitar exibição repetida
+  const tabelaUnica = tabela.filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i);
+  if (tabelaUnica.length === 0) return null;
+
+  const artilheiro = tabelaUnica.reduce((max, r) => (r.gp > max.gp ? r : max), tabelaUnica[0]!);
+  const menosGols = tabelaUnica.reduce((min, r) => (r.gc < min.gc ? r : min), tabelaUnica[0]!);
 
   let maiorVitoria: {
     homeId: string;
@@ -71,10 +75,12 @@ export function calcularStats(tour: Tournament, userTeam: Team): StatsData | nul
     const m = maiorVitoria;
     const vencedorId = m.homeGoals > m.awayGoals ? m.homeId : m.awayId;
     const perdedorId = m.homeGoals > m.awayGoals ? m.awayId : m.homeId;
+    const golsVencedor = Math.max(m.homeGoals, m.awayGoals);
+    const golsPerdedor = Math.min(m.homeGoals, m.awayGoals);
     maiorGoleada = {
       vencedor: resolveTeam(vencedorId, userTeam),
       perdedor: resolveTeam(perdedorId, userTeam),
-      placar: `${m.homeGoals}-${m.awayGoals}`,
+      placar: `${golsVencedor}-${golsPerdedor}`,
       diff: m.diff,
     };
   }

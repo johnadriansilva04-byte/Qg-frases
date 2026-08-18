@@ -90,6 +90,21 @@ export type DesafioPatrocinador = {
   concluido: boolean;
 };
 
+export type ConversaCelular = {
+  id: string;
+  tipo: "patrocinador" | "namorada" | "suborno" | "narrativa" | "evento";
+  nome: string;
+  avatar: string;
+  cargo: string;
+  mensagens: Array<{
+    id: string;
+    texto: string;
+    remetente: "eu" | "outro";
+    timestamp: string;
+  }>;
+  naoLida: boolean;
+};
+
 export type CareerState = {
   coach: Coach;
   dificuldadeAtual: Difficulty | null;
@@ -116,6 +131,8 @@ export type CareerState = {
   temporada: number;
   // Desafio de patrocinador ativo (mensagem no celular com meta → soberania).
   desafioPatrocinador?: DesafioPatrocinador | null | undefined;
+  // Conversas do celular (patrocinador, namorada, suborno, etc.)
+  conversas: ConversaCelular[];
 };
 
 export const CAREER_KEY = "botao:career:v1";
