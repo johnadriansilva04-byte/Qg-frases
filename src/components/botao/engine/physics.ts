@@ -26,7 +26,15 @@ const FRICTION = 0.985;
 const WALL_BOUNCE = 0.72;
 const STOP = 0.06;
 
-export function createDisc(id: string, side: Side | "ball", x: number, y: number, r: number, mass: number, keeper = false): Disc {
+export function createDisc(
+  id: string,
+  side: Side | "ball",
+  x: number,
+  y: number,
+  r: number,
+  mass: number,
+  keeper = false,
+): Disc {
   return { id, side, x, y, vx: 0, vy: 0, r, mass, keeper };
 }
 
@@ -39,38 +47,55 @@ const FORMATION: Array<[number, number]> = [
   [0.44, 0.62],
 ];
 
-export function initialDiscs(): Disc[] {
+/**
+ * Cria o conjunto inicial de discos. Aceita uma formação opcional (5 posições
+ * [x,y] em fração do campo) para personalização PS2. A primeira posição é o
+ * "zagueiro-base"; as 4 seguintes são distribuídas como de linha + 1 avançado
+ * extra centralizado para fechar os 5 botões de campo.
+ */
+export function initialDiscs(formation?: Array<[number, number]>): Disc[] {
   const discs: Disc[] = [];
   const { w, h, discR, keeperR, ballR } = FIELD;
+  const f = formation && formation.length >= 5 ? formation : FORMATION;
 
   discs.push(createDisc("home-gk", "home", w * 0.05, h * 0.5, keeperR, 2.2, true));
   discs.push(createDisc("away-gk", "away", w * 0.95, h * 0.5, keeperR, 2.2, true));
 
-  FORMATION.forEach(([fx, fy], i) => {
+  // Índices 1..4 da formação (pula o 0, que vira o "extra" central abaixo).
+  f.forEach(([fx, fy], i) => {
     if (i === 0) return;
     discs.push(createDisc(`home-${i}`, "home", w * fx, h * fy, discR, 1));
     discs.push(createDisc(`away-${i}`, "away", w * (1 - fx), h * fy, discR, 1));
   });
-  // dois avançados extras
-  discs.push(createDisc("home-5", "home", w * 0.44, h * 0.5, discR, 1));
-  discs.push(createDisc("away-5", "away", w * 0.56, h * 0.5, discR, 1));
+  // quinto botão de linha (avançado central) usando a posição do índice 0.
+  const [bx, by] = f[0]!;
+  discs.push(createDisc("home-5", "home", w * bx, h * by, discR, 1));
+  discs.push(createDisc("away-5", "away", w * (1 - bx), h * by, discR, 1));
 
   discs.push(createDisc("ball", "ball", w * 0.5, h * 0.5, ballR, 0.35));
   return discs;
 }
 
-export function resetPositions(discs: Disc[]) {
-  const fresh = initialDiscs();
-  discs.forEach((d, i) => {
-    const f = fresh[i]!;
-    d.x = f.x;
-    d.y = f.y;
+export function resetPositions(discs: Disc[], formation?: Array<[number, number]>) {
+  const fresh = initialDiscs(formation);
+  const n = Math.min(discs.length, fresh.length);
+  for (let i = 0; i < n; i++) {
+    const d = discs[i]!;
+    const fr = fresh[i]!;
+    d.x = fr.x;
+    d.y = fr.y;
     d.vx = 0;
     d.vy = 0;
-  });
+  }
 }
 
-export type StepResult = { moving: boolean; goal: Side | null; wallHit: boolean; hit: boolean; ownGoal?: boolean };
+export type StepResult = {
+  moving: boolean;
+  goal: Side | null;
+  wallHit: boolean;
+  hit: boolean;
+  ownGoal?: boolean;
+};
 
 export function step(discs: Disc[]): StepResult {
   const { w, h, margin, goalHeight } = FIELD;

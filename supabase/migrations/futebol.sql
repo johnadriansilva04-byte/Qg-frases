@@ -300,6 +300,11 @@ CREATE POLICY "Autenticados podem criar usuarios" ON public.botao_usuarios FOR I
 DROP POLICY IF EXISTS "Autenticados podem atualizar usuarios" ON public.botao_usuarios;
 CREATE POLICY "Autenticados podem atualizar usuarios" ON public.botao_usuarios FOR UPDATE USING (true);
 
+-- Excluir a própria conta (personalização/excluir conta). Só o dono.
+DROP POLICY IF EXISTS "Dono pode excluir propria conta" ON public.botao_usuarios;
+CREATE POLICY "Dono pode excluir propria conta" ON public.botao_usuarios
+  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
 -- Políticas para lobbies
 DROP POLICY IF EXISTS "Todos podem ver lobbies" ON public.botao_lobbies;
 CREATE POLICY "Todos podem ver lobbies" ON public.botao_lobbies FOR SELECT USING (true);
@@ -917,6 +922,59 @@ ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS ultimas_escolhas JSON
 ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS ultima_rodada_processada INTEGER NOT NULL DEFAULT -1;
 ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS dificuldade_atual TEXT
   CHECK (dificuldade_atual IN ('amador','profissional','lenda'));
+
+-- ============================================================================
+-- PERSONALIZAÇÃO PS2: tática/formação + nomes individuais dos botões
+-- Aditivo (ADD COLUMN IF NOT EXISTS). Executa idempotente em re-aplicações.
+-- ============================================================================
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS tatica TEXT NOT NULL DEFAULT '1-2-2'
+  CHECK (tatica IN ('1-2-2','1-3-1','1-1-3','1-2-1-1','2-2-1'));
+
+-- Nomes personalizados dos 5 botões de linha (índice 0..4). JSONB array de texto.
+-- Ex.: ["Zagueiro","Volante","Meia","Ponta","Atacante"]
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS botoes_nomes JSONB NOT NULL DEFAULT
+  '["Zagueiro","Volante","Meia","Ponta","Centroavante"]'::JSONB;
+
+-- Garante que botoes_nomes tenha exatamente 5 entradas de texto não-vazias.
+ALTER TABLE public.botao_usuarios DROP CONSTRAINT IF EXISTS check_botoes_nomes;
+ALTER TABLE public.botao_usuarios ADD CONSTRAINT check_botoes_nomes CHECK (
+  jsonb_array_length(botoes_nomes) = 5
+  AND jsonb_typeof(botoes_nomes) = 'array'
+);
+
+-- Função para atualizar a personalização do clube (nome/time/cores/tática/botões).
+-- Usuário só pode editar o próprio perfil (auth.uid() = p_uid).
+CREATE OR REPLACE FUNCTION public.atualizar_perfil_clube(
+  p_uid         UUID,
+  p_nome        TEXT DEFAULT NULL,
+  p_time        TEXT DEFAULT NULL,
+  p_abreviacao  TEXT DEFAULT NULL,
+  p_cores       TEXT[] DEFAULT NULL,
+  p_tatica      TEXT DEFAULT NULL,
+  p_botoes      JSONB DEFAULT NULL
+) RETURNS public.botao_usuarios
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_row public.botao_usuarios;
+BEGIN
+  IF auth.uid() IS DISTINCT FROM p_uid THEN
+    RAISE EXCEPTION 'Sem permissão: você só pode editar seu próprio perfil.';
+  END IF;
+
+  UPDATE public.botao_usuarios SET
+    nome              = COALESCE(p_nome, nome),
+    time_personalizado = COALESCE(p_time, time_personalizado),
+    abreviacao_time   = UPPER(COALESCE(p_abreviacao, abreviacao_time)),
+    cores             = COALESCE(p_cores, cores),
+    tatica            = COALESCE(p_tatica, tatica),
+    botoes_nomes      = COALESCE(p_botoes, botoes_nomes),
+    updated_at        = now()
+  WHERE user_id = p_uid
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB) TO authenticated;
 
 -- Tabela de manchetes (jornal do torneio)
 CREATE TABLE IF NOT EXISTS public.botao_manchetes (

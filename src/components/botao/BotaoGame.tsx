@@ -9,6 +9,7 @@ import {
   Globe,
   Trash2,
   Calendar,
+  UserCircle,
 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import {
@@ -55,6 +56,7 @@ import { OnlineChampionship } from "./components/OnlineChampionship";
 import { useBotaoAuth } from "./online/useBotaoAuth";
 import type { Perfil } from "./online/auth";
 import { CoachSetup } from "./career/CoachSetup";
+import { ProfileSetup } from "./career/ProfileSetup";
 import { NewsFeed } from "./career/NewsFeed";
 import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
@@ -104,6 +106,7 @@ import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { POINTS, type CareerState, type Choice, type Divisao, type Headline } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
+import { formacaoById } from "./career/formacoes";
 import {
   loadCareerFromSupabase,
   saveCareerToSupabase,
@@ -117,6 +120,7 @@ import {
 type Screen =
   | "auth"
   | "menu"
+  | "profile"
   | "friendly-setup"
   | "friendly-match"
   | "online"
@@ -232,6 +236,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }, [customTeamData, career?.bonusProximaPartida, career?.penaltiesProximaPartida]);
 
+  // Formação PS2 escolhida pelo usuário no perfil (tática + posições dos botões).
+  const formation = useMemo<Array<[number, number]>>(() => {
+    const tatica = perfil?.tatica ?? localStorage.getItem("botao_online_tatica") ?? undefined;
+    return formacaoById(tatica).posicoes;
+  }, [perfil?.tatica]);
+
   const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
   const [current, setCurrent] = useState<Fixture | null>(null);
@@ -299,9 +309,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const aoLogar = async (p?: Perfil) => {
     console.log("[BotaoGame] aoLogar chamado:", { perfil: p });
-    if (p) aplicarPerfil(p);
+    // Sem perfil = logout ou exclusão de conta → volta à tela de login.
+    if (!p) {
+      setScreen("auth");
+      setToast("Você saiu da conta.");
+      return;
+    }
+    aplicarPerfil(p);
     // Carregar progresso do Supabase se o usuário estiver logado
-    if (p?.user_id) {
+    if (p.user_id) {
       const supabaseProgress = await loadProgressFromSupabase(p.user_id);
       setProgress(supabaseProgress);
       saveProgress(supabaseProgress);
@@ -1208,6 +1224,22 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
+  if (screen === "profile") {
+    return (
+      <Shell>
+        <UserMenu perfil={perfil} onLogin={() => setScreen("profile")} onLogout={handleLogout} />
+        <div className="mx-auto w-full max-w-5xl px-4 pb-16">
+          <Header
+            progress={progress}
+            onTrophies={() => setScreen("trophies")}
+            onHome={() => setScreen("menu")}
+          />
+          <ProfileSetup perfil={perfil} onPronto={aoLogar} onBack={() => setScreen("menu")} />
+        </div>
+      </Shell>
+    );
+  }
+
   if (screen === "coach-setup") {
     return (
       <Shell>
@@ -1327,6 +1359,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           onFinish={screen === "friendly-match" ? finishFriendly : finishTournamentMatch}
           onQuit={() => setScreen(screen === "friendly-match" ? "menu" : "hub")}
           customTeam={userTeam}
+          formation={formation}
         />
       </Shell>
     );
@@ -1370,6 +1403,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onOnlineChampionship={() => setScreen("online-championship")}
             onTournament={() => setScreen("tournament-setup")}
             onTrophies={() => setScreen("trophies")}
+            onProfile={() => setScreen("profile")}
             hasTour={!!tour && tour.phase !== "fim"}
             onResume={() => setScreen("hub")}
             onDeleteCampaign={handleDeleteCampaign}
@@ -1472,6 +1506,7 @@ function Menu({
   onOnlineChampionship,
   onTournament,
   onTrophies,
+  onProfile,
   hasTour,
   onResume,
   onDeleteCampaign,
@@ -1483,6 +1518,7 @@ function Menu({
   onOnlineChampionship: () => void;
   onTournament: () => void;
   onTrophies: () => void;
+  onProfile: () => void;
   hasTour: boolean;
   onResume: () => void;
   onDeleteCampaign: () => void;
@@ -1491,6 +1527,13 @@ function Menu({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
+        <MenuCard
+          icon={<UserCircle className="size-5" />}
+          title="Meu Clube / Conta"
+          desc="Login, personalizar time, tática, nomear botões e cores. Acesso à conta."
+          onClick={onProfile}
+          accent="sky"
+        />
         <MenuCard
           icon={<Swords className="size-5" />}
           title="Amistoso"

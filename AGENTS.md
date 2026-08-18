@@ -218,6 +218,52 @@ drama em 1ª pessoa via celular), economia de Soberania e temporada infinita.
 - `competitionApi.ts` NÃO é executável em Node puro (importa `@/lib/times.functions`
   via `data/teams.ts`) — validar por `tsc` + revisão manual.
 
+## Módulo de Login/Conta (PS2-style) — 2026-08-18
+
+Reatoração do login num módulo estável na tela principal, com personalização de
+time/botões/tática no estilo PS2. Tudo persistido no Supabase (`futebol.sql`).
+
+### SQL (`supabase/migrations/futebol.sql`)
+- Colunas aditivas em `botao_usuarios` (idempotentes, `ADD COLUMN IF NOT EXISTS`):
+  - `tatica TEXT NOT NULL DEFAULT '1-2-2'` com CHECK em
+    `('1-2-2','1-3-1','1-1-3','1-2-1-1','2-2-1')`.
+  - `botoes_nomes JSONB NOT NULL DEFAULT [...]` com constraint
+    `check_botoes_nomes` (array de 5).
+- RPC `atualizar_perfil_clube(p_uid, p_nome, p_time, p_abreviacao, p_cores,
+  p_tatica, p_botoes)`: SECURITY DEFINER, valida `auth.uid() = p_uid`. Atualiza
+  nome/time/sigla/cores/tática/botões com COALESCE (só altera o que vier não-null).
+- Policy DELETE: `"Dono pode excluir propria conta"` (`auth.uid() = user_id`).
+  GRANT DELETE já existia para authenticated.
+- **Aplicação obrigatória:** como não há `supabase` CLI/service_role no
+  workspace, o usuário deve colar o SQL atualizado no SQL Editor do Supabase.
+
+### Frontend
+- `career/formacoes.ts`: 5 formações (1-2-2, 1-3-1, 1-1-3, 1-2-1-1, 2-2-1), cada
+  uma com 5 posições [x,y] + nomes padrão. `formacaoById()`,
+  `normalizarBotoesNomes()`.
+- `career/ProfileSetup.tsx`: módulo de conta (login/cadastro/edição). PS2-style:
+  nome do time, sigla, cores (3 únicas), número, **tática**, **nomear os 5
+  botões**, preview de campo (SVG). Login automático via `useBotaoAuth`.
+  Deslogar / excluir conta / salvar personalização.
+- `online/auth.ts`: `Perfil` estendido com `tatica?` e `botoes_nomes?` (nullable
+  para casar com o DB). `cachePerfil` persiste tatica/botoes no localStorage.
+  `STORAGE_KEYS.TATICA`/`BOTOES`.
+- `lib/botao/api.ts`: `atualizarPerfilClube()` (RPC) + `excluirContaUsuario()`.
+- `BotaoGame.tsx`: screen `"profile"`, card "Meu Clube / Conta" no menu,
+  `formation` useMemo deriva posições de `perfil.tatica` e passa ao `MatchView`.
+  `aoLogar(undefined)` → volta à tela `auth` (logout/exclusão).
+- `engine/physics.ts`: `initialDiscs(formation?)` e `resetPositions(discs, formation?)`
+  aceitam formação personalizada. Default = `FORMATION` 1-2-2.
+- `components/MatchView.tsx`: prop `formation?` propagada a initialDiscs/resetPositions.
+- `integrations/supabase/types.ts`: `botao_usuarios` Row/Insert/Update com
+  tatica/botoes_nomes; RPC `atualizar_perfil_clube` tipada.
+
+### Fluxo de auto-login
+- `useBotaoAuth` escuta `onAuthStateChange`. Se há sessão ativa, busca/cria o
+  perfil e popula `perfil`. O `ProfileSetup` abre em modo "editar" quando
+  `perfil` existe; em modo "login" quando não. Logout/excluir → `onPronto(undefined)`
+  → `aoLogar` → screen `"auth"`.
+
 ## TypeScript — observações (2026-08-18)
 - `tsc --noEmit`: **0 erros** | `vite build`: OK | `npm run lint`: 1872 erros
   de prettier pré-existentes em TODO o repo (não bloqueiam build). `--fix`

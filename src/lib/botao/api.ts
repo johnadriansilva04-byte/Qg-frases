@@ -38,6 +38,8 @@ export type UsuarioBotao = {
   vitorias: number;
   derrotas: number;
   empates: number;
+  tatica?: string | null;
+  botoes_nomes?: string[] | null;
 };
 
 export type Lobby = {
@@ -130,7 +132,11 @@ export async function getUsuarioAtual(userId: string): Promise<UsuarioBotao | nu
   return data;
 }
 
-export async function criarPerfilSeNaoExistir(userId: string, email: string, nome?: string): Promise<UsuarioBotao | null> {
+export async function criarPerfilSeNaoExistir(
+  userId: string,
+  email: string,
+  nome?: string,
+): Promise<UsuarioBotao | null> {
   // Primeiro tenta buscar
   const existente = await getUsuarioAtual(userId);
   if (existente) return existente;
@@ -151,7 +157,7 @@ export async function criarPerfilSeNaoExistir(userId: string, email: string, nom
     .single();
 
   if (error) {
-    console.error('Erro ao criar perfil:', error);
+    console.error("Erro ao criar perfil:", error);
     return null;
   }
 
@@ -311,14 +317,16 @@ export async function registrarGolBloco(blocoId: string, jogador: "jogador1" | "
 
 /** Consome uma jogada (decrementa, alterna turno e finaliza no zero). */
 export async function registrarJogadaBloco(blocoId: string) {
-  console.log('[API] Registrando jogada para bloco:', blocoId);
+  console.log("[API] Registrando jogada para bloco:", blocoId);
 
   // Tentar usar RPC primeiro
-  const { error: rpcError, data: rpcData } = await supabase.rpc("registrar_jogada_bloco", { p_bloco_id: blocoId } as any);
+  const { error: rpcError, data: rpcData } = await supabase.rpc("registrar_jogada_bloco", {
+    p_bloco_id: blocoId,
+  } as any);
 
   if (rpcError) {
-    console.error('[API] Erro ao registrar jogada via RPC:', rpcError);
-    console.log('[API] Tentando método alternativo via update direto...');
+    console.error("[API] Erro ao registrar jogada via RPC:", rpcError);
+    console.log("[API] Tentando método alternativo via update direto...");
 
     // Método alternativo: fazer update direto
     const { data: bloco, error: fetchError } = await supabase
@@ -328,14 +336,14 @@ export async function registrarJogadaBloco(blocoId: string) {
       .single();
 
     if (fetchError) {
-      console.error('[API] Erro ao buscar bloco:', fetchError);
+      console.error("[API] Erro ao buscar bloco:", fetchError);
       throw fetchError;
     }
 
-    const novasJogadas = Math.max(0, (bloco.jogadas_restantes as number || 20) - 1);
+    const novasJogadas = Math.max(0, ((bloco.jogadas_restantes as number) || 20) - 1);
     const novoTurno = (bloco.turno as string) === "jogador1" ? "jogador2" : "jogador1";
 
-    console.log('[API] Atualizando bloco:', { novasJogadas, novoTurno });
+    console.log("[API] Atualizando bloco:", { novasJogadas, novoTurno });
 
     const { error: updateError } = await supabase
       .from("botao_blocos")
@@ -344,24 +352,28 @@ export async function registrarJogadaBloco(blocoId: string) {
         turno: novoTurno,
         timestamp_inicio_turno: new Date().toISOString(),
         status: novasJogadas <= 0 ? "finalizado" : bloco.status,
-        vencedor: novasJogadas <= 0 ? (
-          ((bloco.jogador1_gols as number) || 0) > ((bloco.jogador2_gols as number) || 0) ? "jogador1" :
-          ((bloco.jogador2_gols as number) || 0) > ((bloco.jogador1_gols as number) || 0) ? "jogador2" : "empate"
-        ) : bloco.vencedor,
+        vencedor:
+          novasJogadas <= 0
+            ? ((bloco.jogador1_gols as number) || 0) > ((bloco.jogador2_gols as number) || 0)
+              ? "jogador1"
+              : ((bloco.jogador2_gols as number) || 0) > ((bloco.jogador1_gols as number) || 0)
+                ? "jogador2"
+                : "empate"
+            : bloco.vencedor,
         finalizada_em: novasJogadas <= 0 ? new Date().toISOString() : bloco.finalizada_em,
       } as any)
       .eq("id", blocoId);
 
     if (updateError) {
-      console.error('[API] Erro ao atualizar bloco:', updateError);
+      console.error("[API] Erro ao atualizar bloco:", updateError);
       throw updateError;
     }
 
-    console.log('[API] Jogada registrada com sucesso via update direto');
+    console.log("[API] Jogada registrada com sucesso via update direto");
     return;
   }
 
-  console.log('[API] Jogada registrada com sucesso via RPC:', rpcData);
+  console.log("[API] Jogada registrada com sucesso via RPC:", rpcData);
 }
 
 export async function forcarTrocaTurnoBloco(blocoId: string) {
@@ -386,8 +398,60 @@ export async function sairDoBloco(blocoId: string) {
 export async function limparSalasAntigas() {
   const { error } = await supabase.rpc("limpar_salas_antigas");
   if (error) {
-    console.error('[API] Erro ao limpar salas antigas:', error);
+    console.error("[API] Erro ao limpar salas antigas:", error);
     throw error;
   }
-  console.log('[API] Salas antigas limpas com sucesso');
+  console.log("[API] Salas antigas limpas com sucesso");
+}
+
+/* --------------------- Personalização do clube (PS2) --------------------- */
+
+export type PerfilClubeInput = {
+  nome?: string;
+  time?: string;
+  abreviacao?: string;
+  cores?: string[];
+  tatica?: string;
+  botoes?: string[];
+};
+
+/**
+ * Atualiza a personalização do clube do usuário (nome, time, cores, tática e
+ * nomes dos botões) via RPC `atualizar_perfil_clube` (SECURITY DEFINER, valida
+ * auth.uid()). Retorna o perfil atualizado.
+ */
+export async function atualizarPerfilClube(
+  userId: string,
+  input: PerfilClubeInput,
+): Promise<UsuarioBotao | null> {
+  const { data, error } = await supabase.rpc("atualizar_perfil_clube", {
+    p_uid: userId,
+    p_nome: input.nome ?? null,
+    p_time: input.time ?? null,
+    p_abreviacao: input.abreviacao ?? null,
+    p_cores: input.cores ?? null,
+    p_tatica: input.tatica ?? null,
+    p_botoes: input.botoes ?? null,
+  });
+  if (error) {
+    console.error("[API] Erro ao atualizar perfil do clube:", error);
+    throw error;
+  }
+  return (data as UsuarioBotao | null) ?? null;
+}
+
+/** Exclui a conta do usuário: apaga o perfil em botao_usuarios (cascade) e o
+ *  auth user via administração. Por segurança, só o próprio usuário autenticado
+ *  pode excluir (RLS + policy delete_dono). Retorna true se removeu. */
+export async function excluirContaUsuario(userId: string): Promise<boolean> {
+  const { error } = await supabase.from("botao_usuarios").delete().eq("user_id", userId);
+  if (error) {
+    console.error("[API] Erro ao excluir perfil:", error);
+    throw error;
+  }
+  // Encerra a sessão (não há como excluir o auth.user sem service_role; o
+  // perfil e todos os dados em cascade já foram removidos. O logout limpa o
+  // token local, tornando a conta inacessível).
+  await supabase.auth.signOut();
+  return true;
 }

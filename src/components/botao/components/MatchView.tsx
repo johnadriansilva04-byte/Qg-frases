@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FIELD, clampImpulse, initialDiscs, resetPositions, step, type Disc, type Side } from "../engine/physics";
+import {
+  FIELD,
+  clampImpulse,
+  initialDiscs,
+  resetPositions,
+  step,
+  type Disc,
+  type Side,
+} from "../engine/physics";
 import { planAiShot } from "../engine/ai";
 import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
@@ -17,12 +25,27 @@ type Props = {
   onQuit: () => void;
   isOnline?: boolean; // Nova prop para indicar modo online
   customTeam?: Team; // Time personalizado do usuário
-  onPlay?: (goals: number, jogadaData?: { discId: string; ix: number; iy: number; power: number }, posicoesFinais?: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number } }) => void; // Callback chamado quando uma jogada termina (para sincronização online)
+  onPlay?: (
+    goals: number,
+    jogadaData?: { discId: string; ix: number; iy: number; power: number },
+    posicoesFinais?: {
+      discos: Array<{ id: string; x: number; y: number }>;
+      bola: { x: number; y: number };
+    },
+  ) => void; // Callback chamado quando uma jogada termina (para sincronização online)
   initialTurn?: Side; // Turno inicial (para sincronização online)
   onJogadaAdversaria?: (handler: (jogada: any) => void) => void; // Registra handler para receber jogadas do adversário
-  onFimDeTurno?: (handler: (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string; novoTurnoId?: string }) => void) => void; // Registra handler para receber fim de turno
+  onFimDeTurno?: (
+    handler: (payload: {
+      discos: Array<{ id: string; x: number; y: number }>;
+      bola: { x: number; y: number };
+      jogadorId: string;
+      novoTurnoId?: string;
+    }) => void,
+  ) => void; // Registra handler para receber fim de turno
   onGolAdversario?: (resetHandler: () => void) => void; // Registra handler para reset de bola quando o adversário marca gol
   score?: { home: number; away: number }; // Placar sincronizado do servidor (para modo online)
+  formation?: Array<[number, number]>; // Formação personalizada PS2 (5 posições)
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -45,6 +68,7 @@ export function MatchView({
   onFimDeTurno,
   onGolAdversario,
   score: serverScore,
+  formation,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -60,7 +84,7 @@ export function MatchView({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const discsRef = useRef<Disc[]>(initialDiscs());
+  const discsRef = useRef<Disc[]>(initialDiscs(formation));
   const aimRef = useRef<Aim>(null);
   const simRef = useRef(false);
   const turnRef = useRef<Side>(initialTurn || "home");
@@ -119,7 +143,7 @@ export function MatchView({
 
   const verificarFimDeMovimento = useCallback(() => {
     // Verificar se todos os discos e a bola estão em repouso
-    const todosParados = discsRef.current.every(d => {
+    const todosParados = discsRef.current.every((d) => {
       const velocidade = Math.hypot(d.vx, d.vy);
       return velocidade < 0.15;
     });
@@ -132,7 +156,7 @@ export function MatchView({
       }
 
       // Congelar posições finais
-      discsRef.current.forEach(d => {
+      discsRef.current.forEach((d) => {
         d.vx = 0;
         d.vy = 0;
       });
@@ -158,7 +182,7 @@ export function MatchView({
         const turnoAnterior = turnRef.current;
         turnRef.current = initialTurn;
         setTurn(initialTurn);
-        
+
         // Resetar flag de jogada quando o turno muda
         if (turnoAnterior !== initialTurn) {
           hasShotThisTurnRef.current = false;
@@ -216,7 +240,8 @@ export function MatchView({
       endedRef.current = true;
       setEnded(true);
       if (knockout && hg === ag) {
-        const shoot = (): number[] => Array.from({ length: 5 }, () => (Math.random() < 0.72 ? 1 : 0));
+        const shoot = (): number[] =>
+          Array.from({ length: 5 }, () => (Math.random() < 0.72 ? 1 : 0));
         let h = shoot();
         let a = shoot();
         let hs = h.reduce((x, y) => x + y, 0);
@@ -230,7 +255,11 @@ export function MatchView({
           as += ea;
         }
         setPens({ home: h, away: a });
-        setTimeout(() => onFinish({ homeId, awayId, homeGoals: hg, awayGoals: ag, penHome: hs, penAway: as }), 2600);
+        setTimeout(
+          () =>
+            onFinish({ homeId, awayId, homeGoals: hg, awayGoals: ag, penHome: hs, penAway: as }),
+          2600,
+        );
       } else {
         setTimeout(() => onFinish({ homeId, awayId, homeGoals: hg, awayGoals: ag }), 1400);
       }
@@ -252,12 +281,12 @@ export function MatchView({
       }
       frames++;
       const moving = discsRef.current.some((d) => d.vx !== 0 || d.vy !== 0);
-      
+
       // Verificar fim de movimento no modo online (chamar sempre se jogada em andamento)
       if (isOnline && jogadaEmAndamentoRef.current) {
         verificarFimDeMovimento();
       }
-      
+
       if (goal) {
         const next = { ...scoreRef.current, [goal]: scoreRef.current[goal] + 1 };
         setScore(next);
@@ -265,7 +294,7 @@ export function MatchView({
         if (ownGoalDetected) {
           setFlash("GOL CONTRA!");
           setTimeout(() => setFlash(null), 1500);
-          resetPositions(discsRef.current);
+          resetPositions(discsRef.current, formation);
           simRef.current = false;
           // No gol contra, quem sofreu o gol recebe a bola (não quem fez)
           const conceding: Side = goal === "home" ? "home" : "away";
@@ -286,7 +315,7 @@ export function MatchView({
         }
 
         setFlash("GOOOOL!");
-        resetPositions(discsRef.current);
+        resetPositions(discsRef.current, formation);
         setTimeout(() => setFlash(null), 1200);
         const conceding: Side = goal === "home" ? "away" : "home";
         // Quem sofreu o gol (conceding) recebe o próximo turno
@@ -313,7 +342,7 @@ export function MatchView({
         if (!isOnline) {
           setGoalCooldown(5);
           const cooldownInterval = setInterval(() => {
-            setGoalCooldown(prev => {
+            setGoalCooldown((prev) => {
               if (prev === null || prev <= 1) {
                 clearInterval(cooldownInterval);
                 // Passar a vez automaticamente após 5 segundos
@@ -347,13 +376,13 @@ export function MatchView({
           // No modo online, chamar onPlay para sincronizar jogada sem gol
           if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 });
         }
-        
+
         // No modo online, enviar posições finais e NÃO alternar turno localmente
         if (isOnline) {
           // Coletar posições finais de todos os discos e da bola
           const posicoesFinais = {
-            discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
-            bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
+            discos: discsRef.current.map((d) => ({ id: d.id, x: d.x, y: d.y })),
+            bola: discsRef.current.find((d) => d.side === "ball") || { x: 0, y: 0 },
           };
           // Chamar onPlay com posições finais para sincronização
           if (onPlay) onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
@@ -414,12 +443,16 @@ export function MatchView({
   useEffect(() => {
     if (!isOnline || !onFimDeTurno) return;
 
-    const handleFimDeTurno = (payload: { discos: Array<{ id: string; x: number; y: number }>; bola: { x: number; y: number }; jogadorId: string }) => {
+    const handleFimDeTurno = (payload: {
+      discos: Array<{ id: string; x: number; y: number }>;
+      bola: { x: number; y: number };
+      jogadorId: string;
+    }) => {
       // Resetar flag de jogada quando receber fim de turno
       hasShotThisTurnRef.current = false;
 
       // Aplicar posições finais aos discos
-      payload.discos.forEach(discoFinal => {
+      payload.discos.forEach((discoFinal) => {
         const discoLocal = discsRef.current.find((d) => d.id === discoFinal.id);
         if (discoLocal) {
           discoLocal.x = discoFinal.x;
@@ -439,11 +472,11 @@ export function MatchView({
       }
 
       // Forçar re-renderização
-      setAimPower(prev => prev); // Trigger re-render
+      setAimPower((prev) => prev); // Trigger re-render
     };
 
     // Registrar o handler passando a função callback
-    if (typeof onFimDeTurno === 'function') {
+    if (typeof onFimDeTurno === "function") {
       onFimDeTurno(handleFimDeTurno);
     }
   }, [isOnline, onFimDeTurno]);
@@ -454,7 +487,7 @@ export function MatchView({
   useEffect(() => {
     if (!isOnline || !onGolAdversario) return;
     const resetarAposGolAdversario = () => {
-      resetPositions(discsRef.current);
+      resetPositions(discsRef.current, formation);
       simRef.current = false;
       jogadaEmAndamentoRef.current = false;
       hasShotThisTurnRef.current = false;
@@ -576,17 +609,17 @@ export function MatchView({
     safetyTimerRef.current = setTimeout(() => {
       // Forçar parada após 6 segundos
       if (jogadaEmAndamentoRef.current) {
-        discsRef.current.forEach(disc => {
+        discsRef.current.forEach((disc) => {
           disc.vx = 0;
           disc.vy = 0;
         });
         jogadaEmAndamentoRef.current = false;
-        
+
         // Enviar posições finais mesmo com timeout
         if (isOnline && onPlay) {
           const posicoesFinais = {
-            discos: discsRef.current.map(d => ({ id: d.id, x: d.x, y: d.y })),
-            bola: discsRef.current.find(d => d.side === "ball") || { x: 0, y: 0 }
+            discos: discsRef.current.map((d) => ({ id: d.id, x: d.x, y: d.y })),
+            bola: discsRef.current.find((d) => d.side === "ball") || { x: 0, y: 0 },
           };
           onPlay(0, { discId: "no_goal", ix: 0, iy: 0, power: 0 }, posicoesFinais);
         }
@@ -607,19 +640,19 @@ export function MatchView({
   // Função para voltar uma jogada
   const undoLastMove = () => {
     if (historyRef.current.length === 0 || simRef.current || ended) return;
-    
+
     // Restaurar estado anterior
     const previousDiscs = historyRef.current.pop();
     const previousScore = scoreHistoryRef.current.pop();
     const previousTurns = turnsHistoryRef.current.pop();
     const previousTurn = turnHistoryRef.current.pop();
-    
+
     if (previousDiscs) {
       discsRef.current = previousDiscs;
       setScore(previousScore || { home: 0, away: 0 });
       setTurnsLeft(previousTurns || turns);
       setTurn(previousTurn || "home");
-      
+
       // Atualizar refs
       scoreRef.current = previousScore || { home: 0, away: 0 };
       turnsRef.current = previousTurns || turns;
@@ -631,14 +664,16 @@ export function MatchView({
     <div className="mx-auto w-full max-w-5xl px-3 pb-8">
       <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 sm:flex sm:justify-between">
         <div className="min-w-0">
-          <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">{stageLabel}</p>
+          <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
+            {stageLabel}
+          </p>
           <h2 className="truncate font-display text-lg text-foreground sm:text-2xl">
             {home.short} <span className="text-muted-foreground">vs</span> {away.short}
           </h2>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={undoLastMove} 
+          <button
+            onClick={undoLastMove}
             disabled={historyRef.current.length === 0 || simRef.current || ended}
             className="btn-ghost shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Voltar jogada"
@@ -668,14 +703,20 @@ export function MatchView({
         <canvas
           ref={canvasRef}
           className={`pitch-canvas w-full touch-none select-none`}
-          style={{ touchAction: 'none' }}
+          style={{ touchAction: "none" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          onTouchStart={(e) => { e.preventDefault(); }}
-          onTouchMove={(e) => { e.preventDefault(); }}
-          onTouchEnd={(e) => { e.preventDefault(); }}
+          onTouchStart={(e) => {
+            e.preventDefault();
+          }}
+          onTouchMove={(e) => {
+            e.preventDefault();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+          }}
         />
         {isOnline && turn !== userSide && !ended && (
           <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2">
@@ -718,7 +759,8 @@ export function MatchView({
             "Apurando o resultado..."
           ) : yourTurn ? (
             <>
-              Sua vez, <span className="text-foreground">{userTeam.short}</span> — arraste um botão pra trás e solte.
+              Sua vez, <span className="text-foreground">{userTeam.short}</span> — arraste um botão
+              pra trás e solte.
             </>
           ) : isOnline ? (
             "Aguardando o oponente..."
@@ -736,9 +778,13 @@ export function MatchView({
 
 function TeamChip({ team, align }: { team: Team; align: "left" | "right" }) {
   return (
-    <div className={`flex min-w-0 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
+    <div
+      className={`flex min-w-0 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : ""}`}
+    >
       <span className="text-2xl sm:text-3xl">⚽</span>
-      <span className="truncate font-display text-sm text-foreground sm:text-base">{team.short}</span>
+      <span className="truncate font-display text-sm text-foreground sm:text-base">
+        {team.short}
+      </span>
     </div>
   );
 }
@@ -750,7 +796,13 @@ function drawField(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, w, h);
   // listras
   ctx.fillStyle = "rgba(255,255,255,0.035)";
-  for (let i = 0; i < 10; i += 2) ctx.fillRect(margin + (i * (w - margin * 2)) / 10, margin, (w - margin * 2) / 10, h - margin * 2);
+  for (let i = 0; i < 10; i += 2)
+    ctx.fillRect(
+      margin + (i * (w - margin * 2)) / 10,
+      margin,
+      (w - margin * 2) / 10,
+      h - margin * 2,
+    );
 
   ctx.strokeStyle = "rgba(255,255,255,0.75)";
   ctx.lineWidth = 3;
@@ -804,7 +856,14 @@ function drawDiscs(
     } else {
       const primary = d.side === "home" ? hp : ap;
       const secondary = d.side === "home" ? hs : as;
-      const grad = ctx.createRadialGradient(d.x - d.r * 0.35, d.y - d.r * 0.4, d.r * 0.15, d.x, d.y, d.r);
+      const grad = ctx.createRadialGradient(
+        d.x - d.r * 0.35,
+        d.y - d.r * 0.4,
+        d.r * 0.15,
+        d.x,
+        d.y,
+        d.r,
+      );
       grad.addColorStop(0, "rgba(255,255,255,0.55)");
       grad.addColorStop(0.35, primary);
       grad.addColorStop(1, primary);
