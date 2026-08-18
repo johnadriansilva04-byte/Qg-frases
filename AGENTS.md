@@ -340,3 +340,75 @@ time/botões/tática no estilo PS2. Tudo persistido no Supabase (`futebol.sql`).
   divisão do usuário). Stats (`StatsModule`) rotuladas pela divisão selecionada.
 - `exactOptionalPropertyTypes`: props opcionais precisam de `| undefined`
   explícito (ex.: `botoesNomes?: string[] | undefined`).
+
+## Refatoração Master Liga / RPG de Mistério (2026-08-18)
+
+### Regra de pontuação (Soberania) — DB + frontend alinhados
+- **Por partida:** Vitória = +3 | Empate = +1 | **Derrota = +0** (sem perda de
+  soberania). Espelhado no SQL (`aplicar_resultado_carreira`) e no frontend
+  (`POINTS` em `career/types.ts`, `computeSovereigntyDelta` em `careerRemote`,
+  `atualizarPontosSoberania`/`atualizarEstatisticasOnline` em `storage.ts`).
+- **Campeão de campeonato:** +100/+150/+200 de Soberania por dificuldade
+  (amador/profissional/lenda), via `bonusCampeao(dificuldade)` em
+  `career/types.ts`. No SQL, `aplicar_fim_de_campanha` soma CAMPEAO(20) +
+  TITULO_(80/130/180) = 100/150/200.
+- **Bug de contagem dupla corrigido:** `finishTournamentMatch` NÃO chama mais
+  `atualizarPontosSoberania` (a soberania da carreira já é atualizada local
+  + via `aplicarResultadoRemoto`). Apenas sincroniza gols no JSONB de progresso.
+
+### Hotfix: Modo Carreira (Nova Carreira) + Celular inicial limpo
+- `Screen` agora inclui `"career-menu"` e `"celular-conversas"` (antes ausentes
+  do union — as telas eram inalcançáveis, só "Carregar" funcionava).
+- `CareerMenu`: mostra "Continuar Campanha" e "Nova Carreira" quando há
+  campanha salva. "Nova Carreira" sempre cria perfil de treinador novo
+  (`coach-setup`), mesmo com campanha existente.
+- `CareerMenu` props alinhadas com `BotaoGame` (`onSaveCampaign`, não
+  `onSaveCareer`).
+- **Celular inicial limpo:** `iniciarCampanha`/`startNextSeason` não geram mais
+  `desafioPatrocinador` nem narrativa automáticos no início (`desafioPatrocinador:
+  null`). Mensagens só surgem via script de eventos antes da próxima partida
+  válida (`aplicarDesafioPatrocinador` gera novo desafio quando `temProxima`).
+  Corrige o bug da mensagem padrão que quebrava o sistema ao ser clicada.
+
+### AdSense no intervalo (halftime)
+- `components/HalftimeAd.tsx` (NOVO): container em formato de TV/tela que
+  executa automaticamente um anúncio do Google AdSense (`ins.adsbygoogle`) no
+  intervalo de cada partida. Placeholder visível quando AdSense indisponível;
+  countdown de ~6s libera "Continuar partida".
+- `MatchView` aciona o intervalo em modo offline quando `turnsLeft` atinge
+  `Math.ceil(turns/2)` (uma vez por partida, via `halftimeShownRef`). Bloqueia
+  input/CPU/timer de turno durante o intervalo. CSS: `.halftime-*` em
+  `styles.css`.
+
+### Calendário unificado da temporada
+- `competitionApi.construirCalendarioUnificado()` (NOVO) mescla cronologicamente
+  rodadas do Brasileirão com fases da Copa do Brasil (Ida/Volta), intercalando
+  nos gatilhos `COPA_RODADAS_GATILHO`. Produz `CalItem[]` sequencial
+  (`Rodada 1 BR` → `Rodada 2 BR` → `Copa · Ida` → `Rodada 3 BR` → `Copa ·
+  Volta`).
+- `CalendarView` reescrito: exibe a timeline unificada (não mais toggle
+  Brasileirão/Copa isolado). CSS: `.cal-timeline`/`.cal-item[-copa/-br]`.
+
+### Tabela de classificação completa + zonas por divisão
+- `ChampionshipModule` e `Hub` agora exibem P/J/V/E/D/GP/GC/SG (classe
+  `.classificacao-table`), não só P/J/SG.
+- `competitionApi.zonaDaPosicao(posicao, divisao, total)` (NOVO):
+  - Série C: 1º-2º = acesso (Série B); sem Libertadores/Copa direto.
+  - Série B: 1º-2º = acesso (Série A); últimos 2 = rebaixamento (Série C).
+  - Série A: 1º-4º = Libertadores; 5º-6º = Copa do Brasil; últimos 4 =
+    rebaixamento (Série B).
+- `ZoneLegend` agora é divisão-aware (`divisao`/`total` props). CSS:
+  `.zone-acesso` adicionado.
+
+### Nomes dos botões (Futebol SQL)
+- Nomes dos 5 botões do time do usuário vêm da coluna `botoes_nomes` de
+  `botao_usuarios` (via `buscarPerfil` `select("*")`), propagados para
+  `userTeam.botoesNomes` → `MatchView.drawDiscs` desenha no disco do lado do
+  usuário. Times adversários (AI) não têm nomes de botão no schema (apenas
+  cores/abreviação em `botao_times`).
+
+### Verificação
+- `tsc --noEmit`: 0 erros nos arquivos modificados (erros restantes são
+  pré-existentes em `trilha/*` — RPCs/tabelas `*_trilha` não tipadas em
+  `integrations/supabase/types.ts`). `vite build`: OK.
+

@@ -73,6 +73,7 @@ import {
   avaliarFimTemporada,
   iniciarNovaTemporada,
   CUSTO_MANUTENCAO,
+  zonaDaPosicao,
   type VereditoTemporada,
 } from "./career/competitionApi";
 import {
@@ -105,7 +106,7 @@ import {
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { gerarDesafioPatrocinador, cumpriuDesafio } from "./career/patrocinadorEngine";
-import { POINTS, type CareerState, type Choice, type Divisao, type Headline } from "./career/types";
+import { POINTS, bonusCampeao, type CareerState, type Choice, type Divisao, type Headline } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
 import { formacaoById } from "./career/formacoes";
@@ -129,11 +130,13 @@ type Screen =
   | "online-championship"
   | "coach-setup"
   | "tournament-setup"
+  | "career-menu"
   | "hub"
   | "tournament-match"
   | "choice"
   | "suborno"
   | "celular"
+  | "celular-conversas"
   | "trophies";
 
 interface BotaoGameProps {
@@ -518,8 +521,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       temporada: c.temporada ?? 1,
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
-      // Patrocinador propõe a primeira meta do celular (desafio por partida).
-      desafioPatrocinador: gerarDesafioPatrocinador(0),
+      // Celular inicia LIMPO: nenhum desafio de patrocinador nem narrativa
+      // automática ao começar a carreira. Mensagens só surgem via script de
+      // eventos (antes da próxima partida válida), evitando o bug da mensagem
+      // padrão que quebrava o sistema ao ser clicada.
+      desafioPatrocinador: null,
       conversas: [],
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
@@ -709,7 +715,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
       suborno: undefined,
-      desafioPatrocinador: gerarDesafioPatrocinador(0),
+      // Celular limpo no início da temporada (mensagens só via eventos).
+      desafioPatrocinador: null,
       conversas: [],
       coach: {
         ...career.coach,
@@ -1099,23 +1106,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
       if (classificouAgora) novaSoberania += POINTS.CLASSIFICOU_MATA;
 
-      // Fim de campanha: bônus de posição final
+      // Fim de campanha: bônus de posição final. Campeão recebe +100/+150/+200
+      // de Soberania por dificuldade (regra de Soberania do Master Liga).
       const manchetesFim: string[] = [];
       if (t.phase === "fim") {
         // Determina posição do usuário
         if (t.champion === t.userTeamId) {
-          novaSoberania += POINTS.CAMPEAO;
-          novoTitulos += 1;
-          const bonusTitulo =
-            t.difficulty === "amador"
-              ? POINTS.TITULO_AMADOR
-              : t.difficulty === "profissional"
-                ? POINTS.TITULO_PROFISSIONAL
-                : POINTS.TITULO_LENDA;
+          const bonusTitulo = bonusCampeao(t.difficulty);
           novaSoberania += bonusTitulo;
+          novoTitulos += 1;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
           // Cerimônia de premiação!
-          setCeremonyBonus(POINTS.CAMPEAO + bonusTitulo);
+          setCeremonyBonus(bonusTitulo);
           setShowCeremony(true);
         } else {
           // Vice? Terceiro? Quarto?
@@ -1255,10 +1257,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
     persist(novoProgresso);
 
-    // Atualizar pontos de soberania se estiver logado
+    // A soberania da carreira já foi atualizada (local + via
+    // aplicarResultadoRemoto) no bloco de carreira acima. Para evitar
+    // contagem dupla em `pontos_soberania`, NÃO chamamos
+    // atualizarPontosSoberania aqui no modo carreira — apenas sincronizamos
+    // os gols acumulados no JSONB de progresso quando logado.
     if (perfil?.user_id) {
-      const vitoria = gf > ga;
-      atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
+      saveProgressToSupabase(perfil.user_id, novoProgresso).catch(() => {});
     }
 
     persistTournament(t);
@@ -1370,11 +1375,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               }
             }}
             onNewCareer={() => {
-              if (!career?.coach.nome) {
-                setScreen("coach-setup");
-              } else {
-                setScreen("tournament-setup");
-              }
+              // Nova Carreira: sempre cria um perfil de treinador novo, mesmo
+              // que exista uma campanha salva (mantém a opção de Carregar).
+              setScreen("coach-setup");
             }}
             onSaveCampaign={handleSaveCampaign}
             onDeleteCareer={handleDeleteCampaign}
@@ -2108,50 +2111,56 @@ function Hub({
 
           {tour.phase === "grupos" && tour.groups.length > 0 && (
             <div className="panel">
-              <h3 className="mb-2 font-display text-sm font-bold tracking-wide">Classificação</h3>
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="w-8 py-1">#</th>
-                    <th className="py-1">TIME</th>
-                    <th className="w-8 text-center">P</th>
-                    <th className="w-8 text-center">J</th>
-                    <th className="w-10 text-center">SG</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortTable(tour.groups[0]!.table)
-                    .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
-                    .map((r, i) => {
-                    const position = i + 1;
-                    const zone =
-                      position <= 4
-                        ? "libertadores"
-                        : position <= 6
-                          ? "copa-brasil"
-                          : position >= 18
-                            ? "rebaixamento"
-                            : "";
-                    return (
-                      <tr
-                        key={r.teamId}
-                        className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
-                      >
-                        <td className="py-1 text-center font-bold">{position}º</td>
-                        <td className="py-1">
-                          <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+              <h3 className="mb-2 font-display text-sm font-bold tracking-wide">
+                Classificação · {divisaoShort}
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="classificacao-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th className="col-time">TIME</th>
+                      <th>P</th>
+                      <th>J</th>
+                      <th>V</th>
+                      <th>E</th>
+                      <th>D</th>
+                      <th>GP</th>
+                      <th>GC</th>
+                      <th>SG</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortTable(tour.groups[0]!.table)
+                      .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
+                      .map((r, i) => {
+                      const position = i + 1;
+                      const total = tour.groups[0]!.table.length;
+                      const zona = zonaDaPosicao(position, divisao, total);
+                      return (
+                        <tr
+                          key={r.teamId}
+                          className={`zone-row zone-${zona.tipo} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
+                        >
+                          <td className="num">{position}º</td>
+                          <td className="col-time">
                             <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                          </span>
-                        </td>
-                        <td className="py-1 text-center">{r.p}</td>
-                        <td className="py-1 text-center">{r.j}</td>
-                        <td className="py-1 text-center">{r.gp - r.gc}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <ZoneLegend />
+                          </td>
+                          <td className="num">{r.p}</td>
+                          <td className="num">{r.j}</td>
+                          <td className="num">{r.v}</td>
+                          <td className="num">{r.e}</td>
+                          <td className="num">{r.d}</td>
+                          <td className="num">{r.gp}</td>
+                          <td className="num">{r.gc}</td>
+                          <td className="num">{r.gp - r.gc}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <ZoneLegend divisao={divisao} total={tour.groups[0]!.table.length} />
+              </div>
             </div>
           )}
         </div>

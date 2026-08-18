@@ -5,7 +5,7 @@ type Props = {
   career: CareerState | null;
   onLoadCareer: () => void;
   onNewCareer: () => void;
-  onSaveCareer: () => void;
+  onSaveCampaign: () => void;
   onDeleteCareer: () => void;
   onBack: () => void;
 };
@@ -14,7 +14,7 @@ export function CareerMenu({
   career,
   onLoadCareer,
   onNewCareer,
-  onSaveCareer,
+  onSaveCampaign,
   onDeleteCareer,
   onBack,
 }: Props) {
@@ -48,6 +48,7 @@ export function CareerMenu({
               </p>
             </div>
 
+            {/* Continuar campanha existente */}
             <button
               onClick={onLoadCareer}
               className="menu-card w-full"
@@ -62,8 +63,24 @@ export function CareerMenu({
               <span className="menu-card-cta">Entrar →</span>
             </button>
 
+            {/* Nova Carreira: cria um perfil de treinador novo (sem apagar a atual
+                até confirmar). Mantém a opção de Carregar acima. */}
             <button
-              onClick={onSaveCareer}
+              onClick={onNewCareer}
+              className="menu-card w-full"
+            >
+              <span className="menu-card-icon menu-accent-fuchsia">
+                <Play className="size-5" />
+              </span>
+              <span className="mt-3 block font-display text-2xl leading-tight">Nova Carreira</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Criar perfil de treinador e selecionar o time. Comece do zero.
+              </span>
+              <span className="menu-card-cta">Começar →</span>
+            </button>
+
+            <button
+              onClick={onSaveCampaign}
               className="menu-card w-full"
             >
               <span className="menu-card-icon menu-accent-sky">
@@ -105,9 +122,9 @@ export function CareerMenu({
               <span className="menu-card-icon menu-accent-fuchsia">
                 <Play className="size-5" />
               </span>
-              <span className="mt-3 block font-display text-2xl leading-tight">Iniciar Nova Campanha</span>
+              <span className="mt-3 block font-display text-2xl leading-tight">Iniciar Nova Carreira</span>
               <span className="mt-1 block text-sm text-muted-foreground">
-                Comece do zero e construa sua lenda
+                Crie o perfil do treinador, selecione o time e comece do zero
               </span>
               <span className="menu-card-cta">Começar →</span>
             </button>

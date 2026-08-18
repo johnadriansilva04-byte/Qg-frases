@@ -103,12 +103,13 @@ export async function inserirManchetesRemotas(
   }
 }
 
-/** Regras de pontuação escassa (as mesmas de carreira offline). */
+/** Regras de pontuação (espelham o SQL aplicarResultadoCarreira):
+ *  Vitória = +3 | Empate = +1 | Derrota = +0. */
 function computeSovereigntyDelta(golsPro: number, golsContra: number, ultimaEscolha: string | null) {
   let delta = 0;
   let moralDelta = 0;
   if (golsPro > golsContra) { delta = 3; moralDelta = 4; }
-  else if (golsPro < golsContra) { delta = -3; moralDelta = -6; }
+  else if (golsPro < golsContra) { delta = 0; moralDelta = -6; }
   else { delta = 1; moralDelta = -1; }
   if (ultimaEscolha === "goleada") {
     if (golsPro - golsContra >= 2) delta += 5;
@@ -184,8 +185,9 @@ export async function aplicarFimCampanhaRemoto(
     if (!uid) return null;
 
     const bonusPos = { campeao: 20, vice: 15, terceiro: 10, quarto: 5, fora: 0 }[posicao];
+    // Campeão: +100/+150/+200 de Soberania por dificuldade (CAMPEAO + TITULO_*).
     const bonusTit = posicao === "campeao"
-      ? ({ amador: 100, profissional: 250, lenda: 500 }[dificuldade])
+      ? ({ amador: 80, profissional: 130, lenda: 180 }[dificuldade])
       : 0;
     const totalBonus = bonusPos + bonusTit;
 

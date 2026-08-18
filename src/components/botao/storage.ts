@@ -138,10 +138,10 @@ export async function loadTournamentFromSupabase(userId: string): Promise<Tourna
 
 export async function atualizarPontosSoberania(userId: string, golsFeitos: number, golsSofridos: number, vitoria: boolean) {
   try {
-    // Calcular pontos: +1 por gol feito, -2 por gol sofrido, +3 por vitória, -4 por derrota
-    const pontosGols = golsFeitos * 1 + golsSofridos * (-2);
-    const pontosResultado = vitoria ? 3 : -4;
-    const pontosTotais = pontosGols + pontosResultado;
+    // Regra de pontuação por partida (espelha o SQL):
+    //   Vitória = +3 | Empate = +1 | Derrota = +0.
+    // (Gols continuam sendo acumulados no JSONB de progresso.)
+    const pontosTotais = vitoria ? 3 : golsFeitos === golsSofridos ? 1 : 0;
 
     const { data: currentData } = await supabase
       .from('botao_usuarios')
@@ -187,11 +187,11 @@ export async function atualizarEstatisticasOnline(userId: string, resultado: 'vi
 
     if (!currentData) return;
 
-    // Pontuação escassa alinhada com carreira: V=+3, E=+1, D=-3
+    // Pontuação escassa alinhada com carreira e SQL: V=+3, E=+1, D=+0.
     let pontosTotais = 0;
     if (resultado === 'vitoria') pontosTotais = 3;
     else if (resultado === 'empate') pontosTotais = 1;
-    else pontosTotais = -3;
+    else pontosTotais = 0;
 
     const novosPontos = Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;

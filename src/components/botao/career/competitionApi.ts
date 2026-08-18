@@ -379,3 +379,187 @@ function avancarFaseCopa(
 export function iniciarCopaBrasil(userTeam: Team, difficulty: Difficulty): CopaBrasilState {
   return gerarCopaBrasil(userTeam, difficulty);
 }
+
+/* =========================================================================
+ * CALENDÁRIO UNIFICADO DA TEMPORADA
+ * Mescla cronologicamente as rodadas do Brasileirão (pontos corridos) com as
+ * fases da Copa do Brasil (ida/volta), reproduzindo um calendário real:
+ *   Rodada 1 BR → Rodada 2 BR → Copa do Brasil (Fase - Ida) → Rodada 3 BR →
+ *   Copa do Brasil (Fase - Volta) → ...
+ * ========================================================================= */
+
+export type CalItemKind = "brasileirao" | "copa";
+
+export interface CalItem {
+  kind: CalItemKind;
+  /** Rótulo exibido no calendário (ex.: "Rodada 1 BR"). */
+  label: string;
+  /** Data simbólica derivada do índice cronológico. */
+  data: string;
+  /** Jogos da rodada (fixtures do Brasileirão ou da fase da copa). */
+  fixtures: Fixture[];
+  /** Indica se o usuário joga nesta rodada. */
+  jogoDoUsuario: boolean;
+  /** Nome da fase da copa (quando kind === "copa"). */
+  fase?: string;
+  /** Indicador de ida ou volta (quando kind === "copa"). */
+  perna?: "ida" | "volta";
+}
+
+/**
+ * Constrói a timeline cronológica da temporada mesclando Brasileirão + Copa
+ * do Brasil. As rodadas de copa são intercaladas a partir dos gatilhos
+ * (COPA_RODADAS_GATILHO): cada gatilho gera um par Ida/Volta da fase de copa
+ * correspondente, antes e depois da rodada do Brasileirão daquela posição.
+ *
+ * O resultado é uma lista sequencial de itens de calendário.
+ */
+export function construirCalendarioUnificado(
+  tour: Tournament,
+  userTeam: Team,
+  copa: CopaBrasilState | null | undefined,
+): CalItem[] {
+  // Rodadas do Brasileirão agrupadas por stage, em ordem.
+  const rodadasBr: { stage: string; fixtures: Fixture[] }[] = [];
+  const acc: Record<string, Fixture[]> = {};
+  for (const f of tour.groupFixtures) (acc[f.stage] ??= []).push(f);
+  const brStages = Object.keys(acc).sort(
+    (a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")),
+  );
+  for (const stage of brStages) rodadasBr.push({ stage, fixtures: acc[stage]! });
+
+  const itens: CalItem[] = [];
+  let cron = 0; // índice cronológico para "datas" simbólicas.
+  let copaIdx = 0; // próxima fase de copa a intercalar.
+  const fasesCopa = copa?.rounds ?? [];
+
+  // Inserir rodadas de copa (ida/volta) imediatamente antes/depois de uma
+  // rodada-gatilho do Brasileirão.
+  for (let r = 0; r < rodadasBr.length; r++) {
+    const rodadaNum = r + 1;
+    const gatilhoIdx = COPA_RODADAS_GATILHO.indexOf(rodadaNum);
+
+    // Antes da rodada-gatilho: Ida da fase de copa (se houver fase pendente).
+    if (gatilhoIdx >= 0 && copaIdx < fasesCopa.length) {
+      const fase = fasesCopa[copaIdx]!;
+      itens.push({
+        kind: "copa",
+        label: `${fase.stage} · Ida`,
+        data: dataDaRodada(cron++),
+        fixtures: fase.fixtures,
+        jogoDoUsuario: fase.fixtures.some(
+          (f) => f.homeId === userTeam.id || f.awayId === userTeam.id,
+        ),
+        fase: fase.stage,
+        perna: "ida",
+      });
+    }
+
+    // Rodada do Brasileirão.
+    const rb = rodadasBr[r]!;
+    itens.push({
+      kind: "brasileirao",
+      label: `Rodada ${rodadaNum} BR`,
+      data: dataDaRodada(cron++),
+      fixtures: rb.fixtures,
+      jogoDoUsuario: rb.fixtures.some(
+        (f) => f.homeId === userTeam.id || f.awayId === userTeam.id,
+      ),
+    });
+
+    // Depois da rodada-gatilho: Volta da fase de copa (avança o índice).
+    if (gatilhoIdx >= 0 && copaIdx < fasesCopa.length) {
+      const fase = fasesCopa[copaIdx]!;
+      itens.push({
+        kind: "copa",
+        label: `${fase.stage} · Volta`,
+        data: dataDaRodada(cron++),
+        fixtures: fase.fixtures,
+        jogoDoUsuario: fase.fixtures.some(
+          (f) => f.homeId === userTeam.id || f.awayId === userTeam.id,
+        ),
+        fase: fase.stage,
+        perna: "volta",
+      });
+      copaIdx++;
+    }
+  }
+
+  // Fases de copa restantes (se houver mais fases que gatilhos) ao final.
+  while (copaIdx < fasesCopa.length) {
+    const fase = fasesCopa[copaIdx]!;
+    itens.push({
+      kind: "copa",
+      label: `${fase.stage} · Ida`,
+      data: dataDaRodada(cron++),
+      fixtures: fase.fixtures,
+      jogoDoUsuario: fase.fixtures.some(
+        (f) => f.homeId === userTeam.id || f.awayId === userTeam.id,
+      ),
+      fase: fase.stage,
+      perna: "ida",
+    });
+    itens.push({
+      kind: "copa",
+      label: `${fase.stage} · Volta`,
+      data: dataDaRodada(cron++),
+      fixtures: fase.fixtures,
+      jogoDoUsuario: fase.fixtures.some(
+        (f) => f.homeId === userTeam.id || f.awayId === userTeam.id,
+      ),
+      fase: fase.stage,
+      perna: "volta",
+    });
+    copaIdx++;
+  }
+
+  return itens;
+}
+
+/* =========================================================================
+ * Zonas de classificação por divisão (acesso/rebaixamento/Libertadores/Copa)
+ * ========================================================================= */
+
+export type TipoZona =
+  | "acesso"
+  | "rebaixamento"
+  | "libertadores"
+  | "copa-brasil"
+  | "neutro";
+
+export interface ZonaInfo {
+  tipo: TipoZona;
+  /** Rótulo curto p/ legenda. */
+  rotulo: string;
+}
+
+/**
+ * Determina a zona de classificação de uma posição, conforme a divisão:
+ *  - Série C: 1º-2º = acesso (Série B); sem Libertadores/Copa direto.
+ *  - Série B: 1º-2º = acesso (Série A); últimos 2 = rebaixamento (Série C).
+ *  - Série A: 1º-4º = Libertadores; 5º-6º = Copa do Brasil; últimos 4 = rebaixamento.
+ * `total` é o número de times na divisão (default 20).
+ */
+export function zonaDaPosicao(
+  posicao: number,
+  divisao: Divisao,
+  total = 20,
+): ZonaInfo {
+  const zonaRebaixa = (rotulo: string): ZonaInfo => ({ tipo: "rebaixamento", rotulo });
+  const zonaAcesso = (): ZonaInfo => ({ tipo: "acesso", rotulo: "Acesso" });
+  if (divisao === "serie-c") {
+    if (posicao <= 2) return zonaAcesso();
+    if (posicao >= total - 1) return zonaRebaixa("Rebaixamento*");
+    return { tipo: "neutro", rotulo: "" };
+  }
+  if (divisao === "serie-b") {
+    if (posicao <= 2) return zonaAcesso();
+    if (posicao >= total - 1) return zonaRebaixa("Rebaixamento");
+    return { tipo: "neutro", rotulo: "" };
+  }
+  // Série A
+  if (posicao <= 4) return { tipo: "libertadores", rotulo: "Libertadores" };
+  if (posicao <= 6) return { tipo: "copa-brasil", rotulo: "Copa do Brasil" };
+  if (posicao >= total - 3) return zonaRebaixa("Rebaixamento");
+  return { tipo: "neutro", rotulo: "" };
+}

@@ -12,6 +12,7 @@ import { planAiShot } from "../engine/ai";
 import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
+import { HalftimeAd } from "./HalftimeAd";
 
 type Props = {
   homeId: string;
@@ -100,6 +101,11 @@ export function MatchView({
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
   const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
+  // Intervalo (halftime): container TV/AdSense exibido no meio da partida.
+  const [halftime, setHalftime] = useState(false);
+  const halftimeShownRef = useRef(false);
+  // Limiar de jogadas para o intervalo (metade da partida).
+  const halftimeThreshold = Math.max(1, Math.ceil(turns / 2));
 
   // Sincronizar turnsLeft com a prop turns (para modo online)
   useEffect(() => {
@@ -117,6 +123,19 @@ export function MatchView({
   useEffect(() => {
     turnsRef.current = turnsLeft;
   }, [turnsLeft]);
+
+  // Intervalo (halftime): ao atingir a metade das jogadas, exibe o container
+  // de anúncio AdSense em formato de TV. Só no modo offline (online gerenciaria
+  // o intervalo pelo servidor para manter sincronia entre os dois clientes).
+  useEffect(() => {
+    if (isOnline) return;
+    if (halftimeShownRef.current) return;
+    if (ended) return;
+    if (turnsLeft <= halftimeThreshold && turnsLeft > 0) {
+      halftimeShownRef.current = true;
+      setHalftime(true);
+    }
+  }, [turnsLeft, halftimeThreshold, isOnline, ended]);
 
   // FIX CRÍTICO: Resetar flag de "já chutou" sempre que virar o turno do usuário
   // (modo offline). Sem isso, após o 1º chute o botão fica travado nas próximas jogadas.
@@ -512,7 +531,7 @@ export function MatchView({
 
   // jogada da CPU (desabilitado no modo online)
   useEffect(() => {
-    if (!hasCpu || ended || turn !== cpuSide || simRef.current) return;
+    if (!hasCpu || ended || halftime || turn !== cpuSide || simRef.current) return;
     const cpuTeam = cpuSide === "home" ? home : away;
     const t = setTimeout(() => {
       const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
@@ -524,18 +543,18 @@ export function MatchView({
       runSimulation();
     }, 750);
     return () => clearTimeout(t);
-  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation]);
+  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation, halftime]);
 
   // Timer de 10 segundos para jogar (apenas no modo offline)
   useEffect(() => {
-    if (isOnline || ended) return;
+    if (isOnline || ended || halftime) return;
     // Só iniciar timer se for o turno do usuário e não estiver simulando
     if (turn !== userSide) return;
     if (simRef.current) return;
 
     const timer = window.setTimeout(() => {
       // Passar a vez após 10 segundos sem chutar
-      if (simRef.current || endedRef.current) return;
+      if (simRef.current || endedRef.current || halftime) return;
       const nextTurn = turn === "home" ? "away" : "home";
       turnRef.current = nextTurn;
       setTurn(nextTurn);
@@ -544,7 +563,7 @@ export function MatchView({
     return () => {
       clearTimeout(timer);
     };
-  }, [turn, userSide, ended, isOnline]);
+  }, [turn, userSide, ended, isOnline, halftime]);
 
   /* ---------- input ---------- */
   const toField = (e: React.PointerEvent) => {
@@ -558,6 +577,8 @@ export function MatchView({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // Bloqueia input durante o intervalo (halftime) — exibição do anúncio.
+    if (halftime) return;
     // No modo online, bloqueia input se não for o turno do usuário
     if (ended || simRef.current) return;
     if (!isOnline && turn !== userSide) return;
@@ -760,6 +781,12 @@ export function MatchView({
               </p>
             </div>
           </div>
+        )}
+        {halftime && !ended && (
+          <HalftimeAd
+            rotulo={`Intervalo · ${home.short} ${score.home} x ${score.away} ${away.short}`}
+            onContinue={() => setHalftime(false)}
+          />
         )}
       </div>
 

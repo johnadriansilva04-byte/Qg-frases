@@ -10,6 +10,7 @@ import {
   DIVISAO_SHORT,
   calcularStats,
   resolveTeam,
+  zonaDaPosicao,
   type Competicao,
 } from "./competitionApi";
 import type { Divisao } from "./types";
@@ -108,7 +109,7 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
             />
           )}
 
-          {/* Tabela de classificação da divisão */}
+          {/* Tabela de classificação da divisão (completa: P/J/V/E/D/GP/GC/SG) */}
           {tour.phase === "grupos" && tour.groups.length > 0 && (
             <div className="panel">
               <button
@@ -123,15 +124,20 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
               </button>
 
               {showTable && (
-                <div className="mt-3">
-                  <table className="w-full text-left text-xs">
+                <div className="mt-3 overflow-x-auto">
+                  <table className="classificacao-table">
                     <thead>
-                      <tr className="border-b border-white/10">
-                        <th className="w-8 py-1">#</th>
-                        <th className="py-1">TIME</th>
-                        <th className="w-8 text-center">P</th>
-                        <th className="w-8 text-center">J</th>
-                        <th className="w-10 text-center">SG</th>
+                      <tr>
+                        <th>#</th>
+                        <th className="col-time">TIME</th>
+                        <th>P</th>
+                        <th>J</th>
+                        <th>V</th>
+                        <th>E</th>
+                        <th>D</th>
+                        <th>GP</th>
+                        <th>GC</th>
+                        <th>SG</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -139,28 +145,31 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
                         .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
                         .map((r, i) => {
                         const position = i + 1;
-                        const zone =
-                          position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                        const total = tour.groups[0]!.table.length;
+                        const zona = zonaDaPosicao(position, selectedDivisao, total);
                         return (
                           <tr
                             key={r.teamId}
-                            className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
+                            className={`zone-row zone-${zona.tipo} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
                           >
-                            <td className="py-1 text-center font-bold">{position}º</td>
-                            <td className="py-1">
-                              <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                                <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                              </span>
+                            <td className="num">{position}º</td>
+                            <td className="col-time">
+                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
                             </td>
-                            <td className="py-1 text-center">{r.p}</td>
-                            <td className="py-1 text-center">{r.j}</td>
-                            <td className="py-1 text-center">{r.gp - r.gc}</td>
+                            <td className="num">{r.p}</td>
+                            <td className="num">{r.j}</td>
+                            <td className="num">{r.v}</td>
+                            <td className="num">{r.e}</td>
+                            <td className="num">{r.d}</td>
+                            <td className="num">{r.gp}</td>
+                            <td className="num">{r.gc}</td>
+                            <td className="num">{r.gp - r.gc}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
-                  <ZoneLegend />
+                  <ZoneLegend divisao={selectedDivisao} total={tour.groups[0]!.table.length} />
                 </div>
               )}
             </div>
@@ -192,21 +201,32 @@ function CompTab({
   );
 }
 
-export function ZoneLegend() {
+export function ZoneLegend({ divisao = "serie-a", total = 20 }: { divisao?: Divisao; total?: number }) {
+  const itens: { tipo: string; rotulo: string; cor: string }[] = [];
+  if (divisao === "serie-a") {
+    itens.push(
+      { tipo: "libertadores", rotulo: "Libertadores (1º-4º)", cor: "text-sky-300" },
+      { tipo: "copa-brasil", rotulo: "Copa do Brasil (5º-6º)", cor: "text-emerald-300" },
+      { tipo: "rebaixamento", rotulo: `Rebaixamento (${total - 3}º-${total}º)`, cor: "text-rose-300" },
+    );
+  } else if (divisao === "serie-b") {
+    itens.push(
+      { tipo: "acesso", rotulo: "Acesso à Série A (1º-2º)", cor: "text-sky-300" },
+      { tipo: "rebaixamento", rotulo: `Rebaixamento à Série C (${total - 1}º-${total}º)`, cor: "text-rose-300" },
+    );
+  } else {
+    itens.push(
+      { tipo: "acesso", rotulo: "Acesso à Série B (1º-2º)", cor: "text-sky-300" },
+    );
+  }
   return (
     <div className="mt-3 space-y-1 text-[10px]">
-      <div className="flex items-center gap-2">
-        <span className="zone-swatch zone-libertadores" />
-        <span className="text-sky-300">Libertadores (1º-4º)</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="zone-swatch zone-copa-brasil" />
-        <span className="text-emerald-300">Copa do Brasil (5º-6º)</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="zone-swatch zone-rebaixamento" />
-        <span className="text-rose-300">Rebaixamento (18º-20º)</span>
-      </div>
+      {itens.map((it) => (
+        <div key={it.tipo} className="flex items-center gap-2">
+          <span className={`zone-swatch zone-${it.tipo}`} />
+          <span className={it.cor}>{it.rotulo}</span>
+        </div>
+      ))}
     </div>
   );
 }

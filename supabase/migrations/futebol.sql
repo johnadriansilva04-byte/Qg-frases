@@ -1111,10 +1111,12 @@ DECLARE
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
 
+  -- Regra de pontuação por partida (autoritativa):
+  --   Vitória = +3 | Empate = +1 | Derrota = +0 (sem perda de soberania).
   IF p_gols_pro > p_gols_contra THEN
     v_delta_sob := 3;  v_delta_mor := 4;
   ELSIF p_gols_pro < p_gols_contra THEN
-    v_delta_sob := -3; v_delta_mor := -6;
+    v_delta_sob := 0; v_delta_mor := -6;
   ELSE
     v_delta_sob := 1;  v_delta_mor := -1;
   END IF;
@@ -1161,6 +1163,8 @@ DECLARE
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
 
+  -- Bônus por posição final: campeão concede entre +100 e +200 de Soberania
+  -- (conforme a dificuldade da campanha). Vice/terceiro/quarto recebem menos.
   v_bonus := CASE p_posicao
     WHEN 'campeao'   THEN 20
     WHEN 'vice'      THEN 15
@@ -1170,10 +1174,11 @@ BEGIN
   END;
 
   IF p_posicao = 'campeao' THEN
+    -- Campeão: +100 (amador) / +150 (profissional) / +200 (lenda).
     v_bonus := v_bonus + CASE p_dificuldade
-      WHEN 'amador'        THEN 100
-      WHEN 'profissional'  THEN 250
-      WHEN 'lenda'         THEN 500
+      WHEN 'amador'        THEN 80
+      WHEN 'profissional'  THEN 130
+      WHEN 'lenda'         THEN 180
       ELSE 0
     END;
     v_titulo := 1;

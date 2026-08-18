@@ -138,16 +138,33 @@ export type CareerState = {
 export const CAREER_KEY = "botao:career:v1";
 
 export const POINTS = {
+  // Pontuação por partida (autoritativa — espelha o SQL aplicarResultadoCarreira):
+  // Vitória = +3 | Empate = +1 | Derrota = +0 (não há perda de soberania).
   VITORIA: 3,
   EMPATE: 1,
-  DERROTA: -3,
+  DERROTA: 0,
+  // Bônus por classificação/posição final.
   CAMPEAO: 20,
   VICE: 15,
   TERCEIRO: 10,
   QUARTO: 5,
   CLASSIFICOU_MATA: 5,
   VENCEU_GRUPO: 3,
-  TITULO_AMADOR: 100,
-  TITULO_PROFISSIONAL: 250,
-  TITULO_LENDA: 500,
+  // Campeão de campeonato: +100/+150/+200 de Soberania por dificuldade
+  // (CAMPEAO + TITULO_* totalizam 100/150/200, conforme regra de Soberania).
+  TITULO_AMADOR: 80,
+  TITULO_PROFISSIONAL: 130,
+  TITULO_LENDA: 180,
 };
+
+/** Bônus total de Soberania ao vencer um campeonato, por dificuldade. */
+export function bonusCampeao(dificuldade: Difficulty): number {
+  return (
+    POINTS.CAMPEAO +
+    (dificuldade === "amador"
+      ? POINTS.TITULO_AMADOR
+      : dificuldade === "profissional"
+        ? POINTS.TITULO_PROFISSIONAL
+        : POINTS.TITULO_LENDA)
+  );
+}
