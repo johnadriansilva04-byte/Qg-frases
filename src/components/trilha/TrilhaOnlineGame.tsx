@@ -1,14 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, Trophy, Target, X, Award } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { HQPanel } from "./HQPanel";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
-
-const supabase = createClient(
-  import.meta.env['VITE_SUPABASE_URL']!,
-  import.meta.env['VITE_SUPABASE_ANON_KEY']!
-);
 
 interface TrilhaOnlineGameProps {
   mesaId: string;

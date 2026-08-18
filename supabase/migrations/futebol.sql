@@ -1008,6 +1008,9 @@ ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS tatica TEXT NOT NULL 
 ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS botoes_nomes JSONB NOT NULL DEFAULT
   '["Zagueiro","Volante","Meia","Ponta","Centroavante"]'::JSONB;
 
+-- Escudo personalizado do time (emoji ou texto)
+ALTER TABLE public.botao_usuarios ADD COLUMN IF NOT EXISTS escudo TEXT DEFAULT '⚽';
+
 -- Garante que botoes_nomes tenha exatamente 5 entradas de texto não-vazias.
 ALTER TABLE public.botao_usuarios DROP CONSTRAINT IF EXISTS check_botoes_nomes;
 ALTER TABLE public.botao_usuarios ADD CONSTRAINT check_botoes_nomes CHECK (
@@ -1015,8 +1018,10 @@ ALTER TABLE public.botao_usuarios ADD CONSTRAINT check_botoes_nomes CHECK (
   AND jsonb_typeof(botoes_nomes) = 'array'
 );
 
--- Função para atualizar a personalização do clube (nome/time/cores/tática/botões).
+-- Função para atualizar a personalização do clube (nome/time/cores/tática/botões/escudo).
 -- Usuário só pode editar o próprio perfil (auth.uid() = p_uid).
+DROP FUNCTION IF EXISTS public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB);
+DROP FUNCTION IF EXISTS public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB, TEXT);
 CREATE OR REPLACE FUNCTION public.atualizar_perfil_clube(
   p_uid         UUID,
   p_nome        TEXT DEFAULT NULL,
@@ -1024,7 +1029,8 @@ CREATE OR REPLACE FUNCTION public.atualizar_perfil_clube(
   p_abreviacao  TEXT DEFAULT NULL,
   p_cores       TEXT[] DEFAULT NULL,
   p_tatica      TEXT DEFAULT NULL,
-  p_botoes      JSONB DEFAULT NULL
+  p_botoes      JSONB DEFAULT NULL,
+  p_escudo      TEXT DEFAULT NULL
 ) RETURNS public.botao_usuarios
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_row public.botao_usuarios;
@@ -1040,6 +1046,7 @@ BEGIN
     cores             = COALESCE(p_cores, cores),
     tatica            = COALESCE(p_tatica, tatica),
     botoes_nomes      = COALESCE(p_botoes, botoes_nomes),
+    escudo            = COALESCE(p_escudo, escudo),
     updated_at        = now()
   WHERE user_id = p_uid
   RETURNING * INTO v_row;
@@ -1047,7 +1054,7 @@ BEGIN
   RETURN v_row;
 END; $$;
 
-GRANT EXECUTE ON FUNCTION public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.atualizar_perfil_clube(UUID, TEXT, TEXT, TEXT, TEXT[], TEXT, JSONB, TEXT) TO authenticated;
 
 COMMIT;
 

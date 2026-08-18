@@ -490,6 +490,7 @@ export type Database = {
           p_cores?: string[] | null;
           p_tatica?: string | null;
           p_botoes?: string[] | null;
+          p_escudo?: string | null;
         };
         Returns: {
           id: string;

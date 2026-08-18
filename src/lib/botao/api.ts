@@ -413,6 +413,7 @@ export type PerfilClubeInput = {
   cores?: string[];
   tatica?: string;
   botoes?: string[];
+  escudo?: string;
 };
 
 /**
@@ -432,6 +433,7 @@ export async function atualizarPerfilClube(
     p_cores: input.cores ?? null,
     p_tatica: input.tatica ?? null,
     p_botoes: input.botoes ?? null,
+    p_escudo: input.escudo ?? null,
   });
   if (error) {
     console.error("[API] Erro ao atualizar perfil do clube:", error);

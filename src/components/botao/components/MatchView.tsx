@@ -791,7 +791,17 @@ function TeamChip({ team, align }: { team: Team; align: "left" | "right" }) {
     <div
       className={`flex min-w-0 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : ""}`}
     >
-      <span className="text-2xl sm:text-3xl">⚽</span>
+      <span 
+        className="text-2xl sm:text-3xl"
+        style={{ 
+          background: `linear-gradient(135deg, ${team.primary}, ${team.secondary})`,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))'
+        }}
+      >
+        {team.escudo || "⚽"}
+      </span>
       <span className="truncate font-display text-sm text-foreground sm:text-base">
         {team.short}
       </span>

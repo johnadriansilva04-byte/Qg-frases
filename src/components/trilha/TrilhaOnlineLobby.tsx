@@ -1,12 +1,7 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, Users, Clock, Trophy, Play, Plus, RefreshCw } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
-
-const supabase = createClient(
-  import.meta.env['VITE_SUPABASE_URL']!,
-  import.meta.env['VITE_SUPABASE_ANON_KEY']!
-);
 
 interface Mesa {
   mesa_id: string;
