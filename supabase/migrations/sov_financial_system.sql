@@ -307,38 +307,48 @@ ALTER TABLE anti_cheat_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sov_market_transactions ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS para user_wallets
+DROP POLICY IF EXISTS "Users can view own wallet" ON user_wallets;
 CREATE POLICY "Users can view own wallet" ON user_wallets
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can update wallets" ON user_wallets;
 CREATE POLICY "System can update wallets" ON user_wallets
   FOR UPDATE USING (auth.role() = 'service_role');
 
 -- Políticas RLS para bank_ledger
+DROP POLICY IF EXISTS "Users can view own transactions" ON bank_ledger;
 CREATE POLICY "Users can view own transactions" ON bank_ledger
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can insert transactions" ON bank_ledger;
 CREATE POLICY "System can insert transactions" ON bank_ledger
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 -- Políticas RLS para anti_cheat_log
+DROP POLICY IF EXISTS "Users can view own logs" ON anti_cheat_log;
 CREATE POLICY "Users can view own logs" ON anti_cheat_log
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can insert logs" ON anti_cheat_log;
 CREATE POLICY "System can insert logs" ON anti_cheat_log
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 -- Políticas RLS para sov_market_transactions
+DROP POLICY IF EXISTS "Users can view own purchases" ON sov_market_transactions;
 CREATE POLICY "Users can view own purchases" ON sov_market_transactions
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can insert purchases" ON sov_market_transactions;
 CREATE POLICY "System can insert purchases" ON sov_market_transactions
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 -- bank_reserves e sov_market_products são públicas para leitura (admin controla escrita)
 ALTER TABLE bank_reserves ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view reserves" ON bank_reserves;
 CREATE POLICY "Anyone can view reserves" ON bank_reserves
   FOR SELECT USING (true);
 
 ALTER TABLE sov_market_products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view products" ON sov_market_products;
 CREATE POLICY "Anyone can view products" ON sov_market_products
   FOR SELECT USING (true);
