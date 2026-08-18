@@ -22,6 +22,8 @@ export type Perfil = {
   tatica?: string | null;
   /** Nomes personalizados dos 5 botões de linha. */
   botoes_nomes?: string[] | null;
+  /** URL do escudo/brasão do clube (foto salva no Storage). */
+  escudo_url?: string | null;
 };
 
 export const CORES_PADRAO = ["#FF0000", "#00FF00", "#0000FF"];
@@ -37,6 +39,7 @@ export const STORAGE_KEYS = {
   CORES: "botao_online_cores",
   TATICA: "botao_online_tatica",
   BOTOES: "botao_online_botoes_nomes",
+  ESCUDO: "botao_online_escudo_url",
   LOBBY_ID: "botao_online_lobby_id",
   BLOCO_ID: "botao_online_bloco_id",
 } as const;
@@ -87,6 +90,7 @@ export function cachePerfil(p: Perfil) {
   ls.setItem(STORAGE_KEYS.CORES, JSON.stringify(p.cores));
   if (p.tatica) ls.setItem(STORAGE_KEYS.TATICA, p.tatica);
   if (p.botoes_nomes) ls.setItem(STORAGE_KEYS.BOTOES, JSON.stringify(p.botoes_nomes));
+  if (p.escudo_url) ls.setItem(STORAGE_KEYS.ESCUDO, p.escudo_url);
 }
 
 export function limparCache() {

@@ -50,7 +50,6 @@ import {
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { AuthScreen } from "./components/AuthScreen";
-import { UserMenu } from "./components/UserMenu";
 import { OnlineMatchV3 } from "./components/OnlineMatchV3";
 import { OnlineChampionship } from "./components/OnlineChampionship";
 import { useBotaoAuth } from "./online/useBotaoAuth";
@@ -1157,7 +1156,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "online") {
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -1186,7 +1184,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "online-championship") {
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -1218,7 +1215,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "auth") {
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <AuthScreen onPronto={aoLogar} />
       </Shell>
     );
@@ -1227,7 +1223,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "profile") {
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("profile")} onLogout={handleLogout} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -1243,7 +1238,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "coach-setup") {
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <CoachSetup
           timeName={userTeam.name}
           onFinish={finishCoachSetup}
@@ -1265,7 +1259,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -1320,7 +1313,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   ) {
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <SubornoStory
           state={career.suborno}
           onAvancar={aplicarSuborno}
@@ -1346,7 +1338,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const knockout = screen === "tournament-match" && (tour?.phase ?? "") === "mata-mata";
     return (
       <Shell>
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
         <MatchView
           key={`${f.homeId}-${f.awayId}-${screen}`}
           homeId={f.homeId}
@@ -1384,9 +1375,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           soberaniaAdd={ceremonyBonus}
           onContinue={() => setShowCeremony(false)}
         />
-      )}
-      {screen === "menu" && (
-        <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
       )}
       <div className="mx-auto w-full max-w-5xl px-4 pb-16">
         <Header

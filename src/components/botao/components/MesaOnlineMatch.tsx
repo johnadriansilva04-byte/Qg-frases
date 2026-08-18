@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { MatchView } from "@/components/botao/components/MatchView";
+import { ChatOverlay, type ChatMsg } from "@/components/botao/components/ChatOverlay";
 import { supabase } from "@/integrations/supabase/client";
 import { createCustomTeam, teamByIdSync } from "@/components/botao/data/teams";
 import type { MatchResult } from "@/components/botao/types";
@@ -21,7 +22,7 @@ import {
   aplicarResultadoRemoto,
   inserirManchetesRemotas,
 } from "@/components/botao/career/careerRemote";
-import type { Perfil } from "@/components/botao/online/auth";
+import { buscarPerfil, type Perfil } from "@/components/botao/online/auth";
 
 export type ResultadoMesa = {
   vencedorId: string | null;
@@ -34,12 +35,13 @@ type Props = {
   mesa: MesaFutebol;
   perfil: Perfil;
   userId: string;
-  /** Time do usuário logado (id, nome, abreviacao, cores). */
+  /** Time do usuário logado (id, nome, abreviacao, cores, escudo). */
   meuTime: {
     id: string;
     nome: string;
     abreviacao: string;
     cores: string[];
+    escudoUrl?: string | null;
   };
   /** Chamado quando a partida termina (status=finalizado) ou ao sair. */
   onSair: () => void;
@@ -48,6 +50,11 @@ type Props = {
   /** Rótulo exibido no MatchView (ex.: "Amistoso Online" / "Campeonato · Rodada 2"). */
   stageLabel?: string;
 };
+
+/** Total de jogadas da partida (28 = 14 por jogador). */
+const TOTAL_JOGADAS = 28;
+/** Vitórias necessárias para vencer a série (melhor de 3 = primeiro a 2). */
+const VITORIAS_SERIE = 2;
 
 export function MesaOnlineMatch({
   mesa,
@@ -63,7 +70,6 @@ export function MesaOnlineMatch({
   const [currentTurn, setCurrentTurn] = useState<"home" | "away">(souJogador1 ? "home" : "away");
   const [placar, setPlacar] = useState<[number, number]>([mesa.placar_j1, mesa.placar_j2]);
   const [seqJogada, setSeqJogada] = useState(mesa.seq_jogada || 0);
-  const TOTAL_JOGADAS = 12;
   const turnsLeft = Math.max(0, TOTAL_JOGADAS - seqJogada);
   const [tempoRestante, setTempoRestante] = useState(mesa.tempo_restante_segundos || 300);
   const [oponenteOnline, setOponenteOnline] = useState(false);
@@ -72,6 +78,12 @@ export function MesaOnlineMatch({
   );
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento");
   const [finalizado, setFinalizado] = useState(mesa.status === "finalizado");
+  // Série melhor de 3 (rastreada localmente, derivada do fim autoritativo de cada jogo)
+  const [serieJ1, setSerieJ1] = useState(0);
+  const [serieJ2, setSerieJ2] = useState(0);
+  const [jogoAtual, setJogoAtual] = useState(1);
+  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
+
   const mesaRef = useRef<MesaRealtime | null>(null);
   const jogadaAdversariaHandlerRef = useRef<((jogada: JogadaPayload) => void) | null>(null);
   const fimDeTurnoHandlerRef = useRef<
@@ -88,10 +100,6 @@ export function MesaOnlineMatch({
   onFinalizadaRef.current = onFinalizada;
 
   const userSide = souJogador1 ? "home" : "away";
-  // Determina se ESTE cliente disparou o lance localmente (onPlay chegou com o
-  // id de um botão real). O adversário apenas simula a jogada recebida via
-  // broadcast e NÃO dispara registrarGol/trocarTurno — evita o double-toggle
-  // que deixava o turno preso no mesmo jogador após um gol.
   const dispareiRef = useRef(false);
 
   const userTeam = useMemo(() => {
@@ -106,19 +114,50 @@ export function MesaOnlineMatch({
     );
   }, [meuTime]);
 
+  // Time do oponente sincronizado via Supabase (busca o perfil do adversário).
+  const [perfilOponente, setPerfilOponente] = useState<Perfil | null>(null);
+  useEffect(() => {
+    const opId = souJogador1 ? mesa.jogador_2_id : mesa.jogador_1_id;
+    if (!opId) {
+      setPerfilOponente(null);
+      return;
+    }
+    let vivo = true;
+    buscarPerfil(opId).then((p) => {
+      if (vivo) setPerfilOponente(p);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [souJogador1, mesa.jogador_1_id, mesa.jogador_2_id]);
+
   const opponentTeam = useMemo(() => {
-    const opponentTimeId = souJogador1 ? mesa.time_j2 : mesa.time_j1;
-    if (!opponentTimeId)
+    const opTimeId = souJogador1 ? mesa.time_j2 : mesa.time_j1;
+    // Prioriza o perfil real do oponente (nome/cores sincronizados do Supabase).
+    if (perfilOponente) {
+      return createCustomTeam(
+        opTimeId || `custom-${perfilOponente.user_id}`,
+        perfilOponente.time_personalizado || "Adversário",
+        perfilOponente.abreviacao_time || "ADV",
+        perfilOponente.cores?.[0] ?? "#0000FF",
+        perfilOponente.cores?.[1] ?? "#FFFF00",
+        75,
+      );
+    }
+    if (!opTimeId)
       return createCustomTeam("opponent", "Aguardando...", "---", "#666666", "#999999", 75);
-    if (opponentTimeId.startsWith("custom-"))
-      return createCustomTeam(opponentTimeId, "Adversário", "ADV", "#FF0000", "#FFFFFF", 75);
-    const teamFromDb = teamByIdSync(opponentTimeId);
+    if (opTimeId.startsWith("custom-"))
+      return createCustomTeam(opTimeId, "Adversário", "ADV", "#FF0000", "#FFFFFF", 75);
+    const teamFromDb = teamByIdSync(opTimeId);
     if (teamFromDb) return teamFromDb;
-    return createCustomTeam(opponentTimeId, "Adversário", "ADV", "#0000FF", "#FFFF00", 75);
-  }, [mesa.time_j1, mesa.time_j2, souJogador1]);
+    return createCustomTeam(opTimeId, "Adversário", "ADV", "#0000FF", "#FFFF00", 75);
+  }, [mesa.time_j1, mesa.time_j2, souJogador1, perfilOponente]);
 
   const homeId = souJogador1 ? userTeam.id : opponentTeam.id;
   const awayId = souJogador1 ? opponentTeam.id : userTeam.id;
+
+  const nomeOponente = perfilOponente?.nome ?? "Adversário";
+  const meuNome = perfil.nome || "Você";
 
   // Conexão com a mesa (realtime)
   useEffect(() => {
@@ -135,6 +174,7 @@ export function MesaOnlineMatch({
           setPlacar([m.placar_j1, m.placar_j2]);
           setSeqJogada(m.seq_jogada || 0);
           if (m.status === "finalizado") setFinalizado(true);
+          if (m.status === "em_andamento" && m.seq_jogada === 0) setFinalizado(false);
         },
         onTurno: (_meuTurno, turnoAtualId) => {
           setCurrentTurn(turnoAtualId === mesa.jogador_1_id ? "home" : "away");
@@ -150,9 +190,13 @@ export function MesaOnlineMatch({
           if (fimDeTurnoHandlerRef.current) fimDeTurnoHandlerRef.current(payload);
         },
         onGoalScored: () => {
-          // O adversário marcou um gol: força o reset da bola/discos ao centro e
-          // dispara o handler visual no MatchView (lado que sofreu o gol).
           if (golAdversarioHandlerRef.current) golAdversarioHandlerRef.current();
+        },
+        onChat: (msg) => {
+          setChatMsgs((prev) => [
+            ...prev,
+            { autorId: msg.autorId, autorNome: msg.autorNome, texto: msg.texto, enviadoEm: msg.enviadoEm, eu: false },
+          ]);
         },
         onErro: () => {},
       },
@@ -165,15 +209,20 @@ export function MesaOnlineMatch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mesa.mesa_id, userId]);
 
-  // Detecta fim de partida (status=finalizado) e dispara onFinalizada
+  // Detecta fim de um jogo da série e decide próximo passo (melhor de 3).
   useEffect(() => {
     if (!finalizado) return;
     const golsJ1 = placar[0] ?? 0;
     const golsJ2 = placar[1] ?? 0;
-    let vencedorId: string | null = null;
-    if (golsJ1 > golsJ2) vencedorId = mesa.jogador_1_id;
-    else if (golsJ2 > golsJ1) vencedorId = mesa.jogador_2_id;
-    onFinalizadaRef.current?.({ vencedorId, golsJ1, golsJ2, empate: golsJ1 === golsJ2 });
+    // Vencedor do jogo atual (determinado autoritativamente pelo placar).
+    const jogoVencidoPorJ1 = golsJ1 > golsJ2;
+    const jogoVencidoPorJ2 = golsJ2 > golsJ1;
+
+    setSerieJ1((prev) => {
+      const prox = prev + (jogoVencidoPorJ1 ? 1 : 0);
+      return prox;
+    });
+    setSerieJ2((prev) => prev + (jogoVencidoPorJ2 ? 1 : 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalizado]);
 
@@ -182,22 +231,19 @@ export function MesaOnlineMatch({
     if (mesa.status === "em_andamento") {
       setPartidaIniciada(true);
       setDoisJogadoresConectados(true);
-      setFinalizado(false);
+      if (mesa.seq_jogada === 0) setFinalizado(false);
     } else if (mesa.status === "finalizado") {
       setFinalizado(true);
     }
-  }, [mesa.status]);
+  }, [mesa.status, mesa.seq_jogada]);
 
   const handleFinish = useCallback(
     async (_result: MatchResult) => {
       const gf = souJogador1 ? placar[0]! : placar[1]!;
       const ga = souJogador1 ? placar[1]! : placar[0]!;
       const meuNomeCurto = userTeam.short;
-      const nomeOponente = souJogador1
-        ? teamByIdSync(mesa.time_j2 || "MTI").short
-        : teamByIdSync(mesa.time_j1 || "MTI").short;
+      const nomeOponenteCurto = opponentTeam.short;
 
-      // Finaliza a mesa no servidor com o vencedor (status=finalizado)
       const golsJ1 = placar[0] ?? 0;
       const golsJ2 = placar[1] ?? 0;
       let vencedorId: string | null = null;
@@ -211,14 +257,13 @@ export function MesaOnlineMatch({
       }
 
       try {
-        // Pontos escassos + estatísticas no perfil (Amistoso Online)
         await aplicarResultadoRemoto(gf, ga, null);
         let manchete: string;
         if (gf > ga)
-          manchete = `Vitória online! ${meuNomeCurto} bate ${nomeOponente} por ${gf} a ${ga}`;
+          manchete = `Vitória online! ${meuNomeCurto} bate ${nomeOponenteCurto} por ${gf} a ${ga}`;
         else if (gf < ga)
-          manchete = `Derrota amarga: ${meuNomeCurto} cai para ${nomeOponente} (${gf}-${ga})`;
-        else manchete = `Empate equilibrado: ${meuNomeCurto} ${gf} x ${ga} ${nomeOponente}`;
+          manchete = `Derrota amarga: ${meuNomeCurto} cai para ${nomeOponenteCurto} (${gf}-${ga})`;
+        else manchete = `Empate equilibrado: ${meuNomeCurto} ${gf} x ${ga} ${nomeOponenteCurto}`;
         await inserirManchetesRemotas(userId, [
           {
             manchete,
@@ -231,20 +276,18 @@ export function MesaOnlineMatch({
         console.error("[MesaOnlineMatch] erro ao aplicar soberania online:", e);
       }
 
+      // Resultado do jogo (não da série) — o efeito de série decide continuação.
       onFinalizadaRef.current?.({ vencedorId, golsJ1, golsJ2, empate: vencedorId === null });
-      onSair();
     },
     [
-      onSair,
       souJogador1,
       placar,
       mesa.mesa_id,
-      mesa.time_j1,
-      mesa.time_j2,
       mesa.jogador_1_id,
       mesa.jogador_2_id,
       userId,
       userTeam.short,
+      opponentTeam.short,
     ],
   );
 
@@ -267,9 +310,6 @@ export function MesaOnlineMatch({
 
       try {
         if (ehDiscoReal) {
-          // Lance disparado localmente (onPointerUp). Marca que este cliente é o
-          // autor: somente ele reportará o resultado e alternará o turno no
-          // servidor. O adversário recebe este broadcast, simula e NÃO reporta.
           dispareiRef.current = true;
           await mesaRef.current.enviarJogada({
             id_botao: jogadaData!.discId,
@@ -281,12 +321,8 @@ export function MesaOnlineMatch({
           });
         }
 
-        // Só o autor do lance (quem disparou o botão localmente) reporta o
-        // resultado e alterna o turno no servidor.
         if (dispareiRef.current) {
           if (goals > 0) {
-            // Gol normal: credita para o autor (dono do turno). Gol contra
-            // (discId === "own_goal"): credita para o adversário.
             const ehGolContra = jogadaData?.discId === "own_goal";
             const autorDoGol = ehGolContra
               ? mesa.jogador_1_id === userId
@@ -294,7 +330,6 @@ export function MesaOnlineMatch({
                 : mesa.jogador_1_id
               : userId;
             await mesaRef.current.registrarGol(autorDoGol);
-            // Avisa o adversário para resetar a bola ao centro.
             await mesaRef.current.enviarGoalScored({
               jogadorId: userId,
               placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
@@ -312,8 +347,6 @@ export function MesaOnlineMatch({
               jogadorId: userId,
               novoTurnoId: proximoTurno,
             });
-            // Antes faltava: sem trocarTurno() no lance sem gol, o turno ficava
-            // travado no mesmo jogador para sempre.
             await mesaRef.current.trocarTurno();
             dispareiRef.current = false;
           }
@@ -330,6 +363,15 @@ export function MesaOnlineMatch({
     onSair();
   }, [onSair]);
 
+  const enviarChat = useCallback(
+    (texto: string) => {
+      const msg = { autorId: userId, autorNome: perfil.nome || "Você", texto };
+      setChatMsgs((prev) => [...prev, { ...msg, enviadoEm: Date.now(), eu: true }]);
+      mesaRef.current?.enviarChat(msg);
+    },
+    [userId, perfil.nome],
+  );
+
   const meuTurno = currentTurn === userSide;
 
   const iniciarPartida = async () => {
@@ -341,6 +383,44 @@ export function MesaOnlineMatch({
       /* ignore */
     }
   };
+
+  // Reinicia a mesa para o próximo jogo da série (melhor de 3).
+  const proximoJogo = async () => {
+    try {
+      const { error } = await supabase.rpc("reiniciar_mesa", { p_mesa_id: mesa.mesa_id });
+      if (error) {
+        console.error("[MesaOnlineMatch] erro ao reiniciar mesa:", error.message);
+        return;
+      }
+      setFinalizado(false);
+      setPlacar([0, 0]);
+      setSeqJogada(0);
+      setJogoAtual((j) => j + 1);
+    } catch (e) {
+      console.error("[MesaOnlineMatch] exceção ao reiniciar mesa:", e);
+    }
+  };
+
+  const serieDecidida = serieJ1 >= VITORIAS_SERIE || serieJ2 >= VITORIAS_SERIE;
+  const serieVencedorId =
+    serieJ1 >= VITORIAS_SERIE
+      ? mesa.jogador_1_id
+      : serieJ2 >= VITORIAS_SERIE
+        ? mesa.jogador_2_id
+        : null;
+
+  // Quando a série é decidida, notifica e sai.
+  useEffect(() => {
+    if (!serieDecidida || !finalizado) return;
+    onFinalizadaRef.current?.({
+      vencedorId: serieVencedorId,
+      golsJ1: serieJ1,
+      golsJ2: serieJ2,
+      empate: false,
+    });
+    onSair();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serieDecidida, finalizado]);
 
   if (!doisJogadoresConectados) {
     return (
@@ -392,18 +472,73 @@ export function MesaOnlineMatch({
     );
   }
 
+  // Fim de um jogo da série (mas a série ainda não acabou) → botão próximo jogo.
+  if (finalizado && !serieDecidida) {
+    const serieMeu = souJogador1 ? serieJ1 : serieJ2;
+    const serieOp = souJogador1 ? serieJ2 : serieJ1;
+    return (
+      <div className="space-y-4">
+        <div className="surface p-6 text-center">
+          <h2 className="font-display text-2xl">Jogo {jogoAtual} encerrado</h2>
+          <p className="mt-2 text-lg">
+            Placar do jogo: {placar[0]} x {placar[1]}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Melhor de 3 — primeiro a 2 vitórias</p>
+          <div className="mt-4 inline-flex items-center gap-4 rounded-lg border border-border p-4">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">{userTeam.short}</p>
+              <p className="font-display text-3xl">{serieMeu}</p>
+            </div>
+            <span className="text-xl text-muted-foreground">×</span>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">{opponentTeam.short}</p>
+              <p className="font-display text-3xl">{serieOp}</p>
+            </div>
+          </div>
+          <button onClick={proximoJogo} className="btn-primary mt-5">
+            Próximo jogo
+          </button>
+          <button onClick={handleQuit} className="btn-ghost mt-2 ml-2">
+            Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="surface p-4 flex items-center justify-between">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
-          <p className="text-sm text-muted-foreground">
-            Placar: {placar[0]} x {placar[1]} · Tempo: {Math.floor(tempoRestante / 60)}:
-            {(tempoRestante % 60).toString().padStart(2, "0")}
-          </p>
-          <p className="text-sm text-muted-foreground">
+          {/* Escalação com nomes dos treinadores sincronizados do Supabase */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="flex items-center gap-1.5">
+              <span
+                className="size-3 rounded-full"
+                style={{ background: (souJogador1 ? userTeam : opponentTeam).primary }}
+              />
+              <span className="font-semibold">{userTeam.short}</span>
+              <span className="text-muted-foreground">{meuNome}</span>
+              <span className="font-display text-base">{souJogador1 ? placar[0] : placar[1]}</span>
+            </span>
+            <span className="text-muted-foreground">×</span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="size-3 rounded-full"
+                style={{ background: (souJogador1 ? opponentTeam : userTeam).primary }}
+              />
+              <span className="font-semibold">{opponentTeam.short}</span>
+              <span className="text-muted-foreground">{nomeOponente}</span>
+              <span className="font-display text-base">
+                {souJogador1 ? placar[1] : placar[0]}
+              </span>
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
             {meuTurno ? "Seu turno" : "Turno do oponente"} · Oponente:{" "}
-            {oponenteOnline ? "Online" : "Offline"}
+            {oponenteOnline ? "Online" : "Offline"} · Série {serieJ1} x {serieJ2} · Jogadas:{" "}
+            {turnsLeft}/{TOTAL_JOGADAS}
           </p>
         </div>
         <button onClick={handleQuit} className="btn-ghost">
@@ -411,32 +546,35 @@ export function MesaOnlineMatch({
         </button>
       </div>
 
-      <MatchView
-        key={mesa.id}
-        homeId={homeId}
-        awayId={awayId}
-        userSide={userSide}
-        difficulty="amador"
-        turns={turnsLeft}
-        knockout={false}
-        stageLabel={`${stageLabel} - ${meuTurno ? "Seu turno" : "Turno do oponente"}`}
-        onFinish={handleFinish}
-        onQuit={handleQuit}
-        isOnline
-        customTeam={userTeam}
-        onPlay={handlePlay}
-        initialTurn={currentTurn}
-        score={{ home: placar[0] ?? 0, away: placar[1] ?? 0 }}
-        onJogadaAdversaria={(handler) => {
-          jogadaAdversariaHandlerRef.current = handler;
-        }}
-        onFimDeTurno={(handler) => {
-          if (typeof handler === "function") fimDeTurnoHandlerRef.current = handler;
-        }}
-        onGolAdversario={(resetHandler) => {
-          if (typeof resetHandler === "function") golAdversarioHandlerRef.current = resetHandler;
-        }}
-      />
+      <div className="relative">
+        <MatchView
+          key={`${mesa.id}-${jogoAtual}`}
+          homeId={homeId}
+          awayId={awayId}
+          userSide={userSide}
+          difficulty="amador"
+          turns={turnsLeft}
+          knockout={false}
+          stageLabel={`${stageLabel} - ${meuTurno ? "Seu turno" : "Turno do oponente"}`}
+          onFinish={handleFinish}
+          onQuit={handleQuit}
+          isOnline
+          customTeam={userTeam}
+          onPlay={handlePlay}
+          initialTurn={currentTurn}
+          score={{ home: placar[0] ?? 0, away: placar[1] ?? 0 }}
+          onJogadaAdversaria={(handler) => {
+            jogadaAdversariaHandlerRef.current = handler;
+          }}
+          onFimDeTurno={(handler) => {
+            if (typeof handler === "function") fimDeTurnoHandlerRef.current = handler;
+          }}
+          onGolAdversario={(resetHandler) => {
+            if (typeof resetHandler === "function") golAdversarioHandlerRef.current = resetHandler;
+          }}
+        />
+        <ChatOverlay mensagens={chatMsgs} onEnviar={enviarChat} meuNome={perfil.nome || "Você"} />
+      </div>
     </div>
   );
 }

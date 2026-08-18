@@ -66,6 +66,8 @@ export interface MesaRealtimeHandlers {
   onSyncPositions?: (payload: { discos: any[]; bola: any }) => void;
   /** gol marcado - atualiza placar */
   onGoalScored?: (payload: { jogadorId: string; placar: { home: number; away: number } }) => void;
+  /** mensagem de chat recebida do adversário */
+  onChat?: (msg: { autorId: string; autorNome: string; texto: string; enviadoEm: number }) => void;
   /** fim de turno - sincroniza posições finais e passa turno */
   onFimDeTurno?: (payload: {
     discos: Array<{ id: string; x: number; y: number }>;
@@ -150,6 +152,13 @@ export class MesaRealtime {
     // 1.3) fim de turno - sincronização de posições finais
     this.canal.on("broadcast", { event: "fim_de_turno" }, ({ payload }) => {
       this.h.onFimDeTurno?.(payload as any);
+    });
+
+    // 1.4) chat entre jogadores
+    this.canal.on("broadcast", { event: "chat" }, ({ payload }) => {
+      const msg = payload as { autorId: string; autorNome: string; texto: string; enviadoEm: number };
+      if (!msg || msg.autorId === this.userId) return;
+      this.h.onChat?.(msg);
     });
 
     // 2) estado autoritativo da mesa
@@ -318,6 +327,15 @@ export class MesaRealtime {
     turnsLeft?: number;
   }) {
     await this.canal?.send({ type: "broadcast", event: "fim_de_turno", payload });
+  }
+
+  /** Envia mensagem de chat para o adversário (broadcast, baixa latência). */
+  async enviarChat(msg: { autorId: string; autorNome: string; texto: string }) {
+    await this.canal?.send({
+      type: "broadcast",
+      event: "chat",
+      payload: { ...msg, enviadoEm: Date.now() },
+    });
   }
 
   /** Atalho para registrar o listener sem instanciar handlers no construtor. */

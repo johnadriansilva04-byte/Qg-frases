@@ -97,6 +97,7 @@ export function OnlineMatchV3({
       liga: "Personalizado",
       is_personalizado: true,
       usuario_id: perfil.user_id,
+      escudoUrl: perfil.escudo_url ?? null,
     };
   }, [perfil]);
 
@@ -183,20 +184,30 @@ export function OnlineMatchV3({
         <h2 className="text-xl">Seu time</h2>
         {meuTime && (
           <div className="flex items-center gap-3 p-3 border rounded-lg">
-            <span
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
-              style={{ background: meuTime.cores[0] }}
-            >
+            {meuTime.escudoUrl ? (
+              <img
+                src={meuTime.escudoUrl}
+                alt="Escudo"
+                className="size-12 shrink-0 rounded-full border border-border object-cover"
+              />
+            ) : (
               <span
-                className="flex h-8 w-8 items-center justify-center rounded-full"
-                style={{ background: meuTime.cores[1] }}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
+                style={{ background: meuTime.cores[0] }}
               >
-                <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{ background: meuTime.cores[1] }}
+                >
+                  <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
+                </span>
               </span>
-            </span>
+            )}
             <div>
               <p className="font-display text-lg">{meuTime.nome}</p>
-              <p className="text-sm text-muted-foreground">{meuTime.abreviacao}</p>
+              <p className="text-sm text-muted-foreground">
+                {meuTime.abreviacao} · {perfil?.nome ?? "Treinador"}
+              </p>
             </div>
           </div>
         )}
