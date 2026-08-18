@@ -8,11 +8,11 @@ type SupabaseConfig = {
 
 function readEnv(name: string): string | undefined {
   const viteValue = import.meta.env?.[`VITE_${name}`] as string | undefined;
-  if (viteValue) return viteValue;
+  if (viteValue) return viteValue.trim();
 
   if (typeof process !== "undefined") {
     const nodeValue = process.env?.[name] ?? process.env?.[`VITE_${name}`];
-    if (nodeValue) return nodeValue;
+    if (nodeValue) return nodeValue.trim();
   }
 
   return undefined;
