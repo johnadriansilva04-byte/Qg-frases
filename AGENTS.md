@@ -270,3 +270,45 @@ time/botões/tática no estilo PS2. Tudo persistido no Supabase (`futebol.sql`).
   resolve a maioria mas não foi aplicado globalmente.
 - Prefer-const: ESLint recomenda `const` mesmo quando o array é mutado via
   `.push()` (binding não é reatribuído).
+
+## Persistência de fotos (escudo do clube) — commit e9cf53b (2026-08-18)
+- **SQL** (`supabase/migrations/futebol.sql`):
+  - Coluna `escudo_url TEXT` em `botao_usuarios`.
+  - Bucket Storage `escudos` (público) + policies RLS por `auth.uid()`
+    (`escudos_upload_dono`/`escudos_read_public`/`escudos_update_dono`/
+    `escudos_delete_dono` em `storage.objects`).
+  - RPC `atualizar_perfil_clube` ganhou parâmetro `p_escudo TEXT DEFAULT NULL`.
+- **Frontend**:
+  - `src/lib/botao/api.ts`: `uploadEscudo(userId, file)` faz `upsert` no Storage
+    (`escudos/{uid}/escudo.{ext}`) e devolve a URL pública. `PerfilClubeInput`
+    tem campo `escudo?`; `atualizarPerfilClube` envia `p_escudo`.
+  - `src/components/botao/online/auth.ts`: `Perfil.escudo_url`, `STORAGE_KEYS.ESCUDO`,
+    `cachePerfil` persiste o escudo.
+  - `src/components/botao/career/ProfileSetup.tsx`: `<input type="file">` no
+    avatar do resumo, preview `<img>`, hover com overlay de upload, valida
+    `image/*` e ≤2MB; `trocarEscudo()` faz upload + salva via RPC.
+  - `OnlineMatchV3`/`OnlineChampionship`: `meuTime.escudoUrl` exibido no card.
+- **Aplicação obrigatória**: a migração SQL NÃO é aplicada automaticamente (sem
+  `service_role`/CLI). O usuário deve rodar o trecho de `futebol.sql` (coluna
+  + bucket + policies + RPC) no SQL Editor do Supabase. Sem isso, o upload
+  falha (bucket inexistente / coluna ausente).
+
+## SQL consolidado — commit e9cf53b (2026-08-18)
+- Toda a schema de futebol vive em **`supabase/migrations/futebol.sql`** (único
+  arquivo). `futebol_campeonato_online.sql` e
+  `20260817000000_fix_abrir_mesa_campeonato.sql` foram mesclados e removidos.
+- `biblioteca.sql` e `trilha.sql` são módulos separados (livro de frases / jogo
+  de trilha) e **não** devem ser tocados ao consolidar SQL de futebol.
+
+## Amistoso online (MesaOnlineMatch) — commit e9cf53b
+- Série melhor-de-3: estados `serieJ1`/`serieJ2`; vencedor ao alcançar 2 vitórias.
+- 28 jogadas totais (14 por jogador) via `TOTAL_JOGADAS`/`turnsLeft`.
+- Chat: `MesaRealtime.enviarChat()` + listener broadcast `chat` (`onChat`).
+  Overlay `ChatOverlay.tsx` com respostas prontas + campo de digitação.
+- Placar exibe nomes dos treinadores sincronizados do Supabase (`meuNome`/
+  `nomeOponente` via `perfilOponente`) — escalação em primeira pessoa.
+
+## Decisões pendentes (celular) vs narrativa
+- Decisões pendentes **não** devem aparecer como histórico/narrativa em 3ª
+  pessoa. São acessadas no fluxo do botão "celular" como mensagens em 1ª pessoa
+  (comunicação direta do clube, estilo chat/notificação corporativa).
