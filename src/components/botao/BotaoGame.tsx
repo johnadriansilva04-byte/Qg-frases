@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trophy, Swords, Medal, Lock, Shuffle, ChevronRight, Globe, Trash2, Calendar } from "lucide-react";
+import {
+  Trophy,
+  Swords,
+  Medal,
+  Lock,
+  Shuffle,
+  ChevronRight,
+  Globe,
+  Trash2,
+  Calendar,
+} from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import {
   DIFFICULTIES,
@@ -51,7 +61,30 @@ import { ChoiceModal } from "./career/ChoiceModal";
 import { SubornoStory } from "./career/SubornoStory";
 import { CalendarView } from "./career/CalendarView";
 import { ChampionshipModule, ZoneLegend } from "./career/ChampionshipModule";
-import { gerarCopaBrasil, resolveTeam } from "./career/competitionApi";
+import {
+  gerarCopaBrasil,
+  iniciarCopaBrasil,
+  resolveTeam,
+  proximoJogoCopa,
+  usuarioVivoNaCopa,
+  copaDisponivelNaRodada,
+  advanceCopaBrasil,
+  avaliarFimTemporada,
+  iniciarNovaTemporada,
+  CUSTO_MANUTENCAO,
+  type VereditoTemporada,
+} from "./career/competitionApi";
+import {
+  NARRATIVA_INICIAL,
+  gerarNarrativa,
+  cenaDaNarrativa,
+  avancarNarrativa,
+  deveGerarNarrativa,
+  tituloDesfecho,
+  type NarrativaEscolha,
+} from "./career/narrativeEngine";
+import { NarrativeModal } from "./career/NarrativeModal";
+import { SeasonTransition } from "./career/SeasonTransition";
 import {
   SUBORNO_INICIAL,
   deveOfertarSuborno,
@@ -68,7 +101,7 @@ import {
 } from "./career/careerStorage";
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
-import { POINTS, type CareerState, type Choice, type Divisao } from "./career/types";
+import { POINTS, type CareerState, type Choice, type Divisao, type Headline } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
 import {
@@ -111,6 +144,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
+  // Veredito de fim de temporada (continua/Game Over). Quando presente, exibe
+  // a tela SeasonTransition por cima de tudo.
+  const [veredito, setVeredito] = useState<VereditoTemporada | null>(null);
+  // Fixture de copa ativa (para distinguir do fixture de liga no finishTournament).
+  const [currentCopaFix, setCurrentCopaFix] = useState<Fixture | null>(null);
 
   // Debug: permite visualizar a cerimônia via ?debug_ceremony=1
   useEffect(() => {
@@ -180,15 +218,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // que depende dos dados do perfil Supabase
 
   const userTeam = useMemo(() => {
+    // Bônus/penalidades da última decisão narrativa/celular alteram o poder
+    // efetivo do time na próxima partida (reflete moral/tática do elenco).
+    const bonus = career?.bonusProximaPartida ?? 0;
+    const penal = career?.penaltiesProximaPartida ?? 0;
     return createCustomTeam(
       "custom",
       customTeamData.nome,
       customTeamData.short,
       customTeamData.primary,
       customTeamData.secondary,
-      75,
+      Math.max(40, Math.min(99, 75 + bonus - penal)),
     );
-  }, [customTeamData]);
+  }, [customTeamData, career?.bonusProximaPartida, career?.penaltiesProximaPartida]);
 
   const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
@@ -399,7 +441,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Criar Brasileirão (pontos corridos com 20 times) - modo infinito
     const t = createLeague(userTeam.id, difficulty, 20, userTeam);
     persistTournament(t);
-    
+
+    // Copa do Brasil jogável (paralela ao Brasileirão, intercalada).
+    const copa = iniciarCopaBrasil(userTeam, difficulty);
+
     const novaCareer: CareerState = {
       ...c,
       dificuldadeAtual: difficulty,
@@ -409,10 +454,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       headlines: manchetesDeEstreia(c.coach.apelido || c.coach.nome, userTeam.name),
       ultimaRodadaProcessada: -1,
       eventoPendenteId: null,
+      rodadaAtual: 0,
+      rodadasDesdeEventoNarrativo: 0,
+      temporada: c.temporada ?? 1,
+      copaBrasil: copa,
+      narrativa: NARRATIVA_INICIAL,
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
     persistCareer(novaCareer);
-    
+
     // Se estiver logado, sincronizar com Supabase
     if (perfil?.user_id) {
       try {
@@ -423,7 +473,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         console.error("Erro ao sincronizar campanha com Supabase:", error);
       }
     }
-    
+
     setScreen("hub");
   };
 
@@ -434,7 +484,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     iniciarCampanha(nova);
   };
 
-  // Prepara o próximo evento de escolha entre partidas (se houver)
+  // Prepara o próximo evento de escolha/narrativa entre partidas (se houver).
+  // Ordem de prioridade: suborno > narrativa dinâmica > choice event.
   const preparaEscolha = (c: CareerState, faseAtual: string): CareerState => {
     let next = c;
     // Enredo de suborno (narrativa paralela). Tem prioridade e pode disparar em
@@ -443,25 +494,156 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (deveOfertarSuborno(sub, faseAtual) && !sub.nodeAtual) {
       next = { ...next, suborno: iniciarOferta(sub) };
     }
+    if (next.suborno?.nodeAtual) return next;
+    // História dinâmica no celular (2-4/mês): gera se ainda não há uma ativa.
+    if (!next.narrativa?.cenaAtual) {
+      const rodada = next.rodadaAtual;
+      const desde = next.rodadasDesdeEventoNarrativo;
+      if (deveGerarNarrativa(desde, rodada)) {
+        const narr = gerarNarrativa(next.narrativa ?? NARRATIVA_INICIAL);
+        return {
+          ...next,
+          narrativa: narr,
+          rodadasDesdeEventoNarrativo: 0,
+        };
+      }
+    }
+    if (next.narrativa?.cenaAtual) return next;
     if (next.eventoPendenteId) return next;
-    // Sortear evento de carreira antes de cada partida do usuário (60% chance)
-    if (Math.random() > 0.6) return next;
+    // Sortear evento de carreira antes de cada partida do usuário (40% chance)
+    if (Math.random() > 0.4) return next;
     const evento = sortearEvento(next.ultimasEscolhas);
     return { ...next, eventoPendenteId: evento.id };
   };
 
   const playNext = () => {
-    if (!tour) return;
-    // Decisões pendentes não são mais uma narração bloqueante: o usuário é
-    // levado ao celular, onde lê a mensagem (chat em 1ª pessoa) e responde.
-    if (career?.eventoPendenteId) {
+    if (!tour || !career) return;
+    // Decisões pendentes vão ao celular (chat em 1ª pessoa). Ordem:
+    // suborno -> narrativa -> choice event.
+    if (career.suborno?.nodeAtual) {
       setScreen("celular");
       return;
     }
+    if (career.narrativa?.cenaAtual) {
+      setScreen("celular");
+      return;
+    }
+    if (career.eventoPendenteId) {
+      setScreen("celular");
+      return;
+    }
+    // Copa do Brasil paralela: se disponível nesta rodada, joga a copa.
+    const rodada = career.rodadaAtual;
+    if (career.copaBrasil) {
+      const copaFix = proximoJogoCopa(career.copaBrasil, userTeam.id);
+      if (copaFix && copaDisponivelNaRodada(rodada, career.copaBrasil, userTeam.id)) {
+        setCurrentCopaFix(copaFix);
+        setCurrent(copaFix);
+        setScreen("tournament-match");
+        return;
+      }
+    }
     const f = nextUserFixture(tour);
     if (!f) return;
+    setCurrentCopaFix(null);
     setCurrent(f);
     setScreen("tournament-match");
+  };
+
+  // Avança a narrativa dinâmica aplicando efeitos e, no desfecho, gera manchete.
+  const aplicarNarrativa = (escolha: NarrativaEscolha) => {
+    if (!career?.narrativa) return;
+    const { state: novoState, efeitos, finalizado } = avancarNarrativa(career.narrativa, escolha);
+    const novo: CareerState = {
+      ...career,
+      narrativa: novoState,
+      bonusProximaPartida: Math.max(0, career.bonusProximaPartida + (efeitos.bonusPoder ?? 0)),
+      moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
+      coach: {
+        ...career.coach,
+        soberania: Math.max(0, career.coach.soberania + (efeitos.soberania ?? 0)),
+      },
+    };
+    persistCareer(novo);
+    setCareer(novo);
+    // No desfecho, registra manchete narrativa e zera a história.
+    if (finalizado && novoState.desfecho) {
+      const tag =
+        novoState.desfecho === "escandalo" || novoState.desfecho === "lucro_imoral"
+          ? "polemica"
+          : "seu-time";
+      const comManchete = addHeadlines(novo, [
+        {
+          id: `narr-${Date.now()}`,
+          manchete: tituloDesfecho(novoState.desfecho),
+          tag,
+          rodada: novo.rodadaAtual,
+        },
+      ]);
+      const zerado: CareerState = {
+        ...comManchete,
+        narrativa: { ...novoState, cenaAtual: null },
+      };
+      persistCareer(zerado);
+      setCareer(zerado);
+    }
+  };
+
+  // Inicia a próxima temporada (carreira infinita): deduz custo de manutenção,
+  // regenera Brasileirão + Copa do Brasil, mantém progresso e soberania.
+  const startNextSeason = () => {
+    if (!career) return;
+    const divisao = career.divisao;
+    const novaSoberania = iniciarNovaTemporada(career.coach.soberania, divisao);
+    const t = createLeague(userTeam.id, difficulty, 20, userTeam);
+    persistTournament(t);
+    const copa = iniciarCopaBrasil(userTeam, difficulty);
+    const novaCareer: CareerState = {
+      ...career,
+      dificuldadeAtual: difficulty,
+      bonusProximaPartida: 0,
+      penaltiesProximaPartida: 0,
+      moralTime: 65,
+      headlines: manchetesDeEstreia(career.coach.apelido || career.coach.nome, userTeam.name),
+      ultimaRodadaProcessada: -1,
+      eventoPendenteId: null,
+      rodadaAtual: 0,
+      rodadasDesdeEventoNarrativo: 0,
+      temporada: (career.temporada ?? 1) + 1,
+      copaBrasil: copa,
+      narrativa: NARRATIVA_INICIAL,
+      suborno: undefined,
+      coach: {
+        ...career.coach,
+        soberania: novaSoberania,
+        campanhasJogadas: career.coach.campanhasJogadas + 1,
+      },
+    };
+    persistCareer(novaCareer);
+    setVeredito(null);
+    setCurrentCopaFix(null);
+    setScreen("hub");
+  };
+
+  // Game Over: reinicia a carreira do zero (mantém apenas o coach).
+  const gameOverReset = () => {
+    if (!career) return;
+    const novaCareer: CareerState = {
+      ...EMPTY_CAREER,
+      coach: {
+        ...career.coach,
+        soberania: 0,
+        titulos: 0,
+        campanhasJogadas: career.coach.campanhasJogadas + 1,
+      },
+      temporada: 1,
+    };
+    persistCareer(novaCareer);
+    persistTournament(null);
+    setVeredito(null);
+    setCurrentCopaFix(null);
+    setScreen("menu");
+    setToast("Carreira reiniciada após falência. Recomece do zero.");
   };
 
   const aplicarSuborno = (escolha: SubornoEscolha) => {
@@ -508,8 +690,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const aplicarEscolha = (choice: Choice) => {
     if (!career) return;
-    let bonusPoder = career.bonusProximaPartida + (choice.bonusPoder ?? 0);
-    let moral = Math.max(0, Math.min(100, career.moralTime + (choice.bonusMoral ?? 0)));
+    const bonusPoder = career.bonusProximaPartida + (choice.bonusPoder ?? 0);
+    const moral = Math.max(0, Math.min(100, career.moralTime + (choice.bonusMoral ?? 0)));
     let soberania = career.coach.soberania;
     // Penalty imediata (não aplica bônus/penal condicional aqui — vai no finish)
     if (choice.penaltyPontos && choice.penaltyPontos < 0) soberania += choice.penaltyPontos;
@@ -540,6 +722,86 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setScreen("tournament-match");
   };
 
+  // Processa o resultado de um jogo da Copa do Brasil (paralela ao
+  // Brasileirão). Avança o chaveamento da copa e aplica efeitos de carreira.
+  const finishCopaMatch = (r: MatchResult, gf: number, ga: number) => {
+    if (!career?.copaBrasil || !currentCopaFix) return;
+    const copa = advanceCopaBrasil(
+      career.copaBrasil,
+      currentCopaFix,
+      r,
+      tour?.difficulty ?? difficulty,
+    );
+    // Marca a rodada-gatilho como consumida para evitar disparar a próxima fase
+    // na mesma rodada do Brasileirão.
+    copa.rodadaGatilhoConsumida = career.rodadaAtual;
+
+    // Soberania/moral simples pelo resultado da copa (peso um pouco maior que
+    // a liga por ser mata-mata).
+    let novaSoberania = career.coach.soberania;
+    let moral = career.moralTime;
+    if (gf > ga) {
+      novaSoberania += 4;
+      moral = Math.min(100, moral + 5);
+    } else if (gf < ga) {
+      novaSoberania = Math.max(0, novaSoberania - 2);
+      moral = Math.max(0, moral - 5);
+    } else {
+      // Empate no tempo normal, vencedor nos pênaltis:
+      const userHome = r.homeId === userTeam.id;
+      const userPen = userHome ? (r.penHome ?? 0) : (r.penAway ?? 0);
+      const advPen = userHome ? (r.penAway ?? 0) : (r.penHome ?? 0);
+      if (userPen > advPen) {
+        novaSoberania += 2;
+        moral = Math.min(100, moral + 2);
+      } else {
+        novaSoberania = Math.max(0, novaSoberania - 1);
+        moral = Math.max(0, moral - 3);
+      }
+    }
+
+    // Campeão da copa: bônus de Soberania + manchete.
+    let novas: Headline[] = [];
+    if (copa.finished && copa.champion === userTeam.id) {
+      novaSoberania += POINTS.CAMPEAO;
+      novas = [
+        {
+          id: `copa-campeao-${Date.now()}`,
+          manchete: "CAMPEÃO DA COPA DO BRASIL! Glória eterna",
+          tag: "seu-time",
+          rodada: career.rodadaAtual,
+        },
+      ];
+    } else if (copa.finished) {
+      novas = [
+        {
+          id: `copa-fim-${Date.now()}`,
+          manchete: "Copa do Brasil encerrada",
+          tag: "seu-time",
+          rodada: career.rodadaAtual,
+        },
+      ];
+    }
+
+    let novaCareer: CareerState = {
+      ...career,
+      copaBrasil: copa,
+      moralTime: moral,
+      coach: { ...career.coach, soberania: Math.max(0, novaSoberania) },
+    };
+    if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
+    persistCareer(novaCareer);
+    setToast(
+      copa.finished && copa.champion === userTeam.id
+        ? "CAMPEÃO DA COPA DO BRASIL!"
+        : gf > ga
+          ? "Vitória na Copa do Brasil!"
+          : gf < ga
+            ? "Eliminado da Copa do Brasil."
+            : "Avançou nos pênaltis na Copa.",
+    );
+  };
+
   const finishTournamentMatch = (r: MatchResult) => {
     if (!tour || !current) return;
     const t: Tournament = structuredClone(tour);
@@ -547,6 +809,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const userIsHome = r.homeId === userTeam.id;
     const gf = userIsHome ? r.homeGoals : r.awayGoals;
     const ga = userIsHome ? r.awayGoals : r.homeGoals;
+
+    // Copa do Brasil (paralela ao Brasileirão): se a partida atual é da copa,
+    // aplica o resultado ao chaveamento da copa e NÃO avança o Brasileirão.
+    if (currentCopaFix && career?.copaBrasil) {
+      finishCopaMatch(r, gf, ga);
+      setCurrent(null);
+      setCurrentCopaFix(null);
+      setScreen("hub");
+      return;
+    }
 
     if (t.phase === "grupos") {
       const fx = t.groupFixtures.find((x) => x.id === current.id)!;
@@ -575,11 +847,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           // Lógica de promoção/rebaixamento (2 primeiros sobem, 2 últimos caem)
           if (career) {
             const userPosition = tabela.findIndex((r) => r.teamId === t.userTeamId);
-            const novaDivisao = userPosition <= 1 ? (
-              career.divisao === "serie-c" ? "serie-b" : career.divisao === "serie-b" ? "serie-a" : "serie-a"
-            ) : userPosition >= 18 ? (
-              career.divisao === "serie-a" ? "serie-b" : career.divisao === "serie-b" ? "serie-c" : "serie-c"
-            ) : career.divisao;
+            const novaDivisao =
+              userPosition <= 1
+                ? career.divisao === "serie-c"
+                  ? "serie-b"
+                  : career.divisao === "serie-b"
+                    ? "serie-a"
+                    : "serie-a"
+                : userPosition >= 18
+                  ? career.divisao === "serie-a"
+                    ? "serie-b"
+                    : career.divisao === "serie-b"
+                      ? "serie-c"
+                      : "serie-c"
+                  : career.divisao;
 
             const careerAtualizado: CareerState = {
               ...career,
@@ -590,9 +871,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
             if (novaDivisao !== career.divisao) {
               if (userPosition <= 1) {
-                setToast(`PROMOÇÃO! Você subiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE A"}!`);
+                setToast(
+                  `PROMOÇÃO! Você subiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE A"}!`,
+                );
               } else if (userPosition >= 18) {
-                setToast(`REBAIXAMENTO! Você caiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}.`);
+                setToast(
+                  `REBAIXAMENTO! Você caiu para ${novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}.`,
+                );
               }
             }
           }
@@ -604,7 +889,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           );
         } else {
           buildKnockout(t);
-          setToast(qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.");
+          setToast(
+            qualified(t) ? "Classificado para o mata-mata!" : "Eliminado na fase de grupos.",
+          );
         }
       }
     } else {
@@ -685,7 +972,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (classificouAgora) novaSoberania += POINTS.CLASSIFICOU_MATA;
 
       // Fim de campanha: bônus de posição final
-      let manchetesFim: string[] = [];
+      const manchetesFim: string[] = [];
       if (t.phase === "fim") {
         // Determina posição do usuário
         if (t.champion === t.userTeamId) {
@@ -767,6 +1054,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         bonusProximaPartida: 0,
         penaltiesProximaPartida: 0,
         moralTime: moral,
+        // Avança a rodada do Brasileirão para distribuir narrativas/Copa.
+        rodadaAtual: (career.rodadaAtual ?? 0) + 1,
+        rodadasDesdeEventoNarrativo: (career.rodadasDesdeEventoNarrativo ?? 0) + 1,
         coach: {
           ...career.coach,
           soberania: Math.max(0, Math.round(novaSoberania)),
@@ -780,6 +1070,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         novaCareer = preparaEscolha(novaCareer, proximoFix.stage);
       }
       persistCareer(novaCareer);
+
+      // Fim de temporada (liga concluída): economia de Soberania decide se o
+      // treinador segue (temporada infinita) ou é demitido (Game Over).
+      if (t.phase === "fim") {
+        const v = avaliarFimTemporada(novaCareer.coach.soberania, novaCareer.divisao);
+        setVeredito(v);
+      }
 
       // Sync remoto (autoritativo) — não bloqueia UX
       if (perfil?.user_id) {
@@ -925,13 +1222,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   }
 
   if (screen === "celular") {
-    // Inbox unificado do celular: decisões (chat em 1ª pessoa) e enredo de suborno.
-    // Prioriza a decisão pendente; ao resolves, segue para a partida automaticamente.
+    // Inbox unificado do celular: suborno, narrativa dinâmica e decisões —
+    // todas em primeira pessoa (chat). Ordem de prioridade: suborno > narrativa
+    // > choice event. Ao resolver, segue para a partida automaticamente.
+    const subornoAtivo = career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
+    const narrativaAtiva = career?.narrativa?.cenaAtual ? cenaDaNarrativa(career.narrativa) : null;
     const eventoPendente = career?.eventoPendenteId
       ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
       : null;
-    const subornoAtivo =
-      career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
 
     return (
       <Shell>
@@ -942,13 +1240,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onTrophies={() => setScreen("trophies")}
             onHome={() => setScreen("menu")}
           />
-          {eventoPendente ? (
-            <ChoiceModal
-              evento={eventoPendente}
-              onChoose={aplicarEscolha}
-              onBack={() => setScreen("hub")}
-            />
-          ) : subornoAtivo ? (
+          {subornoAtivo ? (
             <SubornoStory
               state={career!.suborno!}
               onAvancar={aplicarSuborno}
@@ -959,6 +1251,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                   setScreen("hub");
                 }
               }}
+            />
+          ) : narrativaAtiva && career?.narrativa ? (
+            <NarrativeModal
+              state={career.narrativa}
+              cena={narrativaAtiva}
+              onAvancar={aplicarNarrativa}
+              onBack={() => setScreen("hub")}
+            />
+          ) : eventoPendente ? (
+            <ChoiceModal
+              evento={eventoPendente}
+              onChoose={aplicarEscolha}
+              onBack={() => setScreen("hub")}
             />
           ) : (
             <div className="panel text-center py-12">
@@ -976,7 +1281,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
-  if (screen === "suborno" && career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho)) {
+  if (
+    screen === "suborno" &&
+    career?.suborno &&
+    (career.suborno.nodeAtual || career.suborno.desfecho)
+  ) {
     return (
       <Shell>
         <UserMenu perfil={perfil} onLogin={() => setScreen("auth")} onLogout={handleLogout} />
@@ -1025,6 +1334,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
+      {veredito && career && (
+        <SeasonTransition
+          veredito={veredito}
+          divisao={career.divisao}
+          temporada={career.temporada ?? 1}
+          onContinuar={startNextSeason}
+          onReiniciar={gameOverReset}
+        />
+      )}
       {showCeremony && career?.coach.nome && (
         <TitleCeremony
           coach={career.coach}
@@ -1268,7 +1586,9 @@ function MenuCard({
       onClick={onClick}
       className={`menu-card group ${destructive ? "menu-card-destructive" : accentMap[accent]}`}
     >
-      <span className={`menu-card-icon ${destructive ? "menu-card-icon-destructive" : accentMap[accent]}`}>
+      <span
+        className={`menu-card-icon ${destructive ? "menu-card-icon-destructive" : accentMap[accent]}`}
+      >
         {icon}
       </span>
       <span className="mt-3 block font-display text-2xl leading-tight">{title}</span>
@@ -1400,18 +1720,23 @@ function Hub({
 
   const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
 
-  // Copa do Brasil: sorteada uma vez por temporada (memoizada por userTeam + difficulty).
-  const copaBrasil = useMemo(
-    () => gerarCopaBrasil(userTeam, tour.difficulty),
-    [userTeam, tour.difficulty],
-  );
+  // Copa do Brasil: estado jogável persistido em career.copaBrasil; se ausente
+  // (carregamento antigo), gera um chaveamento apenas p/ exibição no calendário.
+  const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
+  const copaFixPend = copaBrasil ? proximoJogoCopa(copaBrasil, userTeam.id) : null;
+  const vivoNaCopa = copaBrasil ? usuarioVivoNaCopa(copaBrasil, userTeam.id) : false;
 
   const divisao = career?.divisao ?? "serie-c";
-  const divisaoShort = divisao === "serie-a" ? "SÉRIE A" : divisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
+  const divisaoShort =
+    divisao === "serie-a" ? "SÉRIE A" : divisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
+  const temporada = career?.temporada ?? 1;
+  const custoManutencao = CUSTO_MANUTENCAO[divisao];
 
-  // Contagem de mensagens não lidas no celular (decisões + suborno).
+  // Contagem de mensagens não lidas no celular (narrativa + suborno + decisões).
   const mensagensPendentes =
-    (career?.eventoPendenteId ? 1 : 0) + (career?.suborno?.nodeAtual ? 1 : 0);
+    (career?.eventoPendenteId ? 1 : 0) +
+    (career?.suborno?.nodeAtual ? 1 : 0) +
+    (career?.narrativa?.cenaAtual ? 1 : 0);
   const temCelular = mensagensPendentes > 0;
 
   const userPos =
@@ -1421,7 +1746,14 @@ function Hub({
 
   return (
     <div className="space-y-5">
-      {career?.coach.nome && <SovereigntyPanel coach={career.coach} moral={career.moralTime} />}
+      {career?.coach.nome && (
+        <SovereigntyPanel
+          coach={career.coach}
+          moral={career.moralTime}
+          temporada={temporada}
+          divisao={divisao}
+        />
+      )}
 
       {/* Próximo jogo em destaque */}
       <div className="next-match-card">
@@ -1466,6 +1798,40 @@ function Hub({
         )}
       </div>
 
+      {/* Status da Copa do Brasil (paralela ao Brasileirão) */}
+      {copaBrasil && (
+        <div className="copa-status-card">
+          <div className="copa-status-head">
+            <span className="copa-status-tag">Copa do Brasil</span>
+            <span className="copa-status-badge">
+              {copaBrasil.finished
+                ? copaBrasil.champion === userTeam.id
+                  ? "CAMPEÃO"
+                  : "Encerrada"
+                : vivoNaCopa
+                  ? "Em jogo"
+                  : "Eliminado"}
+            </span>
+          </div>
+          {copaFixPend ? (
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <TeamBadge team={getTeam(copaFixPend.homeId)} size="sm" />
+                <span className="font-display text-lg text-muted-foreground">×</span>
+                <TeamBadge team={getTeam(copaFixPend.awayId)} size="sm" />
+              </div>
+              <span className="text-[11px] text-muted-foreground">{copaFixPend.stage}</span>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {copaBrasil.finished
+                ? "Torneio concluído nesta temporada."
+                : "Próxima fase será disponibilizada no calendário do Brasileirão."}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Layout principal: 2 colunas sem blocos vazios */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* COLUNA ESQUERDA — ações e celular */}
@@ -1477,7 +1843,8 @@ function Hub({
               <div className="celular-info">
                 <span className="celular-title">Celular do Treinador</span>
                 <span className="celular-sub">
-                  {mensagensPendentes} mensagem{mensagensPendentes !== 1 ? "s" : ""} nova{mensagensPendentes !== 1 ? "s" : ""}
+                  {mensagensPendentes} mensagem{mensagensPendentes !== 1 ? "s" : ""} nova
+                  {mensagensPendentes !== 1 ? "s" : ""}
                 </span>
               </div>
               <span className="celular-badge">{mensagensPendentes}</span>
@@ -1514,10 +1881,17 @@ function Hub({
               <Calendar className="size-4 text-emerald-400" />
               <span className="font-display text-sm tracking-wide">Calendário da Temporada</span>
             </div>
-            <ChevronRight className={`size-4 transition-transform ${showCalendar ? "rotate-90" : ""}`} />
+            <ChevronRight
+              className={`size-4 transition-transform ${showCalendar ? "rotate-90" : ""}`}
+            />
           </button>
           {showCalendar && (
-            <CalendarView tour={tour} userTeam={userTeam} currentDivisao={divisao} copaBrasil={copaBrasil} />
+            <CalendarView
+              tour={tour}
+              userTeam={userTeam}
+              currentDivisao={divisao}
+              copaBrasil={copaBrasil}
+            />
           )}
 
           <button onClick={onExit} className="btn-ghost w-full">
@@ -1546,7 +1920,13 @@ function Hub({
                   {sortTable(tour.groups[0]!.table).map((r, i) => {
                     const position = i + 1;
                     const zone =
-                      position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                      position <= 4
+                        ? "libertadores"
+                        : position <= 6
+                          ? "copa-brasil"
+                          : position >= 18
+                            ? "rebaixamento"
+                            : "";
                     return (
                       <tr
                         key={r.teamId}
@@ -1575,7 +1955,15 @@ function Hub({
   );
 }
 
-function TrophyRoom({ progress, userTeam, onBack }: { progress: Progress; userTeam: Team; onBack: () => void }) {
+function TrophyRoom({
+  progress,
+  userTeam,
+  onBack,
+}: {
+  progress: Progress;
+  userTeam: Team;
+  onBack: () => void;
+}) {
   const getTeam = (teamId: string): Team => {
     if (teamId === userTeam.id) return userTeam;
     return teamByIdSync(teamId);

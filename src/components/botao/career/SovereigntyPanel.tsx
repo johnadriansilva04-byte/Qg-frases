@@ -1,12 +1,28 @@
-import { Crown, TrendingUp, Heart } from "lucide-react";
-import { nivelDoTreinador, type Coach } from "./types";
+import { Crown, TrendingUp, Heart, Coins } from "lucide-react";
+import { nivelDoTreinador, type Coach, type Divisao } from "./types";
+import { CUSTO_MANUTENCAO } from "./competitionApi";
 
-export function SovereigntyPanel({ coach, moral }: { coach: Coach; moral: number }) {
+export function SovereigntyPanel({
+  coach,
+  moral,
+  temporada,
+  divisao,
+}: {
+  coach: Coach;
+  moral: number;
+  temporada?: number;
+  divisao?: Divisao;
+}) {
   const { atual, proximo } = nivelDoTreinador(coach.soberania);
   const progresso = proximo
     ? Math.min(100, Math.round(((coach.soberania - atual.min) / (proximo.min - atual.min)) * 100))
     : 100;
-  const moralColor = moral >= 70 ? "text-emerald-300" : moral >= 40 ? "text-amber-300" : "text-rose-300";
+  const moralColor =
+    moral >= 70 ? "text-emerald-300" : moral >= 40 ? "text-amber-300" : "text-rose-300";
+
+  const custo = divisao ? CUSTO_MANUTENCAO[divisao] : 0;
+  const saldoManutencao = coach.soberania - custo;
+  const manutencaoOk = saldoManutencao >= 0;
 
   return (
     <div className="sovereignty-panel" data-testid="soberania-panel">
@@ -22,9 +38,19 @@ export function SovereigntyPanel({ coach, moral }: { coach: Coach; moral: number
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2.5">
-        <Stat icon={<Crown className="size-4" />} label="Soberania" value={coach.soberania} accent />
+        <Stat
+          icon={<Crown className="size-4" />}
+          label="Soberania"
+          value={coach.soberania}
+          accent
+        />
         <Stat icon={<TrendingUp className="size-4" />} label="Títulos" value={coach.titulos} />
-        <Stat icon={<Heart className="size-4" />} label="Moral" value={`${moral}%`} valueClass={moralColor} />
+        <Stat
+          icon={<Heart className="size-4" />}
+          label="Moral"
+          value={`${moral}%`}
+          valueClass={moralColor}
+        />
       </div>
 
       {proximo && (
@@ -36,10 +62,31 @@ export function SovereigntyPanel({ coach, moral }: { coach: Coach; moral: number
             </span>
           </div>
           <div className="sovereignty-bar">
-            <div
-              className="sovereignty-bar-fill"
-              style={{ width: `${progresso}%` }}
-            />
+            <div className="sovereignty-bar-fill" style={{ width: `${progresso}%` }} />
+          </div>
+        </div>
+      )}
+
+      {divisao && (
+        <div className="sovereignty-maintenance">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-widest">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Coins className="size-3.5" />
+              Manutenção da temporada {temporada ?? 1}
+            </span>
+            <span className={manutencaoOk ? "text-emerald-300" : "text-rose-300"}>
+              {manutencaoOk ? `Saldo +${saldoManutencao}` : `Déficit ${saldoManutencao}`}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-[11px] text-muted-foreground">
+              Custo {custo} · você tem {coach.soberania}
+            </span>
+            <span
+              className={`text-[11px] font-medium ${manutencaoOk ? "text-emerald-300" : "text-rose-300"}`}
+            >
+              {manutencaoOk ? "Permanência garantida" : "Risco de falência"}
+            </span>
           </div>
         </div>
       )}
@@ -62,7 +109,9 @@ function Stat({
 }) {
   return (
     <div className={`stat-tile ${accent ? "stat-tile-accent" : ""}`}>
-      <div className={`flex items-center gap-1 text-[10px] uppercase tracking-widest ${accent ? "text-amber-300" : "text-muted-foreground"}`}>
+      <div
+        className={`flex items-center gap-1 text-[10px] uppercase tracking-widest ${accent ? "text-amber-300" : "text-muted-foreground"}`}
+      >
         {icon}
         {label}
       </div>
@@ -70,4 +119,3 @@ function Stat({
     </div>
   );
 }
-

@@ -23,6 +23,9 @@ export const EMPTY_CAREER: CareerState = {
   ultimaRodadaProcessada: -1,
   eventoPendenteId: null,
   divisao: "serie-c",
+  rodadaAtual: 0,
+  rodadasDesdeEventoNarrativo: 0,
+  temporada: 1,
 };
 
 export function loadCareer(): CareerState | null {

@@ -28,7 +28,7 @@ export const COACH_LEVELS: { nome: string; min: number; icon: string }[] = [
 
 export function nivelDoTreinador(soberania: number) {
   let atual = COACH_LEVELS[0]!;
-  let proximo: typeof COACH_LEVELS[number] | null = null;
+  let proximo: (typeof COACH_LEVELS)[number] | null = null;
   for (let i = 0; i < COACH_LEVELS.length; i++) {
     if (soberania >= COACH_LEVELS[i]!.min) {
       atual = COACH_LEVELS[i]!;
@@ -76,7 +76,17 @@ export type CareerState = {
   // Divisão atual do Brasileirão (promoção/rebaixamento entre séries).
   divisao: Divisao;
   // Enredo de suborno (narrativa paralela). Veja subornoEngine.ts.
-  suborno?: import("./subornoEngine").SubornoState;
+  suborno?: import("./subornoEngine").SubornoState | undefined;
+  // Histórias dinâmicas no celular (suspense/drama). Veja narrativeEngine.ts.
+  narrativa?: import("./narrativeEngine").NarrativaState | undefined;
+  // Copa do Brasil jogável, paralela ao Brasileirão (pontos corridos).
+  copaBrasil?: import("./competitionApi").CopaBrasilState | undefined;
+  // Rodada corrente do Brasileirão — base para distribuição de eventos.
+  rodadaAtual: number;
+  // Rodadas desde o último evento narrativo (para espaçar 2-4/mês).
+  rodadasDesdeEventoNarrativo: number;
+  // Número da temporada (carreira infinita enquanto houver soberania).
+  temporada: number;
 };
 
 export const CAREER_KEY = "botao:career:v1";

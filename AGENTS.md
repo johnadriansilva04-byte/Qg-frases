@@ -171,3 +171,56 @@ o conteúdo de
 `supabase/migrations/20260817000000_fix_abrir_mesa_campeonato.sql` no **SQL
 Editor do Supabase** e rodar. Sem isso, o Campeonato Online continua quebrado
 (não há workaround no frontend — a criação da mesa depende desta RPC).
+
+## Modo Carreira (single-player) — arquitetura (2026-08-18)
+
+Reatoração completa do modo carreira com sistema narrativo dinâmico (suspense/
+drama em 1ª pessoa via celular), economia de Soberania e temporada infinita.
+
+### Núcleo
+- `career/types.ts`: `CareerState` com `bonusProximaPartida`,
+  `penaltiesProximaPartida`, `moralTime`, `narrativa`, `suborno`, `copaBrasil`,
+  `temporada`, `divisao`, `rodadasDesdeEventoNarrativo`, `vereditoTemporada`.
+  Props opcionais tipadas como `| undefined` (necessário por
+  `exactOptionalPropertyTypes`).
+- `career/competitionApi.ts`: `calcularStats()` (artilheiro/goleiro/
+  maiorGoleada reais da tabela), `CopaBrasilState` com chaveamento de 16 times
+  (4 fases: Oitavas/Quartas/Semifinal/Final), `COPA_RODADAS_GATILHO=[4,9,14,18]`,
+  `avaliarFimTemporada`/`iniciarNovaTemporada` (custo de manutenção por divisão),
+  `CUSTO_MANUTENCAO` (serie-a=120, serie-b=80, serie-c=50).
+- `career/narrativeEngine.ts`: gera histórias com persona × gancho × reviravolta.
+  `gerarNarrativa` → `cenaDaNarrativa` → `avancarNarrativa`. Arco de 2 cenas
+  (raiz → desfecho). Final cenas têm `final: true` + `desfecho`.
+- `career/NarrativeModal.tsx`: UI de chat no celular. Cenas finais exibem um
+  botão "Concluir" sintético (`id:"concluir"`, sem `proximoId`, com `desfecho`)
+  que dispara `avancarNarrativa` retornando `finalizado=true` + registra headline.
+- `career/SeasonTransition.tsx`: veredito de fim de temporada (continua/falência).
+
+### Fluxo do BotaoGame
+- `preparaEscolha`: prioridade suborno > narrativa > choice event.
+- `playNext`: suborno/narrativa/evento → tela `celular`; copa → `copa-match`;
+  senão liga → `tournament-match`.
+- `aplicarNarrativa`: avança cena, aplica efeitos (bonusPoder/moral/soberania),
+  registra headline se finalizado, zera `cenaAtual`.
+- `finishCopaMatch`: `advanceCopaBrasil` + define `rodadaGatilhoConsumida`.
+- `finishTournamentMatch`: fim da liga → `avaliarFimTemporada` → `setVeredito`.
+- `userTeam.power`: 75 + bonusProximaPartida - penaltiesProximaPartida (40-99).
+
+### Bug crítico corrigido (não reintroduzir)
+- `GANCHOS_BASTIDORES`/`GANCHOS_TRAICAO`/`GANCHOS_MIDIA` DEVEM ter 5 entradas
+  cada (índice acessado via `ganchoIdx % 5`). Quando tinham só 4, `idx=4` →
+  `mensagemRaiz` undefined → `fillTemplate(tpl=undefined)` quebrava o jogo.
+- `CopaBrasilState.rodadaGatilhoConsumida`: obrigatório para evitar que a
+  próxima fase da copa dispare na MESMA rodada-gatilho (sem avançar a liga).
+
+### Testes de runtime (Node 22 `--experimental-strip-types`)
+- `narrativeEngine.ts` é testável isoladamente (sem imports com alias `@/`).
+- `competitionApi.ts` NÃO é executável em Node puro (importa `@/lib/times.functions`
+  via `data/teams.ts`) — validar por `tsc` + revisão manual.
+
+## TypeScript — observações (2026-08-18)
+- `tsc --noEmit`: **0 erros** | `vite build`: OK | `npm run lint`: 1872 erros
+  de prettier pré-existentes em TODO o repo (não bloqueiam build). `--fix`
+  resolve a maioria mas não foi aplicado globalmente.
+- Prefer-const: ESLint recomenda `const` mesmo quando o array é mutado via
+  `.push()` (binding não é reatribuído).
