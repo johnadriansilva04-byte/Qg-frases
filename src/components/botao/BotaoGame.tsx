@@ -95,7 +95,7 @@ import {
   responderContatoNpc,
 } from "./career/rpg/rpgEngine";
 import { anexarPost, gerarPostPartida } from "./career/rpg/socialEngine";
-// REMOVIDO: armarSponsor - Monetag causava disparos em QUALQUER clique
+import { armarSponsor } from "@/lib/sponsorGate";
 import {
   aplicarRitualNaCarreira,
   consumirRitualPendente,

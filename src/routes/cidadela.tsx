@@ -9,7 +9,7 @@ import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
-// REMOVIDO: armarSponsor - Monetag causava disparos em QUALQUER clique
+import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
 
 export const Route = createFileRoute("/cidadela")({

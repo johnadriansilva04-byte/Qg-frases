@@ -23,7 +23,7 @@ export interface AdRouteConfig {
 const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
   // Rotas estáticas - Google AdSense
   "/": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
-  "/cidadela": { network: "none", allowedSlots: [] },
+  "/cidadela": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
   "/biblioteca": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
   "/gerador": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
   "/corretor": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
@@ -34,10 +34,10 @@ const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
   // Futebol de Botão - Adsterra
   "/botao": { network: "adsterra", allowedSlots: ["native-banner", "interstitial"] },
 
-  // REMOVIDO: Monetag de todas as rotas - causava disparos em QUALQUER clique
-  "/trilha": { network: "none", allowedSlots: [] },
-  "/dama": { network: "none", allowedSlots: [] },
-  "/xadrez": { network: "none", allowedSlots: [] },
+  // Jogos de estratégia - Monetag (carregado apenas sob demanda via ControlledMonetagButton)
+  "/trilha": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
+  "/dama": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
+  "/xadrez": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
 };
 
 /**
@@ -55,7 +55,13 @@ const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string;
     containerId: "container-0ad480fbab555d4ab76b3d9548942579",
   },
   // REMOVIDO: adsterra_social - causava disparos indevidos em cliques globais
-  // REMOVIDO: monetag - causava disparos em QUALQUER clique (zona OnClick)
+  monetag: {
+    // Tag script do Monetag (zona 11607595) — carregado apenas sob demanda via ControlledMonetagButton
+    src: "https://al5sm.com/tag.min.js",
+    id: "monetag-script",
+    containerId: "monetag-container",
+    zone: "11607595",
+  },
 };
 
 /**
@@ -119,7 +125,9 @@ class AdManager {
     if (path.startsWith("/botao")) {
       return "adsterra";
     }
-    // REMOVIDO: Monetag prefixos - causava disparos em QUALQUER clique
+    if (path.startsWith("/trilha") || path.startsWith("/dama") || path.startsWith("/xadrez")) {
+      return "monetag";
+    }
 
     // Padrão: AdSense para páginas estáticas
     return "adsense";
@@ -127,8 +135,9 @@ class AdManager {
 
   /**
    * Carrega o script da rede especificada
+   * MODIFICADO: Monetag não é carregado automaticamente - requer ação explícita do usuário
    */
-  loadScript(network: AdNetwork): void {
+  loadScript(network: AdNetwork, forceLoad = false): void {
     // Verifica se está no browser (SSR-safe)
     if (typeof window === "undefined" || typeof document === "undefined") {
       console.warn("[AdManager] Tentativa de carregar script no SSR - ignorando");
@@ -138,6 +147,12 @@ class AdManager {
     if (network === "none") return;
     if (this.loadedScripts.has(network)) {
       console.log(`[AdManager] Script ${network} já carregado, pulando`);
+      return;
+    }
+
+    // Monetag só carrega se forceLoad=true (ação explícita do usuário)
+    if (network === "monetag" && !forceLoad) {
+      console.log("[AdManager] Monetag requer carregamento explícito via ControlledMonetagButton");
       return;
     }
 
@@ -264,6 +279,13 @@ class AdManager {
     this.removeScript("adsterra" as AdNetwork);
     this.cleanupContainers();
     console.log("[AdManager] Cleanup Adsterra completo");
+  }
+
+  /**
+   * Carrega script Monetag sob demanda (apenas quando usuário confirma)
+   */
+  loadMonetagOnDemand(): void {
+    this.loadScript("monetag", true);
   }
 
   /**

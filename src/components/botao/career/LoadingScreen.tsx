@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Megaphone } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { sponsorArmado } from "@/lib/sponsorGate";
 import {
   selecionarConteudo,
@@ -133,6 +134,18 @@ export function LoadingScreen({
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-left">
             <Megaphone className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
             <p className="text-[11px] leading-snug text-amber-100">{avisoSponsor.mensagem}</p>
+          </div>
+        )}
+
+        {/* Botão controlado de Monetag durante loading */}
+        {avisoSponsor && (
+          <div className="mt-3">
+            <ControlledMonetagButton
+              className="w-full text-xs"
+              message={avisoSponsor.mensagem}
+            >
+              Ver patrocinador
+            </ControlledMonetagButton>
           </div>
         )}
 
