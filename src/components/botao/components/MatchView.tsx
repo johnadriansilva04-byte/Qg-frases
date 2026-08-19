@@ -133,9 +133,6 @@ export function MatchView({
     if (turnsLeft <= metade && turnsLeft > 0) {
       halftimeShownRef.current = true;
       setHalftime(true);
-      // Ponto estratégico: intervalo → o próximo clique pode ser patrocinado
-      // (avisado pelo SponsorNotice discreto no topo).
-      armarSponsor("partida-intervalo");
     }
   }, [turnsLeft, turns, isOnline, ended]);
 

@@ -626,8 +626,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const finishFriendly = (r: MatchResult) => {
     // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
     markFirstGamePlayed();
-    // Ponto estratégico: fim de partida → próxima ação pode ser patrocinada.
-    armarSponsor("partida-fim");
 
     const userIsHome = r.homeId === userTeam.id;
     const gf = userIsHome ? r.homeGoals : r.awayGoals;
@@ -1252,9 +1250,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const finishTournamentMatch = (r: MatchResult) => {
     if (!tour || !current) return;
-    // Ponto estratégico: fim de partida da carreira → próxima ação pode ser
-    // patrocinada (o usuário já viu o aviso no overlay de finalização).
-    armarSponsor("partida-fim");
     let t: Tournament = structuredClone(tour);
     let ligasAtualizadas: LigasTemporada | undefined;
     let resultadoTemp: ReturnType<typeof processarResultadoTemporada> | null = null;
@@ -2008,8 +2003,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
-      {/* Social Bar da Adsterra - desativada temporariamente para evitar redirecionamentos */}
-      {/* <AdsterraSocialBar /> */}
+      {/* Social Bar da Adsterra - global no Futebol de Botão */}
+      <AdsterraSocialBar />
 
       {carregando && !loading && <LoadingScreen pronto={false} onCompleto={() => {}} />}
       {loading && <LoadingScreen pronto={loadingReady} onCompleto={loadingOnComplete} />}

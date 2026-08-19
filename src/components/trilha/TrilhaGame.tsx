@@ -438,9 +438,6 @@ function TrilhaGameBoard({
 
       // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
       markFirstGamePlayed();
-      // Ponto estratégico: fim de jogo da Trilha → próxima ação pode ser
-      // patrocinada (o usuário é avisado pelo SponsorNotice).
-      armarSponsor("trilha-fim");
       // Ritual da Trilha: mesmo universo do Modo Carreira — marcar o resultado
       // para o BotaoGame integrar na carreira (SOV, sombra, rede social).
       marcarRitualPendente(result === "victory" ? "vitoria" : "derrota");

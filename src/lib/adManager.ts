@@ -9,7 +9,6 @@
 
 import { useCallback } from "react";
 import { initAdClickGuard } from "./adClickGuard";
-import { sponsorArmado } from "./sponsorGate";
 
 export type AdNetwork = "adsense" | "adsterra" | "monetag" | "none";
 
@@ -151,12 +150,6 @@ class AdManager {
     if (network === "none") return;
     if (this.loadedScripts.has(network)) {
       console.log(`[AdManager] Script ${network} já carregado, pulando`);
-      return;
-    }
-
-    // Monetag só carrega quando gate está armado
-    if (network === "monetag" && !sponsorArmado()) {
-      console.log("[AdManager] Script Monetag bloqueado (gate não armado)");
       return;
     }
 

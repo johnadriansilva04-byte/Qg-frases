@@ -123,9 +123,6 @@ function Cidadela() {
 
   const handleGameSelect = (game: Game) => {
     if (game === "botao" || game === "trilha") {
-      // Ponto estratégico: o carregamento avisa que a continuação pode abrir
-      // uma aba de patrocinador (Monetag OnClick, zona /cidadela).
-      armarSponsor(game === "botao" ? "carreira-entrar" : "trilha-intervalo");
       setLoadingGame(game);
       return;
     }
