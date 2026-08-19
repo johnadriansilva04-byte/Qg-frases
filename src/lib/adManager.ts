@@ -8,6 +8,7 @@
  */
 
 import { useCallback } from "react";
+import { initAdClickGuard } from "./adClickGuard";
 
 export type AdNetwork = "adsense" | "adsterra" | "monetag" | "none";
 
@@ -77,6 +78,7 @@ class AdManager {
   private readonly FIRST_GAME_KEY = "sov_first_game_played";
 
   constructor() {
+    initAdClickGuard();
     this.unregisterLegacyMonetagSW();
   }
 
