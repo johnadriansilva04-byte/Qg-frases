@@ -113,11 +113,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-      {
-        rel: "preload",
-        href: "https://www.googletagmanager.com/gtag/js?id=G-64FCC805LH",
-        as: "script",
-      },
     ],
   }),
 

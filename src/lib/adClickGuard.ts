@@ -2,32 +2,15 @@
  * AD CLICK GUARD — limita pop-unders/onclick ads a 1 por 5 minutos.
  *
  * Zonas "OnClick" (Monetag, Adsterra Social) instalam handler global que abre
- * nova janela em QUALQUER clique. Interceptamos window.open + location.assign
- * e bloqueamos quando o cooldown está ativo.
+ * nova janela em QUALQUER clique. Interceptamos window.open e bloqueamos
+ * quando o cooldown está ativo. NÃO sobrescrevemos location.assign — é
+ * read-only e derrubaria o módulo inteiro.
  */
 
 const COOLDOWN_MS = 5 * 60 * 1000;
 const STORAGE_KEY = "ad_popguard_last_open";
-const AD_DOMAINS = new Set([
-  "quge5.com",
-  "al5sm.com",
-  "effectivecpmnetwork.com",
-  "effectivecpmrate.com",
-  "propellerads.com",
-  "monetag.com",
-]);
 
 let patched = false;
-
-function isAdUrl(url: string): boolean {
-  if (!url) return false;
-  try {
-    const host = new URL(url, window.location.href).hostname.toLowerCase();
-    return AD_DOMAINS.has(host) || [...AD_DOMAINS].some((d) => host.endsWith(`.${d}`));
-  } catch {
-    return false;
-  }
-}
 
 function isInternal(url: string): boolean {
   if (!url) return true;
@@ -60,7 +43,6 @@ export function initAdClickGuard(): void {
   patched = true;
 
   const originalOpen = window.open.bind(window);
-  const originalAssign = window.location.assign?.bind(window.location);
 
   window.open = function (url?: string | URL, target?: string, features?: string) {
     const urlStr = String(url ?? "");
@@ -79,19 +61,4 @@ export function initAdClickGuard(): void {
     console.log("[AdGuard] Pop liberado (cooldown de 5 min iniciado)");
     return originalOpen(url, target, features);
   };
-
-  if (originalAssign) {
-    window.location.assign = function (url: string) {
-      if (isAdUrl(url)) {
-        const now = Date.now();
-        const last = lastOpen();
-        if (last > 0 && now - last < COOLDOWN_MS) {
-          console.log("[AdGuard] Redirect de anúncio bloqueado (cooldown)");
-          return;
-        }
-        markOpen(now);
-      }
-      return originalAssign(url);
-    };
-  }
 }
