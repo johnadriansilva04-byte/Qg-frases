@@ -5,7 +5,7 @@
  * sponsorGate (intervalo/fim de partida, entrada no Modo Carreira, fim de
  * jogo da Trilha) e o usuário foi avisado. Sem gate: bloqueado sempre.
  *
- * NÃO sobrescrevemos location.assign — read-only, derrubava o módulo.
+ * Intercepta: window.open, location.assign, window.location.href
  */
 
 import { consumirSponsorGate } from "./sponsorGate";
@@ -36,6 +36,7 @@ export function initAdClickGuard(): void {
   if (patched || typeof window === "undefined") return;
   patched = true;
 
+  // Intercepta window.open
   const originalOpen = window.open.bind(window);
 
   window.open = function (url?: string | URL, target?: string, features?: string) {
@@ -52,4 +53,51 @@ export function initAdClickGuard(): void {
     console.log("[AdGuard] Pop externo bloqueado (nenhum ponto estratégico armado)");
     return null;
   };
+
+  // Intercepta location.assign
+  const originalAssign = Location.prototype.assign.bind(window.location);
+
+  Location.prototype.assign = function (url: string | URL) {
+    const urlStr = String(url);
+    if (isInternal(urlStr)) return originalAssign(url);
+
+    // Único caminho legítimo: gate armado em ponto estratégico.
+    if (consumirSponsorGate()) {
+      markOpen(Date.now());
+      console.log("[AdGuard] Redirecionamento liberado (ponto estratégico)");
+      return originalAssign(url);
+    }
+
+    console.log("[AdGuard] Redirecionamento externo bloqueado (nenhum ponto estratégico armado)");
+    return;
+  };
+
+  // Intercepta window.location.href setter
+  let currentHref = window.location.href;
+  Object.defineProperty(window.location, "href", {
+    get() {
+      return currentHref;
+    },
+    set(url: string) {
+      if (isInternal(url)) {
+        currentHref = url;
+        window.location.href = url;
+        return;
+      }
+
+      // Único caminho legítimo: gate armado em ponto estratégico.
+      if (consumirSponsorGate()) {
+        markOpen(Date.now());
+        console.log("[AdGuard] Redirecionamento via href liberado (ponto estratégico)");
+        currentHref = url;
+        window.location.href = url;
+        return;
+      }
+
+      console.log("[AdGuard] Redirecionamento via href bloqueado (nenhum ponto estratégico armado)");
+    },
+    configurable: true,
+  });
+
+  console.log("[AdGuard] Proteção contra redirecionamentos ativada");
 }
