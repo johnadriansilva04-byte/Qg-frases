@@ -257,7 +257,7 @@ DECLARE
   v_new_yield DECIMAL;
 BEGIN
   -- Para cada reserva, calcular taxa de utilização e ajustar yield
-  FOR v_reserve IN SELECT reserve_type, allocated_amount, max_cap FROM bank_reserves WHERE reserve_type != 'total_supply' LOOP
+  FOR v_reserve IN SELECT bank_reserves.reserve_type, bank_reserves.allocated_amount, bank_reserves.max_cap FROM bank_reserves WHERE bank_reserves.reserve_type != 'total_supply' LOOP
     v_utilization_ratio := v_reserve.allocated_amount / v_reserve.max_cap;
 
     -- Lógica da IA: yield aumenta quando reservas estão baixas, diminui quando estão altas
@@ -276,7 +276,7 @@ BEGIN
     UPDATE bank_reserves
     SET yield_rate = v_new_yield,
         updated_at = NOW()
-    WHERE reserve_type = v_reserve.reserve_type;
+    WHERE bank_reserves.reserve_type = v_reserve.reserve_type;
 
     RETURN NEXT;
   END LOOP;

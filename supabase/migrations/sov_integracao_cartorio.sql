@@ -6,6 +6,9 @@
 -- 1. RPCs SOV (soberania unificada)
 -- =========================================================
 
+-- Drop função existente para poder mudar tipo de retorno
+DROP FUNCTION IF EXISTS registrar_transacao_soberania(UUID, DECIMAL, TEXT, TEXT, TEXT, JSONB);
+
 -- Wrapper seguro sobre record_transaction. Valida o autor (auth.uid() ou
 -- service_role) e devolve o saldo resultante, para o frontend atualizar o
 -- cache pontos_soberania na mesma chamada.
@@ -17,7 +20,7 @@ CREATE OR REPLACE FUNCTION registrar_transacao_soberania(
   p_source_module TEXT,
   p_metadata JSONB DEFAULT '{}'
 )
-RETURNS DECIMAL
+RETURNS TABLE (balance DECIMAL)
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
@@ -39,7 +42,7 @@ BEGIN
   );
 
   SELECT balance INTO v_bal FROM user_wallets WHERE user_id = p_user_id;
-  RETURN v_bal;
+  RETURN QUERY SELECT v_bal AS balance;
 END;
 $$;
 
