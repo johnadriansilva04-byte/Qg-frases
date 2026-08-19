@@ -1,20 +1,13 @@
 /**
  * AD CLICK GUARD — a zona OnClick do Monetag abre pop em QUALQUER clique.
  *
- * Regra: pop externo só passa quando um ponto estratégico foi "armado" pelo
- * sponsorGate (intervalo/fim de partida, entrada no Modo Carreira, fim de
- * jogo da Trilha) e o usuário foi avisado. Sem gate: bloqueado sempre.
- *
- * Intercepta: window.open, location.assign, e remove script Monetag quando gate não armado
+ * Bloqueia todos os redirecionamentos externos não autorizados.
+ * Intercepta: window.open, location.assign, e eventos de clique globais
  */
 
-import { consumirSponsorGate, onSponsorChange, sponsorArmado } from "./sponsorGate";
-
 const STORAGE_KEY = "ad_popguard_last_open";
-const MONETAG_SCRIPT_ID = "monetag-script";
 
 let patched = false;
-let monetagScriptRemoved = false;
 
 function isInternal(url: string): boolean {
   if (!url) return true;
@@ -34,22 +27,6 @@ function markOpen(now: number): void {
   }
 }
 
-function removeMonetagScript(): void {
-  const script = document.getElementById(MONETAG_SCRIPT_ID);
-  if (script) {
-    script.remove();
-    monetagScriptRemoved = true;
-    console.log("[AdGuard] Script Monetag removido (gate desarmado)");
-  }
-}
-
-function restoreMonetagScript(): void {
-  if (!monetagScriptRemoved) return;
-  // O script será recarregado pelo adManager quando necessário
-  monetagScriptRemoved = false;
-  console.log("[AdGuard] Script Monetag pode ser restaurado (gate armado)");
-}
-
 export function initAdClickGuard(): void {
   if (patched || typeof window === "undefined") return;
   patched = true;
@@ -61,14 +38,7 @@ export function initAdClickGuard(): void {
     const urlStr = String(url ?? "");
     if (isInternal(urlStr)) return originalOpen(url, target, features);
 
-    // Único caminho legítimo: gate armado em ponto estratégico.
-    if (consumirSponsorGate()) {
-      markOpen(Date.now());
-      console.log("[AdGuard] Pop de patrocinador liberado (ponto estratégico)");
-      return originalOpen(url, target, features);
-    }
-
-    console.log("[AdGuard] Pop externo bloqueado (nenhum ponto estratégico armado)");
+    console.log("[AdGuard] Pop externo bloqueado");
     return null;
   };
 
@@ -81,14 +51,7 @@ export function initAdClickGuard(): void {
         const urlStr = String(url);
         if (isInternal(urlStr)) return originalAssign.call(this, url);
 
-        // Único caminho legítimo: gate armado em ponto estratégico.
-        if (consumirSponsorGate()) {
-          markOpen(Date.now());
-          console.log("[AdGuard] Redirecionamento liberado (ponto estratégico)");
-          return originalAssign.call(this, url);
-        }
-
-        console.log("[AdGuard] Redirecionamento externo bloqueado (nenhum ponto estratégico armado)");
+        console.log("[AdGuard] Redirecionamento externo bloqueado");
         return;
       };
     }
@@ -96,18 +59,49 @@ export function initAdClickGuard(): void {
     console.warn("[AdGuard] Não foi possível interceptar location.assign:", error);
   }
 
-  // Monitora mudanças no sponsorGate para controlar o script Monetag
-  onSponsorChange((armado) => {
-    if (armado) {
-      restoreMonetagScript();
-    } else {
-      removeMonetagScript();
-    }
-  });
+  // Intercepta todos os cliques no documento para bloquear redirecionamentos
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const link = target.closest("a");
 
-  // Verifica estado inicial
-  if (!sponsorArmado()) {
-    removeMonetagScript();
+    if (!link) return;
+
+    const href = link.getAttribute("href");
+    if (!href) return;
+
+    if (isInternal(href)) return;
+
+    console.log("[AdGuard] Clique em link externo bloqueado");
+    event.preventDefault();
+    event.stopPropagation();
+  }, true); // Use capture phase para interceptar antes de outros handlers
+
+  // Intercepta window.location.href setter
+  try {
+    if (window.location) {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, "href");
+
+      Object.defineProperty(window.location, "href", {
+        get() {
+          return originalDescriptor?.get?.call(this) ?? window.location.href;
+        },
+        set(url: string) {
+          if (isInternal(url)) {
+            if (originalDescriptor?.set) {
+              originalDescriptor.set.call(this, url);
+            } else {
+              window.location.href = url;
+            }
+            return;
+          }
+
+          console.log("[AdGuard] Redirecionamento via href bloqueado");
+        },
+        configurable: true,
+      });
+    }
+  } catch (error) {
+    console.warn("[AdGuard] Não foi possível interceptar window.location.href:", error);
   }
 
   console.log("[AdGuard] Proteção contra redirecionamentos ativada");
