@@ -54,50 +54,72 @@ export function initAdClickGuard(): void {
     return null;
   };
 
-  // Intercepta location.assign
-  const originalAssign = Location.prototype.assign.bind(window.location);
+  // Intercepta location.assign - com verificação de segurança
+  try {
+    if (typeof Location !== "undefined" && Location.prototype && window.location) {
+      const originalAssign = Location.prototype.assign;
 
-  Location.prototype.assign = function (url: string | URL) {
-    const urlStr = String(url);
-    if (isInternal(urlStr)) return originalAssign(url);
+      Location.prototype.assign = function (url: string | URL) {
+        const urlStr = String(url);
+        if (isInternal(urlStr)) return originalAssign.call(this, url);
 
-    // Único caminho legítimo: gate armado em ponto estratégico.
-    if (consumirSponsorGate()) {
-      markOpen(Date.now());
-      console.log("[AdGuard] Redirecionamento liberado (ponto estratégico)");
-      return originalAssign(url);
+        // Único caminho legítimo: gate armado em ponto estratégico.
+        if (consumirSponsorGate()) {
+          markOpen(Date.now());
+          console.log("[AdGuard] Redirecionamento liberado (ponto estratégico)");
+          return originalAssign.call(this, url);
+        }
+
+        console.log("[AdGuard] Redirecionamento externo bloqueado (nenhum ponto estratégico armado)");
+        return;
+      };
     }
+  } catch (error) {
+    console.warn("[AdGuard] Não foi possível interceptar location.assign:", error);
+  }
 
-    console.log("[AdGuard] Redirecionamento externo bloqueado (nenhum ponto estratégico armado)");
-    return;
-  };
+  // Intercepta window.location.href setter - com verificação de segurança
+  try {
+    if (window.location) {
+      let currentHref = window.location.href;
+      const originalDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, "href");
 
-  // Intercepta window.location.href setter
-  let currentHref = window.location.href;
-  Object.defineProperty(window.location, "href", {
-    get() {
-      return currentHref;
-    },
-    set(url: string) {
-      if (isInternal(url)) {
-        currentHref = url;
-        window.location.href = url;
-        return;
-      }
+      Object.defineProperty(window.location, "href", {
+        get() {
+          return originalDescriptor?.get?.call(this) ?? currentHref;
+        },
+        set(url: string) {
+          if (isInternal(url)) {
+            if (originalDescriptor?.set) {
+              originalDescriptor.set.call(this, url);
+            } else {
+              currentHref = url;
+              window.location.href = url;
+            }
+            return;
+          }
 
-      // Único caminho legítimo: gate armado em ponto estratégico.
-      if (consumirSponsorGate()) {
-        markOpen(Date.now());
-        console.log("[AdGuard] Redirecionamento via href liberado (ponto estratégico)");
-        currentHref = url;
-        window.location.href = url;
-        return;
-      }
+          // Único caminho legítimo: gate armado em ponto estratégico.
+          if (consumirSponsorGate()) {
+            markOpen(Date.now());
+            console.log("[AdGuard] Redirecionamento via href liberado (ponto estratégico)");
+            if (originalDescriptor?.set) {
+              originalDescriptor.set.call(this, url);
+            } else {
+              currentHref = url;
+              window.location.href = url;
+            }
+            return;
+          }
 
-      console.log("[AdGuard] Redirecionamento via href bloqueado (nenhum ponto estratégico armado)");
-    },
-    configurable: true,
-  });
+          console.log("[AdGuard] Redirecionamento via href bloqueado (nenhum ponto estratégico armado)");
+        },
+        configurable: true,
+      });
+    }
+  } catch (error) {
+    console.warn("[AdGuard] Não foi possível interceptar window.location.href:", error);
+  }
 
   console.log("[AdGuard] Proteção contra redirecionamentos ativada");
 }
