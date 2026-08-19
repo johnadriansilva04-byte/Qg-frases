@@ -90,6 +90,7 @@ class AdManager {
   private loadedScripts: Set<string> = new Set();
   private activeContainers: Set<string> = new Set();
   private readonly FIRST_GAME_KEY = "sov_first_game_played";
+  private monetagTimer: number | null = null;
 
   constructor() {
     initAdClickGuard();
@@ -304,6 +305,28 @@ class AdManager {
    */
   loadMonetagOnDemand(): void {
     this.loadScript("monetag", true);
+  }
+
+  /**
+   * Dispara o Monetag UMA vez por permissão: carrega a tag, deixa a zona
+   * on-click ativa por `janelaMs` (padrão 3s) e então REMOVE o script do DOM.
+   * Sem isso, a tag fica ouvindo cliques globais e dispara sem parar depois
+   * da primeira liberação. Após a janela, a "permissão" expira e o usuário
+   * precisa confirmar de novo para um novo disparo.
+   */
+  dispararMonetagUmaVez(janelaMs = 3000): void {
+    if (typeof window === "undefined") return;
+    // Garante recarga limpa caso um disparo anterior ainda esteja no DOM.
+    this.removeScript("monetag");
+    this.loadScript("monetag", true);
+    if (this.monetagTimer !== null) {
+      window.clearTimeout(this.monetagTimer);
+    }
+    this.monetagTimer = window.setTimeout(() => {
+      this.removeScript("monetag");
+      this.monetagTimer = null;
+      console.log("[AdManager] Monetag: janela de permissão expirada — script removido");
+    }, janelaMs);
   }
 
   /**

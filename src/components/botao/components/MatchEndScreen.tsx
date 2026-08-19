@@ -23,6 +23,8 @@ export interface MatchEndData {
 type Props = {
   dados: MatchEndData;
   onContinuar: () => void;
+  /** Chamado quando o usuário libera o anúncio de patrocínio (abre a entrevista). */
+  onPatrocinio?: (() => void) | undefined;
 };
 
 const RESULTADO_MAP = {
@@ -55,7 +57,7 @@ function DeltaBadge({ valor }: { valor: number }) {
  * monetização discreta no rodapé (Adsterra nativo + Monetag sob clique com
  * aviso) — sem poluir a leitura das estatísticas.
  */
-export function MatchEndScreen({ dados, onContinuar }: Props) {
+export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
   const r = RESULTADO_MAP[dados.resultado];
 
   return (
@@ -143,10 +145,11 @@ export function MatchEndScreen({ dados, onContinuar }: Props) {
           <AdsterraBanner slotId="match-end-banner" className="min-h-[90px]" />
           <div className="mt-2">
             <ControlledMonetagButton
-              className="w-full text-[10px]"
-              message="Uma página de patrocinador pode abrir em uma nova aba. Deseja continuar?"
+              className="w-full text-xs"
+              message="Um empresário de uma marca quer te PATROCINAR após essa partida! Para fechar o acordo, você dará uma entrevista rápida para a imprensa. Uma página do patrocinador pode abrir em uma nova aba."
+              onDisparado={onPatrocinio}
             >
-              Apoiar o projeto — ver patrocinador
+              🎤 Dar Entrevista · Ganho Patrocínio
             </ControlledMonetagButton>
           </div>
         </div>

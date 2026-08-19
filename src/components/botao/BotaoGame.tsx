@@ -50,6 +50,7 @@ import {
 } from "./tournament";
 import { MatchView } from "./components/MatchView";
 import { MatchEndScreen, type MatchEndData } from "./components/MatchEndScreen";
+import { EntrevistaPatrocinio } from "./components/EntrevistaPatrocinio";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { AuthScreen } from "./components/AuthScreen";
 import { OnlineMatchV3 } from "./components/OnlineMatchV3";
@@ -224,6 +225,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [matchEnd, setMatchEnd] = useState<MatchEndData | null>(null);
   // Tela de destino do botão "Continuar" da tela de fim de jogo.
   const [matchEndDestino, setMatchEndDestino] = useState<Screen>("menu");
+  // Entrevista de patrocínio pós-jogo (abre após o usuário liberar o anúncio).
+  const [entrevistaAberta, setEntrevistaAberta] = useState(false);
   // Tela de carregamento (splash) controlada por contexto: inicia de carreira,
   // entrada em campo, consultas ao Supabase e inicialização da IA.
   const [loading, setLoading] = useState(false);
@@ -1933,14 +1936,51 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- telas ---------- */
   if (screen === "match-end" && matchEnd) {
+    // Ganho de patrocínio escala com o resultado (incentiva a entrevista).
+    const ganhoPatrocinio =
+      matchEnd.resultado === "vitoria" ? 30 : matchEnd.resultado === "empate" ? 20 : 10;
+    const concluirPatrocinio = () => {
+      setEntrevistaAberta(false);
+      const uid = perfil?.user_id;
+      if (uid) {
+        void registrarTransacaoSov(
+          uid,
+          ganhoPatrocinio,
+          "reward",
+          `Patrocínio pós-jogo — entrevista (${matchEnd.competicao})`,
+          career ? "career" : "market",
+          { adversario: matchEnd.timeAdvNome, placar: `${matchEnd.placarUser}x${matchEnd.placarAdv}` },
+        );
+      }
+      if (career) {
+        persistCareer({
+          ...career,
+          coach: { ...career.coach, soberania: career.coach.soberania + ganhoPatrocinio },
+        });
+      }
+      setToast(`🎤 Entrevista concedida! +${ganhoPatrocinio} SOV de patrocínio`);
+    };
     return (
-      <MatchEndScreen
-        dados={matchEnd}
-        onContinuar={() => {
-          setMatchEnd(null);
-          setScreen(matchEndDestino);
-        }}
-      />
+      <>
+        <MatchEndScreen
+          dados={matchEnd}
+          onPatrocinio={() => setEntrevistaAberta(true)}
+          onContinuar={() => {
+            setMatchEnd(null);
+            setEntrevistaAberta(false);
+            setScreen(matchEndDestino);
+          }}
+        />
+        {entrevistaAberta && (
+          <EntrevistaPatrocinio
+            dados={matchEnd}
+            ganho={ganhoPatrocinio}
+            coachNome={career?.coach.apelido || career?.coach.nome || perfil?.nome || "Treinador"}
+            onConcluir={concluirPatrocinio}
+            onFechar={() => setEntrevistaAberta(false)}
+          />
+        )}
+      </>
     );
   }
 

@@ -9,6 +9,8 @@ interface ControlledMonetagButtonProps {
   className?: string;
   disabled?: boolean;
   message?: string;
+  /** Chamado logo após o disparo autorizado do anúncio (ex.: abrir recompensa). */
+  onDisparado?: (() => void) | undefined;
 }
 
 /**
@@ -28,6 +30,7 @@ export function ControlledMonetagButton({
   className = "",
   disabled = false,
   message = "Uma página de patrocinador pode abrir. Deseja continuar?",
+  onDisparado,
 }: ControlledMonetagButtonProps) {
   const [adState, setAdState] = useState<AdState>("idle");
   const executionLockRef = useRef(false);
@@ -64,16 +67,18 @@ export function ControlledMonetagButton({
     console.log("[MONETAG] execution-start");
 
     try {
-      // Carrega script Monetag sob demanda
-      adManager.loadMonetagOnDemand();
+      // Dispara o Monetag UMA vez: a permissão dura 3 segundos e depois o
+      // script é removido do DOM — o usuário precisa permitir de novo.
+      adManager.dispararMonetagUmaVez(3000);
       console.log("[MONETAG] execution-success");
+      onDisparado?.();
 
-      // Cooldown de 10 segundos para evitar repetição acidental
+      // Cooldown alinhado à janela de permissão (3s): volta a pedir permissão.
       setAdState("cooldown");
       setTimeout(() => {
         executionLockRef.current = false;
         setAdState("idle");
-      }, 10000);
+      }, 3000);
     } catch (error) {
       console.error("[MONETAG] execution-error", error);
       executionLockRef.current = false;
