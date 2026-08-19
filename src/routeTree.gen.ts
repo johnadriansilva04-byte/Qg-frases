@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as BrioRouteImport } from './routes/brio'
 import { Route as CidadelaRouteImport } from './routes/cidadela'
 import { Route as CorretorRouteImport } from './routes/corretor'
 import { Route as GeradorRouteImport } from './routes/gerador'
@@ -26,6 +27,11 @@ const IndexRoute = IndexRouteImport.update({
 const BibliotecaRoute = BibliotecaRouteImport.update({
   id: '/biblioteca',
   path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrioRoute = BrioRouteImport.update({
+  id: '/brio',
+  path: '/brio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CidadelaRoute = CidadelaRouteImport.update({
@@ -62,6 +68,7 @@ const TermosRoute = TermosRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/brio': typeof BrioRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
   '/gerador': typeof GeradorRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/brio': typeof BrioRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
   '/gerador': typeof GeradorRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/brio': typeof BrioRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
   '/gerador': typeof GeradorRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/biblioteca'
+    | '/brio'
     | '/cidadela'
     | '/corretor'
     | '/gerador'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/biblioteca'
+    | '/brio'
     | '/cidadela'
     | '/corretor'
     | '/gerador'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/biblioteca'
+    | '/brio'
     | '/cidadela'
     | '/corretor'
     | '/gerador'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibliotecaRoute: typeof BibliotecaRoute
+  BrioRoute: typeof BrioRoute
   CidadelaRoute: typeof CidadelaRoute
   CorretorRoute: typeof CorretorRoute
   GeradorRoute: typeof GeradorRoute
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/biblioteca'
       fullPath: '/biblioteca'
       preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brio': {
+      id: '/brio'
+      path: '/brio'
+      fullPath: '/brio'
+      preLoaderRoute: typeof BrioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cidadela': {
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibliotecaRoute: BibliotecaRoute,
+  BrioRoute: BrioRoute,
   CidadelaRoute: CidadelaRoute,
   CorretorRoute: CorretorRoute,
   GeradorRoute: GeradorRoute,

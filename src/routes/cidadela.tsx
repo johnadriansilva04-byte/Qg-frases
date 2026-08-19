@@ -43,7 +43,6 @@ type Game =
   | "botao"
   | "online"
   | "campeonato"
-  | "brio" // #BRIO: Módulo Desenvolvimento do Brio
   | null;
 
 const GAMES = [
@@ -59,14 +58,6 @@ const GAMES = [
     label: "Futebol de Botão",
     description: "Campeonato com física realista",
     icon: Trophy,
-    status: "disponível",
-  },
-  // #BRIO: Módulo Desenvolvimento do Brio
-  {
-    id: "brio" as Game,
-    label: "Desenvolvimento do Brio",
-    description: "Biblioteca, Cartório e Ferramentas",
-    icon: Grid3X3,
     status: "disponível",
   },
   {
@@ -139,15 +130,9 @@ function Cidadela() {
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
   const closeModal = () => setActiveModal(null);
 
-  // #BRIO: Abrir módulo Desenvolvimento do Brio
   const handleGameSelect = (game: Game) => {
     if (game === "botao" || game === "trilha") {
       setLoadingGame(game);
-      return;
-    }
-    // #BRIO: Abrir módulo Brio
-    if (game === "brio") {
-      setActiveGame(game);
       return;
     }
     // Jogos em breve não fazem nada
@@ -241,58 +226,6 @@ function Cidadela() {
 
   if (activeGame === "botao") {
     return <BotaoGame onBack={() => setActiveGame(null)} />;
-  }
-
-  // #BRIO: Renderizar módulo Desenvolvimento do Brio
-  if (activeGame === "brio") {
-    return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#2a1a1e_0%,#1a0f1a_55%)]">
-        <div className="p-4">
-          <button
-            onClick={() => setActiveGame(null)}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
-          >
-            ← Voltar para Cidadela
-          </button>
-          <h2 className="texto-marca text-2xl font-black mb-6">Desenvolvimento do Brio</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Link
-              to="/biblioteca"
-              className="flex items-center gap-4 p-6 rounded-xl border border-border bg-surface/50 hover:bg-primary/10 hover:border-primary transition-all"
-            >
-              <div className="p-3 rounded-lg bg-primary/20 text-primary">
-                📚
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-foreground">Biblioteca</h3>
-                <p className="text-sm text-muted-foreground">Livros e indicações</p>
-              </div>
-            </Link>
-            <Link
-              to="/gerador"
-              className="flex items-center gap-4 p-6 rounded-xl border border-border bg-surface/50 hover:bg-primary/10 hover:border-primary transition-all"
-            >
-              <div className="p-3 rounded-lg bg-primary/20 text-primary">
-                ✏️
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-foreground">Gerador de Texto</h3>
-                <p className="text-sm text-muted-foreground">Frases e corretor</p>
-              </div>
-            </Link>
-            <div className="flex items-center gap-4 p-6 rounded-xl border border-border bg-surface/50 opacity-60">
-              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
-                📜
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-foreground">Cartório</h3>
-                <p className="text-sm text-muted-foreground">Petição e contratos (em breve)</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (

@@ -30,20 +30,12 @@ const SECTIONS = [
     bgColor: "bg-purple-500/10",
   },
   {
-    icon: "book",
-    title: "Biblioteca",
-    description: "Livros selecionados de motivação, fé e desenvolvimento pessoal.",
-    link: "/biblioteca",
-    color: "from-blue-500 to-cyan-500",
-    bgColor: "bg-blue-500/10",
-  },
-  {
-    icon: "pen",
-    title: "Gerador de Texto",
-    description: "Frases prontas, correção de texto e muito mais. Crie conteúdo em segundos.",
-    link: "/gerador",
-    color: "from-green-500 to-emerald-500",
-    bgColor: "bg-green-500/10",
+    icon: "sparkles",
+    title: "Desenvolvimento do Brio",
+    description: "Biblioteca, Cartório e Ferramentas de Texto",
+    link: "/brio",
+    color: "from-amber-500 to-orange-500",
+    bgColor: "bg-amber-500/10",
   },
 ];
 
