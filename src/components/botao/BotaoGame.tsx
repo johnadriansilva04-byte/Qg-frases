@@ -44,13 +44,10 @@ import {
   advanceKnockout,
   applyResult,
   buildKnockout,
-  createTournament,
-  createLeague,
   nextUserFixture,
   shuffle,
   simulateMatch,
   sortTable,
-  winnerOf,
 } from "./tournament";
 import { MatchView } from "./components/MatchView";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
@@ -91,6 +88,7 @@ import {
 } from "./career/narrativeEngine";
 import { NarrativeModal } from "./career/NarrativeModal";
 import { CelularConversas } from "./career/CelularConversas";
+import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
 import { LoadingScreen } from "./career/LoadingScreen";
@@ -133,7 +131,20 @@ import {
   aplicarFimCampanhaRemoto,
   aplicarEscolhaRemoto,
   iniciarCampanhaRemota,
+  registrarTemporadaRemota,
+  registrarPartidaRemota,
+  finalizarTemporadaRemota,
+  registrarEventoCarreiraRemoto,
 } from "./career/careerRemote";
+import {
+  composicoesIniciais,
+  criarLigasDaTemporada,
+  ligasConcluidas,
+  processarResultadoTemporada,
+  simularRodadaDivisoes,
+  type LigasTemporada,
+} from "./career/seasonEngine";
+import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 
 type Screen =
   | "auth"
@@ -190,16 +201,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
 
   // Inicializa AdManager para rota /botao (Adsterra)
-  const {
-    init: initAdManager,
-    cleanup: cleanupAdManager,
-    markFirstGamePlayed,
-  } = useAdManager("/botao");
+  const { init: initAdManager, markFirstGamePlayed } = useAdManager("/botao");
 
   useEffect(() => {
     initAdManager();
     return () => {
-      // Limpa apenas scripts da Adsterra ao sair
+      // Limpa apenas scripts da Adsterra ao sair do módulo
       adManager.cleanupAdsterra();
     };
   }, [initAdManager]);
@@ -363,11 +370,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         ]);
 
         setProgress(remoteProgress);
-        setTour(remoteProgress.tournament ?? null);
-        setCareer(remoteCareer);
+        let careerHidratada = remoteCareer;
+        let torneioAtivo = remoteProgress.tournament ?? null;
+        if (remoteCareer && !remoteCareer.ligas) {
+          const divisao = remoteCareer.divisao ?? "serie-c";
+          const composicoes = composicoesIniciais(userTeam, divisao);
+          const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
+          if (torneioAtivo) ligas[divisao] = torneioAtivo;
+          careerHidratada = { ...remoteCareer, ligas, composicoes };
+        } else if (remoteCareer?.ligas && !careerHidratada?.composicoes) {
+          careerHidratada = {
+            ...remoteCareer,
+            composicoes: Object.fromEntries(
+              Object.entries(remoteCareer.ligas).map(([divisao, liga]) => [
+                divisao,
+                liga.groups[0]?.teamIds ?? [],
+              ]),
+            ) as NonNullable<typeof remoteCareer.composicoes>,
+          };
+        }
+        if (careerHidratada?.ligas && careerHidratada.divisao) {
+          torneioAtivo = careerHidratada.ligas[careerHidratada.divisao] ?? torneioAtivo;
+        }
+
+        setTour(torneioAtivo);
+        setCareer(careerHidratada);
         if (remoteCareer) {
           // Repara registros antigos que tinham coach vazio no JSONB.
-          void saveCareerToSupabase(userId, remoteCareer);
+          void saveCareerToSupabase(userId, careerHidratada ?? remoteCareer);
         }
         const campanhaAtiva =
           remoteCareer && remoteProgress.tournament && remoteProgress.tournament.phase !== "fim";
@@ -598,12 +628,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   const iniciarCampanha = async (c: CareerState) => {
-    // Criar Brasileirão (pontos corridos com 20 times) - modo infinito
-    const t = createLeague(userTeam.id, difficulty, 20, userTeam);
-    persistTournament(t);
+    const divisaoInicial = c.divisao ?? "serie-c";
+    const composicoes = c.composicoes ?? composicoesIniciais(userTeam, divisaoInicial);
+    const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
+    const ativa = ligas[divisaoInicial];
+    persistTournament(ativa);
 
-    // Copa do Brasil jogável (paralela ao Brasileirão, intercalada).
-    const copa = iniciarCopaBrasil(userTeam, difficulty);
+    const poolCopa = Object.values(ligas)
+      .flatMap((liga) => liga.groups.flatMap((g) => g.teamIds))
+      .map((id) => resolveTeam(id, userTeam));
+    const copa = gerarCopaBrasil(userTeam, difficulty, poolCopa);
 
     const novaCareer: CareerState = {
       ...c,
@@ -617,6 +651,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       rodadaAtual: 0,
       rodadasDesdeEventoNarrativo: 0,
       temporada: c.temporada ?? 1,
+      divisao: divisaoInicial,
+      ligas,
+      composicoes,
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
       // Patrocinador propõe a primeira meta do celular (desafio por partida).
@@ -630,6 +667,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (perfil?.user_id) {
       try {
         await iniciarCampanhaRemota(difficulty);
+        void registrarTemporadaRemota(perfil.user_id, novaCareer);
         const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
         await inserirManchetesRemotas(perfil.user_id, semId);
       } catch (error) {
@@ -811,6 +849,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       };
       persistCareer(zerado);
       setCareer(zerado);
+      if (perfil?.user_id) {
+        void registrarEventoCarreiraRemoto(
+          perfil.user_id,
+          zerado,
+          "narrativa",
+          tituloDesfecho(novoState.desfecho),
+          typeof zerado.narrativa?.desfecho === "string" ? zerado.narrativa.desfecho : "Desfecho",
+          { desfecho: novoState.desfecho },
+        );
+        void registrarEventoMissao("celular_decisao");
+      }
     }
   };
 
@@ -820,9 +869,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!career) return;
     const divisao = career.divisao;
     const novaSoberania = iniciarNovaTemporada(career.coach.soberania, divisao);
-    const t = createLeague(userTeam.id, difficulty, 20, userTeam);
-    persistTournament(t);
-    const copa = iniciarCopaBrasil(userTeam, difficulty);
+    const composicoes = career.composicoes ?? composicoesIniciais(userTeam, divisao);
+    const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
+    const ativa = ligas[divisao];
+    persistTournament(ativa);
+    const poolCopa = Object.values(ligas)
+      .flatMap((liga) => liga.groups.flatMap((g) => g.teamIds))
+      .map((id) => resolveTeam(id, userTeam));
+    const copa = gerarCopaBrasil(userTeam, difficulty, poolCopa);
     const novaCareer: CareerState = {
       ...career,
       dificuldadeAtual: difficulty,
@@ -835,6 +889,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       rodadaAtual: 0,
       rodadasDesdeEventoNarrativo: 0,
       temporada: (career.temporada ?? 1) + 1,
+      divisao,
+      ligas,
+      composicoes,
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
       suborno: undefined,
@@ -847,6 +904,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       },
     };
     persistCareer(novaCareer);
+    if (perfil?.user_id) void registrarTemporadaRemota(perfil.user_id, novaCareer);
     setVeredito(null);
     setCurrentCopaFix(null);
     setScreen("hub");
@@ -979,6 +1037,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       aplicarEscolhaRemoto(choice.id, choice.bonusPoder ?? 0, choice.bonusMoral ?? 0).catch(
         () => {},
       );
+      void registrarEventoMissao("celular_decisao");
     }
 
     // Feedback de sanções graves.
@@ -1098,6 +1157,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       coach: { ...career.coach, soberania: Math.max(0, novaSoberania) },
     };
     if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
+    if (perfil?.user_id) {
+      void registrarPartidaRemota(
+        perfil.user_id,
+        novaCareer,
+        userTeam.id,
+        currentCopaFix,
+        r,
+        "copa-brasil",
+      );
+    }
     persistCareer(novaCareer);
     setToast(
       copa.finished && copa.champion === userTeam.id
@@ -1112,7 +1181,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const finishTournamentMatch = (r: MatchResult) => {
     if (!tour || !current) return;
-    const t: Tournament = structuredClone(tour);
+    let t: Tournament = structuredClone(tour);
+    let ligasAtualizadas: LigasTemporada | undefined;
+    let resultadoTemp: ReturnType<typeof processarResultadoTemporada> | null = null;
 
     // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
     markFirstGamePlayed();
@@ -1147,6 +1218,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         )
         .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
 
+      if (career?.ligas) {
+        const ligasParciais: LigasTemporada = {
+          ...career.ligas,
+          [career.divisao]: t,
+        };
+        ligasAtualizadas = simularRodadaDivisoes(
+          ligasParciais,
+          userTeam.id,
+          currentRound,
+          t.difficulty,
+        );
+        t = ligasAtualizadas[career.divisao];
+      }
+
       // só monta o mata-mata quando todos os jogos da fase de grupos terminarem
       if (t.groupFixtures.every((x) => x.played)) {
         if (t.format === "pontos-corridos") {
@@ -1155,47 +1240,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           t.champion = tabela[0]!.teamId;
           t.phase = "fim";
 
-          // Promoção/rebaixamento por divisão (regras do Brasileirão):
-          //  Série C: apenas os 2 primeiros sobem p/ Série B (sem vaga direta em copas).
-          //  Série B: os 2 primeiros sobem p/ A; os 2 últimos caem p/ C.
-          //  Série A: rebaixamento dos últimos p/ B (e vaga em copas continentais/Copa do Brasil).
-          if (career) {
-            const userPosition = tabela.findIndex((r) => r.teamId === t.userTeamId);
-            const total = tabela.length;
-            const zonaAcesso = 2; // top 2 sobem (C→B, B→A)
-            const zonaRebaixa = 2; // últimos 2 caem (A→B, B→C). Série C não cai.
-            let novaDivisao = career.divisao;
-            let promovido = false;
-            let rebaixado = false;
-            if (userPosition >= 0 && userPosition < zonaAcesso && career.divisao !== "serie-a") {
-              novaDivisao = career.divisao === "serie-c" ? "serie-b" : "serie-a";
-              promovido = true;
-            } else if (userPosition >= total - zonaRebaixa && career.divisao !== "serie-c") {
-              novaDivisao = career.divisao === "serie-a" ? "serie-b" : "serie-c";
-              rebaixado = true;
+          if (career?.ligas && ligasAtualizadas && ligasConcluidas(ligasAtualizadas)) {
+            resultadoTemp = processarResultadoTemporada(ligasAtualizadas, userTeam.id);
+            if (resultadoTemp.promovido) {
+              setToast(
+                `PROMOÇÃO! Você subiu para a ${resultadoTemp.novaDivisao === "serie-a" ? "SÉRIE A" : "SÉRIE B"}!`,
+              );
+            } else if (resultadoTemp.rebaixado) {
+              setToast(
+                `REBAIXAMENTO! Você caiu para a ${resultadoTemp.novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C"}.`,
+              );
             }
-
-            const careerAtualizado: CareerState = {
-              ...career,
-              divisao: novaDivisao,
-            };
-            persistCareer(careerAtualizado);
-            setCareer(careerAtualizado);
-
-            if (promovido) {
-              const label = novaDivisao === "serie-a" ? "SÉRIE A" : "SÉRIE B";
-              setToast(`PROMOÇÃO! Você subiu para a ${label}!`);
-            } else if (rebaixado) {
-              const label = novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
-              setToast(`REBAIXAMENTO! Você caiu para a ${label}.`);
-            }
+          } else {
+            setToast(
+              t.champion === t.userTeamId
+                ? "CAMPEÃO DA LIGA! Pontos corridos conquistados."
+                : "Fim da liga — você não ficou em 1º.",
+            );
           }
-
-          setToast(
-            t.champion === t.userTeamId
-              ? "CAMPEÃO DA LIGA! Pontos corridos conquistados."
-              : "Fim da liga — você não ficou em 1º.",
-          );
         } else {
           buildKnockout(t);
           setToast(
@@ -1369,6 +1431,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // Avança a rodada do Brasileirão para distribuir narrativas/Copa.
         rodadaAtual: (career.rodadaAtual ?? 0) + 1,
         rodadasDesdeEventoNarrativo: (career.rodadasDesdeEventoNarrativo ?? 0) + 1,
+        divisao: resultadoTemp?.novaDivisao ?? career.divisao,
+        ligas: ligasAtualizadas ?? career.ligas,
+        composicoes: resultadoTemp?.composicoes ?? career.composicoes,
         coach: {
           ...career.coach,
           soberania: Math.max(0, Math.round(novaSoberania)),
@@ -1397,12 +1462,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
       // Sync remoto (autoritativo) — não bloqueia UX
       if (perfil?.user_id) {
+        void registrarPartidaRemota(
+          perfil.user_id,
+          novaCareer,
+          userTeam.id,
+          current,
+          r,
+          "brasileirao",
+        );
         const isUserFixture = current.homeId === t.userTeamId || current.awayId === t.userTeamId;
         if (isUserFixture) {
           const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1] ?? null;
           aplicarResultadoRemoto(gf, ga, lastChoice).catch(() => {});
+          void registrarEventoMissao("botao_partida_carreira");
+          if (gf > ga) void registrarEventoMissao("botao_vitoria_carreira");
         }
         if (t.phase === "fim") {
+          void finalizarTemporadaRemota(perfil.user_id, novaCareer);
           let posicao: "campeao" | "vice" | "terceiro" | "quarto" | "fora" = "fora";
           if (t.champion === t.userTeamId) posicao = "campeao";
           else {
@@ -1457,6 +1533,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         if (!career) return;
         const adversario = current.homeId === userTeam.id ? current.awayId : current.homeId;
         const advTeam = teamByIdSync(adversario);
+        const tabelaAtiva = career.ligas?.[career.divisao]?.groups ?? t.groups;
+        const linhaUsuario = tabelaAtiva
+          .find((g) => g.teamIds.includes(userTeam.id))
+          ? sortTable(tabelaAtiva.find((g) => g.teamIds.includes(userTeam.id))!.table)
+            .findIndex((row) => row.teamId === userTeam.id) + 1
+          : 0;
         const resultado = {
           golsPro: gf,
           golsContra: ga,
@@ -1464,7 +1546,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           coach: career.coach.apelido || "Treinador",
           adversarioNome: advTeam?.name,
           rodada: career.rodadaAtual,
-        };
+          competicao: currentCopaFix ? "copa" : "liga",
+          competicaoNome: currentCopaFix ? "Copa do Brasil" : "Brasileirão",
+          divisao: career.divisao,
+          temporada: career.temporada,
+          posicaoTabela: linhaUsuario,
+          moralTime: career.moralTime,
+          soberania: career.coach.soberania,
+          rodadasRestantes: t.groupFixtures.filter((fx) => !fx.played).length,
+        } as const;
         const [, relMed, redes] = await Promise.all([
           coletivaPosJogo(resultado),
           relatorioMedico(resultado),
@@ -1722,6 +1812,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               <CelularConversas
                 conversas={career?.conversas ?? []}
                 desafioPatrocinador={career?.desafioPatrocinador ?? null}
+                userId={perfil?.user_id ?? null}
+                nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
                 onEnviarMensagem={handleEnviarMensagem}
                 onExcluirConversa={handleExcluirConversa}
                 onVoltar={() => setScreen("hub")}
@@ -1743,6 +1835,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       <Shell>
         <CelularConversas
           conversas={career.conversas}
+          desafioPatrocinador={career.desafioPatrocinador ?? null}
+          userId={perfil?.user_id ?? null}
+          nomeJogador={career.coach.apelido || career.coach.nome}
           onEnviarMensagem={handleEnviarMensagem}
           onExcluirConversa={handleExcluirConversa}
           onVoltar={() => setScreen("hub")}
@@ -1883,10 +1978,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         )}
 
         {screen === "hub" && tour && (
-          <Hub
+          <CareerHub
             tour={tour}
             userTeam={userTeam}
             career={career}
+            ligas={career?.ligas}
             onPlay={playNext}
             onExit={() => setScreen("menu")}
             onOpenCelular={() => setScreen("celular")}
@@ -2166,243 +2262,6 @@ function Setup(props: {
   );
 }
 
-function Hub({
-  tour,
-  userTeam,
-  career,
-  onPlay,
-  onExit,
-  onOpenCelular,
-}: {
-  tour: Tournament;
-  userTeam: Team;
-  career: CareerState | null;
-  onPlay: () => void;
-  onExit: () => void;
-  onOpenCelular: () => void;
-}) {
-  const [showCalendar, setShowCalendar] = useState(false);
-  const next = useMemo(() => nextUserFixture(tour), [tour]);
-  const stage = tour.knockout[tour.knockout.length - 1];
-
-  const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
-
-  // Copa do Brasil: estado jogável persistido em career.copaBrasil; se ausente
-  // (carregamento antigo), gera um chaveamento apenas p/ exibição no calendário.
-  const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
-  const copaFixPend = copaBrasil ? proximoJogoCopa(copaBrasil, userTeam.id) : null;
-  const vivoNaCopa = copaBrasil ? usuarioVivoNaCopa(copaBrasil, userTeam.id) : false;
-
-  const divisao = career?.divisao ?? "serie-c";
-  const divisaoShort =
-    divisao === "serie-a" ? "SÉRIE A" : divisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
-  const temporada = career?.temporada ?? 1;
-  const custoManutencao = CUSTO_MANUTENCAO[divisao];
-
-  // Contagem de mensagens não lidas no celular (narrativa + suborno + decisões +
-  // desafio de patrocinador). O desafio fica sempre acessível no celular.
-  const temDesafioPatrocinador =
-    !!career?.desafioPatrocinador && !career.desafioPatrocinador.concluido;
-  const mensagensPendentes =
-    (career?.eventoPendenteId ? 1 : 0) +
-    (career?.suborno?.nodeAtual ? 1 : 0) +
-    (career?.narrativa?.cenaAtual ? 1 : 0);
-  const temCelular = mensagensPendentes > 0 || temDesafioPatrocinador;
-
-  const userPos =
-    tour.phase === "grupos" && tour.groups.length > 0
-      ? sortTable(tour.groups[0]!.table).findIndex((r) => r.teamId === tour.userTeamId) + 1
-      : 0;
-
-  // Determina o próximo jogo (prioriza Copa do Brasil se disponível)
-  const proximoJogo =
-    copaFixPend &&
-    copaDisponivelNaRodada(career?.rodadaAtual ?? 0, copaBrasil, userTeam.id, divisao)
-      ? { fixture: copaFixPend, tipo: "Copa do Brasil" }
-      : next
-        ? {
-            fixture: next,
-            tipo: tour.phase === "grupos" ? "Brasileirão" : (stage?.stage ?? "Mata-mata"),
-          }
-        : null;
-
-  return (
-    <div className="space-y-5">
-      {career?.coach.nome && (
-        <SovereigntyPanel
-          coach={career.coach}
-          moral={career.moralTime}
-          temporada={temporada}
-          divisao={divisao}
-        />
-      )}
-
-      {/* Próximo Jogo unificado (Brasileirão ou Copa do Brasil) */}
-      <div className="next-match-card">
-        <div className="next-match-head">
-          <span className="next-match-tag">
-            {tour.phase === "fim" ? "Campanha encerrada" : (proximoJogo?.tipo ?? "Aguardando")}
-          </span>
-          <span className="next-match-div">{divisaoShort}</span>
-        </div>
-        {tour.phase === "fim" ? (
-          <p className="mt-3 font-display text-2xl">
-            Campeão: <TeamBadge team={getTeam(tour.champion!)} />
-          </p>
-        ) : proximoJogo ? (
-          <>
-            <div className="mt-3 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <TeamBadge team={getTeam(proximoJogo.fixture.homeId)} size="md" />
-                <span className="font-display text-2xl text-muted-foreground">×</span>
-                <TeamBadge team={getTeam(proximoJogo.fixture.awayId)} size="md" />
-              </div>
-              <button
-                data-testid="entrar-em-campo"
-                onClick={onPlay}
-                className="btn-primary px-5 py-2.5 text-sm"
-              >
-                Entrar em campo
-              </button>
-            </div>
-            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-              <span>{proximoJogo.fixture.stage}</span>
-              {userPos > 0 && <span>Posição: {userPos}º</span>}
-              {temCelular && <span className="text-amber-300">Celular com mensagens</span>}
-            </div>
-          </>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">Aguardando próximo jogo...</p>
-        )}
-      </div>
-
-      {/* Layout principal: 2 colunas sem blocos vazios */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        {/* COLUNA ESQUERDA — ações e celular */}
-        <div className="flex flex-col gap-3">
-          {/* Celular / mensagens em primeira pessoa — sempre acessível
-              (patrocinador deixa uma meta ativa por partida). */}
-          <button onClick={onOpenCelular} className="celular-card">
-            <span className="celular-emoji">📱</span>
-            <div className="celular-info">
-              <span className="celular-title">Celular do Treinador</span>
-              <span className="celular-sub">
-                {mensagensPendentes > 0
-                  ? `${mensagensPendentes} mensagem${mensagensPendentes !== 1 ? "s" : ""} nova${mensagensPendentes !== 1 ? "s" : ""}`
-                  : temDesafioPatrocinador
-                    ? "Desafio de patrocinador ativo"
-                    : "Tudo em dia por aqui"}
-              </span>
-            </div>
-            {mensagensPendentes > 0 && <span className="celular-badge">{mensagensPendentes}</span>}
-            <span className="celular-cta">Abrir</span>
-          </button>
-
-          {/* Portal de Notícias & Bastidores (carrossel contínuo) */}
-          {career && (
-            <NewsPortal
-              headlines={career.headlines}
-              userTeam={userTeam}
-              coachNome={career.coach.apelido || career.coach.nome}
-            />
-          )}
-
-          {/* Calendário */}
-          <button
-            onClick={() => setShowCalendar(!showCalendar)}
-            className="panel flex items-center justify-between hover:border-emerald-500/50"
-          >
-            <div className="flex items-center gap-2">
-              <Calendar className="size-4 text-emerald-400" />
-              <span className="font-display text-sm tracking-wide">Calendário da Temporada</span>
-            </div>
-            <ChevronRight
-              className={`size-4 transition-transform ${showCalendar ? "rotate-90" : ""}`}
-            />
-          </button>
-          {showCalendar && (
-            <CalendarView
-              tour={tour}
-              userTeam={userTeam}
-              currentDivisao={divisao}
-              copaBrasil={copaBrasil}
-            />
-          )}
-
-          <button onClick={onExit} className="btn-ghost w-full">
-            Voltar ao menu
-          </button>
-        </div>
-
-        {/* COLUNA DIREITA — campeonatos + classificação (centraliza stats) */}
-        <div className="flex flex-col gap-3">
-          <ChampionshipModule tour={tour} userTeam={userTeam} currentDivisao={divisao} />
-
-          {tour.phase === "grupos" && tour.groups.length > 0 && (
-            <div className="panel">
-              <h3 className="mb-2 font-display text-sm font-bold tracking-wide">Classificação</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="w-8 py-1">#</th>
-                      <th className="py-1">TIME</th>
-                      <th className="w-7 text-center">P</th>
-                      <th className="w-6 text-center">J</th>
-                      <th className="w-5 text-center">V</th>
-                      <th className="w-5 text-center">E</th>
-                      <th className="w-5 text-center">D</th>
-                      <th className="w-6 text-center">GP</th>
-                      <th className="w-6 text-center">GC</th>
-                      <th className="w-7 text-center">SG</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortTable(tour.groups[0]!.table)
-                      .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
-                      .map((r, i) => {
-                        const position = i + 1;
-                        const zone =
-                          position <= 4
-                            ? "libertadores"
-                            : position <= 6
-                              ? "copa-brasil"
-                              : position >= 18
-                                ? "rebaixamento"
-                                : "";
-                        return (
-                          <tr
-                            key={r.teamId}
-                            className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
-                          >
-                            <td className="py-1 text-center font-bold">{position}º</td>
-                            <td className="py-1">
-                              <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                                <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                              </span>
-                            </td>
-                            <td className="py-1 text-center font-bold">{r.p}</td>
-                            <td className="py-1 text-center">{r.j}</td>
-                            <td className="py-1 text-center text-emerald-300">{r.v}</td>
-                            <td className="py-1 text-center text-muted-foreground">{r.e}</td>
-                            <td className="py-1 text-center text-rose-300">{r.d}</td>
-                            <td className="py-1 text-center">{r.gp}</td>
-                            <td className="py-1 text-center">{r.gc}</td>
-                            <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-              <ZoneLegend />
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function TrophyRoom({
   progress,

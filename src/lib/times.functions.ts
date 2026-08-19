@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export type TeamDivision = "serie-a" | "serie-b" | "serie-c";
+
 export interface TimeDB {
   id: string;
   nome: string;
@@ -7,6 +9,8 @@ export interface TimeDB {
   cores: string[];
   pais: string;
   liga: string;
+  forca?: number | null | undefined;
+  divisao?: TeamDivision | null | undefined;
   is_personalizado: boolean;
   usuario_id: string | null;
   created_at: string;

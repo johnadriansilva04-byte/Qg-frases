@@ -11,16 +11,26 @@ import {
   calcularStats,
   resolveTeam,
   type Competicao,
+  type CopaBrasilState,
 } from "./competitionApi";
+import type { LigasTemporada } from "./seasonEngine";
 import type { Divisao } from "./types";
 
 interface ChampionshipModuleProps {
   tour: Tournament;
   userTeam: Team;
   currentDivisao: Divisao;
+  ligas?: LigasTemporada | undefined;
+  copaBrasil?: CopaBrasilState | null | undefined;
 }
 
-export function ChampionshipModule({ tour, userTeam, currentDivisao }: ChampionshipModuleProps) {
+export function ChampionshipModule({
+  tour,
+  userTeam,
+  currentDivisao,
+  ligas,
+  copaBrasil,
+}: ChampionshipModuleProps) {
   const [competicao, setCompeticao] = useState<Competicao>("brasileirao");
   const [selectedDivisao, setSelectedDivisao] = useState<Divisao | null>(null);
   const [showTable, setShowTable] = useState(false);
@@ -39,10 +49,15 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
 
   const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
 
-  // Estatísticas REAIS do torneio (mesmo chaveamento), rotuladas pela divisão escolhida.
+  const selectedLiga = selectedDivisao
+    ? (ligas?.[selectedDivisao] ?? (selectedDivisao === currentDivisao ? tour : null))
+    : null;
+
+  // Estatísticas REAIS da divisão selecionada. Se o usuário só tem a snapshot
+  // da divisão ativa (carreira antiga), ela alimenta essa série.
   const stats = useMemo(
-    () => calcularStats(tour, userTeam),
-    [tour, userTeam],
+    () => (selectedLiga ? calcularStats(selectedLiga, userTeam) : null),
+    [selectedLiga, userTeam],
   );
 
   return (
@@ -99,16 +114,28 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
             <h3 className="font-display text-sm font-bold tracking-wide">Copa do Brasil</h3>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Mata-mata nacional com 16 clubes. Os confrontos e datas aparecem no
-            calendário da temporada. Dispute as fases para levantar a taça.
+            {copaBrasil?.finished
+              ? copaBrasil.champion === userTeam.id
+                ? "Campanha enterrada em título. A taça foi conquistada pelo seu clube."
+                : "Chaveamento encerrado nesta temporada. Os confrontos ficaram registrados no calendário."
+              : "16 clubes realmente classificados entre as três divisões. Cada fase é jogável e intercala com a liga."}
           </p>
-          <div className="mt-3 grid grid-cols-5 gap-1.5">
-            {COPA_PHASES.map((f, i) => (
-              <div key={f} className="copa-phase-chip">
-                <span className="copa-phase-num">{i + 1}</span>
-                <span className="copa-phase-name">{f}</span>
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {(copaBrasil?.rounds ?? []).map((round, index) => (
+              <div key={round.stage} className="copa-phase-chip">
+                <span className={`copa-phase-num ${round.fixtures.every((f) => f.played) ? "done" : ""}`}>
+                  {index + 1}
+                </span>
+                <span className="copa-phase-name">{round.stage.replace("Copa do Brasil · ", "")}</span>
               </div>
             ))}
+            {(copaBrasil?.rounds ?? []).length === 0 &&
+              ["2ª Fase", "Oitavas", "Quartas", "Semi"].map((f, i) => (
+                <div key={f} className="copa-phase-chip">
+                  <span className="copa-phase-num">{i + 1}</span>
+                  <span className="copa-phase-name">{f}</span>
+                </div>
+              ))}
           </div>
         </div>
       ) : (
@@ -123,7 +150,7 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
           )}
 
           {/* Tabela de classificação da divisão - só aparece quando série é selecionada */}
-          {selectedDivisao && tour.phase === "grupos" && tour.groups.length > 0 && (
+          {selectedDivisao && selectedLiga?.phase === "grupos" && selectedLiga.groups.length > 0 && (
             <div className="panel">
               <button
                 onClick={() => setShowTable(!showTable)}
@@ -154,7 +181,7 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
                       </tr>
                     </thead>
                     <tbody>
-                      {sortTable(tour.groups[0]!.table)
+                      {sortTable(selectedLiga.groups[0]!.table)
                         .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
                         .map((r, i) => {
                         const position = i + 1;
@@ -163,7 +190,7 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
                         return (
                           <tr
                             key={r.teamId}
-                            className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
+                            className={`zone-row zone-${zone} ${r.teamId === selectedLiga.userTeamId ? "is-user" : ""}`}
                           >
                             <td className="py-1 text-center font-bold">{position}º</td>
                             <td className="py-1">
@@ -194,8 +221,6 @@ export function ChampionshipModule({ tour, userTeam, currentDivisao }: Champions
     </div>
   );
 }
-
-const COPA_PHASES = ["2ª Fase", "Oitavas", "Quartas", "Semi", "Final"];
 
 function CompTab({
   active,

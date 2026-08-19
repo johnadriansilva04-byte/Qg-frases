@@ -735,6 +735,9 @@ button.celular-card:hover {
   font-size: 0.85rem;
   color: color-mix(in oklab, var(--gold) 80%, white);
 }
+.copa-phase-num.done {
+  color: color-mix(in oklab, var(--success) 80%, white);
+}
 .copa-phase-name {
   font-size: 0.55rem;
   letter-spacing: 0.04em;

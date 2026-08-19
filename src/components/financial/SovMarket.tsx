@@ -1,268 +1,241 @@
-/**
- * Módulo SOV Market / Marketplace
- * Interface para troca de SOV por itens, recompensas e vantagens
- */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Coins, ScrollText, ShoppingCart, Store } from "lucide-react";
+import {
+  carregarInventario,
+  carregarOfertasMarketplace,
+  comprarOfertaMarketplace,
+  criarOfertaMarketplace,
+  obterSaldoSov,
+  type InventarioCidadela,
+  type OfertaCidadela,
+} from "@/lib/cidadela/pracinhaCore";
 
-import { useState, useEffect } from "react";
-import { ShoppingCart, Coins, Sparkles, Lock, Unlock } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { getSovereignBank } from "@/lib/financial/sovereignBank";
-import type { SovMarketProduct, SovMarketTransaction, MarketCategory } from "@/lib/financial/types";
+interface SovMarketProps {
+  userId: string | null;
+  compact?: boolean | undefined;
+}
 
-export function SovMarket() {
-  const [products, setProducts] = useState<SovMarketProduct[]>([]);
-  const [userBalance, setUserBalance] = useState<number>(0);
-  const [selectedCategory, setSelectedCategory] = useState<MarketCategory | "all">("all");
-  const [loading, setLoading] = useState(true);
-  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
-  const [purchasedItems, setPurchasedItems] = useState<Set<string>>(new Set());
+export function SovMarket({ userId, compact = false }: SovMarketProps) {
+  const [inventario, setInventario] = useState<InventarioCidadela[]>([]);
+  const [ofertas, setOfertas] = useState<OfertaCidadela[]>([]);
+  const [saldo, setSaldo] = useState(0);
+  const [itemSelecionado, setItemSelecionado] = useState("");
+  const [preco, setPreco] = useState("5");
+  const [carregando, setCarregando] = useState(true);
+  const [aguardando, setAguardando] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-  const bank = getSovereignBank();
-
-  useEffect(() => {
-    loadProducts();
-    loadUserBalance();
-    loadPurchasedItems();
-  }, []);
-
-  const loadProducts = async () => {
-    const { data, error } = await supabase
-      .from("sov_market_products")
-      .select("*")
-      .eq("is_active", true)
-      .order("price_sov", { ascending: true });
-
-    if (error) {
-      console.error("[SovMarket] Erro ao carregar produtos:", error);
-    } else {
-      setProducts((data || []) as SovMarketProduct[]);
-    }
-    setLoading(false);
-  };
-
-  const loadUserBalance = async () => {
-    // Aqui precisaria do userId real do contexto de autenticação
-    // Por enquanto, usando um placeholder
-    const balance = await bank.getUserBalance("placeholder-user-id");
-    setUserBalance(balance);
-  };
-
-  const loadPurchasedItems = async () => {
-    // Aqui precisaria do userId real do contexto de autenticação
-    const { data, error } = await supabase
-      .from("sov_market_transactions")
-      .select("product_id")
-      .eq("user_id", "placeholder-user-id")
-      .eq("status", "completed");
-
-    if (!error && data) {
-      setPurchasedItems(new Set(data.map((t) => t.product_id)));
-    }
-  };
-
-  const handlePurchase = async (product: SovMarketProduct) => {
-    if (userBalance < product.price_sov) {
-      alert("Saldo insuficiente!");
+  const carregarTudo = useCallback(async () => {
+    if (!userId) {
+      setCarregando(false);
       return;
     }
+    setCarregando(true);
+    const [inv, ofs, saldoAtual] = await Promise.all([
+      carregarInventario(userId),
+      carregarOfertasMarketplace(),
+      obterSaldoSov(userId),
+    ]);
+    setInventario(inv);
+    setOfertas(ofs);
+    setSaldo(saldoAtual);
+    setItemSelecionado((prev) => prev || inv[0]?.item_slug || "");
+    setCarregando(false);
+  }, [userId]);
 
-    setPurchaseLoading(product.id);
+  useEffect(() => {
+    void carregarTudo();
+  }, [carregarTudo]);
 
-    try {
-      // Processar transação de compra
-      const result = await bank.processTransaction({
-        user_id: "placeholder-user-id",
-        amount: -product.price_sov,
-        transaction_type: "market_purchase",
-        source_module: "market",
-        description: `Compra: ${product.name}`,
-        metadata: {
-          product_id: product.id,
-          product_name: product.name,
-          category: product.category,
-        },
-      });
-
-      if (result.success) {
-        // Registrar transação no marketplace
-        await supabase.from("sov_market_transactions").insert({
-          user_id: "placeholder-user-id",
-          product_id: product.id,
-          amount_sov: product.price_sov,
-          status: "completed",
-          metadata: {
-            transaction_id: result.transaction_id,
-          },
-        });
-
-        // Atualizar estado
-        setUserBalance(result.new_balance || 0);
-        setPurchasedItems((prev) => new Set(prev).add(product.id));
-
-        alert(`Compra realizada: ${product.name}`);
-      } else {
-        alert(`Erro na compra: ${result.error}`);
-      }
-    } catch (error) {
-      console.error("[SovMarket] Erro na compra:", error);
-      alert("Erro ao processar compra");
-    } finally {
-      setPurchaseLoading(null);
+  const criarOferta = async () => {
+    if (!itemSelecionado) return;
+    const valor = Number(preco.replace(",", "."));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setFeedback("Defina um preço em SOV maior que zero.");
+      return;
     }
+    setAguardando("criar");
+    setFeedback(null);
+    const ok = await criarOfertaMarketplace(itemSelecionado, 1, valor);
+    if (ok) {
+      setFeedback("Oferta publicada na Feira.");
+      await carregarTudo();
+    } else {
+      setFeedback("Não foi possível publicar a oferta.");
+    }
+    setAguardando(null);
   };
 
-  const filteredProducts = selectedCategory === "all"
-    ? products
-    : products.filter((p) => p.category === selectedCategory);
-
-  const categories: Array<MarketCategory | "all"> = ["all", "item", "reward", "advantage", "cosmetic"];
-
-  const getCategoryLabel = (category: MarketCategory | "all"): string => {
-    const labels: Record<MarketCategory | "all", string> = {
-      all: "Todos",
-      item: "Itens",
-      reward: "Recompensas",
-      advantage: "Vantagens",
-      cosmetic: "Cosméticos",
-    };
-    return labels[category];
+  const comprar = async (oferta: OfertaCidadela) => {
+    if (saldo < oferta.preco_sov) {
+      setFeedback("Saldo SOV insuficiente para esta compra.");
+      return;
+    }
+    setAguardando(oferta.id);
+    setFeedback(null);
+    const novoSaldo = await comprarOfertaMarketplace(oferta.id);
+    if (novoSaldo !== null) {
+      setSaldo(novoSaldo);
+      setFeedback(`Compra concluída: ${oferta.item?.nome ?? oferta.item_slug}.`);
+      await carregarTudo();
+    } else {
+      setFeedback("Compra não concluída.");
+    }
+    setAguardando(null);
   };
 
-  const getCategoryColor = (category: MarketCategory): string => {
-    const colors: Record<MarketCategory, string> = {
-      item: "bg-blue-500/10 text-blue-500 border-blue-500/30",
-      reward: "bg-green-500/10 text-green-500 border-green-500/30",
-      advantage: "bg-purple-500/10 text-purple-500 border-purple-500/30",
-      cosmetic: "bg-pink-500/10 text-pink-500 border-pink-500/30",
-    };
-    return colors[category];
-  };
+  const pergaminhos = useMemo(
+    () => inventario.filter((item) => item.item?.tipo === "pergaminho"),
+    [inventario],
+  );
 
-  if (loading) {
+  if (!userId) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      <div className="p-4 text-center">
+        <Store className="mx-auto mb-3 size-10 text-slate-500" />
+        <p className="text-sm font-bold text-white">Feira bloqueada</p>
+        <p className="mt-1 text-xs text-slate-400">
+          Entre com sua conta para negociar Pergaminhos e itens com outros jogadores.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-4 py-3 sm:px-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/20 rounded-lg">
-              <ShoppingCart className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">SOV Market</h1>
-              <p className="text-sm text-muted-foreground">Central de Trocas</p>
-            </div>
+    <div className={compact ? "p-3" : "mx-auto max-w-6xl p-4 sm:p-6"}>
+      <div className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Feira da Cidadela</p>
+            <p className="mt-1 text-sm text-slate-200">
+              Compre e venda Pergaminhos diretamente com jogadores.
+            </p>
           </div>
-          <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-lg">
-            <Coins className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-primary">{userBalance.toFixed(2)} SOV</span>
+          <div className="rounded-xl bg-slate-950/70 px-3 py-2 text-right">
+            <p className="text-[10px] uppercase text-slate-400">Saldo</p>
+            <p className="flex items-center gap-1 text-sm font-black text-amber-200">
+              <Coins className="size-4" />
+              {saldo.toFixed(2)} SOV
+            </p>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 sm:px-6">
-        {/* Filtros de categoria */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {categories.map((category) => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                selectedCategory === category
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary/70 text-foreground hover:bg-secondary"
-              }`}
-            >
-              {getCategoryLabel(category)}
-            </button>
-          ))}
+      {feedback && (
+        <div className="mb-3 rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100">
+          {feedback}
         </div>
+      )}
 
-        {/* Grid de produtos */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredProducts.map((product) => {
-            const isPurchased = purchasedItems.has(product.id);
-            const canAfford = userBalance >= product.price_sov;
-
-            return (
-              <div
-                key={product.id}
-                className={`p-4 rounded-xl border transition-all ${
-                  isPurchased
-                    ? "bg-green-500/10 border-green-500/30"
-                    : "bg-surface/50 border-border hover:border-primary/50"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
-                    {getCategoryLabel(product.category)}
+      <section className="mb-4 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
+        <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+          Meu inventário ({pergaminhos.length} pergaminho{pergaminhos.length === 1 ? "" : "s"})
+        </p>
+        {inventario.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-500">
+            Seu inventário está vazio. Novos Pergaminhos chegam pela comunidade e por eventos.
+          </p>
+        ) : (
+          <div className="grid gap-2">
+            {inventario.slice(0, 4).map((item) => (
+              <div key={item.item_slug} className="rounded-xl bg-white/[0.04] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-white">
+                      {item.item?.nome ?? item.item_slug}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">
+                      {item.item?.descricao ?? "Item negociável da Cidadela."}
+                    </p>
                   </div>
-                  {isPurchased ? (
-                    <div className="flex items-center gap-1 text-green-500 text-sm">
-                      <Unlock className="w-4 h-4" />
-                      <span>Adquirido</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                      <Lock className="w-4 h-4" />
-                      <span>Bloqueado</span>
-                    </div>
-                  )}
+                  <span className="rounded-full bg-purple-400/20 px-2 py-1 text-[10px] font-bold text-purple-200">
+                    x{item.quantidade}
+                  </span>
                 </div>
-
-                <h3 className="font-semibold text-foreground mb-1">{product.name}</h3>
-                {product.description && (
-                  <p className="text-sm text-muted-foreground mb-3">{product.description}</p>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <Coins className="w-4 h-4 text-primary" />
-                    <span className="font-bold text-primary">{product.price_sov.toFixed(2)} SOV</span>
-                  </div>
-
-                  {!isPurchased && (
-                    <button
-                      onClick={() => handlePurchase(product)}
-                      disabled={!canAfford || purchaseLoading === product.id}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        canAfford
-                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                          : "bg-muted text-muted-foreground cursor-not-allowed"
-                      } ${purchaseLoading === product.id ? "opacity-50" : ""}`}
-                    >
-                      {purchaseLoading === product.id ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
-                      ) : (
-                        "Comprar"
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                {product.stock > 0 && product.stock < 10 && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Apenas {product.stock} disponíveis!
-                  </p>
-                )}
               </div>
-            );
-          })}
-        </div>
-
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-12">
-            <Sparkles className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Nenhum produto encontrado nesta categoria</p>
+            ))}
           </div>
         )}
-      </main>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
+          <select
+            value={itemSelecionado}
+            onChange={(event) => setItemSelecionado(event.target.value)}
+            className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none"
+          >
+            {inventario.map((item) => (
+              <option key={item.item_slug} value={item.item_slug}>
+                {item.item?.nome ?? item.item_slug} (x{item.quantidade})
+              </option>
+            ))}
+          </select>
+          <input
+            value={preco}
+            onChange={(event) => setPreco(event.target.value)}
+            inputMode="decimal"
+            placeholder="Preço"
+            className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none"
+          />
+          <button
+            onClick={criarOferta}
+            disabled={!itemSelecionado || aguardando !== null}
+            className="rounded-xl bg-amber-300 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-40"
+          >
+            {aguardando === "criar" ? "Publicando..." : "Anunciar"}
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <ShoppingCart className="size-4 text-emerald-300" />
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+            Ofertas da comunidade
+          </p>
+        </div>
+
+        {carregando ? (
+          <div className="py-6 text-center text-xs text-slate-500">Carregando Feira...</div>
+        ) : ofertas.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
+            <ScrollText className="mx-auto mb-2 size-8 text-slate-500" />
+            <p className="text-xs text-slate-400">
+              Nenhuma oferta ativa agora. Publique seu Pergaminho para movimentar o mercado.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {ofertas.map((oferta) => {
+              const propria = oferta.seller_id === userId;
+              return (
+                <div key={oferta.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">
+                        {oferta.item?.nome ?? oferta.item_slug}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Vendedor: {propria ? "você" : oferta.seller_nome} • Quantidade {oferta.quantidade}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => comprar(oferta)}
+                      disabled={propria || aguardando !== null}
+                      className="rounded-xl bg-emerald-400 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-40"
+                    >
+                      {aguardando === oferta.id
+                        ? "Comprando..."
+                        : propria
+                          ? "Sua oferta"
+                          : `${oferta.preco_sov.toFixed(2)} SOV`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

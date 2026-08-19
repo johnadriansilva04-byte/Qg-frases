@@ -68,10 +68,14 @@ function Index() {
               CIDADELA DO PRACINHA
             </h1>
           </div>
-          <p className="text-lg md:text-xl text-slate-300 mb-2">Jogos e Utilidades</p>
+          <p className="text-lg md:text-xl text-slate-300 mb-2">Jogos clássicos com propósito</p>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            Entre em um universo digital onde jogos, conhecimento e criatividade se encontram.
-            Explore, crie e divirta-se em um só lugar.
+            Nossa intenção é educar e ensinar economia, educação financeira e raciocínio lógico
+            para crianças e jovens através de jogos clássicos.
+          </p>
+          <p className="mt-4 text-xs md:text-sm text-purple-200/80 max-w-2xl mx-auto">
+            Fundada por John Adrian, a Cidadela guarda um segredo em seus Pergaminhos.
+            Encontre-os, negocie com a comunidade e descubra a história completa.
           </p>
         </header>
 

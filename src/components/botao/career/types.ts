@@ -133,6 +133,12 @@ export type CareerState = {
   eventoPendenteId: string | null; // choice event a ser mostrado antes da próxima
   // Divisão atual do Brasileirão (promoção/rebaixamento entre séries).
   divisao: Divisao;
+  /** Snapshot completo das 3 divisões da temporada (A/B/C). Garante que
+   * estatísticas e tabelas de todas as séries sejam consultáveis no hub. */
+  ligas?: import("./seasonEngine").LigasTemporada | undefined;
+  /** Comparação das divisões na próxima temporada (para recriar ligas após
+   * promoção/rebaixamento). */
+  composicoes?: import("./seasonEngine").ComposicoesDivisoes | undefined;
   // Enredo de suborno (narrativa paralela). Veja subornoEngine.ts.
   suborno?: import("./subornoEngine").SubornoState | undefined;
   // Histórias dinâmicas no celular (suspense/drama). Veja narrativeEngine.ts.

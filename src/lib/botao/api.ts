@@ -162,6 +162,12 @@ export async function criarPerfilSeNaoExistir(
     return null;
   }
 
+  try {
+    await supabase.rpc("create_or_update_wallet", { p_user_id: userId });
+  } catch {
+    // Carteira SOV é opcional até a migração financeira ser aplicada.
+  }
+
   return data;
 }
 
@@ -414,7 +420,6 @@ export type PerfilClubeInput = {
   cores?: string[];
   tatica?: string;
   botoes?: string[];
-  escudo?: string;
 };
 
 /**
@@ -434,7 +439,6 @@ export async function atualizarPerfilClube(
     p_cores: input.cores ?? null,
     p_tatica: input.tatica ?? null,
     p_botoes: input.botoes ?? null,
-    p_escudo: input.escudo ?? null,
   });
   if (error) {
     console.error("[API] Erro ao atualizar perfil do clube:", error);

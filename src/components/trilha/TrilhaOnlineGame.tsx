@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Trophy, Target, X, Award } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { HQPanel } from "./HQPanel";
 import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
@@ -17,6 +18,20 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [supabaseNotConfigured, setSupabaseNotConfigured] = useState(false);
+  const missaoRegistradaRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      missaoRegistradaRef.current ||
+      !userId ||
+      !mesa ||
+      mesa.status !== "em_andamento"
+    ) {
+      return;
+    }
+    missaoRegistradaRef.current = true;
+    void registrarEventoMissao("trilha_online");
+  }, [mesa, userId]);
 
   useEffect(() => {
     // Verificar se Supabase está configurado

@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -12,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { CookieBanner } from "../components/CookieBanner";
 import { Sidebar } from "../components/Sidebar";
+import { adManager } from "../lib/adManager";
 
 function NotFoundComponent() {
   return (
@@ -143,6 +145,13 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Carrega a rede de anúncios correta para cada rota
+  // (Adsterra=/botao, Monetag=/trilha,/cidadela, AdSense=páginas estáticas).
+  useEffect(() => {
+    adManager.initForRoute(pathname);
+  }, [pathname]);
 
   useEffect(() => {
     // Google Analytics

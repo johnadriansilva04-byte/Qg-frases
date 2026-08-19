@@ -135,6 +135,8 @@ export type Database = {
           cores: string[];
           pais: string;
           liga: string;
+          forca: number | null;
+          divisao: "serie-a" | "serie-b" | "serie-c" | null;
           is_personalizado: boolean;
           usuario_id: string | null;
           created_at: string;
@@ -146,6 +148,8 @@ export type Database = {
           cores: string[];
           pais: string;
           liga: string;
+          forca?: number | null;
+          divisao?: "serie-a" | "serie-b" | "serie-c" | null;
           is_personalizado?: boolean;
           usuario_id?: string | null;
           created_at?: string;
@@ -157,6 +161,8 @@ export type Database = {
           cores?: string[];
           pais?: string;
           liga?: string;
+          forca?: number | null;
+          divisao?: "serie-a" | "serie-b" | "serie-c" | null;
           is_personalizado?: boolean;
           usuario_id?: string | null;
           created_at?: string;
@@ -673,6 +679,150 @@ export type Database = {
         };
         Relationships: [];
       };
+      cidadela_chat_messages: {
+        Row: {
+          id: string;
+          sender_id: string | null;
+          sender_nome: string;
+          tipo: string;
+          texto: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id?: string | null;
+          sender_nome?: string;
+          tipo?: string;
+          texto: string;
+          created_at?: string;
+        };
+        Update: {
+          sender_id?: string | null;
+          sender_nome?: string;
+          tipo?: string;
+          texto?: string;
+        };
+        Relationships: [];
+      };
+      cidadela_itens: {
+        Row: {
+          slug: string;
+          nome: string;
+          descricao: string | null;
+          tipo: string;
+          raridade: string;
+          ativo: boolean;
+          created_at: string;
+        };
+        Insert: {
+          slug: string;
+          nome: string;
+          descricao?: string | null;
+          tipo: string;
+          raridade?: string;
+          ativo?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          nome?: string;
+          descricao?: string | null;
+          tipo?: string;
+          raridade?: string;
+          ativo?: boolean;
+        };
+        Relationships: [];
+      };
+      cidadela_inventory: {
+        Row: {
+          id: string;
+          user_id: string;
+          item_slug: string;
+          quantidade: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          item_slug: string;
+          quantidade?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          quantidade?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cidadela_market_listings: {
+        Row: {
+          id: string;
+          seller_id: string;
+          seller_nome: string;
+          item_slug: string;
+          quantidade: number;
+          preco_sov: number;
+          status: string;
+          comprador_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          seller_id: string;
+          seller_nome?: string;
+          item_slug: string;
+          quantidade: number;
+          preco_sov: number;
+          status?: string;
+          comprador_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: string;
+          comprador_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cidadela_missoes_diarias: {
+        Row: {
+          id: string;
+          user_id: string;
+          data: string;
+          missao_key: string;
+          titulo: string;
+          descricao: string;
+          alvo: number;
+          progresso: number;
+          recompensa_sov: number;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          data?: string;
+          missao_key: string;
+          titulo: string;
+          descricao: string;
+          alvo: number;
+          progresso?: number;
+          recompensa_sov: number;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          progresso?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -771,7 +921,6 @@ export type Database = {
           p_cores?: string[] | null;
           p_tatica?: string | null;
           p_botoes?: string[] | null;
-          p_escudo?: string | null;
         };
         Returns: {
           id: string;
@@ -858,6 +1007,62 @@ export type Database = {
       adjust_yield_rate: {
         Args: Record<never, never>;
         Returns: Json;
+      };
+      cidadela_gerar_missoes_diarias: {
+        Args: Record<never, never>;
+        Returns: Array<{
+          id: string;
+          missao_key: string;
+          titulo: string;
+          descricao: string;
+          alvo: number;
+          progresso: number;
+          recompensa_sov: number;
+          status: string;
+        }>;
+      };
+      cidadela_progresso_missao: {
+        Args: { p_chave: string; p_delta?: number };
+        Returns: string | null;
+      };
+      cidadela_resgatar_missao: {
+        Args: { p_missao_id: string };
+        Returns: number;
+      };
+      cidadela_criar_oferta: {
+        Args: { p_item_slug: string; p_quantidade: number; p_preco_sov: number };
+        Returns: string;
+      };
+      cidadela_comprar_oferta: {
+        Args: { p_listing_id: string };
+        Returns: number;
+      };
+      registrar_temporada_carreira: {
+        Args: {
+          p_user_id: string;
+          p_temporada: number;
+          p_dificuldade: string;
+          p_divisao: string;
+          p_estado?: Json;
+        };
+        Returns: undefined;
+      };
+      registrar_partida_carreira: {
+        Args: { p_user_id: string; p_partida: Json };
+        Returns: undefined;
+      };
+      finalizar_temporada_carreira: {
+        Args: {
+          p_user_id: string;
+          p_temporada: number;
+          p_tabelas: Json;
+          p_estado?: Json;
+        };
+        Returns: undefined;
+      };
+      registrar_evento_carreira: {
+        Args: { p_user_id: string; p_evento: Json };
+        Returns: undefined;
       };
     };
     Enums: {

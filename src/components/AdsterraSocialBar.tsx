@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { useAdManager } from "@/lib/adManager";
+import { adManager } from "@/lib/adManager";
+
+const SOCIAL_BAR_SRC =
+  "https://pl30913394.effectivecpmnetwork.com/2c/11/c4/2c11c437d41b62fa1a87e6cb055a054c.js";
+const SOCIAL_BAR_ID = "adsterra-social-script";
 
 /**
  * Componente Social Bar da Adsterra
@@ -8,53 +12,32 @@ import { useAdManager } from "@/lib/adManager";
  */
 export function AdsterraSocialBar() {
   const [isMounted, setIsMounted] = useState(false);
-  const { init, getNetwork } = useAdManager("/botao");
 
   useEffect(() => {
-    // Garante que rode apenas no client-side
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!isMounted) return undefined;
+    if (!isMounted || typeof document === "undefined") return undefined;
 
-    // Inicializa AdManager para rota /botao
-    init();
+    // Garante a rede da rota /botao sem depender do componente.
+    adManager.initForRoute("/botao");
 
-    // Verifica se a rede correta está ativa
-    const network = getNetwork();
-    if (network !== "adsterra") {
-      console.warn("[AdsterraSocialBar] Rede incorreta ativa:", network);
-      return undefined;
-    }
+    if (document.getElementById(SOCIAL_BAR_ID)) return undefined;
 
-    // Carrega script da Social Bar
-    if (typeof window !== "undefined" && typeof document !== "undefined") {
-      const script = document.createElement("script");
-      script.id = "adsterra-social-script";
-      script.src = "https://pl30913394.effectivecpmnetwork.com/2c/11/c4/2c11c437d41b62fa1a87e6cb055a054c.js";
-      script.async = true;
-      document.head.appendChild(script);
+    const script = document.createElement("script");
+    script.id = SOCIAL_BAR_ID;
+    script.src = SOCIAL_BAR_SRC;
+    script.async = true;
+    document.head.appendChild(script);
+    console.log("[AdsterraSocialBar] Script carregado");
 
-      console.log("[AdsterraSocialBar] Script carregado");
+    return () => {
+      document.getElementById(SOCIAL_BAR_ID)?.remove();
+      console.log("[AdsterraSocialBar] Script removido");
+    };
+  }, [isMounted]);
 
-      return () => {
-        // Cleanup ao desmontar
-        const socialScript = document.getElementById("adsterra-social-script");
-        if (socialScript) {
-          socialScript.remove();
-          console.log("[AdsterraSocialBar] Script removido");
-        }
-      };
-    }
-
-    return undefined;
-  }, [init, getNetwork, isMounted]);
-
-  // Não renderiza nada durante SSR
-  if (!isMounted) {
-    return null;
-  }
-
-  return null; // Social Bar é injetada pelo script, não precisa de container
+  // Social Bar é injetada pelo script, não precisa de container
+  return null;
 }

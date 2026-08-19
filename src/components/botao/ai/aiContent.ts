@@ -11,27 +11,20 @@
 import { AIService } from "./AIService";
 import type { AIContext } from "./types";
 
-export interface ResultadoPartida {
+export type ResultadoPartida = AIContext & {
   golsPro: number;
   golsContra: number;
   timeNome: string;
   coach: string;
-  adversarioNome?: string;
-  rodada?: number;
-}
+};
 
 function ctxDe(r: ResultadoPartida): AIContext {
   const venceu = r.golsPro > r.golsContra;
-  const empate = r.golsPro === r.golsContra;
   return {
-    coach: r.coach,
-    timeNome: r.timeNome,
+    ...r,
     vencedor: venceu ? r.timeNome : r.adversarioNome,
     perdedor: venceu ? r.adversarioNome : r.timeNome,
-    golsPro: r.golsPro,
-    golsContra: r.golsContra,
     diff: Math.abs(r.golsPro - r.golsContra),
-    rodada: r.rodada,
   };
 }
 

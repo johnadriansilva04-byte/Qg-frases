@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3 } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
-import { CidadelaIntro } from "@/components/CidadelaIntro";
+import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
+import { CelularConversas } from "@/components/botao/career/CelularConversas";
+import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { SEO_CONTENT } from "@/data/seoContent";
 
@@ -31,7 +33,7 @@ export const Route = createFileRoute("/cidadela")({
   component: Cidadela,
 });
 
-type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | null;
+type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | "dama" | "xadrez" | null;
 
 const GAMES = [
   {
@@ -47,6 +49,20 @@ const GAMES = [
     description: "Campeonato com física realista",
     icon: Trophy,
     status: "disponível",
+  },
+  {
+    id: "dama" as Game,
+    label: "Dama",
+    description: "Capturas e leitura de tabuleiro",
+    icon: Grid3X3,
+    status: "em breve",
+  },
+  {
+    id: "xadrez" as Game,
+    label: "Xadrez",
+    description: "Tática clássica e estratégia",
+    icon: Crown,
+    status: "em breve",
   },
   {
     id: "dado" as Game,
@@ -83,7 +99,10 @@ function Cidadela() {
   const [activeGame, setActiveGame] = useState<Game>(null);
   const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
   const [showIntro, setShowIntro] = useState(false);
+  const [showPracinha, setShowPracinha] = useState(false);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
+  const { perfil } = useBotaoAuth();
 
   // Sessão ativa não é persistida: cada login entra com estado limpo.
   useEffect(() => {
@@ -95,6 +114,7 @@ function Cidadela() {
   const handleContinueIntro = () => {
     window.localStorage.setItem("cidadela_intro_seen", "true");
     setShowIntro(false);
+    setShowPracinha(true);
   };
 
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
@@ -134,6 +154,33 @@ function Cidadela() {
 
   if (showIntro) {
     return <CidadelaIntro onContinue={handleContinueIntro} />;
+  }
+
+  if (showPracinha) {
+    return (
+      <PracinhaIntro
+        nomeJogador={perfil?.nome}
+        onComplete={() => {
+          setShowPracinha(false);
+          setPhoneOpen(!!perfil?.user_id);
+        }}
+      />
+    );
+  }
+
+  if (phoneOpen) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0f2e24_0%,#020617_55%)]">
+        <CelularConversas
+          conversas={[]}
+          userId={perfil?.user_id ?? null}
+          nomeJogador={perfil?.nome ?? "Recruta"}
+          onEnviarMensagem={() => undefined}
+          onExcluirConversa={() => undefined}
+          onVoltar={() => setPhoneOpen(false)}
+        />
+      </div>
+    );
   }
 
   if (loadingGame === "botao") {
@@ -200,6 +247,13 @@ function Cidadela() {
               <InfoButton onClick={() => openModal("sobre")} label="Sobre a Pracinha" />
               <InfoButton onClick={() => openModal("como")} label="Como Jogar" />
               <InfoButton onClick={() => openModal("soberania")} label="Soberania" />
+              <button
+                onClick={() => setPhoneOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/20"
+              >
+                <Smartphone className="size-4" />
+                Celular da Cidadela
+              </button>
             </div>
           </header>
 

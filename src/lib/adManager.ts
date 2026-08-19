@@ -7,6 +7,8 @@
  * - Monetag: Trilha e demais jogos de estratégia
  */
 
+import { useCallback } from "react";
+
 export type AdNetwork = "adsense" | "adsterra" | "monetag" | "none";
 
 export interface AdRouteConfig {
@@ -40,7 +42,7 @@ const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
 /**
  * Scripts de cada rede de anúncios
  */
-const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string }> = {
+const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string; zone?: string }> = {
   adsense: {
     src: "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js",
     id: "adsense-script",
@@ -57,10 +59,11 @@ const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string 
     containerId: "adsterra-social-container",
   },
   monetag: {
-    // Registrado via Service Worker público (/monetag.js) nos slots Monetag.
-    src: "",
+    // Tag script do Monetag (zona 11607595) — sem Service Worker.
+    src: "https://al5sm.com/tag.min.js",
     id: "monetag-script",
     containerId: "monetag-container",
+    zone: "11607595",
   },
 };
 
@@ -71,59 +74,43 @@ class AdManager {
   private currentNetwork: AdNetwork = "none";
   private loadedScripts: Set<string> = new Set();
   private activeContainers: Set<string> = new Set();
-  private isFirstVisit: boolean = true;
-  private hasPlayedFirstGame: boolean = false;
-  private readonly FIRST_VISIT_KEY = "sov_first_visit";
   private readonly FIRST_GAME_KEY = "sov_first_game_played";
 
   constructor() {
-    this.checkFirstVisit();
+    this.unregisterLegacyMonetagSW();
   }
 
   /**
-   * Verifica se é a primeira visita do usuário
+   * Desregistra o SW legado do Monetag: a tag antiga responde com MIME
+   * `text/plain` e quebra o importScripts — só gerava erro no console.
    */
-  private checkFirstVisit(): void {
-    if (typeof window === "undefined") return;
-
-    const hasVisited = localStorage.getItem(this.FIRST_VISIT_KEY);
-    const hasPlayedGame = localStorage.getItem(this.FIRST_GAME_KEY);
-
-    this.isFirstVisit = !hasVisited;
-    this.hasPlayedFirstGame = !!hasPlayedGame;
-
-    if (this.isFirstVisit) {
-      localStorage.setItem(this.FIRST_VISIT_KEY, Date.now().toString());
-    }
+  private unregisterLegacyMonetagSW(): void {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => {
+        for (const reg of regs) {
+          if (reg.active?.scriptURL.includes("/monetag.js")) {
+            void reg.unregister();
+          }
+        }
+      })
+      .catch(() => {});
   }
 
   /**
-   * Marca que o usuário jogou o primeiro jogo
+   * Mantido por compatibilidade com chamadas legadas; não abre/fecha ads.
    */
   markFirstGamePlayed(): void {
     if (typeof window === "undefined") return;
-
     localStorage.setItem(this.FIRST_GAME_KEY, Date.now().toString());
-    this.hasPlayedFirstGame = true;
-    this.isFirstVisit = false;
   }
 
   /**
-   * Verifica se anúncios devem ser mostrados
+   * Anúncios nunca são bloqueados por "primeira visita/primeiro jogo".
+   * O único critério é a rota (rede configurada em ROUTE_CONFIG).
    */
   shouldShowAds(): boolean {
-    // Não mostrar anúncios na primeira visita
-    if (this.isFirstVisit) {
-      console.log("[AdManager] Primeira visita - anúncios bloqueados");
-      return false;
-    }
-
-    // Só mostrar anúncios após o primeiro jogo
-    if (!this.hasPlayedFirstGame) {
-      console.log("[AdManager] Primeiro jogo ainda não jogado - anúncios bloqueados");
-      return false;
-    }
-
     return true;
   }
 
@@ -152,12 +139,6 @@ class AdManager {
    * Carrega o script da rede especificada
    */
   loadScript(network: AdNetwork): void {
-    // Verifica se deve mostrar anúncios
-    if (!this.shouldShowAds()) {
-      console.log("[AdManager] Anúncios bloqueados (primeira visita ou primeiro jogo não jogado)");
-      return;
-    }
-
     // Verifica se está no browser (SSR-safe)
     if (typeof window === "undefined" || typeof document === "undefined") {
       console.warn("[AdManager] Tentativa de carregar script no SSR - ignorando");
@@ -182,11 +163,9 @@ class AdManager {
     script.src = config.src;
     script.async = true;
     script.setAttribute("data-cfasync", "false");
-    if (network === "monetag") {
-      script.dataset["zone"] = "271263";
-      if ("serviceWorker" in navigator) {
-        void navigator.serviceWorker.register("/monetag.js").catch(() => {});
-      }
+    if (network === "monetag" && config.zone) {
+      // Zona exigida pela tag script do Monetag
+      script.dataset["zone"] = config.zone;
     }
 
     document.head.appendChild(script);
@@ -302,14 +281,6 @@ class AdManager {
    * Inicializa anúncios para uma rota
    */
   initForRoute(path: string): void {
-    // Verifica se deve mostrar anúncios
-    if (!this.shouldShowAds()) {
-      console.log(
-        `[AdManager] Anúncios desativados para rota ${path} (primeira visita ou primeiro jogo não jogado)`,
-      );
-      return;
-    }
-
     const network = this.getNetworkForRoute(path);
 
     // Se a rede mudou, limpa tudo e carrega nova
@@ -317,11 +288,6 @@ class AdManager {
       this.cleanup();
       this.currentNetwork = network;
       this.loadScript(network);
-    }
-
-    // Só loga se a rede mudou (evita spam no console)
-    if (this.currentNetwork !== network) {
-      console.log(`[AdManager] Rota ${path} usando rede ${network}`);
     }
   }
 
@@ -342,29 +308,33 @@ class AdManager {
 export const adManager = new AdManager();
 
 /**
- * Hook React para usar o AdManager
+ * Hook React para usar o AdManager. Callbacks são estáveis por `path` —
+ * evita re-execução infinita de efeitos (loop de carregar/remover scripts).
  */
 export function useAdManager(path: string) {
-  const init = () => {
+  const init = useCallback(() => {
     adManager.initForRoute(path);
-  };
+  }, [path]);
 
-  const cleanup = () => {
+  const cleanup = useCallback(() => {
     adManager.cleanup();
-  };
+  }, []);
 
-  const createContainer = (slotId: string) => {
-    const network = adManager.getNetworkForRoute(path);
-    return adManager.createContainer(network, slotId);
-  };
+  const createContainer = useCallback(
+    (slotId: string) => {
+      const network = adManager.getNetworkForRoute(path);
+      return adManager.createContainer(network, slotId);
+    },
+    [path],
+  );
 
   return {
     init,
     cleanup,
     createContainer,
-    getNetwork: () => adManager.getNetworkForRoute(path),
-    isSlotAllowed: (slotId: string) => adManager.isSlotAllowed(path, slotId),
-    markFirstGamePlayed: () => adManager.markFirstGamePlayed(),
-    shouldShowAds: () => adManager.shouldShowAds(),
+    getNetwork: useCallback(() => adManager.getNetworkForRoute(path), [path]),
+    isSlotAllowed: useCallback((slotId: string) => adManager.isSlotAllowed(path, slotId), [path]),
+    markFirstGamePlayed: useCallback(() => adManager.markFirstGamePlayed(), []),
+    shouldShowAds: useCallback(() => adManager.shouldShowAds(), []),
   };
 }

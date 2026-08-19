@@ -1,3 +1,13 @@
+## Reconstrução da Carreira Infinita (Futebol de Botão) — 2026-08-18
+
+- Base canônica de times em `src/components/botao/data/teams.ts`: 60 clubes ficcionais, IDs únicos/persistentes, 20 por divisão (A=88..71, B=71..48, C=48..28). Reuse esses IDs — evita conflitos e sobrescrição na base.
+- `career/seasonEngine.ts` gera 3 ligas por temporada usando o pool completo. A liga ativa do usuário usa os 19 NPCs divisão + usuário. Nunca derivar campeão com colchete sem nullable.
+- Copa do Brasil usa pool de 15 NPCs das três divisões + usuário; não há bloqueio por Série A na rodada-gatilho.
+- `career/careerRemote.ts` agora usa persistência híbrida: snapshot em `progresso_caminpanha` + histórico relacional pelas RPCs `registrar_temporada_carreira`, `registrar_partida_carreira`, `finalizar_temporada_carreira`, `registrar_evento_carreira`. TODAS falham silenciosamente para carreiras antigas.
+- `supabase/migrations/futebol.sql` adiciona `forca`/`divisao` em `botao_times`, 60 seeds e tabelas `botao_temporadas_carreira`, `botao_partidas_carreira`, `botao_tabelas_carreira`, `botao_eventos_carreira`. Aplique manualmente via SQL Editor (sem CLI/service-role).
+- `AIContext` agora aceita `divisao`, `temporada`, `competicaoNome`, `moralTime`, `soberania`, `posicaoTabela`, `rodadasRestantes`, `decisaoPendente`. `AIService`/`templateEngine` preenchem esses placeholders (`{divisao}`, `{temporada}`, `{posicao}`, `{moral}`, `{soberania}`, `{restantes}`, `{pendencia}`).
+- `atualizar_perfil_clube` deve ter 7 parâmetros (sem `p_escudo`) — remover `p_escudo` do frontend/types evita falha de produção.
+
 <!-- LOVABLE:BEGIN -->
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting

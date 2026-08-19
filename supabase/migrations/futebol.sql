@@ -2000,3 +2000,373 @@ INSERT INTO public.botao_frases_ia (prompt_type, categoria, template_text, ordem
 ON CONFLICT (prompt_type, categoria, ordem) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';
+
+-- Prompts universais do Pracinha (núcleo guia da Cidadela).
+ALTER TABLE public.botao_frases_ia
+  DROP CONSTRAINT IF EXISTS botao_frases_ia_prompt_type_check;
+ALTER TABLE public.botao_frases_ia
+  ADD CONSTRAINT botao_frases_ia_prompt_type_check
+  CHECK (prompt_type IN ('comentarista','coletiva','medico','redes_sociais','noticia','pracinha'));
+
+INSERT INTO public.botao_frases_ia (prompt_type, categoria, template_text, ordem) VALUES
+('pracinha', 'boas_vindas', 'Saudações, {coach}. Eu sou o Pracinha. Complete as 5 missões do dia, procure oponentes online e siga o rastro dos Pergaminhos.', 1),
+('pracinha', 'missoes', 'Ordem do dia: cinco missões, recompensa limitada e economia protegida. Quem joga em grupo avança mais rápido.', 2),
+('pracinha', 'geral', 'Pracinha na escuta: explore a Cidadela, convide rivais e procure a verdade nos Pergaminhos.', 3)
+ON CONFLICT (prompt_type, categoria, ordem) DO NOTHING;
+
+NOTIFY pgrst, 'reload schema';
+
+-- =====================================================
+-- Reconstrução da carreira infinita — divisões + histórico (2026-08-18)
+-- =====================================================
+
+ALTER TABLE public.botao_times
+  ADD COLUMN IF NOT EXISTS forca INTEGER DEFAULT 70 CHECK (forca BETWEEN 1 AND 100);
+ALTER TABLE public.botao_times
+  ADD COLUMN IF NOT EXISTS divisao TEXT DEFAULT NULL CHECK (divisao IN ('serie-a','serie-b','serie-c'));
+
+-- Seed canônico da base futebol de botão: 60 clubes ficcionais, deduplicados,
+-- 20 por divisão. Idempotente para integrações existentes.
+INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga, forca, divisao, is_personalizado)
+VALUES
+  ('fla', 'Rubro-Negro Carioca', 'RNC', ARRAY['#c8102e', '#111111'], 'Rio de Janeiro', 'Brasil', 88, 'serie-a', true),
+  ('pal', 'Alviverde Paulista', 'ALP', ARRAY['#0b7a3b', '#f2f2f2'], 'São Paulo', 'Brasil', 87, 'serie-a', true),
+  ('atl', 'Galo Mineiro', 'GAL', ARRAY['#181818', '#ededed'], 'Belo Horizonte', 'Brasil', 85, 'serie-a', true),
+  ('cor', 'Alvinegro do Parque', 'ADP', ARRAY['#1a1a1a', '#ffffff'], 'São Paulo', 'Brasil', 84, 'serie-a', true),
+  ('gre', 'Imortal Tricolor', 'IMT', ARRAY['#0d6bb0', '#111111'], 'Porto Alegre', 'Brasil', 84, 'serie-a', true),
+  ('spf', 'Tricolor do Morumbi', 'TDM', ARRAY['#e21c21', '#111111'], 'São Paulo', 'Brasil', 83, 'serie-a', true),
+  ('intb', 'Colorado Gaúcho', 'COG', ARRAY['#d10a11', '#ffffff'], 'Porto Alegre', 'Brasil', 82, 'serie-a', true),
+  ('flu', 'Tricolor das Laranjeiras', 'TDL', ARRAY['#7a1b3a', '#0d6b3f'], 'Rio de Janeiro', 'Brasil', 81, 'serie-a', true),
+  ('cru', 'Raposa Celeste', 'RAC', ARRAY['#1b3f95', '#ffffff'], 'Belo Horizonte', 'Brasil', 80, 'serie-a', true),
+  ('bot', 'Estrela Solitária', 'ESO', ARRAY['#222222', '#f5f5f5'], 'Rio de Janeiro', 'Brasil', 79, 'serie-a', true),
+  ('cap', 'Furacão Paranaense', 'FUR', ARRAY['#c8102e', '#111111'], 'Curitiba', 'Brasil', 79, 'serie-a', true),
+  ('for', 'Leão do Pici', 'LDP', ARRAY['#0b3f8f', '#e2231a'], 'Fortaleza', 'Brasil', 78, 'serie-a', true),
+  ('bah', 'Tricolor de Aço', 'TDA', ARRAY['#1e64c8', '#e2231a'], 'Salvador', 'Brasil', 77, 'serie-a', true),
+  ('vas', 'Cruz-Maltino', 'CRM', ARRAY['#111111', '#ffffff'], 'Rio de Janeiro', 'Brasil', 76, 'serie-a', true),
+  ('san', 'Peixe da Vila', 'PXV', ARRAY['#f4f4f4', '#111111'], 'Santos', 'Brasil', 75, 'serie-a', true),
+  ('cax', 'Imperial Serrano', 'IMP', ARRAY['#1b3f95', '#f7d117'], 'Caxias do Sul', 'Brasil', 74, 'serie-a', true),
+  ('cea', 'Vozão Alvinegro', 'VOZ', ARRAY['#1a1a1a', '#ffffff'], 'Fortaleza', 'Brasil', 73, 'serie-a', true),
+  ('vit', 'Leão da Barra', 'LDB', ARRAY['#c8102e', '#111111'], 'Salvador', 'Brasil', 72, 'serie-a', true),
+  ('spo', 'Leão da Ilha', 'LDI', ARRAY['#c8102e', '#111111'], 'Recife', 'Brasil', 71, 'serie-a', true),
+  ('fig', 'Figueira Alvinegra', 'FIG', ARRAY['#111111', '#ffffff'], 'Florianópolis', 'Brasil', 70, 'serie-a', true),
+  ('cha', 'Verdão do Oeste', 'VDO', ARRAY['#0b7a3b', '#f7d117'], 'Chapecó', 'Brasil', 70, 'serie-b', true),
+  ('bru', 'Auriverde Bauruano', 'AUR', ARRAY['#0e5ba6', '#f2c500'], 'Bauru', 'Brasil', 70, 'serie-b', true),
+  ('cor2', 'Coxa Alviverde', 'COX', ARRAY['#0b6b3a', '#ffffff'], 'Curitiba', 'Brasil', 69, 'serie-b', true),
+  ('goi', 'Esmeraldino', 'ESM', ARRAY['#0a7d43', '#ffffff'], 'Goiânia', 'Brasil', 69, 'serie-b', true),
+  ('nau', 'Timbu Alvirrubro', 'TAR', ARRAY['#e2231a', '#ffffff'], 'Recife', 'Brasil', 68, 'serie-b', true),
+  ('par', 'Domínio Paraense', 'DPR', ARRAY['#0b3f8f', '#ffffff'], 'Belém', 'Brasil', 67, 'serie-b', true),
+  ('vil', 'Tigre Colorada', 'TIC', ARRAY['#e2231a', '#ffe500'], 'Nova Lima', 'Brasil', 67, 'serie-b', true),
+  ('ame', 'Coelho Mineiro', 'COE', ARRAY['#0b6b3a', '#e2231a'], 'Belo Horizonte', 'Brasil', 67, 'serie-b', true),
+  ('lon', 'Tubarão do Norte', 'TUB', ARRAY['#0e5ba6', '#ffffff'], 'Londrina', 'Brasil', 66, 'serie-b', true),
+  ('gua', 'Bugre Campineiro', 'BUG', ARRAY['#0b7a3b', '#ffffff'], 'Campinas', 'Brasil', 66, 'serie-b', true),
+  ('itu', 'Galo Interior', 'GIN', ARRAY['#e2231a', '#111111'], 'Itu', 'Brasil', 65, 'serie-b', true),
+  ('cui', 'Dourado do Centro-Oeste', 'DOU', ARRAY['#0f9b4c', '#f7d117'], 'Cuiabá', 'Brasil', 64, 'serie-b', true),
+  ('mir', 'Leão Preto', 'LEA', ARRAY['#111111', '#f2c500'], 'Mogi Mirim', 'Brasil', 64, 'serie-b', true),
+  ('juvbr', 'Jaconero Serrano', 'JAC', ARRAY['#1a7a3f', '#111111'], 'Caxias do Sul', 'Brasil', 63, 'serie-b', true),
+  ('cri', 'Tigre Catarinense', 'TIG', ARRAY['#f2c500', '#111111'], 'Criciúma', 'Brasil', 62, 'serie-b', true),
+  ('ava', 'Leão da Ilha Sul', 'LIS', ARRAY['#0e5ba6', '#ffffff'], 'Florianópolis', 'Brasil', 61, 'serie-b', true),
+  ('rem', 'Leão Azul do Norte', 'LAZ', ARRAY['#0b3f8f', '#ffffff'], 'Belém', 'Brasil', 60, 'serie-b', true),
+  ('pay', 'Papão da Curuzu', 'PAP', ARRAY['#1a1a1a', '#0b7a3b'], 'Belém', 'Brasil', 60, 'serie-b', true),
+  ('abc', 'Alvinegro Potiguar', 'ALP2', ARRAY['#111111', '#ffffff'], 'Natal', 'Brasil', 58, 'serie-b', true),
+  ('sam', 'Azulino Sampaio', 'AZS', ARRAY['#0e5ba6', '#ffffff'], 'Sampaio', 'Brasil', 58, 'serie-b', true),
+  ('pon', 'Macaca Alvinegra', 'MAC', ARRAY['#1a1a1a', '#ffffff'], 'Campinas', 'Brasil', 65, 'serie-c', true),
+  ('joi', 'Jec Verde-Papo', 'JEC', ARRAY['#0b7a3b', '#ffffff'], 'Joinville', 'Brasil', 62, 'serie-c', true),
+  ('fer', 'Mulherada Ferroviária', 'MFE', ARRAY['#8b1a1a', '#ffffff'], 'Araraquara', 'Brasil', 61, 'serie-c', true),
+  ('nov', 'Tigre do Vale', 'TIV', ARRAY['#f2c500', '#111111'], 'Novo Horizonte', 'Brasil', 60, 'serie-c', true),
+  ('tup', 'Azul Carvoeiro', 'AZL', ARRAY['#0e5ba6', '#ffffff'], 'Criciúma', 'Brasil', 59, 'serie-c', true),
+  ('opo', 'Fantasma Alvinegro', 'FAN', ARRAY['#111111', '#ffffff'], 'Ouro Preto', 'Brasil', 58, 'serie-c', true),
+  ('cal', 'Calanga Alameda', 'CLD', ARRAY['#0b7a3b', '#f7d117'], 'Calabria', 'Brasil', 58, 'serie-c', true),
+  ('tom', 'Gavião do Planalto', 'GAV', ARRAY['#e2231a', '#111111'], 'Tomba', 'Brasil', 57, 'serie-c', true),
+  ('mot', 'Moto Rubro-Negro', 'MRN', ARRAY['#c8102e', '#111111'], 'São Luís', 'Brasil', 57, 'serie-c', true),
+  ('csa', 'Azulão do Município', 'AZM', ARRAY['#0e5ba6', '#ffffff'], 'Maceió', 'Brasil', 56, 'serie-c', true),
+  ('crb', 'Galício de Pajuçara', 'GPA', ARRAY['#d10a11', '#ffffff'], 'Maceió', 'Brasil', 56, 'serie-c', true),
+  ('ser', 'Corno do Sertão', 'CSR', ARRAY['#e2231a', '#111111'], 'Sertão', 'Brasil', 55, 'serie-c', true),
+  ('cam', 'Aymoré do Sul', 'AYS', ARRAY['#0b3f8f', '#f7d117'], 'Campo Grande', 'Brasil', 55, 'serie-c', true),
+  ('tre', 'Trevo das Palmeiras', 'TRP', ARRAY['#0b7a3b', '#111111'], 'Palmeiras', 'Brasil', 54, 'serie-c', true),
+  ('nor', 'Nortuno do Amapá', 'NAP', ARRAY['#0e5ba6', '#f7d117'], 'Macapá', 'Brasil', 54, 'serie-c', true),
+  ('asa', 'Aurico Lampião', 'ALP', ARRAY['#f2c500', '#111111'], 'Lampião', 'Brasil', 53, 'serie-c', true),
+  ('jacu', 'Jacu do Norte', 'JDN', ARRAY['#111111', '#ffffff'], 'Natal', 'Brasil', 52, 'serie-c', true),
+  ('riv', 'Palomino Inverso', 'PLI', ARRAY['#7a1b3a', '#0b3f8f'], 'Riacho', 'Brasil', 52, 'serie-c', true),
+  ('alt', 'Alta Colina', 'ALC', ARRAY['#0b6b3a', '#ffffff'], 'Colina', 'Brasil', 51, 'serie-c', true),
+  ('botpb', 'Beltrão Paraibano', 'BTP', ARRAY['#c8102e', '#111111'], 'João Pessoa', 'Brasil', 51, 'serie-c', true)
+ON CONFLICT (id) DO UPDATE SET
+  nome = EXCLUDED.nome,
+  abreviacao = EXCLUDED.abreviacao,
+  cores = EXCLUDED.cores,
+  pais = EXCLUDED.pais,
+  liga = EXCLUDED.liga,
+  forca = EXCLUDED.forca,
+  divisao = EXCLUDED.divisao;
+
+CREATE TABLE IF NOT EXISTS public.botao_temporadas_carreira (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  temporada INTEGER NOT NULL,
+  dificuldade TEXT NOT NULL DEFAULT 'amador',
+  divisao_usuario TEXT NOT NULL DEFAULT 'serie-c' CHECK (divisao_usuario IN ('serie-a','serie-b','serie-c')),
+  status TEXT NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa','finalizada')),
+  estado JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finalizada_em TIMESTAMPTZ,
+  UNIQUE (user_id, temporada)
+);
+
+CREATE TABLE IF NOT EXISTS public.botao_partidas_carreira (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  temporada INTEGER NOT NULL,
+  competicao TEXT NOT NULL CHECK (competicao IN ('brasileirao','copa-brasil')),
+  divisao TEXT CHECK (divisao IN ('serie-a','serie-b','serie-c')),
+  rodada TEXT NOT NULL,
+  home_id TEXT NOT NULL,
+  away_id TEXT NOT NULL,
+  home_goals INTEGER NOT NULL,
+  away_goals INTEGER NOT NULL,
+  pen_home INTEGER,
+  pen_away INTEGER,
+  resultado_usuario TEXT NOT NULL CHECK (resultado_usuario IN ('vitoria','empate','derrota')),
+  detalhes JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.botao_tabelas_carreira (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  temporada INTEGER NOT NULL,
+  competicao TEXT NOT NULL CHECK (competicao IN ('brasileirao','copa-brasil')),
+  divisao TEXT CHECK (divisao IN ('serie-a','serie-b','serie-c')),
+  team_id TEXT NOT NULL,
+  team_nome TEXT NOT NULL,
+  posicao INTEGER NOT NULL,
+  p INTEGER NOT NULL DEFAULT 0,
+  j INTEGER NOT NULL DEFAULT 0,
+  v INTEGER NOT NULL DEFAULT 0,
+  e INTEGER NOT NULL DEFAULT 0,
+  d INTEGER NOT NULL DEFAULT 0,
+  gp INTEGER NOT NULL DEFAULT 0,
+  gc INTEGER NOT NULL DEFAULT 0,
+  sg INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, temporada, competicao, divisao, team_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.botao_eventos_carreira (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  temporada INTEGER,
+  tipo TEXT NOT NULL,
+  titulo TEXT NOT NULL,
+  texto TEXT NOT NULL DEFAULT '',
+  payload JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_botao_temporadas_carreira_user
+  ON public.botao_temporadas_carreira(user_id, temporada DESC);
+CREATE INDEX IF NOT EXISTS idx_botao_partidas_carreira_user
+  ON public.botao_partidas_carreira(user_id, temporada, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_botao_tabelas_carreira_user
+  ON public.botao_tabelas_carreira(user_id, temporada, divisao);
+CREATE INDEX IF NOT EXISTS idx_botao_eventos_carreira_user
+  ON public.botao_eventos_carreira(user_id, temporada, created_at DESC);
+
+ALTER TABLE public.botao_temporadas_carreira ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.botao_partidas_carreira ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.botao_tabelas_carreira ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.botao_eventos_carreira ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "dono le proprias temporadas" ON public.botao_temporadas_carreira
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "dono le proprias partidas carreira" ON public.botao_partidas_carreira
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "dono le proprias tabelas carreira" ON public.botao_tabelas_carreira
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "dono le proprios eventos carreira" ON public.botao_eventos_carreira
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+CREATE OR REPLACE FUNCTION public.registrar_temporada_carreira(
+  p_user_id UUID,
+  p_temporada INTEGER,
+  p_dificuldade TEXT,
+  p_divisao TEXT,
+  p_estado JSONB DEFAULT '{}'::JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
+    RAISE EXCEPTION 'Só o dono da carreira pode gravar a temporada';
+  END IF;
+
+  INSERT INTO public.botao_temporadas_carreira (
+    user_id, temporada, dificuldade, divisao_usuario, estado, status
+  ) VALUES (
+    p_user_id, p_temporada, p_dificuldade, p_divisao, p_estado, 'ativa'
+  )
+  ON CONFLICT (user_id, temporada) DO UPDATE SET
+    dificuldade = EXCLUDED.dificuldade,
+    divisao_usuario = EXCLUDED.divisao_usuario,
+    estado = EXCLUDED.estado,
+    status = 'ativa',
+    finalizada_em = NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.registrar_partida_carreira(
+  p_user_id UUID,
+  p_partida JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
+    RAISE EXCEPTION 'Só o dono da carreira pode registrar partidas';
+  END IF;
+
+  INSERT INTO public.botao_partidas_carreira (
+    user_id, temporada, competicao, divisao, rodada,
+    home_id, away_id, home_goals, away_goals,
+    pen_home, pen_away, resultado_usuario, detalhes
+  ) VALUES (
+    p_user_id,
+    COALESCE((p_partida->>'temporada')::INTEGER, 1),
+    COALESCE(p_partida->>'competicao', 'brasileirao'),
+    NULLIF(p_partida->>'divisao', ''),
+    COALESCE(p_partida->>'rodada', 'Rodada'),
+    p_partida->>'home_id',
+    p_partida->>'away_id',
+    COALESCE((p_partida->>'home_goals')::INTEGER, 0),
+    COALESCE((p_partida->>'away_goals')::INTEGER, 0),
+    (p_partida->>'pen_home')::INTEGER,
+    (p_partida->>'pen_away')::INTEGER,
+    CASE
+      WHEN COALESCE((p_partida->>'home_goals')::INTEGER, 0) > COALESCE((p_partida->>'away_goals')::INTEGER, 0)
+        THEN CASE WHEN p_partida->>'user_home' = 'true' THEN 'vitoria' ELSE 'derrota' END
+      WHEN COALESCE((p_partida->>'home_goals')::INTEGER, 0) < COALESCE((p_partida->>'away_goals')::INTEGER, 0)
+        THEN CASE WHEN p_partida->>'user_home' = 'true' THEN 'derrota' ELSE 'vitoria' END
+      ELSE 'empate'
+    END,
+    COALESCE(p_partida->'detalhes', '{}'::JSONB)
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.finalizar_temporada_carreira(
+  p_user_id UUID,
+  p_temporada INTEGER,
+  p_tabelas JSONB,
+  p_estado JSONB DEFAULT '{}'::JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_item JSONB;
+BEGIN
+  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
+    RAISE EXCEPTION 'Só o dono da carreira pode finalizar a temporada';
+  END IF;
+
+  INSERT INTO public.botao_temporadas_carreira (
+    user_id, temporada, estado, status, finalizada_em
+  ) VALUES (
+    p_user_id, p_temporada, p_estado, 'finalizada', NOW()
+  )
+  ON CONFLICT (user_id, temporada) DO UPDATE SET
+    estado = EXCLUDED.estado,
+    status = 'finalizada',
+    finalizada_em = NOW();
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(p_tabelas, '[]'::JSONB))
+  LOOP
+    INSERT INTO public.botao_tabelas_carreira (
+      user_id, temporada, competicao, divisao, team_id, team_nome, posicao,
+      p, j, v, e, d, gp, gc, sg
+    ) VALUES (
+      p_user_id,
+      p_temporada,
+      COALESCE(v_item->>'competicao', 'brasileirao'),
+      NULLIF(v_item->>'divisao', ''),
+      v_item->>'team_id',
+      COALESCE(v_item->>'team_nome', v_item->>'team_id'),
+      COALESCE((v_item->>'posicao')::INTEGER, 0),
+      COALESCE((v_item->>'p')::INTEGER, 0),
+      COALESCE((v_item->>'j')::INTEGER, 0),
+      COALESCE((v_item->>'v')::INTEGER, 0),
+      COALESCE((v_item->>'e')::INTEGER, 0),
+      COALESCE((v_item->>'d')::INTEGER, 0),
+      COALESCE((v_item->>'gp')::INTEGER, 0),
+      COALESCE((v_item->>'gc')::INTEGER, 0),
+      COALESCE((v_item->>'sg')::INTEGER, COALESCE((v_item->>'gp')::INTEGER,0) - COALESCE((v_item->>'gc')::INTEGER,0))
+    )
+    ON CONFLICT (user_id, temporada, competicao, divisao, team_id) DO UPDATE SET
+      team_nome = EXCLUDED.team_nome,
+      posicao = EXCLUDED.posicao,
+      p = EXCLUDED.p,
+      j = EXCLUDED.j,
+      v = EXCLUDED.v,
+      e = EXCLUDED.e,
+      d = EXCLUDED.d,
+      gp = EXCLUDED.gp,
+      gc = EXCLUDED.gc,
+      sg = EXCLUDED.sg;
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.registrar_evento_carreira(
+  p_user_id UUID,
+  p_evento JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
+    RAISE EXCEPTION 'Só o dono da carreira pode registrar eventos';
+  END IF;
+
+  INSERT INTO public.botao_eventos_carreira (
+    user_id, temporada, tipo, titulo, texto, payload
+  ) VALUES (
+    p_user_id,
+    (p_evento->>'temporada')::INTEGER,
+    COALESCE(p_evento->>'tipo', 'evento'),
+    COALESCE(p_evento->>'titulo', 'Evento de carreira'),
+    COALESCE(p_evento->>'texto', ''),
+    COALESCE(p_evento->'payload', '{}'::JSONB)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.registrar_temporada_carreira(UUID, INTEGER, TEXT, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_partida_carreira(UUID, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.finalizar_temporada_carreira(UUID, INTEGER, JSONB, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_evento_carreira(UUID, JSONB) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- Frases contextuais da reconstrução de temporada (placeholders novos).
+INSERT INTO public.botao_frases_ia (prompt_type, categoria, template_text, ativo, ordem)
+VALUES
+  ('comentarista','vitoria','{T} vence na {divisao}, sobe para {posicao}º e {coach} sai acreditando na temporada {temporada}!', true, 210),
+  ('comentarista','derrota','{T} tropeça na {divisao}, fica {posicao}º e a moral do elenco cai para {moral}/100. Que vexame!', true, 211),
+  ('comentarista','goleada','Goleada na {divisao}! {W} encerra a temporada {temporada} com crise geral no {L}.', true, 212),
+  ('coletiva','vitoria','— {coach}, com {T} na {divisao} e {posicao}º na tabela, dá pra prometer acesso e até a Copa?', true, 213),
+  ('coletiva','derrota','— {coach}, {T} teve moral só {moral}/100 e {soberania} de soberania. Como explica esse placar na {divisao}?', true, 214),
+  ('medico','preparo','— Dr. Maurício: a rotação do elenco deve aliviar depois de {restantes} rodadas restantes na {divisao}.', true, 215),
+  ('redes_sociais','vitoria','@TorcedorFiel: {T} na {divisao}, {posicao}º na tabela e {coach} no banco! Agora dá pra sonhar!', true, 216),
+  ('redes_sociais','derrota','@TorcedorIndignado: {T} caiu para {posicao}º na {divisao}. {moral}/100 de moral é crise Vesteira!', true, 217),
+  ('noticia','crise','Crise no {T}: {coach} tem {soberania} de soberania comentada com silêncio e {restantes} rodadas restantes.', true, 218),
+  ('noticia','geral','Futebol de Botão, temporada {temporada}: {T} no comando da {divisao} com bastidores em 1ª pessoa.', true, 219)
+ON CONFLICT (prompt_type, categoria, ordem) DO NOTHING;

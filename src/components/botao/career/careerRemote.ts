@@ -1,11 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import type { CareerState, Headline } from "./types";
+import type { Fixture, MatchResult } from "../types";
+import { teamByIdSync } from "../data/teams";
 import { EMPTY_CAREER } from "./careerStorage";
 import { mergeProgressInSupabase, type Progress } from "../storage";
+import { sortTable } from "../tournament";
 
 /**
- * Persistência 100% dentro da coluna JSONB `progresso_caminpanha` da tabela
- * `botao_usuarios` — que já existe no Supabase. Sem depender de migração nova.
+ * Persistência híbrida: `progresso_caminpanha` guarda o snapshot da sessão e
+ * RPCs históricas (`botao_temporadas/partidas/tabelas/eventos`) alimentam o
+ * histórico relacional da carreira quando a migração está aplicada.
  *
  * Layout do JSONB:
  * {
@@ -377,3 +382,122 @@ export async function aplicarApostaSoberania(
     return null;
   }
 }
+
+/** Inicia/atualiza a temporada no histórico relacional. Falha silenciosa mantém o snapshot JSONB. */
+export async function registrarTemporadaRemota(
+  userId: string,
+  career: CareerState,
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc("registrar_temporada_carreira", {
+      p_user_id: userId,
+      p_temporada: career.temporada ?? 1,
+      p_dificuldade: career.dificuldadeAtual ?? "amador",
+      p_divisao: career.divisao,
+      p_estado: career as unknown as Json,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn("[careerRemote] histórico de temporada indisponível:", e);
+  }
+}
+
+/** Registra cada resultado real do usuário no histórico relacional. */
+export async function registrarPartidaRemota(
+  userId: string,
+  career: CareerState,
+  userTeamId: string,
+  fixture: Fixture,
+  result: MatchResult,
+  competicao: "brasileirao" | "copa-brasil",
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc("registrar_partida_carreira", {
+      p_user_id: userId,
+      p_partida: {
+        temporada: career.temporada ?? 1,
+        competicao,
+        divisao: competicao === "brasileirao" ? career.divisao : null,
+        rodada: fixture.stage,
+        home_id: result.homeId,
+        away_id: result.awayId,
+        home_goals: result.homeGoals,
+        away_goals: result.awayGoals,
+        pen_home: result.penHome ?? null,
+        pen_away: result.penAway ?? null,
+        user_home: fixture.homeId === userTeamId,
+        detalhes: {
+          fixture_id: fixture.id,
+          user_team: userTeamId,
+          home_nome: teamByIdSync(result.homeId).name,
+          away_nome: teamByIdSync(result.awayId).name,
+        },
+      },
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn("[careerRemote] histórico de partida indisponível:", e);
+  }
+}
+
+/** Finaliza a temporada e grava as três tabelas em formato relacional. */
+export async function finalizarTemporadaRemota(
+  userId: string,
+  career: CareerState,
+): Promise<void> {
+  try {
+    const tabelas = Object.entries(career.ligas ?? {}).flatMap(([divisao, liga]) =>
+      sortTable(liga.groups[0]?.table ?? []).map((row, index) => ({
+        competicao: "brasileirao",
+        divisao,
+        team_id: row.teamId,
+        team_nome: liga.userTeamId === row.teamId ? career.coach.nome : teamByIdSync(row.teamId).name,
+        posicao: index + 1,
+        p: row.p,
+        j: row.j,
+        v: row.v,
+        e: row.e,
+        d: row.d,
+        gp: row.gp,
+        gc: row.gc,
+        sg: row.gp - row.gc,
+      })),
+    );
+    const { error } = await supabase.rpc("finalizar_temporada_carreira", {
+      p_user_id: userId,
+      p_temporada: career.temporada ?? 1,
+      p_tabelas: tabelas,
+      p_estado: career as unknown as Json,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn("[careerRemote] finalização de temporada indisponível:", e);
+  }
+}
+
+/** Registra decisão/narrativa no histórico de eventos. */
+export async function registrarEventoCarreiraRemoto(
+  userId: string,
+  career: CareerState,
+  tipo: string,
+  titulo: string,
+  texto: string,
+  payload: Json,
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc("registrar_evento_carreira", {
+      p_user_id: userId,
+      p_evento: {
+        temporada: career.temporada ?? null,
+        tipo,
+        titulo,
+        texto,
+        payload,
+      },
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn("[careerRemote] evento histórico indisponível:", e);
+  }
+}
+

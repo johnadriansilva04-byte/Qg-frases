@@ -1,7 +1,8 @@
-import { Brain, Target, TrendingUp, GraduationCap } from "lucide-react";
+import { Brain, Coins, GraduationCap, ScrollText, Shield, Target, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AIService } from "@/components/botao/ai/AIService";
 import { InfoModal, InfoButton } from "./InfoModal";
 import { SEO_CONTENT } from "@/data/seoContent";
-import { useState } from "react";
 
 interface CidadelaIntroProps {
   onContinue: () => void;
@@ -10,103 +11,181 @@ interface CidadelaIntroProps {
 export function CidadelaIntro({ onContinue }: CidadelaIntroProps) {
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
 
-  const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
-  const closeModal = () => setActiveModal(null);
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-6 sm:p-8 md:p-12 shadow-2xl max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="bg-primary/20 p-3 sm:p-4 rounded-full">
-                <GraduationCap className="size-10 sm:size-12 text-primary" />
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#2f1b55_0%,#0f172a_48%,#020617_100%)] p-4 text-white sm:p-6">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-5xl items-center justify-center">
+        <section className="relative w-full overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-purple-950/40 backdrop-blur-xl sm:p-10">
+          <div className="absolute -left-24 top-0 h-64 w-64 rounded-full bg-purple-500/20 blur-3xl" />
+          <div className="absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+
+          <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">
+                <GraduationCap className="size-4" />
+                Aprender jogando
+              </div>
+
+              <h1 className="font-display text-4xl font-black leading-tight sm:text-6xl">
+                Cidadela do
+                <span className="block bg-gradient-to-r from-emerald-300 via-cyan-300 to-purple-300 bg-clip-text text-transparent">
+                  Pracinha
+                </span>
+              </h1>
+
+              <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-200 sm:text-lg">
+                Nossa intenção é educar e ensinar economia, educação financeira e
+                raciocínio lógico para crianças e jovens através de jogos clássicos.
+              </p>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <Brain className="mb-3 size-6 text-cyan-300" />
+                  <p className="text-sm font-bold">Raciocínio lógico</p>
+                  <p className="mt-1 text-xs text-slate-400">Estratégia em cada jogada.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <Coins className="mb-3 size-6 text-amber-300" />
+                  <p className="text-sm font-bold">Educação financeira</p>
+                  <p className="mt-1 text-xs text-slate-400">SOV escasso, decisões reais.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <Target className="mb-3 size-6 text-purple-300" />
+                  <p className="text-sm font-bold">Economia</p>
+                  <p className="mt-1 text-xs text-slate-400">Mercado, oferta e negociação.</p>
+                </div>
               </div>
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-2">
-              Cidadela de Jogos
-            </h1>
-            <p className="text-muted-foreground text-base sm:text-lg">
-              Entretenimento que transforma mentes
-            </p>
+
+            <aside className="rounded-[1.75rem] border border-purple-300/20 bg-purple-500/10 p-5 shadow-inner shadow-purple-950/30 sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="rounded-2xl bg-purple-400/15 p-3">
+                  <ScrollText className="size-6 text-purple-200" />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-purple-200">Arquivo confidencial</p>
+                  <h2 className="text-xl font-black">O segredo de John Adrian</h2>
+                </div>
+              </div>
+
+              <p className="text-sm leading-relaxed text-slate-100 sm:text-base">
+                “A Cidadela não é apenas um lugar de jogos. Ela foi fundada por
+                <strong> John Adrian</strong> com um propósito secreto. Mas a verdadeira
+                razão de sua criação e os mistérios por trás de suas muralhas estão
+                trancados em <strong>Pergaminhos Secretos</strong>.”
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
+                <div className="mb-2 flex items-center gap-2 text-amber-200">
+                  <Shield className="size-4" />
+                  <p className="text-xs font-bold uppercase tracking-[0.18em]">Pergaminhos Secretos</p>
+                </div>
+                <p className="text-sm leading-relaxed text-slate-200">
+                  Para descobrir a história completa, encontre ou adquira os
+                  Pergaminhos espalhados pela comunidade. Eles podem ser negociados
+                  entre jogadores no Marketplace da Cidadela usando Sovereign (SOV).
+                </p>
+              </div>
+            </aside>
           </div>
 
-          {/* Mensagem educativa */}
-          <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8">
-            <p className="text-center text-foreground leading-relaxed text-sm sm:text-base">
-              Nossos jogos são desenvolvidos para ajudar no ensino de{" "}
-              <span className="text-primary font-semibold">tática</span>,{" "}
-              <span className="text-primary font-semibold">raciocínio lógico</span> e{" "}
-              <span className="text-primary font-semibold">gestão financeira</span>{" "}
-              para nossas crianças e educação.
-            </p>
-
-            <p className="text-center text-muted-foreground leading-relaxed text-sm sm:text-base">
-              São jogos educativos e informativos que visam transformar o modo de
-              pensar e o raciocínio para ser mais estratégico e evoluir o QI.
-            </p>
+          <div className="relative mt-8 grid gap-3 sm:grid-cols-3">
+            <InfoButton onClick={() => setActiveModal("sobre")} label="Sobre a Pracinha" className="justify-center" />
+            <InfoButton onClick={() => setActiveModal("como")} label="Como Jogar" className="justify-center" />
+            <InfoButton onClick={() => setActiveModal("soberania")} label="Economia SOV" className="justify-center" />
           </div>
 
-          {/* Cards de benefícios */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
-            <div className="bg-surface/50 border border-border rounded-xl p-3 sm:p-4 text-center">
-              <Brain className="size-6 sm:size-8 text-emerald-400 mx-auto mb-2" />
-              <h3 className="font-semibold text-xs sm:text-sm mb-1">Raciocínio</h3>
-              <p className="text-xs text-muted-foreground">Desenvolve pensamento lógico</p>
-            </div>
-            <div className="bg-surface/50 border border-border rounded-xl p-3 sm:p-4 text-center">
-              <Target className="size-6 sm:size-8 text-amber-400 mx-auto mb-2" />
-              <h3 className="font-semibold text-xs sm:text-sm mb-1">Tática</h3>
-              <p className="text-xs text-muted-foreground">Estratégia e planejamento</p>
-            </div>
-            <div className="bg-surface/50 border border-border rounded-xl p-3 sm:p-4 text-center">
-              <TrendingUp className="size-6 sm:size-8 text-sky-400 mx-auto mb-2" />
-              <h3 className="font-semibold text-xs sm:text-sm mb-1">Gestão</h3>
-              <p className="text-xs text-muted-foreground">Controle financeiro</p>
-            </div>
-          </div>
-
-          {/* Botões Saiba Mais */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
-            <InfoButton onClick={() => openModal("sobre")} label="Sobre a Pracinha" className="justify-center" />
-            <InfoButton onClick={() => openModal("como")} label="Como Jogar" className="justify-center" />
-            <InfoButton onClick={() => openModal("soberania")} label="Soberania" className="justify-center" />
-          </div>
-
-          {/* Botão Continuar */}
           <button
             onClick={onContinue}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 sm:py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl text-sm sm:text-base"
+            className="relative mt-5 w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-400 px-6 py-4 text-base font-black text-slate-950 shadow-lg shadow-emerald-500/20 transition hover:scale-[1.01] hover:brightness-110 active:scale-[0.99]"
           >
-            Continuar
+            Continuar para a Cidadela
           </button>
-
-          {/* Footer */}
-          <p className="text-center text-xs text-muted-foreground mt-4 sm:mt-6">
-            Aprenda brincando • Evolua seu QI • Divirta-se
+          <p className="mt-4 text-center text-xs text-slate-400">
+            Economia, estratégia e lógica — sem peso, com diversão.
           </p>
-        </div>
+        </section>
       </div>
 
-      {/* Modais de Informação */}
-      <InfoModal
-        isOpen={activeModal === "sobre"}
-        onClose={closeModal}
-        title="Sobre a Pracinha Online"
-        content={SEO_CONTENT.sobrePracinha}
-      />
-      <InfoModal
-        isOpen={activeModal === "como"}
-        onClose={closeModal}
-        title="Como Jogar"
-        content={SEO_CONTENT.comoJogar}
-      />
-      <InfoModal
-        isOpen={activeModal === "soberania"}
-        onClose={closeModal}
-        title="Economia da Soberania"
-        content={SEO_CONTENT.soberania}
-      />
+      <InfoModal isOpen={activeModal === "sobre"} onClose={() => setActiveModal(null)} title="Sobre a Pracinha Online" content={SEO_CONTENT.sobrePracinha} />
+      <InfoModal isOpen={activeModal === "como"} onClose={() => setActiveModal(null)} title="Como Jogar" content={SEO_CONTENT.comoJogar} />
+      <InfoModal isOpen={activeModal === "soberania"} onClose={() => setActiveModal(null)} title="Economia da Soberania" content={SEO_CONTENT.soberania} />
+    </div>
+  );
+}
+
+interface PracinhaIntroProps {
+  nomeJogador?: string | undefined;
+  onComplete: () => void;
+}
+
+const FALA_PADRAO =
+  "Saudações, recruta. Eu sou o Pracinha: guardião retrô da Cidadela e oficial de campo da FEB. Suas ordens são claras: explore o modo carreira, complete as 5 missões diárias, chame rivais para o online e procure a verdade nos Pergaminhos de John Adrian.";
+
+export function PracinhaIntro({ nomeJogador, onComplete }: PracinhaIntroProps) {
+  const [fala, setFala] = useState(FALA_PADRAO);
+
+  useEffect(() => {
+    let vivo = true;
+    AIService.generateText(
+      { coach: nomeJogador || "Recruta", categoria: "boas_vindas" },
+      "pracinha",
+    )
+      .then((texto) => {
+        if (vivo && texto.trim()) setFala(texto);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [nomeJogador]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_center,#173526_0%,#0f172a_48%,#020617_100%)] p-4 text-white">
+      <section className="w-full max-w-3xl rounded-[2rem] border border-emerald-300/20 bg-slate-950/80 p-6 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl sm:p-8">
+        <div className="mx-auto max-w-md">
+          <div className="relative mx-auto h-44 w-40">
+            <div className="absolute left-1/2 top-0 h-8 w-1 -translate-x-1/2 rounded bg-emerald-300/70" />
+            <div className="absolute left-1/2 top-5 h-4 w-4 -translate-x-1/2 rounded-full bg-emerald-300 shadow-[0_0_24px_rgba(110,231,183,0.8)]" />
+            <div className="absolute inset-x-2 top-8 h-20 rounded-t-[3rem] border-4 border-emerald-200/50 bg-gradient-to-b from-emerald-700 to-emerald-950 shadow-inner" />
+            <div className="absolute inset-x-5 top-24 h-20 rounded-b-[2rem] rounded-t-lg border border-emerald-300/30 bg-gradient-to-b from-slate-700 to-slate-950" />
+            <div className="absolute left-9 top-[5.8rem] h-5 w-5 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
+            <div className="absolute right-9 top-[5.8rem] h-5 w-5 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
+            <div className="absolute bottom-3 left-1/2 h-2 w-16 -translate-x-1/2 rounded-full bg-emerald-300/40" />
+          </div>
+        </div>
+
+        <div className="mt-2 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-emerald-300">Unidade de orientação ativa</p>
+          <h2 className="font-display mt-2 text-4xl font-black">Pracinha</h2>
+          <p className="mt-1 text-sm text-slate-400">Robô militar retrô • Guardião da Cidadela</p>
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-base leading-relaxed text-slate-100 sm:text-lg">{fala}</p>
+        </div>
+
+        <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-3">
+          <div className="rounded-2xl bg-emerald-400/10 p-3">
+            <TrendingUp className="mb-2 size-5 text-emerald-300" />
+            5 missões novas por dia
+          </div>
+          <div className="rounded-2xl bg-cyan-400/10 p-3">
+            <Target className="mb-2 size-5 text-cyan-300" />
+            Online sempre em movimento
+          </div>
+          <div className="rounded-2xl bg-purple-400/10 p-3">
+            <ScrollText className="mb-2 size-5 text-purple-300" />
+            Pergaminhos contam a verdade
+          </div>
+        </div>
+
+        <button
+          onClick={onComplete}
+          className="mt-6 w-full rounded-2xl bg-emerald-400 px-6 py-4 font-black text-slate-950 transition hover:brightness-110 active:scale-[0.99]"
+        >
+          Receber missões do dia
+        </button>
+      </section>
     </div>
   );
 }

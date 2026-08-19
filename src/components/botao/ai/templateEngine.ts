@@ -28,13 +28,15 @@ const FALLBACK: Record<PromptType, Record<string, string[]>> = {
     vitoria: [
       "E OLHE O FOGUETE! {T} sai de campo encantando a galera, {coach} fazendo pose de gênio no banco!",
       "HÉEEE... {coach} acerta a tática e o {T} passeia! Será genética ou foi sorte? Você decide!",
+      "{T} vence na {divisao}, sobe para {posicao}º e a temporada {temporada} fica iluminada!",
     ],
     derrota: [
       "GENTEEE, que vexame! {T} leva de {gA} e {coach} faz cara de quem caiu da chaleira. Coitado!",
       "O {T} fez o quê? Perdeu de {gA}? {coach} já deve estar arrumando as malas, né não?",
+      "{T} tropeça na {divisao}, fica {posicao}º e a moral vira {moral}/100 na temporada {temporada}.",
     ],
     goleada: [
-      "DESTRUIÇÃO TOTAL! {W} goleia e o {L} some do mapa. Que noite esquecível pra {coachL}!",
+      "DESTRUIÇÃO TOTAL! {W} goleia e o {L} some do mapa da {divisao}. Que noite esquecível pra {coachL}!",
     ],
     empate: [
       "EMPATOU! {coach} sai de campo com aquela cara de quem não entendeu se é bom ou ruim. Patético!",
@@ -81,6 +83,17 @@ const FALLBACK: Record<PromptType, Record<string, string[]>> = {
     crise: ["Crise no {T}: salário atrasado e torcida cobra cabeça de {coach}"],
     geral: ["Futebol de Botão: {coach} no comando do {T} nesta rodada"],
   },
+  pracinha: {
+    boas_vindas: [
+      "Saudações, {coach}. Eu sou o Pracinha. Complete as 5 missões do dia, procure oponentes online e siga o rastro dos Pergaminhos.",
+    ],
+    missoes: [
+      "Ordem do dia: cinco missões, recompensa limitada e economia protegida. Quem joga em grupo avança mais rápido.",
+    ],
+    geral: [
+      "Pracinha na escuta: explore a Cidadela, convide rivais e procure a verdade nos Pergaminhos.",
+    ],
+  },
 };
 
 let cacheRows: FraseRow[] | null = null;
@@ -124,6 +137,15 @@ function fillTemplate(tpl: string, ctx: AIContext): string {
     gA: ctx.golsContra ?? 0,
     diff: ctx.diff ?? 0,
     rodada: ctx.rodada ?? 0,
+    competicao: ctx.competicaoNome ?? ctx.competicao ?? "liga",
+    adversario: ctx.adversarioNome ?? "",
+    divisao: ctx.divisao ? ({ "serie-a": "Série A", "serie-b": "Série B", "serie-c": "Série C" })[ctx.divisao] : "",
+    temporada: ctx.temporada ?? "",
+    posicao: ctx.posicaoTabela ?? "",
+    moral: ctx.moralTime ?? "",
+    soberania: ctx.soberania ?? "",
+    restantes: ctx.rodadasRestantes ?? "",
+    pendencia: ctx.decisaoPendente ?? "",
   };
   return tpl.replace(/\{(\w+)\}/g, (_m, k: string) => String(vars[k] ?? ""));
 }

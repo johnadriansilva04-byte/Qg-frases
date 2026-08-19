@@ -83,6 +83,12 @@ async function getEngine(hw: HardwareInfo): Promise<WebLLMEngine | null> {
   return engineLoading;
 }
 
+const DIVISAO_LABEL_AI = {
+  "serie-a": "Série A",
+  "serie-b": "Série B",
+  "serie-c": "Série C",
+} as const;
+
 /** Monta o prompt de chat no padrão instruction do SmolLM2/Qwen. */
 function buildUserPrompt(promptType: PromptType, ctx: AIContext): string {
   const base: Record<PromptType, string> = {
@@ -91,6 +97,8 @@ function buildUserPrompt(promptType: PromptType, ctx: AIContext): string {
     medico: "Redija um relatório do departamento médico, irônico, sobre o preparo dos botões.",
     redes_sociais: "Gere um tweet de torcedor reagindo ao último placar.",
     noticia: "Escreva uma manchete de bastidores conectada ao jogo.",
+    pracinha:
+      "Fale como Pracinha, o robô militar retrô e guia da Cidadela. Convoque o jogador para missões diárias, exploração dos Pergaminhos e partidas online em tom heroico e intrigante.",
   };
   const vars: string[] = [];
   if (ctx.coach) vars.push(`Treinador: ${ctx.coach}`);
@@ -100,8 +108,19 @@ function buildUserPrompt(promptType: PromptType, ctx: AIContext): string {
   if (ctx.golsPro != null && ctx.golsContra != null)
     vars.push(`Placar: ${ctx.golsPro} x ${ctx.golsContra}`);
   if (ctx.rodada != null) vars.push(`Rodada: ${ctx.rodada}`);
+  if (ctx.competicao) vars.push(`Competição: ${ctx.competicaoNome ?? ctx.competicao}`);
+  if (ctx.adversarioNome) vars.push(`Adversário: ${ctx.adversarioNome}`);
+  if (ctx.divisao) vars.push(`Divisão: ${DIVISAO_LABEL_AI[ctx.divisao]}`);
+  if (ctx.temporada != null) vars.push(`Temporada: ${ctx.temporada}`);
+  if (ctx.posicaoTabela != null) vars.push(`Posição na tabela: ${ctx.posicaoTabela}º`);
+  if (ctx.moralTime != null) vars.push(`Moral do elenco: ${ctx.moralTime}/100`);
+  if (ctx.soberania != null) vars.push(`Soberania: ${ctx.soberania}`);
+  if (ctx.rodadasRestantes != null) vars.push(`Rodadas restantes: ${ctx.rodadasRestantes}`);
+  if (ctx.decisaoPendente) vars.push(`Decisão pendente: ${ctx.decisaoPendente}`);
 
-  return `${base[promptType]}\nContexto do jogo:\n${vars.join("\n")}\nResponda em português, no máximo 2 frases.`;
+  return `${base[promptType]}\nContexto do jogo:\n${vars.join("\n")}\n` +
+    `Nunca invente fatos fora do contexto; use somente dados reais e varie aberturas. ` +
+    `Responda em português, no máximo 2 frases.`;
 }
 
 /**

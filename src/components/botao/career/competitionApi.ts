@@ -1,4 +1,4 @@
-import { TEAMS as TEAMS_LOCAL, teamByIdSync, type Team } from "../data/teams";
+import { TEAMS as TEAMS_LOCAL, teamByIdSync, timesDaDivisao, type Team } from "../data/teams";
 import { shuffle, simulateMatch, sortTable } from "../tournament";
 import type { Difficulty, Fixture, MatchResult, Tournament } from "../types";
 import type { Divisao } from "./types";
@@ -114,12 +114,27 @@ export interface CopaBrasilState {
   rodadaGatilhoConsumida: number | null;
 }
 
-export function gerarCopaBrasil(userTeam: Team, _difficulty: Difficulty): CopaBrasilState {
-  // Sorteia 15 adversários reais do banco local + o time do usuário = 16.
-  const others = shuffle(
-    Array.from(new Set([userTeam, ...TEAMS_LOCAL])).filter((t) => t.id !== userTeam.id),
-  ).slice(0, 15);
-  const participantes = shuffle([userTeam, ...others]);
+export function gerarCopaBrasil(
+  userTeam: Team,
+  _difficulty: Difficulty,
+  pool?: Team[],
+): CopaBrasilState {
+  // A Copa reúne os clubes mais fortes das 3 divisões. O usuário sempre entra
+  // no chaveamento para evitar uma competição "espectável" paralela.
+  const poolTodas = [
+    ...timesDaDivisao("serie-a"),
+    ...timesDaDivisao("serie-b"),
+    ...timesDaDivisao("serie-c"),
+  ];
+  const base = [...(pool && pool.length > 0 ? pool : poolTodas.length > 0 ? poolTodas : TEAMS_LOCAL)];
+  const unique = new Map<string, Team>();
+  for (const team of base) unique.set(team.id, team);
+  unique.set(userTeam.id, userTeam);
+  const seed = Array.from(unique.values()).sort((a, b) => b.power - a.power).slice(0, 16);
+  if (!seed.some((team) => team.id === userTeam.id)) {
+    seed.splice(Math.max(seed.length - 1, 0), 1, userTeam);
+  }
+  const participantes = shuffle(seed);
 
   const rounds: { stage: string; fixtures: Fixture[] }[] = [];
   // 2ª fase: 8 confrontos definidos.
@@ -270,10 +285,10 @@ export function copaDisponivelNaRodada(
   rodadaBrasileirao: number,
   copa: CopaBrasilState,
   userId: string,
-  divisao: Divisao,
+  _divisao: Divisao,
 ): boolean {
-  // Copa do Brasil só disponível na Série A (não em Série B ou C)
-  if (divisao !== "serie-a") return false;
+  // Copa é alimentada pelas três divisões e sempre inclui o usuário; a divisão
+  // atual decide apenas o grau de desafio, não bloqueia participação.
   if (copa.finished) return false;
   if (!usuarioVivoNaCopa(copa, userId)) return false;
   if (!COPA_RODADAS_GATILHO.includes(rodadaBrasileirao)) return false;

@@ -1,123 +1,143 @@
-import { buscarTodosTimes, buscarTimePorId, type TimeDB } from "@/lib/times.functions";
+import { buscarTodosTimes, type TimeDB } from "@/lib/times.functions";
+
+export type TeamDivision = "serie-a" | "serie-b" | "serie-c";
 
 export type Team = {
   id: string;
   name: string;
   short: string;
   city: string;
-  /** cor principal do botão */
   primary: string;
-  /** cor secundária (borda / detalhe) */
   secondary: string;
-  /** força base 60-90, usada pela IA e sorteios */
   power: number;
-  /** Nomes dos 5 botões do usuário (GK + 4 de linha), p/ exibir no campo. */
   botoesNomes?: string[] | undefined;
-  /** Escudo/emoji do time */
   escudo?: string;
+  divisaoInicial?: TeamDivision | undefined;
 };
 
-// Times locais como fallback
+const t = (
+  id: string,
+  name: string,
+  short: string,
+  city: string,
+  primary: string,
+  secondary: string,
+  power: number,
+  divisaoInicial: TeamDivision,
+  escudo = "",
+): Team => ({ id, name, short, city, primary, secondary, power, divisaoInicial, escudo });
+
+// Base ficcional de 60 clubes, deduplicada e ordenada por divisão inicial.
 export const TEAMS: Team[] = [
-  { id: "fla", name: "Rubro-Negro Carioca", short: "RNC", city: "Rio de Janeiro", primary: "#c8102e", secondary: "#111111", power: 88, escudo: "" },
-  { id: "pal", name: "Alviverde Paulista", short: "ALP", city: "São Paulo", primary: "#0b7a3b", secondary: "#f2f2f2", power: 87, escudo: "" },
-  { id: "cor", name: "Alvinegro do Parque", short: "ADP", city: "São Paulo", primary: "#1a1a1a", secondary: "#ffffff", power: 84, escudo: "" },
-  { id: "spf", name: "Tricolor do Morumbi", short: "TDM", city: "São Paulo", primary: "#e21c21", secondary: "#111111", power: 83, escudo: "" },
-  { id: "gre", name: "Imortal Tricolor", short: "IMT", city: "Porto Alegre", primary: "#0d6bb0", secondary: "#111111", power: 84, escudo: "" },
-  { id: "int", name: "Colorado Gaúcho", short: "COG", city: "Porto Alegre", primary: "#d10a11", secondary: "#ffffff", power: 82, escudo: "" },
-  { id: "atl", name: "Galo Mineiro", short: "GAL", city: "Belo Horizonte", primary: "#181818", secondary: "#ededed", power: 85, escudo: "" },
-  { id: "cru", name: "Raposa Celeste", short: "RAC", city: "Belo Horizonte", primary: "#1b3f95", secondary: "#ffffff", power: 80, escudo: "" },
-  { id: "flu", name: "Tricolor das Laranjeiras", short: "TDL", city: "Rio de Janeiro", primary: "#7a1b3a", secondary: "#0d6b3f", power: 81, escudo: "" },
-  { id: "vas", name: "Cruz-Maltino", short: "CRM", city: "Rio de Janeiro", primary: "#111111", secondary: "#ffffff", power: 76, escudo: "" },
-  { id: "bot", name: "Estrela Solitária", short: "ESO", city: "Rio de Janeiro", primary: "#222222", secondary: "#f5f5f5", power: 79, escudo: "" },
-  { id: "san", name: "Peixe da Vila", short: "PXV", city: "Santos", primary: "#f4f4f4", secondary: "#111111", power: 75, escudo: "" },
-  { id: "bah", name: "Tricolor de Aço", short: "TDA", city: "Salvador", primary: "#1e64c8", secondary: "#e2231a", power: 77, escudo: "" },
-  { id: "vit", name: "Leão da Barra", short: "LDB", city: "Salvador", primary: "#c8102e", secondary: "#111111", power: 72, escudo: "" },
-  { id: "spo", name: "Leão da Ilha", short: "LDI", city: "Recife", primary: "#c8102e", secondary: "#111111", power: 71, escudo: "" },
-  { id: "nau", name: "Timbu Alvirrubro", short: "TAR", city: "Recife", primary: "#e2231a", secondary: "#ffffff", power: 68, escudo: "" },
-  { id: "for", name: "Leão do Pici", short: "LDP", city: "Fortaleza", primary: "#0b3f8f", secondary: "#e2231a", power: 78, escudo: "" },
-  { id: "cea", name: "Vozão Alvinegro", short: "VOZ", city: "Fortaleza", primary: "#1a1a1a", secondary: "#ffffff", power: 73, escudo: "" },
-  { id: "cap", name: "Furacão Paranaense", short: "FUR", city: "Curitiba", primary: "#c8102e", secondary: "#111111", power: 79, escudo: "" },
-  { id: "cor2", name: "Coxa Alviverde", short: "COX", city: "Curitiba", primary: "#0b6b3a", secondary: "#ffffff", power: 70, escudo: "" },
-  { id: "gua", name: "Bugre Campineiro", short: "BUG", city: "Campinas", primary: "#0b7a3b", secondary: "#ffffff", power: 66, escudo: "" },
-  { id: "pon", name: "Macaca Alvinegra", short: "MAC", city: "Campinas", primary: "#1a1a1a", secondary: "#ffffff", power: 65, escudo: "" },
-  { id: "goi", name: "Esmeraldino", short: "ESM", city: "Goiânia", primary: "#0a7d43", secondary: "#ffffff", power: 69, escudo: "" },
-  { id: "cui", name: "Dourado do Centro-Oeste", short: "DOU", city: "Cuiabá", primary: "#0f9b4c", secondary: "#f7d117", power: 64, escudo: "" },
-  { id: "ame", name: "Coelho Mineiro", short: "COE", city: "Belo Horizonte", primary: "#0b6b3a", secondary: "#e2231a", power: 67, escudo: "" },
-  { id: "juv", name: "Jaconero Serrano", short: "JAC", city: "Caxias do Sul", primary: "#1a7a3f", secondary: "#111111", power: 63, escudo: "" },
-  { id: "cri", name: "Tigre Catarinense", short: "TIG", city: "Criciúma", primary: "#f2c500", secondary: "#111111", power: 62, escudo: "" },
-  { id: "ava", name: "Leão da Ilha Sul", short: "LIS", city: "Florianópolis", primary: "#0e5ba6", secondary: "#ffffff", power: 61, escudo: "" },
-  { id: "rem", name: "Leão Azul do Norte", short: "LAZ", city: "Belém", primary: "#0b3f8f", secondary: "#ffffff", power: 60, escudo: "" },
-  { id: "pay", name: "Papão da Curuzu", short: "PAP", city: "Belém", primary: "#1a1a1a", secondary: "#0b7a3b", power: 60, escudo: "" },
-  { id: "sam", name: "Peixe do Nordeste", short: "PXN", city: "Aracaju", primary: "#c8102e", secondary: "#ffffff", power: 58, escudo: "" },
-  { id: "abc", name: "Alvinegro Potiguar", short: "ALP2", city: "Natal", primary: "#111111", secondary: "#ffffff", power: 58, escudo: "" },
-  { id: "cor", name: "Alvinegro do Parque", short: "ADP", city: "São Paulo", primary: "#1a1a1a", secondary: "#ffffff", power: 84 },
-  { id: "spf", name: "Tricolor do Morumbi", short: "TDM", city: "São Paulo", primary: "#e21c21", secondary: "#111111", power: 83 },
-  { id: "gre", name: "Imortal Tricolor", short: "IMT", city: "Porto Alegre", primary: "#0d6bb0", secondary: "#111111", power: 84 },
-  { id: "int", name: "Colorado Gaúcho", short: "COG", city: "Porto Alegre", primary: "#d10a11", secondary: "#ffffff", power: 82 },
-  { id: "atl", name: "Galo Mineiro", short: "GAL", city: "Belo Horizonte", primary: "#181818", secondary: "#ededed", power: 85 },
-  { id: "cru", name: "Raposa Celeste", short: "RAC", city: "Belo Horizonte", primary: "#1b3f95", secondary: "#ffffff", power: 80 },
-  { id: "flu", name: "Tricolor das Laranjeiras", short: "TDL", city: "Rio de Janeiro", primary: "#7a1b3a", secondary: "#0d6b3f", power: 81 },
-  { id: "vas", name: "Cruz-Maltino", short: "CRM", city: "Rio de Janeiro", primary: "#111111", secondary: "#ffffff", power: 76 },
-  { id: "bot", name: "Estrela Solitária", short: "ESO", city: "Rio de Janeiro", primary: "#222222", secondary: "#f5f5f5", power: 79 },
-  { id: "san", name: "Peixe da Vila", short: "PXV", city: "Santos", primary: "#f4f4f4", secondary: "#111111", power: 75 },
-  { id: "bah", name: "Tricolor de Aço", short: "TDA", city: "Salvador", primary: "#1e64c8", secondary: "#e2231a", power: 77 },
-  { id: "vit", name: "Leão da Barra", short: "LDB", city: "Salvador", primary: "#c8102e", secondary: "#111111", power: 72 },
-  { id: "spo", name: "Leão da Ilha", short: "LDI", city: "Recife", primary: "#c8102e", secondary: "#111111", power: 71 },
-  { id: "nau", name: "Timbu Alvirrubro", short: "TAR", city: "Recife", primary: "#e2231a", secondary: "#ffffff", power: 68 },
-  { id: "for", name: "Leão do Pici", short: "LDP", city: "Fortaleza", primary: "#0b3f8f", secondary: "#e2231a", power: 78 },
-  { id: "cea", name: "Vozão Alvinegro", short: "VOZ", city: "Fortaleza", primary: "#1a1a1a", secondary: "#ffffff", power: 73 },
-  { id: "cap", name: "Furacão Paranaense", short: "FUR", city: "Curitiba", primary: "#c8102e", secondary: "#111111", power: 79 },
-  { id: "cor2", name: "Coxa Alviverde", short: "COX", city: "Curitiba", primary: "#0b6b3a", secondary: "#ffffff", power: 70 },
-  { id: "gua", name: "Bugre Campineiro", short: "BUG", city: "Campinas", primary: "#0b7a3b", secondary: "#ffffff", power: 66 },
-  { id: "pon", name: "Macaca Alvinegra", short: "MAC", city: "Campinas", primary: "#1a1a1a", secondary: "#ffffff", power: 65 },
-  { id: "goi", name: "Esmeraldino", short: "ESM", city: "Goiânia", primary: "#0a7d43", secondary: "#ffffff", power: 69 },
-  { id: "cui", name: "Dourado do Centro-Oeste", short: "DOU", city: "Cuiabá", primary: "#0f9b4c", secondary: "#f7d117", power: 64 },
-  { id: "ame", name: "Coelho Mineiro", short: "COE", city: "Belo Horizonte", primary: "#0b6b3a", secondary: "#e2231a", power: 67 },
-  { id: "juv", name: "Jaconero Serrano", short: "JAC", city: "Caxias do Sul", primary: "#1a7a3f", secondary: "#111111", power: 63 },
-  { id: "cri", name: "Tigre Catarinense", short: "TIG", city: "Criciúma", primary: "#f2c500", secondary: "#111111", power: 62 },
-  { id: "ava", name: "Leão da Ilha Sul", short: "LIS", city: "Florianópolis", primary: "#0e5ba6", secondary: "#ffffff", power: 61 },
-  { id: "rem", name: "Leão Azul do Norte", short: "LAZ", city: "Belém", primary: "#0b3f8f", secondary: "#ffffff", power: 60 },
-  { id: "pay", name: "Papão da Curuzu", short: "PAP", city: "Belém", primary: "#1a1a1a", secondary: "#0b7a3b", power: 60 },
-  { id: "sam", name: "Peixe do Nordeste", short: "PXN", city: "Aracaju", primary: "#c8102e", secondary: "#ffffff", power: 58 },
-  { id: "abc", name: "Alvinegro Potiguar", short: "ALP2", city: "Natal", primary: "#111111", secondary: "#ffffff", power: 58 },
+  t("fla", "Rubro-Negro Carioca", "RNC", "Rio de Janeiro", "#c8102e", "#111111", 88, "serie-a", "🔴"),
+  t("pal", "Alviverde Paulista", "ALP", "São Paulo", "#0b7a3b", "#f2f2f2", 87, "serie-a", "🐖"),
+  t("atl", "Galo Mineiro", "GAL", "Belo Horizonte", "#181818", "#ededed", 85, "serie-a", "🐔"),
+  t("cor", "Alvinegro do Parque", "ADP", "São Paulo", "#1a1a1a", "#ffffff", 84, "serie-a", "⚪"),
+  t("gre", "Imortal Tricolor", "IMT", "Porto Alegre", "#0d6bb0", "#111111", 84, "serie-a", "🔵"),
+  t("spf", "Tricolor do Morumbi", "TDM", "São Paulo", "#e21c21", "#111111", 83, "serie-a", "🔺"),
+  t("intb", "Colorado Gaúcho", "COG", "Porto Alegre", "#d10a11", "#ffffff", 82, "serie-a", "🔴"),
+  t("flu", "Tricolor das Laranjeiras", "TDL", "Rio de Janeiro", "#7a1b3a", "#0d6b3f", 81, "serie-a", "🟢"),
+  t("cru", "Raposa Celeste", "RAC", "Belo Horizonte", "#1b3f95", "#ffffff", 80, "serie-a", "🦊"),
+  t("bot", "Estrela Solitária", "ESO", "Rio de Janeiro", "#222222", "#f5f5f5", 79, "serie-a", "⭐"),
+  t("cap", "Furacão Paranaense", "FUR", "Curitiba", "#c8102e", "#111111", 79, "serie-a", "🌪️"),
+  t("for", "Leão do Pici", "LDP", "Fortaleza", "#0b3f8f", "#e2231a", 78, "serie-a", "🦁"),
+  t("bah", "Tricolor de Aço", "TDA", "Salvador", "#1e64c8", "#e2231a", 77, "serie-a", "🟦"),
+  t("vas", "Cruz-Maltino", "CRM", "Rio de Janeiro", "#111111", "#ffffff", 76, "serie-a", "✝️"),
+  t("san", "Peixe da Vila", "PXV", "Santos", "#f4f4f4", "#111111", 75, "serie-a", "🐟"),
+  t("cax", "Imperial Serrano", "IMP", "Caxias do Sul", "#1b3f95", "#f7d117", 74, "serie-a", "🏔️"),
+  t("cea", "Vozão Alvinegro", "VOZ", "Fortaleza", "#1a1a1a", "#ffffff", 73, "serie-a", "👴"),
+  t("vit", "Leão da Barra", "LDB", "Salvador", "#c8102e", "#111111", 72, "serie-a", "🦁"),
+  t("spo", "Leão da Ilha", "LDI", "Recife", "#c8102e", "#111111", 71, "serie-a", "🦁"),
+  t("fig", "Figueira Alvinegra", "FIG", "Florianópolis", "#111111", "#ffffff", 70, "serie-a", "🌳"),
+
+  t("cha", "Verdão do Oeste", "VDO", "Chapecó", "#0b7a3b", "#f7d117", 70, "serie-b", "🟩"),
+  t("bru", "Auriverde Bauruano", "AUR", "Bauru", "#0e5ba6", "#f2c500", 70, "serie-b", "🟡"),
+  t("cor2", "Coxa Alviverde", "COX", "Curitiba", "#0b6b3a", "#ffffff", 69, "serie-b", "🟢"),
+  t("goi", "Esmeraldino", "ESM", "Goiânia", "#0a7d43", "#ffffff", 69, "serie-b", "💚"),
+  t("nau", "Timbu Alvirrubro", "TAR", "Recife", "#e2231a", "#ffffff", 68, "serie-b", "⚓"),
+  t("par", "Domínio Paraense", "DPR", "Belém", "#0b3f8f", "#ffffff", 67, "serie-b", "🦅"),
+  t("vil", "Tigre Colorada", "TIC", "Nova Lima", "#e2231a", "#ffe500", 67, "serie-b", "🐯"),
+  t("ame", "Coelho Mineiro", "COE", "Belo Horizonte", "#0b6b3a", "#e2231a", 67, "serie-b", "🐇"),
+  t("lon", "Tubarão do Norte", "TUB", "Londrina", "#0e5ba6", "#ffffff", 66, "serie-b", "🦈"),
+  t("gua", "Bugre Campineiro", "BUG", "Campinas", "#0b7a3b", "#ffffff", 66, "serie-b", "🐐"),
+  t("itu", "Galo Interior", "GIN", "Itu", "#e2231a", "#111111", 65, "serie-b", "🐔"),
+  t("cui", "Dourado do Centro-Oeste", "DOU", "Cuiabá", "#0f9b4c", "#f7d117", 64, "serie-b", "🟨"),
+  t("mir", "Leão Preto", "LEA", "Mogi Mirim", "#111111", "#f2c500", 64, "serie-b", "🦁"),
+  t("juvbr", "Jaconero Serrano", "JAC", "Caxias do Sul", "#1a7a3f", "#111111", 63, "serie-b", "🟢"),
+  t("cri", "Tigre Catarinense", "TIG", "Criciúma", "#f2c500", "#111111", 62, "serie-b", "🐯"),
+  t("ava", "Leão da Ilha Sul", "LIS", "Florianópolis", "#0e5ba6", "#ffffff", 61, "serie-b", "🦁"),
+  t("rem", "Leão Azul do Norte", "LAZ", "Belém", "#0b3f8f", "#ffffff", 60, "serie-b", "🦁"),
+  t("pay", "Papão da Curuzu", "PAP", "Belém", "#1a1a1a", "#0b7a3b", 60, "serie-b", "🍫"),
+  t("abc", "Alvinegro Potiguar", "ALP2", "Natal", "#111111", "#ffffff", 58, "serie-b", "⚫"),
+  t("sam", "Azulino Sampaio", "AZS", "Sampaio", "#0e5ba6", "#ffffff", 58, "serie-b", "🔷"),
+
+  t("pon", "Macaca Alvinegra", "MAC", "Campinas", "#1a1a1a", "#ffffff", 65, "serie-c", "🐒"),
+  t("joi", "Jec Verde-Papo", "JEC", "Joinville", "#0b7a3b", "#ffffff", 62, "serie-c", "🐰"),
+  t("fer", "Mulherada Ferroviária", "MFE", "Araraquara", "#8b1a1a", "#ffffff", 61, "serie-c", "🚂"),
+  t("nov", "Tigre do Vale", "TIV", "Novo Horizonte", "#f2c500", "#111111", 60, "serie-c", "🐯"),
+  t("tup", "Azul Carvoeiro", "AZL", "Criciúma", "#0e5ba6", "#ffffff", 59, "serie-c", "🔵"),
+  t("opo", "Fantasma Alvinegro", "FAN", "Ouro Preto", "#111111", "#ffffff", 58, "serie-c", "👻"),
+  t("cal", "Calanga Alameda", "CLD", "Calabria", "#0b7a3b", "#f7d117", 58, "serie-c", "🟢"),
+  t("tom", "Gavião do Planalto", "GAV", "Tomba", "#e2231a", "#111111", 57, "serie-c", "🦅"),
+  t("mot", "Moto Rubro-Negro", "MRN", "São Luís", "#c8102e", "#111111", 57, "serie-c", "🏍️"),
+  t("csa", "Azulão do Município", "AZM", "Maceió", "#0e5ba6", "#ffffff", 56, "serie-c", "🔵"),
+  t("crb", "Galício de Pajuçara", "GPA", "Maceió", "#d10a11", "#ffffff", 56, "serie-c", "⚓"),
+  t("ser", "Corno do Sertão", "CSR", "Sertão", "#e2231a", "#111111", 55, "serie-c", "🐐"),
+  t("cam", "Aymoré do Sul", "AYS", "Campo Grande", "#0b3f8f", "#f7d117", 55, "serie-c", "🌵"),
+  t("tre", "Trevo das Palmeiras", "TRP", "Palmeiras", "#0b7a3b", "#111111", 54, "serie-c", "🍀"),
+  t("nor", "Nortuno do Amapá", "NAP", "Macapá", "#0e5ba6", "#f7d117", 54, "serie-c", "🧭"),
+  t("asa", "Aurico Lampião", "ALP", "Lampião", "#f2c500", "#111111", 53, "serie-c", "🌵"),
+  t("jacu", "Jacu do Norte", "JDN", "Natal", "#111111", "#ffffff", 52, "serie-c", "🐦"),
+  t("riv", "Palomino Inverso", "PLI", "Riacho", "#7a1b3a", "#0b3f8f", 52, "serie-c", "🐴"),
+  t("alt", "Alta Colina", "ALC", "Colina", "#0b6b3a", "#ffffff", 51, "serie-c", "⛰️"),
+  t("botpb", "Beltrão Paraibano", "BTP", "João Pessoa", "#c8102e", "#111111", 51, "serie-c", "⭐"),
 ];
 
-// Cache de times do banco de dados
+export const DIVISIONS: TeamDivision[] = ["serie-a", "serie-b", "serie-c"];
+
 let cachedTeams: Team[] | null = null;
-/** Cache síncrono dos times do banco, populado por loadTeamsFromDB().
- * Permite que teamByIdSync resolva times do torneio (IDs do banco) em vez de
- * cair para o fallback local — corrige exibições duplicadas (ex.: "FB vs FB"). */
-let cachedTeamsSyncData: Team[] = [];
+let cachedTeamsSyncData: Team[] = TEAMS;
+
+function mapDbTeam(tdb: TimeDB): Team {
+  const local = TEAMS.find((x) => x.id === tdb.id);
+  return {
+    id: tdb.id,
+    name: tdb.nome,
+    short: tdb.abreviacao || local?.short || tdb.nome.slice(0, 3).toUpperCase(),
+    city: tdb.pais || local?.city || "Internacional",
+    primary: tdb.cores[0] || local?.primary || "#000000",
+    secondary: tdb.cores[1] || local?.secondary || "#ffffff",
+    power: tdb.forca ?? local?.power ?? 70,
+    escudo: local?.escudo || "",
+    divisaoInicial: tdb.divisao ?? local?.divisaoInicial,
+  };
+}
 
 async function loadTeamsFromDB(): Promise<Team[]> {
   if (cachedTeams) return cachedTeams;
-
   try {
     const timesDB = await buscarTodosTimes();
-    cachedTeams = timesDB.map((t) => ({
-      id: t.id,
-      name: t.nome,
-      short: t.abreviacao,
-      city: t.pais,
-      primary: t.cores[0] || '#000000',
-      secondary: t.cores[1] || '#ffffff',
-      power: 75, // Poder padrão, pode ser ajustado no futuro
-    }));
+    const merged = new Map<string, Team>();
+    for (const team of TEAMS) merged.set(team.id, team);
+    for (const row of timesDB) {
+      if (row.is_personalizado) continue;
+      merged.set(row.id, mapDbTeam(row));
+    }
+    cachedTeams = Array.from(merged.values());
     cachedTeamsSyncData = cachedTeams;
     return cachedTeams;
   } catch (error) {
-    console.error('Erro ao carregar times do banco:', error);
+    console.error("Erro ao carregar times do banco:", error);
+    cachedTeams = TEAMS;
+    cachedTeamsSyncData = TEAMS;
     return TEAMS;
   }
 }
 
-/** Pré-carrega os times do banco no cache síncrono (chamar na inicialização). */
 export async function preloadTeams(): Promise<void> {
   await loadTeamsFromDB();
 }
 
-/** Acesso síncrono ao cache de times do banco (pode estar vazio antes do load). */
 export function cachedTeamsSync(): Team[] {
   return cachedTeamsSyncData;
 }
@@ -128,14 +148,18 @@ export async function getAllTeams(): Promise<Team[]> {
 
 export async function teamById(id: string): Promise<Team> {
   const teams = await loadTeamsFromDB();
-  return teams.find((t) => t.id === id) ?? teams[0]!;
+  return teams.find((team) => team.id === id) ?? TEAMS.find((team) => team.id === id) ?? TEAMS[0]!;
 }
 
 export function teamByIdSync(id: string): Team {
-  // Cache do banco primeiro (IDs do torneio), depois fallback local.
-  const fromDb = cachedTeamsSyncData.find((t) => t.id === id);
+  const fromDb = cachedTeamsSyncData.find((team) => team.id === id);
   if (fromDb) return fromDb;
-  return TEAMS.find((t) => t.id === id) ?? TEAMS[0]!;
+  return TEAMS.find((team) => team.id === id) ?? TEAMS[0]!;
+}
+
+export function timesDaDivisao(divisao: TeamDivision): Team[] {
+  const base = cachedTeamsSyncData.filter((team) => team.divisaoInicial === divisao);
+  return base.length > 0 ? base : TEAMS.filter((team) => team.divisaoInicial === divisao);
 }
 
 export function createCustomTeam(
@@ -144,8 +168,9 @@ export function createCustomTeam(
   short: string,
   primary: string,
   secondary: string,
-  power: number = 75,
+  power = 75,
   botoesNomes?: string[],
+  divisaoInicial: TeamDivision = "serie-c",
 ): Team {
-  return { id, name, short, city: "Personalizado", primary, secondary, power, botoesNomes };
+  return { id, name, short, city: "Personalizado", primary, secondary, power, botoesNomes, divisaoInicial };
 }

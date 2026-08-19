@@ -10,7 +10,8 @@ export type PromptType =
   | "coletiva"
   | "medico"
   | "redes_sociais"
-  | "noticia";
+  | "noticia"
+  | "pracinha";
 
 /**
  * Contexto real do jogo repassado à IA. Os nomes (time do jogador, adversário,
@@ -37,6 +38,26 @@ export interface AIContext {
   diff?: number | undefined;
   /** Rodada atual do Brasileirão. */
   rodada?: number | undefined;
+  /** Competição (liga/copa/amistoso). */
+  competicao?: "liga" | "copa" | "amistoso" | undefined;
+  /** Nome amigável da competição. */
+  competicaoNome?: string | undefined;
+  /** Adversário do contexto. */
+  adversarioNome?: string | undefined;
+  /** Divisão do usuário (Série A/B/C). */
+  divisao?: "serie-a" | "serie-b" | "serie-c" | undefined;
+  /** Temporada da carreira. */
+  temporada?: number | undefined;
+  /** Posição do usuário na tabela atual. */
+  posicaoTabela?: number | undefined;
+  /** Moral do elenco (0-100). */
+  moralTime?: number | undefined;
+  /** Saldo de soberania. */
+  soberania?: number | undefined;
+  /** Rodadas restantes na temporada. */
+  rodadasRestantes?: number | undefined;
+  /** Decisão/narrativa pendente no celular. */
+  decisaoPendente?: string | undefined;
   /** Categoria específica (suborno/escandalo/crise/...). Sobrepõe à derivada. */
   categoria?: string | undefined;
 }

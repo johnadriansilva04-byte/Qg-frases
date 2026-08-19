@@ -1,18 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-const MONETAG_ZONE_ID = "271263";
+const MONETAG_ZONE_ID = "11607595";
 
 interface MonetagAdProps {
   className?: string;
 }
 
-/** Banner/In-page push da Monetag usado nas telas de transição fora do Botão. */
+/** Placeholder visual nas telas de transição fora do Botão.
+ *  O Monetag agora é a tag script async (zona 271263), carregada pelo
+ *  `adManager` por rota (/trilha, /cidadela) — sem Service Worker.
+ *  Registros do SW legado (`quge5.com`) são removidos aqui. */
 export function MonetagAd({ className = "" }: MonetagAdProps) {
-  const [erro, setErro] = useState(false);
-
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/monetag.js").catch(() => setErro(true));
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => {
+        for (const reg of regs) {
+          if (reg.active?.scriptURL.includes("/monetag.js")) {
+            void reg.unregister();
+          }
+        }
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -21,9 +31,7 @@ export function MonetagAd({ className = "" }: MonetagAdProps) {
       data-monetag-zone={MONETAG_ZONE_ID}
     >
       <p className="mb-2 text-center text-xs text-muted-foreground">Publicidade</p>
-      <div id="monetag-loading-ad" className="flex min-h-[50px] items-center justify-center">
-        {erro && <span className="text-xs text-muted-foreground">Anúncio indisponível</span>}
-      </div>
+      <div id="monetag-loading-ad" className="flex min-h-[50px] items-center justify-center" />
     </div>
   );
 }

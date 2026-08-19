@@ -1,6 +1,29 @@
-import { useState } from "react";
-import { Smartphone, ChevronLeft, Trash2, Send, MessageSquare } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Bot,
+  ClipboardList,
+  ChevronLeft,
+  MessageSquare,
+  Send,
+  Smartphone,
+  Store,
+  Trash2,
+  Users,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { SovMarket } from "@/components/financial/SovMarket";
+import {
+  carregarChatCidadela,
+  enviarMensagemCidadela,
+  inicializarPracinha,
+  registrarEventoMissao,
+  resgatarMissao,
+  type MensagemChatCidadela,
+  type MissaoDiaria,
+} from "@/lib/cidadela/pracinhaCore";
 import type { ConversaCelular, DesafioPatrocinador } from "./types";
+
+type AbaCelular = "mensagens" | "missoes" | "grupo" | "mercado";
 
 type Props = {
   conversas: ConversaCelular[];
@@ -9,6 +32,8 @@ type Props = {
   onEnviarMensagem: (conversaId: string, texto: string) => void;
   onExcluirConversa: (conversaId: string) => void;
   onVoltar: () => void;
+  userId?: string | null | undefined;
+  nomeJogador?: string | null | undefined;
 };
 
 export function CelularConversas({
@@ -17,9 +42,20 @@ export function CelularConversas({
   onEnviarMensagem,
   onExcluirConversa,
   onVoltar,
+  userId = null,
+  nomeJogador = null,
 }: Props) {
+  const [aba, setAba] = useState<AbaCelular>("mensagens");
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
   const [textoInput, setTextoInput] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [missoes, setMissoes] = useState<MissaoDiaria[]>([]);
+  const [chat, setChat] = useState<MensagemChatCidadela[]>([]);
+  const [motorIA, setMotorIA] = useState("local");
+  const [carregandoMissoes, setCarregandoMissoes] = useState(false);
+  const [carregandoChat, setCarregandoChat] = useState(false);
+  const [resgatando, setResgatando] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   // IDs de conversas já abertas nesta sessão — limpa o indicador de "não lida"
   // ao abrir, evitando um ponto verde travado que nunca some.
   const [lidas, setLidas] = useState<Set<string>>(new Set());
@@ -54,10 +90,10 @@ export function CelularConversas({
 
   const conversaAtiva = todasConversas.find((c) => c.id === conversaSelecionada) ?? null;
 
-  // Guarda contra conversa selecionada que não existe mais
-  if (conversaSelecionada && !conversaAtiva) {
-    setConversaSelecionada(null);
-  }
+  useEffect(() => {
+    if (conversaSelecionada && !conversaAtiva) setConversaSelecionada(null);
+  }, [conversaSelecionada, conversaAtiva]);
+
 
   const abrirConversa = (id: string) => {
     setConversaSelecionada(id);
@@ -76,7 +112,79 @@ export function CelularConversas({
     setTextoInput("");
   };
 
-  if (conversaAtiva) {
+  const carregarMissoes = useCallback(async () => {
+    if (!userId) return;
+    setCarregandoMissoes(true);
+    const diagnostico = await inicializarPracinha(userId);
+    setMissoes(diagnostico.missoes);
+    setMotorIA(diagnostico.motorIA);
+    setCarregandoMissoes(false);
+  }, [userId]);
+
+  const carregarChat = useCallback(async () => {
+    setCarregandoChat(true);
+    setChat(await carregarChatCidadela());
+    setCarregandoChat(false);
+  }, []);
+
+  useEffect(() => {
+    if (aba === "missoes") void carregarMissoes();
+    if (aba === "mercado") void registrarEventoMissao("explorar_pergaminhos");
+  }, [aba, carregarMissoes]);
+
+  useEffect(() => {
+    if (aba !== "grupo") return;
+    void carregarChat();
+    const canal = supabase
+      .channel("cidadela-chat-global")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "cidadela_chat_messages" },
+        (payload) => {
+          const nova = payload.new as MensagemChatCidadela;
+          setChat((prev) => (prev.some((m) => m.id === nova.id) ? prev : [...prev, nova].slice(-80)));
+        },
+      )
+      .subscribe();
+    const intervalo = window.setInterval(() => void carregarChat(), 20000);
+    return () => {
+      window.clearInterval(intervalo);
+      void supabase.removeChannel(canal);
+    };
+  }, [aba, carregarChat]);
+
+  const resgatar = async (missao: MissaoDiaria) => {
+    setResgatando(missao.id);
+    const saldo = await resgatarMissao(missao.id);
+    if (saldo !== null) {
+      setFeedback(`Missão resgatada: saldo ${saldo.toFixed(2)} SOV.`);
+      await carregarMissoes();
+    } else {
+      setFeedback("Não foi possível resgatar esta missão agora.");
+    }
+    setResgatando(null);
+  };
+
+  const enviarNoGrupo = async () => {
+    if (!userId || !chatInput.trim()) return;
+    const ok = await enviarMensagemCidadela(userId, nomeJogador ?? "Recruta", chatInput);
+    if (ok) {
+      setChatInput("");
+      await carregarChat();
+    } else {
+      setFeedback("Mensagem não enviada. Verifique sua conexão.");
+    }
+  };
+
+  const tituloAba: Record<AbaCelular, string> = {
+    mensagens: "Mensagens",
+    missoes: "Missões do Pracinha",
+    grupo: "Grupo da Cidadela",
+    mercado: "Feira / Marketplace",
+  };
+
+
+  if (conversaAtiva && aba === "mensagens") {
     return (
       <div className="mx-auto max-w-md px-4 py-6">
         <div className="phone-frame">
@@ -160,59 +268,188 @@ export function CelularConversas({
     <div className="mx-auto max-w-md px-4 py-6">
       <div className="phone-frame">
         <div className="phone-notch" />
-
         <div className="phone-screen">
-          {/* Cabeçalho */}
           <div className="phone-chat-head">
             <button onClick={onVoltar} className="phone-back" aria-label="Voltar">
               <ChevronLeft className="size-5" />
             </button>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-white">Mensagens</p>
-              <p className="truncate text-[10px] text-slate-400">
-                {todasConversas.length} conversa{todasConversas.length !== 1 ? "s" : ""}
-              </p>
+              <p className="truncate text-sm font-bold text-white">{tituloAba[aba]}</p>
+              <p className="truncate text-[10px] text-slate-400">Central integrada do jogador</p>
             </div>
             <Smartphone className="size-4 text-slate-400" />
           </div>
 
-          {/* Lista de conversas */}
+          <div className="grid grid-cols-4 border-b border-slate-700/60 bg-slate-950/70 text-[10px] font-bold">
+            {(
+              [
+                ["mensagens", MessageSquare, "Msgs"],
+                ["missoes", ClipboardList, "Missões"],
+                ["grupo", Users, "Grupo"],
+                ["mercado", Store, "Feira"],
+              ] as const
+            ).map(([id, Icon, label]) => (
+              <button
+                key={id}
+                onClick={() => {
+                  setAba(id);
+                  setConversaSelecionada(null);
+                }}
+                className={`flex flex-col items-center gap-1 px-1 py-2 transition ${
+                  aba === id ? "bg-emerald-400/15 text-emerald-300" : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                <Icon className="size-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="phone-chat-body">
-            {todasConversas.length === 0 ? (
-              <div className="text-center py-8">
-                <MessageSquare className="size-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-400">Celular limpo</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  As notificações chegam sozinhas conforme sua carreira avança.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {todasConversas.map((conv) => (
-                  <button
-                    key={conv.id}
-                    onClick={() => abrirConversa(conv.id)}
-                    className="w-full text-left p-3 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="phone-avatar">{conv.avatar}</div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-bold text-slate-100">{conv.nome}</p>
-                          {conv.naoLida && !lidas.has(conv.id) && (
-                            <span className="w-2 h-2 rounded-full bg-green-400" />
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 truncate">{conv.cargo}</p>
-                        <p className="text-xs text-slate-500 truncate mt-1">
-                          {conv.mensagens[conv.mensagens.length - 1]?.texto}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+            {feedback && (
+              <div className="mb-3 rounded-xl border border-cyan-300/20 bg-cyan-300/10 p-2 text-xs text-cyan-100">
+                {feedback}
               </div>
             )}
+
+            {aba === "mensagens" && (
+              todasConversas.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageSquare className="size-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-sm text-slate-400">Celular limpo</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    As notificações chegam sozinhas conforme sua carreira avança.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {todasConversas.map((conv) => (
+                    <button
+                      key={conv.id}
+                      onClick={() => abrirConversa(conv.id)}
+                      className="w-full text-left p-3 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="phone-avatar">{conv.avatar}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-bold text-slate-100">{conv.nome}</p>
+                            {conv.naoLida && !lidas.has(conv.id) && (
+                              <span className="w-2 h-2 rounded-full bg-green-400" />
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 truncate">{conv.cargo}</p>
+                          <p className="text-xs text-slate-500 truncate mt-1">
+                            {conv.mensagens[conv.mensagens.length - 1]?.texto}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
+
+            {aba === "missoes" && (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3">
+                  <div className="flex items-center gap-2">
+                    <Bot className="size-5 text-emerald-300" />
+                    <div>
+                      <p className="text-sm font-bold text-white">Rotina diária do Pracinha</p>
+                      <p className="text-[10px] text-emerald-200">Motor {motorIA} • Banco Central protegendo o orçamento</p>
+                    </div>
+                  </div>
+                </div>
+
+                {!userId ? (
+                  <p className="py-6 text-center text-xs text-slate-400">Entre com sua conta para receber as 5 missões diárias.</p>
+                ) : carregandoMissoes ? (
+                  <p className="py-6 text-center text-xs text-slate-400">Pracinha calculando missões...</p>
+                ) : missoes.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400">Aplique a migração SQL da Cidadela para ativar as missões.</p>
+                ) : (
+                  missoes.map((missao) => {
+                    const pct = Math.min(100, (missao.progresso / missao.alvo) * 100);
+                    return (
+                      <div key={missao.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-white">{missao.titulo}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-400">{missao.descricao}</p>
+                          </div>
+                          <span className="rounded-full bg-amber-300/20 px-2 py-1 text-[10px] font-black text-amber-200">
+                            {missao.recompensa_sov.toFixed(2)} SOV
+                          </span>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
+                          <div className="h-full rounded-full bg-emerald-300" style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                          <span>{missao.progresso}/{missao.alvo}</span>
+                          <span className="uppercase">{missao.status}</span>
+                        </div>
+                        {missao.status === "completa" && (
+                          <button
+                            onClick={() => void resgatar(missao)}
+                            disabled={resgatando !== null}
+                            className="mt-2 w-full rounded-xl bg-emerald-400 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-50"
+                          >
+                            {resgatando === missao.id ? "Resgatando..." : "Resgatar SOV"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {aba === "grupo" && (
+              <div className="flex h-full flex-col">
+                <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-3">
+                  <p className="text-sm font-bold text-white">Grupo universal da Cidadela</p>
+                  <p className="mt-1 text-xs text-cyan-100">Chame jogadores para o online e acompanhe avisos do Pracinha.</p>
+                </div>
+                <div className="flex-1 space-y-2 overflow-y-auto pb-3">
+                  {carregandoChat && chat.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-slate-400">Carregando grupo...</p>
+                  ) : chat.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-slate-400">Nenhuma mensagem ainda. Abra o front e convide um oponente.</p>
+                  ) : (
+                    chat.map((msg) => (
+                      <div key={msg.id} className="rounded-2xl bg-slate-800/80 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-xs font-bold ${msg.tipo === "sistema" ? "text-emerald-300" : "text-cyan-300"}`}>{msg.sender_nome}</p>
+                          <span className="text-[10px] text-slate-500">{new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                        <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-slate-200">{msg.texto}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={(event) => setChatInput(event.target.value)}
+                    onKeyDown={(event) => event.key === "Enter" && void enviarNoGrupo()}
+                    placeholder={userId ? "Convide alguém para jogar..." : "Entre para participar"}
+                    disabled={!userId}
+                    className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white outline-none disabled:opacity-50"
+                  />
+                  <button
+                    onClick={() => void enviarNoGrupo()}
+                    disabled={!userId || !chatInput.trim()}
+                    className="rounded-xl bg-cyan-400 px-3 text-slate-950 disabled:opacity-40"
+                    aria-label="Enviar no grupo"
+                  >
+                    <Send className="size-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {aba === "mercado" && <SovMarket userId={userId} compact />}
           </div>
         </div>
       </div>
