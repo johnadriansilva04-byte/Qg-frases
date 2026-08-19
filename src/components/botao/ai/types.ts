@@ -11,7 +11,13 @@ export type PromptType =
   | "medico"
   | "redes_sociais"
   | "noticia"
-  | "pracinha";
+  | "pracinha"
+  | "bibliotecaria" // #BRIO: Voz da Bibliotecária
+  | "forja" // #BRIO: Forja de Palavras
+  | "resumo" // #BRIO: Resumo inteligente
+  | "pergunta" // #BRIO: Pergunta sobre conteúdo
+  | "explicacao" // #BRIO: Explicação simplificada
+  | "filosofia"; // #BRIO: Frase filosófica
 
 /**
  * Contexto real do jogo repassado à IA. Os nomes (time do jogador, adversário,
@@ -60,6 +66,19 @@ export interface AIContext {
   decisaoPendente?: string | undefined;
   /** Categoria específica (suborno/escandalo/crise/...). Sobrepõe à derivada. */
   categoria?: string | undefined;
+  // #BRIO: Campos específicos para Biblioteca/Forja
+  /** Título do livro sendo analisado. */
+  livroTitulo?: string | undefined;
+  /** Autor do livro. */
+  livroAutor?: string | undefined;
+  /** Texto original para resumo/correção. */
+  textoOriginal?: string | undefined;
+  /** Tipo de geração (frase, carta, diálogo). */
+  tipoGeracao?: string | undefined;
+  /** Missão atual do jogador. */
+  missaoAtual?: string | undefined;
+  /** Localização atual (Biblioteca, Forja, etc.). */
+  localizacao?: string | undefined;
 }
 
 export const SYSTEM_PROMPT_COMENTARISTA =

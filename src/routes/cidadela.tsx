@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3 } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, Book, PenTool } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
@@ -11,6 +11,12 @@ import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
+// #BRIO: Importar BibliotecaBRIO e ForjaPalavras
+import { BibliotecaBRIO } from "@/components/botao/career/BibliotecaBRIO";
+import { ForjaPalavras } from "@/components/botao/career/ForjaPalavras";
+// #BRIO: Importar tipos para conversa com Bibliotecária
+import type { ConversaCelular } from "@/components/botao/career/types";
+import { personagem } from "@/components/botao/career/rpg/personagens";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -34,7 +40,8 @@ export const Route = createFileRoute("/cidadela")({
   component: Cidadela,
 });
 
-type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | "dama" | "xadrez" | null;
+// #BRIO: Adicionar biblioteca e forja ao tipo Game
+type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | "dama" | "xadrez" | "biblioteca" | "forja" | null;
 
 const GAMES = [
   {
@@ -49,6 +56,21 @@ const GAMES = [
     label: "Futebol de Botão",
     description: "Campeonato com física realista",
     icon: Trophy,
+    status: "disponível",
+  },
+  // #BRIO: Adicionar Biblioteca e Forja como áreas de conhecimento
+  {
+    id: "biblioteca" as Game,
+    label: "Biblioteca",
+    description: "Livros, resumos e a Bibliotecária IA",
+    icon: Book,
+    status: "disponível",
+  },
+  {
+    id: "forja" as Game,
+    label: "Forja de Palavras",
+    description: "Gerador de textos e correção com IA",
+    icon: PenTool,
     status: "disponível",
   },
   {
@@ -121,9 +143,15 @@ function Cidadela() {
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
   const closeModal = () => setActiveModal(null);
 
+  // #BRIO: Adicionar lógica para abrir Biblioteca e Forja
   const handleGameSelect = (game: Game) => {
     if (game === "botao" || game === "trilha") {
       setLoadingGame(game);
+      return;
+    }
+    // #BRIO: Abrir Biblioteca/Forja diretamente (sem loading por enquanto)
+    if (game === "biblioteca" || game === "forja") {
+      setActiveGame(game);
       return;
     }
     // Jogos em breve não fazem nada
@@ -165,10 +193,30 @@ function Cidadela() {
   }
 
   if (phoneOpen) {
+    // #BRIO: Criar conversa com Bibliotecária para o celular
+    const bibliotecaria = personagem("npc-bibliotecaria");
+    const conversaBibliotecaria: ConversaCelular = {
+      id: "conv-bibliotecaria",
+      tipo: "bibliotecaria",
+      nome: bibliotecaria.nome,
+      avatar: bibliotecaria.avatar,
+      cargo: bibliotecaria.cargo,
+      npcId: bibliotecaria.id,
+      mensagens: [
+        {
+          id: "msg-1",
+          texto: "Bem-vindo à Biblioteca dos Clássicos. O que busca hoje?",
+          remetente: "outro",
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      naoLida: true,
+    };
+
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0f2e24_0%,#020617_55%)]">
         <CelularConversas
-          conversas={[]}
+          conversas={[conversaBibliotecaria]}
           userId={perfil?.user_id ?? null}
           nomeJogador={perfil?.nome ?? "Recruta"}
           onEnviarMensagem={() => undefined}
@@ -218,6 +266,16 @@ function Cidadela() {
 
   if (activeGame === "botao") {
     return <BotaoGame onBack={() => setActiveGame(null)} />;
+  }
+
+  // #BRIO: Renderizar BibliotecaBRIO
+  if (activeGame === "biblioteca") {
+    return <BibliotecaBRIO onBack={() => setActiveGame(null)} />;
+  }
+
+  // #BRIO: Renderizar ForjaPalavras
+  if (activeGame === "forja") {
+    return <ForjaPalavras onBack={() => setActiveGame(null)} />;
   }
 
   return (

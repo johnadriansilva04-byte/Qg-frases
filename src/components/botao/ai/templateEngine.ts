@@ -94,6 +94,81 @@ const FALLBACK: Record<PromptType, Record<string, string[]>> = {
       "Pracinha na escuta: explore a Cidadela, convide rivais e procure a verdade nos Pergaminhos.",
     ],
   },
+  // #BRIO: Buckets para novos PromptTypes (Biblioteca/Forja)
+  bibliotecaria: {
+    boas_vindas: [
+      "Bem-vindo à Biblioteca dos Clássicos, {coach}. O conhecimento espera por você.",
+      "Ah, {coach}. Entre. Os livros têm muito a contar.",
+    ],
+    resumo: [
+      "Este livro fala sobre {tema}. O ponto principal é {ponto}.",
+      "A essência desta obra é {essencia}. Vale a pena a leitura.",
+    ],
+    pergunta: [
+      "Sobre {tema}, o livro diz que {resposta}.",
+      "A resposta está nas páginas {paginas}. {explicacao}.",
+    ],
+    geral: [
+      "A Biblioteca guarda segredos antigos, {coach}. O que busca?",
+    ],
+  },
+  forja: {
+    gerar: [
+      "Aqui está sua {tipo}: {resultado}. Use com sabedoria.",
+      "Forjado com cuidado: {resultado}.",
+    ],
+    corrigir: [
+      "Sua frase melhorou: {correcao}.",
+      "A versão refinada: {correcao}.",
+    ],
+    filosofia: [
+      "Sobre {tema}: {frase}.",
+      "Reflexão: {frase}.",
+    ],
+    geral: [
+      "A Forja de Palavras está pronta, {coach}. O que deseja criar?",
+    ],
+  },
+  resumo: {
+    curto: [
+      "Resumo: {resumo}.",
+      "Em poucas palavras: {resumo}.",
+    ],
+    detalhado: [
+      "Resumo detalhado: {resumo}. Pontos principais: {pontos}.",
+      "Análise: {resumo}. Contexto: {contexto}.",
+    ],
+    geral: [
+      "Conteúdo resumido: {resumo}.",
+    ],
+  },
+  pergunta: {
+    resposta: [
+      "Resposta: {resposta}.",
+      "Sobre isso: {resposta}.",
+    ],
+    geral: [
+      "A Biblioteca responde: {resposta}.",
+    ],
+  },
+  explicacao: {
+    simples: [
+      "De forma simples: {explicacao}.",
+      "Pense assim: {explicacao}.",
+    ],
+    geral: [
+      "Explicação: {explicacao}.",
+    ],
+  },
+  filosofia: {
+    frase: [
+      "Reflexão: {frase}.",
+      "Pensamento: {frase}.",
+    ],
+    geral: [
+      "Sabedoria: {frase}.",
+    ],
+  },
 };
 
 let cacheRows: FraseRow[] | null = null;
@@ -146,6 +221,25 @@ function fillTemplate(tpl: string, ctx: AIContext): string {
     soberania: ctx.soberania ?? "",
     restantes: ctx.rodadasRestantes ?? "",
     pendencia: ctx.decisaoPendente ?? "",
+    // #BRIO: Placeholders específicos para Biblioteca/Forja
+    livro: ctx.livroTitulo ?? "",
+    autor: ctx.livroAutor ?? "",
+    texto: ctx.textoOriginal ?? "",
+    tipo: ctx.tipoGeracao ?? "",
+    missao: ctx.missaoAtual ?? "",
+    local: ctx.localizacao ?? "",
+    // Placeholders genéricos para templates BRIO
+    tema: ctx.categoria ?? "",
+    ponto: ctx.decisaoPendente ?? "",
+    essencia: ctx.decisaoPendente ?? "",
+    resposta: ctx.decisaoPendente ?? "",
+    explicacao: ctx.decisaoPendente ?? "",
+    correcao: ctx.decisaoPendente ?? "",
+    frase: ctx.decisaoPendente ?? "",
+    resumo: ctx.decisaoPendente ?? "",
+    pontos: ctx.decisaoPendente ?? "",
+    contexto: ctx.decisaoPendente ?? "",
+    paginas: ctx.rodada ?? "",
   };
   return tpl.replace(/\{(\w+)\}/g, (_m, k: string) => String(vars[k] ?? ""));
 }

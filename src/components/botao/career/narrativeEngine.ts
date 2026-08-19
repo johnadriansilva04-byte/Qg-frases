@@ -10,12 +10,13 @@
  *  - bastidores: empresário/punter propondo acerto sujo
  *  - traicao:   estrela/comissão tramando derrubar o técnico ou vazar tática
  *  - midia:     polêmica em rede social, chantagem anônima por fotos
+ *  - conhecimento: #BRIO: Bibliotecária oferecendo pistas sobre pergaminhos e mistérios
  *
  * O estado da história ativa é persistido em CareerState.narrativa para a
  * sequência continuar entre as partidas até o desfecho.
  */
 
-export type CategoriaNarrativa = "amoroso" | "bastidores" | "traicao" | "midia";
+export type CategoriaNarrativa = "amoroso" | "bastidores" | "traicao" | "midia" | "conhecimento"; // #BRIO: Adicionar categoria conhecimento
 
 export type NarrativaEfeitos = {
   soberania?: number;
@@ -196,6 +197,28 @@ const PERSONAS_TRAICAO = [
   },
 ];
 
+// #BRIO: Personas para categoria conhecimento (Bibliotecária e mistérios da Cidadela)
+const PERSONAS_CONHECIMENTO = [
+  {
+    nome: "Bibliotecária",
+    cargo: "Guardiã do Conhecimento",
+    initials: "BL",
+    iscos: ["pergaminho antigo", "livro selado", "mapa secreto"],
+  },
+  {
+    nome: "Mestre da Forja",
+    cargo: "Artesão de Palavras",
+    initials: "MF",
+    iscos: ["texto cifrado", "frase perdida", "manuscrito original"],
+  },
+  {
+    nome: "Arquivista",
+    cargo: "Custódia de Registros",
+    initials: "AR",
+    iscos: ["registro antigo", "foto arquivada", "documento classificado"],
+  },
+];
+
 const PERSONAS_MIDIA = [
   { nome: "Número desconhecido", cargo: "Chantagem anônima", initials: "??" },
   { nome: "Tadeu Bicalho", cargo: "Colunista marrom", initials: "TB" },
@@ -235,6 +258,15 @@ const GANCHOS_MIDIA = [
   "Treinador, {nome} ({cargo}). Um infiltrado me passou um dossiê. Posso segurar 24h — ou solto em pico de audiência. Decida.",
 ];
 
+// #BRIO: Ganchos para categoria conhecimento (Bibliotecária oferecendo pistas)
+const GANCHOS_CONHECIMENTO = [
+  "Treinador, aqui é {nome} ({cargo}). Encontrei {isco}. Parece conter uma pista sobre a origem da Cidadela. Quer investigar?",
+  "Treinador, {nome} ({cargo}). O {isco} foi encontrado nos arquivos. Precisamos de conhecimento para decifrá-lo. Pode ajudar?",
+  "Sou {nome} ({cargo}). O {isco} revela algo sobre o passado da Cidadela. Mas preciso que você venha à Biblioteca.",
+  "Treinador, {nome} ({cargo}). Descobri {isco}. Para entender o significado, precisamos de sua ajuda na Biblioteca.",
+  "Treinador, {nome} ({cargo}). O {isco} guarda segredos antigos. A Biblioteca está aberta para quem busca conhecimento.",
+];
+
 const REVINAVOLTAS = [
   "e o principal acionista do clube ligou perguntando de você",
   "e um repórter já está confirmado na coletiva de amanhã",
@@ -265,6 +297,7 @@ export function gerarNarrativa(state: NarrativaState): NarrativaState {
     "bastidores",
     "traicao",
     "midia",
+    "conhecimento", // #BRIO: Adicionar categoria conhecimento ao sorteio
   ]);
   let persona: Persona;
   const ganchoIdx = Math.floor(Math.random() * 5);
@@ -276,6 +309,9 @@ export function gerarNarrativa(state: NarrativaState): NarrativaState {
     persona = pick(PERSONAS_BASTIDORES);
   } else if (categoria === "traicao") {
     persona = pick(PERSONAS_TRAICAO);
+  } else if (categoria === "conhecimento") {
+    // #BRIO: Usar PERSONAS_CONHECIMENTO para categoria conhecimento
+    persona = pick(PERSONAS_CONHECIMENTO);
   } else {
     persona = pick(PERSONAS_MIDIA);
   }
@@ -569,36 +605,43 @@ export function cenaDaNarrativa(state: NarrativaState): NarrativaCena | null {
   return arco[state.cenaAtual] ?? null;
 }
 
-function mensagemRaiz(categoria: CategoriaNarrativa, persona: Persona, ganchoIdx: number): string {
-  const idx = ganchoIdx % 5;
+function mensagemRaiz(categoria: CategoriaNarrativa, persona: Persona, idx: number): string {
   if (categoria === "amoroso") {
-    const p = PERSONAS_AMOROSO.find((x) => x.nome === persona.nome) ?? PERSONAS_AMOROSO[0]!;
-    return fillTemplate(GANCHOS_AMOROSO[idx]!, {
-      nome: p.nome,
-      perfil: p.perfis[idx % p.perfis.length]!,
-    });
+    const template = GANCHOS_AMOROSO[idx % GANCHOS_AMOROSO.length];
+    return fillTemplate(template ?? "Erro ao carregar mensagem.", persona);
   }
   if (categoria === "bastidores") {
-    const p = PERSONAS_BASTIDORES.find((x) => x.nome === persona.nome) ?? PERSONAS_BASTIDORES[0]!;
-    return fillTemplate(GANCHOS_BASTIDORES[idx]!, {
-      nome: p.nome,
-      cargo: p.cargo,
-      isco: p.iscos[idx % p.iscos.length]!,
-    });
+    const template = GANCHOS_BASTIDORES[idx % GANCHOS_BASTIDORES.length];
+    return fillTemplate(template ?? "Erro ao carregar mensagem.", persona);
   }
   if (categoria === "traicao") {
     const p = PERSONAS_TRAICAO.find((x) => x.nome === persona.nome) ?? PERSONAS_TRAICAO[0]!;
-    return fillTemplate(GANCHOS_TRAICAO[idx]!, {
+    const template = GANCHOS_TRAICAO[idx % GANCHOS_TRAICAO.length];
+    return fillTemplate(template ?? "Erro ao carregar mensagem.", {
       nome: p.nome,
       cargo: p.cargo,
       isco: p.iscos[idx % p.iscos.length]!,
     });
   }
-  return fillTemplate(GANCHOS_MIDIA[idx]!, {
-    nome: persona.nome,
-    cargo: persona.cargo,
-    perfis: "fontes",
-  });
+  if (categoria === "midia") {
+    const template = GANCHOS_MIDIA[idx % GANCHOS_MIDIA.length];
+    return fillTemplate(template ?? "Erro ao carregar mensagem.", {
+      nome: persona.nome,
+      cargo: persona.cargo,
+      perfis: "fontes",
+    });
+  }
+  // #BRIO: Adicionar mensagemRaiz para categoria conhecimento
+  if (categoria === "conhecimento") {
+    const p = PERSONAS_CONHECIMENTO.find((x) => x.nome === persona.nome) ?? PERSONAS_CONHECIMENTO[0]!;
+    const template = GANCHOS_CONHECIMENTO[idx % GANCHOS_CONHECIMENTO.length];
+    return fillTemplate(template ?? "Erro ao carregar mensagem.", {
+      nome: p.nome,
+      cargo: p.cargo,
+      isco: p.iscos[idx % p.iscos.length]!,
+    });
+  }
+  return "Erro: categoria desconhecida.";
 }
 
 export function avancarNarrativa(

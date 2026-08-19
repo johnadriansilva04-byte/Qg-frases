@@ -108,7 +108,8 @@ export type ConversaCelular = {
     | "evento"
     | "presidente"
     | "empresario"
-    | "medico";
+    | "medico"
+    | "bibliotecaria"; // #BRIO: Conversa com Bibliotecária
   nome: string;
   avatar: string;
   cargo: string;
