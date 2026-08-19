@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2 } from "lucide-react";
-import { armarSponsor } from "@/lib/sponsorGate";
+// REMOVIDO: armarSponsor - Monetag causava disparos em QUALQUER clique
 import { marcarRitualPendente } from "@/components/botao/career/trilhaIntegracao";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";

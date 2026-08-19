@@ -23,7 +23,7 @@ export interface AdRouteConfig {
 const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
   // Rotas estáticas - Google AdSense
   "/": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
-  "/cidadela": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
+  "/cidadela": { network: "none", allowedSlots: [] },
   "/biblioteca": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
   "/gerador": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
   "/corretor": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
@@ -34,10 +34,10 @@ const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
   // Futebol de Botão - Adsterra
   "/botao": { network: "adsterra", allowedSlots: ["native-banner", "interstitial"] },
 
-  // Jogos de estratégia - Monetag
-  "/trilha": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
-  "/dama": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
-  "/xadrez": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
+  // REMOVIDO: Monetag de todas as rotas - causava disparos em QUALQUER clique
+  "/trilha": { network: "none", allowedSlots: [] },
+  "/dama": { network: "none", allowedSlots: [] },
+  "/xadrez": { network: "none", allowedSlots: [] },
 };
 
 /**
@@ -55,13 +55,7 @@ const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string;
     containerId: "container-0ad480fbab555d4ab76b3d9548942579",
   },
   // REMOVIDO: adsterra_social - causava disparos indevidos em cliques globais
-  monetag: {
-    // Tag script do Monetag (zona 11607595) — sem Service Worker.
-    src: "https://al5sm.com/tag.min.js",
-    id: "monetag-script",
-    containerId: "monetag-container",
-    zone: "11607595",
-  },
+  // REMOVIDO: monetag - causava disparos em QUALQUER clique (zona OnClick)
 };
 
 /**
@@ -125,9 +119,7 @@ class AdManager {
     if (path.startsWith("/botao")) {
       return "adsterra";
     }
-    if (path.startsWith("/trilha") || path.startsWith("/dama") || path.startsWith("/xadrez")) {
-      return "monetag";
-    }
+    // REMOVIDO: Monetag prefixos - causava disparos em QUALQUER clique
 
     // Padrão: AdSense para páginas estáticas
     return "adsense";

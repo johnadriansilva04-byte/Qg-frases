@@ -13,7 +13,7 @@ import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
-import { armarSponsor } from "@/lib/sponsorGate";
+// REMOVIDO: armarSponsor - Monetag causava disparos em QUALQUER clique
 
 type Props = {
   homeId: string;
