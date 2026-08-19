@@ -14,7 +14,6 @@ import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
-import { armarSponsor } from "@/lib/sponsorGate";
 
 type Props = {
   homeId: string;
@@ -781,7 +780,7 @@ export function MatchView({
           </div>
         )}
 
-        {/* Intervalo da partida: container TV com anúncio e botão controlado de Monetag.
+        {/* Intervalo da partida: container TV com anúncio.
             Pausa o jogo até o treinador continuar (botão "Voltar ao jogo"). */}
         {halftime && !ended && (
           <div className="halftime-tv">
@@ -792,14 +791,6 @@ export function MatchView({
               </div>
               <div className="p-3">
                 <AdsterraBanner slotId="intervalo" className="min-h-[120px]" />
-              </div>
-              <div className="my-3">
-                <ControlledMonetagButton
-                  className="w-full text-xs"
-                  message="Uma página de patrocinador pode abrir durante o intervalo. Deseja continuar?"
-                >
-                  Ver patrocinador
-                </ControlledMonetagButton>
               </div>
               <div className="my-4 text-center text-xs text-muted-foreground">
                 Publicidade
@@ -834,6 +825,18 @@ export function MatchView({
           <span style={{ width: `${Math.round(aimPower * 100)}%` }} />
         </div>
       </div>
+
+      {/* Botão de Monetag no final do jogo */}
+      {ended && (
+        <div className="mt-4">
+          <ControlledMonetagButton
+            className="w-full text-xs"
+            message="Partida encerrada! Uma página de patrocinador pode abrir. Deseja continuar?"
+          >
+            Ver patrocinador
+          </ControlledMonetagButton>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LogIn, UserPlus } from "lucide-react";
+import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { cadastrar, cachePerfil, entrar, CORES_PADRAO, type Perfil } from "../online/auth";
 
 type Props = {
@@ -18,6 +19,26 @@ export function AuthScreen({ onPronto }: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+
+  // Mensagens variadas sobre mistérios/como joga
+  const LOGIN_MESSAGES = [
+    "Descubra os segredos da Cidadela enquanto espera...",
+    "Aprenda a dominar o Futebol de Botão com estratégia!",
+    "Mistérios aguardam na Trilha dos Mistérios...",
+    "Construa sua carreira e conquiste troféus!",
+    "Desafie jogadores de todo o mundo no modo online!",
+    "Cada partida é uma nova história para contar...",
+  ];
+
+  const [mensagemIndex, setMensagemIndex] = useState(0);
+
+  // Rotação de mensagens
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMensagemIndex((prev) => (prev + 1) % LOGIN_MESSAGES.length);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   const submit = async () => {
     console.log("Modo atual:", modo);
@@ -191,6 +212,19 @@ export function AuthScreen({ onPronto }: Props) {
         >
           {modo === "login" ? "Não tenho conta" : "Já tenho conta"}
         </button>
+      </div>
+
+      {/* Mensagem variada e botão de Monetag */}
+      <div className="rounded-lg border border-border/50 bg-surface/30 p-3">
+        <p className="mb-3 text-center text-xs text-muted-foreground">
+          {LOGIN_MESSAGES[mensagemIndex]}
+        </p>
+        <ControlledMonetagButton
+          className="w-full text-xs"
+          message="Uma página de patrocinador pode abrir. Deseja continuar?"
+        >
+          Ver patrocinador
+        </ControlledMonetagButton>
       </div>
     </div>
   );

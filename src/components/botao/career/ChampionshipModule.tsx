@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Trophy, ChevronRight, Shield, Crown } from "lucide-react";
+import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { TeamBadge } from "../components/TeamPicker";
 import { type Team } from "../data/teams";
 import { sortTable } from "../tournament";
@@ -212,6 +213,18 @@ export function ChampionshipModule({
                     </tbody>
                   </table>
                   <ZoneLegend />
+                </div>
+              )}
+
+              {/* Botão de Monetag na classificação */}
+              {showTable && (
+                <div className="mt-3">
+                  <ControlledMonetagButton
+                    className="w-full text-xs"
+                    message="Uma página de patrocinador pode abrir. Deseja continuar?"
+                  >
+                    Ver patrocinador
+                  </ControlledMonetagButton>
                 </div>
               )}
             </div>

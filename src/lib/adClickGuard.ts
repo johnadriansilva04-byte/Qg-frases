@@ -68,6 +68,13 @@ export function initAdClickGuard(): void {
     if (window.location) {
       const originalDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, "href");
 
+      // Verifica se já foi interceptado para evitar erro "Cannot redefine property"
+      const currentDescriptor = Object.getOwnPropertyDescriptor(window.location, "href");
+      if (currentDescriptor && currentDescriptor.set !== originalDescriptor?.set) {
+        console.log("[AdGuard] window.location.href já foi interceptado anteriormente");
+        return;
+      }
+
       Object.defineProperty(window.location, "href", {
         get() {
           return originalDescriptor?.get?.call(this) ?? window.location.href;

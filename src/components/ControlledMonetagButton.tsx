@@ -68,12 +68,12 @@ export function ControlledMonetagButton({
       adManager.loadMonetagOnDemand();
       console.log("[MONETAG] execution-success");
 
-      // Cooldown de 5 segundos para evitar repetição acidental
+      // Cooldown de 10 segundos para evitar repetição acidental
       setAdState("cooldown");
       setTimeout(() => {
         executionLockRef.current = false;
         setAdState("idle");
-      }, 5000);
+      }, 10000);
     } catch (error) {
       console.error("[MONETAG] execution-error", error);
       executionLockRef.current = false;

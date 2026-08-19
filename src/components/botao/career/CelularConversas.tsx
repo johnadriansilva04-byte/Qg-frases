@@ -12,6 +12,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { supabase } from "@/integrations/supabase/client";
 import { SovMarket } from "@/components/financial/SovMarket";
 import {
@@ -316,6 +317,18 @@ export function CelularConversas({
                 <button onClick={onVoltar} className="btn-ghost w-full text-xs">
                   Entendido — voltar
                 </button>
+              </div>
+            )}
+
+            {/* Botão de Monetag no celular (apenas em conversas ativas) */}
+            {conversaAtiva.id !== "conv-patrocinador" && (
+              <div className="px-3 pb-3">
+                <ControlledMonetagButton
+                  className="w-full text-[10px]"
+                  message="Uma página de patrocinador pode abrir. Deseja continuar?"
+                >
+                  Ver patrocinador
+                </ControlledMonetagButton>
               </div>
             )}
           </div>
