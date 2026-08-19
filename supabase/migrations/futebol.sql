@@ -309,10 +309,12 @@ DROP POLICY IF EXISTS "Todos podem ver usuarios" ON public.botao_usuarios;
 CREATE POLICY "Todos podem ver usuarios" ON public.botao_usuarios FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Autenticados podem criar usuarios" ON public.botao_usuarios;
+DROP POLICY IF EXISTS "Dono pode criar proprio perfil" ON public.botao_usuarios;
 CREATE POLICY "Dono pode criar proprio perfil" ON public.botao_usuarios
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Autenticados podem atualizar usuarios" ON public.botao_usuarios;
+DROP POLICY IF EXISTS "Dono pode atualizar proprio perfil" ON public.botao_usuarios;
 CREATE POLICY "Dono pode atualizar proprio perfil" ON public.botao_usuarios
   FOR UPDATE USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);

@@ -19,6 +19,7 @@ export function AuthScreen({ onPronto }: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [isMounted, setIsMounted] = useState(false);
 
   // Mensagens variadas sobre mistérios/como joga
   const LOGIN_MESSAGES = [
@@ -32,13 +33,19 @@ export function AuthScreen({ onPronto }: Props) {
 
   const [mensagemIndex, setMensagemIndex] = useState(0);
 
-  // Rotação de mensagens
+  // Garante que só rode no client-side para evitar hydration mismatch
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Rotação de mensagens (após montagem)
+  useEffect(() => {
+    if (!isMounted) return;
     const interval = setInterval(() => {
       setMensagemIndex((prev) => (prev + 1) % LOGIN_MESSAGES.length);
     }, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isMounted]);
 
   const submit = async () => {
     console.log("Modo atual:", modo);
@@ -215,17 +222,19 @@ export function AuthScreen({ onPronto }: Props) {
       </div>
 
       {/* Mensagem variada e botão de Monetag */}
-      <div className="rounded-lg border border-border/50 bg-surface/30 p-3">
-        <p className="mb-3 text-center text-xs text-muted-foreground">
-          {LOGIN_MESSAGES[mensagemIndex]}
-        </p>
-        <ControlledMonetagButton
-          className="w-full text-xs"
-          message="Uma página de patrocinador pode abrir. Deseja continuar?"
-        >
-          Ver patrocinador
-        </ControlledMonetagButton>
-      </div>
+      {isMounted && (
+        <div className="rounded-lg border border-border/50 bg-surface/30 p-3">
+          <p className="mb-3 text-center text-xs text-muted-foreground">
+            {LOGIN_MESSAGES[mensagemIndex]}
+          </p>
+          <ControlledMonetagButton
+            className="w-full text-xs"
+            message="Uma página de patrocinador pode abrir. Deseja continuar?"
+          >
+            Ver patrocinador
+          </ControlledMonetagButton>
+        </div>
+      )}
     </div>
   );
 }
