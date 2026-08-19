@@ -151,6 +151,7 @@ export async function criarPerfilSeNaoExistir(
       time_personalizado: "Meu Time",
       abreviacao_time: "MTI",
       numero_jogador: 10,
+      pontos_soberania: 50,
       cores: ["#FF0000", "#00FF00", "#0000FF"],
     })
     .select("*")

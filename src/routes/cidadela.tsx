@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
+import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { CidadelaIntro } from "@/components/CidadelaIntro";
@@ -80,28 +81,16 @@ const GAMES = [
 function Cidadela() {
   const [hydrated, setHydrated] = useState(false);
   const [activeGame, setActiveGame] = useState<Game>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
   const [showIntro, setShowIntro] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
 
-  // Lê preferências locais só no cliente para evitar quebra/hidratação no SSR.
+  // Sessão ativa não é persistida: cada login entra com estado limpo.
   useEffect(() => {
-    const saved = window.localStorage.getItem("cidadela_active_game");
+    window.localStorage.removeItem("cidadela_active_game");
     const seen = window.localStorage.getItem("cidadela_intro_seen");
-    setActiveGame((saved as Game) || null);
     setShowIntro(!seen);
-    setHydrated(true);
   }, []);
-
-  // Persistir o jogo ativo no localStorage depois da hidratação.
-  useEffect(() => {
-    if (!hydrated) return;
-    if (activeGame) {
-      window.localStorage.setItem("cidadela_active_game", activeGame);
-    } else {
-      window.localStorage.removeItem("cidadela_active_game");
-    }
-  }, [activeGame, hydrated]);
 
   const handleContinueIntro = () => {
     window.localStorage.setItem("cidadela_intro_seen", "true");
@@ -112,47 +101,75 @@ function Cidadela() {
   const closeModal = () => setActiveModal(null);
 
   const handleGameSelect = (game: Game) => {
-    if (game === "botao") {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setActiveGame(game);
-      }, 1800);
-    } else if (game === "trilha") {
-      setActiveGame(game);
-    } else {
-      // Jogos em breve não fazem nada
-      console.log("Jogo em breve:", game);
+    if (game === "botao" || game === "trilha") {
+      setLoadingGame(game);
+      return;
     }
+    // Jogos em breve não fazem nada
+    console.log("Jogo em breve:", game);
   };
 
   if (!hydrated) {
-    return <div className="min-h-screen bg-background" />;
+    return (
+      <TrilhaLoadingScreen
+        titulo="Carregando Cidadela"
+        subtitulo="Sincronizando módulos de estratégia"
+        passos={[
+          "Limpando sessão anterior...",
+          "Preparando jogos...",
+          "Carregando publicidade Monetag...",
+          "Pronto!",
+        ]}
+        intros={[
+          {
+            titulo: "Cidadela do Pracinha",
+            corpo: "Cada módulo carrega de forma isolada para evitar dados de sessões anteriores.",
+          },
+        ]}
+        duracao={1200}
+        onCompleto={() => setHydrated(true)}
+      />
+    );
   }
 
   if (showIntro) {
     return <CidadelaIntro onContinue={handleContinueIntro} />;
   }
 
-  if (loading) {
+  if (loadingGame === "botao") {
     return (
       <LoadingScreen
         passos={[
           "Carregando Futebol de Botão...",
+          "Sincronizando sua conta com o Supabase...",
           "Inicializando IA Comentarista...",
           "Preparando times...",
-          "Carregando campeonatos...",
           "Pronto!",
         ]}
         intros={[
           {
             titulo: "Bem-vindo ao Futebol de Botão",
             corpo:
-              "Prepare-se para entrar em campo. A IA está gerando notícias e analisando dados do campeonato.",
+              "Seus dados são carregados apenas do seu usuário autenticado. Aguarde a sincronização segura.",
           },
         ]}
         duracao={1800}
-        onCompleto={() => {}}
+        onCompleto={() => {
+          setLoadingGame(null);
+          setActiveGame("botao");
+        }}
+      />
+    );
+  }
+
+  if (loadingGame === "trilha") {
+    return (
+      <TrilhaLoadingScreen
+        duracao={1800}
+        onCompleto={() => {
+          setLoadingGame(null);
+          setActiveGame("trilha");
+        }}
       />
     );
   }

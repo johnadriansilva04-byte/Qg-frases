@@ -66,6 +66,8 @@ interface LoadingScreenProps {
   intros?: IntroTexto[];
   /** Duração total alvo em ms (default ~2200ms). A barra preenche suavemente. */
   duracao?: number;
+  /** Quando false, a barra permanece em 100% até o backend estar pronto. */
+  pronto?: boolean;
   /** Callback ao chegar em 100%. */
   onCompleto?: () => void;
 }
@@ -74,13 +76,19 @@ export function LoadingScreen({
   passos = PASSOS_PADRAO,
   intros = INTROS_PADRAO,
   duracao = 2200,
+  pronto = true,
   onCompleto,
 }: LoadingScreenProps) {
   const [pct, setPct] = useState(0);
   const [introIdx, setIntroIdx] = useState(0);
   const startRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
+  const readyRef = useRef(pronto);
   const doneRef = useRef(false);
+
+  useEffect(() => {
+    readyRef.current = pronto;
+  }, [pronto]);
 
   // Anima a barra de 0 a 100% suavemente (ease-out).
   useEffect(() => {
@@ -89,7 +97,7 @@ export function LoadingScreen({
       const t = Math.min(1, (now - startRef.current) / duracao);
       const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
       setPct(Math.round(eased * 100));
-      if (t < 1) {
+      if (t < 1 || !readyRef.current) {
         rafRef.current = requestAnimationFrame(tick);
       } else if (!doneRef.current) {
         doneRef.current = true;

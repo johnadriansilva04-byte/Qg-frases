@@ -186,6 +186,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Tela de carregamento (splash) controlada por contexto: inicia de carreira,
   // entrada em campo, consultas ao Supabase e inicialização da IA.
   const [loading, setLoading] = useState(false);
+  const [loadingReady, setLoadingReady] = useState(true);
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
 
   // Inicializa AdManager para rota /botao (Adsterra)
@@ -232,27 +233,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
   }, []);
 
-  // Login automático: se o navegador já tem sessão conhecida (perfil pronto),
-  // leva direto ao destino certo — sem passar pela tela de login. Se há uma
-  // carreira ativa (torneio em andamento), abre o lobby (hub); senão, menu.
-  // Roda uma única vez para não sobrescrever a navegação do usuário. Usuários
-  // sem sessão permanecem no menu (jogável offline) — não força a tela de login.
-  const autoLoginDone = useRef(false);
-  useEffect(() => {
-    if (autoLoginDone.current) return;
-    if (carregando) return;
-    autoLoginDone.current = true;
-    if (perfil) {
-      // Logado: mostra loading antes de navegar para o destino correto
-      const carreiraAtiva = !!tour && tour.phase !== "fim" && !!career?.coach.nome;
-      runWithLoading(() => {
-        setScreen(carreiraAtiva ? "hub" : "menu");
-      }, 1500);
-    }
-    // Sem sessão: mantém o menu inicial (jogo offline acessível).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [carregando, perfil]);
-
   // Inicializa a IA central (detecção de hardware + pré-carga do WebLLM se
   // potente). Não bloqueia a UI — roda em background. Zero crash: se falhar,
   // o Motor de Templates Procedurais assume automaticamente.
@@ -260,40 +240,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     AIService.init().catch(() => {});
   }, []);
 
-  // Salvar tela atual no localStorage
-  useEffect(() => {
-    localStorage.setItem("botao_screen", screen);
-  }, [screen]);
+  // A tela atual fica apenas em memória; nunca restaura estado de outra sessão.
 
-  // Carregar time personalizado do usuário (prioridade: perfil Supabase > localStorage)
+  // Time personalizado vem exclusivamente do perfil autenticado no Supabase.
   const customTeamData = useMemo(() => {
-    if (perfil?.time_personalizado && perfil?.abreviacao_time && perfil?.cores) {
-      return {
-        nome: perfil.time_personalizado,
-        short: perfil.abreviacao_time,
-        primary: perfil.cores[0],
-        secondary: perfil.cores[1],
-        botoesNomes: perfil.botoes_nomes ?? undefined,
-      };
-    }
-    const timeNome = localStorage.getItem("botao_online_time_personalizado") || "Meu Time";
-    const abreviacao = localStorage.getItem("botao_online_abreviacao_time") || "MTI";
-    const cores = JSON.parse(
-      localStorage.getItem("botao_online_cores") || '["#FF0000", "#00FF00", "#0000FF"]',
-    );
-    let botoesNomes: string[] | undefined;
-    try {
-      const raw = localStorage.getItem("botao_online_botoes_nomes");
-      if (raw) botoesNomes = JSON.parse(raw);
-    } catch {
-      botoesNomes = undefined;
-    }
     return {
-      nome: timeNome,
-      short: abreviacao,
-      primary: cores[0],
-      secondary: cores[1],
-      botoesNomes,
+      nome: perfil?.time_personalizado ?? "Meu Time",
+      short: perfil?.abreviacao_time ?? "MTI",
+      primary: perfil?.cores?.[0] ?? "#FF0000",
+      secondary: perfil?.cores?.[1] ?? "#00FF00",
+      botoesNomes: perfil?.botoes_nomes ?? undefined,
     };
   }, [perfil]);
 
@@ -318,8 +274,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   // Formação PS2 escolhida pelo usuário no perfil (tática + posições dos botões).
   const formation = useMemo<Array<[number, number]>>(() => {
-    const tatica = perfil?.tatica ?? localStorage.getItem("botao_online_tatica") ?? undefined;
-    return formacaoById(tatica).posicoes;
+    return formacaoById(perfil?.tatica ?? undefined).posicoes;
   }, [perfil?.tatica]);
 
   const [rivalTeam, setRivalTeam] = useState("fla");
@@ -327,7 +282,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [current, setCurrent] = useState<Fixture | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  useEffect(() => setProgress(loadProgress()), []);
+  const zerarEstadoDaConta = useCallback(() => {
+    setProgress(loadProgress());
+    setTour(null);
+    setCareer(null);
+    setCurrent(null);
+    setCurrentCopaFix(null);
+    setVeredito(null);
+    setShowCeremony(false);
+    setCeremonyBonus(0);
+    setRivalTeam("fla");
+    setDifficulty("amador");
+  }, []);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3200);
@@ -344,6 +311,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setLoading(false);
       onComplete();
     });
+    setLoadingReady(true);
     setLoading(true);
     void duracao;
   };
@@ -378,93 +346,53 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   };
 
-  // Carregar carreira ao iniciar (localStorage primeiro para UX instantânea)
-  useEffect(() => {
-    const localCareer = loadCareer();
-    if (localCareer && localCareer.coach.nome) {
-      console.log("[BotaoGame] Carreira carregada do localStorage:", localCareer);
-      setCareer(localCareer);
-    }
-  }, []);
+  /** Hidrata progresso + carreira + torneio apenas do usuário autenticado. */
+  const hidratarCampanha = useCallback(
+    async (userId: string) => {
+      if (hydratedUserRef.current === userId) return;
+      hydratedUserRef.current = userId;
+      zerarEstadoDaConta();
+      setLoadingOnComplete(() => () => setLoading(false));
+      setLoadingReady(false);
+      setLoading(true);
 
-  const progressTemConteudo = (p: Progress) =>
-    Object.values(p.titles ?? {}).some((v) => v > 0) ||
-    (p.trophies?.length ?? 0) > 0 ||
-    Object.values(p.friendlies ?? {}).some((v) => v > 0) ||
-    (p.gols_feitos ?? 0) > 0 ||
-    (p.gols_sofridos ?? 0) > 0 ||
-    !!p.tournament;
+      try {
+        const [remoteProgress, remoteCareer] = await Promise.all([
+          loadProgressFromSupabase(userId),
+          loadCareerFromSupabase(userId),
+        ]);
 
-  /**
-   * Hidrata progresso + carreira + torneio do Supabase uma vez por usuário.
-   * Se o remoto estiver vazio, preserva o save local e sobe esse save.
-   */
-  const hidratarCampanha = useCallback(async (userId: string) => {
-    if (hydratedUserRef.current === userId) return;
-    hydratedUserRef.current = userId;
-
-    try {
-      const localProgress = loadProgress();
-      const localTournament = loadTournament();
-      const localCareer = loadCareer();
-      const [remoteProgress, remoteCareer] = await Promise.all([
-        loadProgressFromSupabase(userId),
-        loadCareerFromSupabase(userId, localCareer?.coach),
-      ]);
-
-      const nextProgress = progressTemConteudo(remoteProgress) ? remoteProgress : localProgress;
-      setProgress(nextProgress);
-      saveProgress(nextProgress);
-      if (!progressTemConteudo(remoteProgress) && progressTemConteudo(localProgress)) {
-        void saveProgressToSupabase(userId, localProgress);
-      }
-
-      const remoteTournament = remoteProgress.tournament ?? null;
-      if (remoteTournament) {
-        console.log("[BotaoGame] Torneio carregado do Supabase:", remoteTournament);
-        setTour(remoteTournament);
-        saveTournament(remoteTournament);
-      } else if (localTournament) {
-        console.log("[BotaoGame] Torneio remoto vazio; mantendo local");
-        setTour(localTournament);
-        void saveTournamentToSupabase(userId, localTournament);
-      } else {
-        setTour(null);
-        deleteTournamentLocal();
-      }
-
-      if (remoteCareer && remoteCareer.coach.nome) {
-        console.log("[BotaoGame] Carreira carregada do Supabase:", remoteCareer);
+        setProgress(remoteProgress);
+        setTour(remoteProgress.tournament ?? null);
         setCareer(remoteCareer);
-        saveCareer(remoteCareer);
-        // Repara registros antigos que tinham coach vazio no JSONB.
-        void saveCareerToSupabase(userId, remoteCareer);
-      } else if (localCareer?.coach.nome) {
-        console.log("[BotaoGame] Carreira remota vazia; mantendo local:", localCareer);
-        setCareer(localCareer);
-        void saveCareerToSupabase(userId, localCareer);
-      } else {
-        setCareer(null);
-        deleteCareer();
+        if (remoteCareer) {
+          // Repara registros antigos que tinham coach vazio no JSONB.
+          void saveCareerToSupabase(userId, remoteCareer);
+        }
+        const campanhaAtiva =
+          remoteCareer && remoteProgress.tournament && remoteProgress.tournament.phase !== "fim";
+        setScreen(campanhaAtiva ? "hub" : "menu");
+      } catch (error) {
+        hydratedUserRef.current = null;
+        console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
+        zerarEstadoDaConta();
+        setToast("Não foi possível carregar seus dados. Estado da conta limpo.");
+      } finally {
+        setLoadingReady(true);
       }
-    } catch (error) {
-      hydratedUserRef.current = null;
-      console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
-      const localCareer = loadCareer();
-      if (localCareer?.coach.nome) setCareer(localCareer);
-      const localTournament = loadTournament();
-      if (localTournament) setTour(localTournament);
-    }
-  }, []);
+    },
+    [zerarEstadoDaConta],
+  );
 
   useEffect(() => {
     const userId = perfil?.user_id;
     if (!userId) {
       hydratedUserRef.current = null;
+      zerarEstadoDaConta();
       return;
     }
     void hidratarCampanha(userId);
-  }, [perfil?.user_id, hidratarCampanha]);
+  }, [perfil?.user_id, hidratarCampanha, zerarEstadoDaConta]);
 
   const handleLogout = async () => {
     if (emPartidaOnline) {
@@ -472,8 +400,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       return;
     }
     await logout();
+    zerarEstadoDaConta();
     setScreen("auth");
-    localStorage.removeItem("botao_screen"); // Limpar tela salva ao fazer logout
     setToast("Você saiu da conta.");
   };
 
@@ -481,6 +409,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     console.log("[BotaoGame] aoLogar chamado:", { perfil: p });
     // Sem perfil = logout ou exclusão de conta → volta à tela de login.
     if (!p) {
+      zerarEstadoDaConta();
       setScreen("auth");
       setToast("Você saiu da conta.");
       return;
@@ -713,7 +642,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const finishCoachSetup = (coach: CareerState["coach"]) => {
     const base = career ?? EMPTY_CAREER;
-    const nova: CareerState = { ...base, coach };
+    const coachComSaldo = { ...coach, soberania: perfil?.pontos_soberania ?? coach.soberania };
+    const nova: CareerState = { ...base, coach: coachComSaldo };
     persistCareer(nova);
     iniciarCampanha(nova);
   };
@@ -1877,7 +1807,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       {/* Social Bar da Adsterra - global no Futebol de Botão */}
       <AdsterraSocialBar />
 
-      {loading && <LoadingScreen onCompleto={loadingOnComplete} />}
+      {carregando && !loading && <LoadingScreen pronto={false} onCompleto={() => {}} />}
+      {loading && <LoadingScreen pronto={loadingReady} onCompleto={loadingOnComplete} />}
       {veredito && career && (
         <SeasonTransition
           veredito={veredito}

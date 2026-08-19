@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Target, Trophy, Gamepad2 } from "lucide-react";
+import { MonetagAd } from "@/components/MonetagAd";
 
 /**
  * TrilhaLoadingScreen — Tela de carregamento específica para Trilha
@@ -17,19 +18,26 @@ const PASSOS_TRILHA = [
 const INTROS_TRILHA = [
   {
     titulo: "Bem-vindo à Trilha!",
-    corpo: "O jogo de estratégia tática da FEB. Planeje seus movimentos e domine o campo de batalha.",
+    corpo:
+      "O jogo de estratégia tática da FEB. Planeje seus movimentos e domine o campo de batalha.",
   },
   {
     titulo: "Dica de Estratégia",
-    corpo: "Forme trilhas para capturar peças inimigas. Tente criar trilhas duplas para máxima eficiência.",
+    corpo:
+      "Forme trilhas para capturar peças inimigas. Tente criar trilhas duplas para máxima eficiência.",
   },
   {
     titulo: "Sistema de Fases",
-    corpo: "Complete fases para se tornar o Mestre da Trilha. Cada desafio é mais difícil que o anterior.",
+    corpo:
+      "Complete fases para se tornar o Mestre da Trilha. Cada desafio é mais difícil que o anterior.",
   },
 ];
 
 interface TrilhaLoadingScreenProps {
+  /** Título do módulo em transição. */
+  titulo?: string;
+  /** Subtítulo do módulo em transição. */
+  subtitulo?: string;
   /** Mensagens de passo (status) exibidas abaixo da barra. */
   passos?: string[];
   /** Rotação de textos introdutórios/dicas. */
@@ -41,6 +49,8 @@ interface TrilhaLoadingScreenProps {
 }
 
 export function TrilhaLoadingScreen({
+  titulo = "Carregando Trilha",
+  subtitulo = "Preparando o campo de batalha",
   passos = PASSOS_TRILHA,
   intros = INTROS_TRILHA,
   duracao = 2000,
@@ -96,11 +106,9 @@ export function TrilhaLoadingScreen({
               </div>
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground mb-2">
-              Carregando Trilha
+              {titulo}
             </h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Preparando o campo de batalha
-            </p>
+            <p className="text-muted-foreground text-sm sm:text-base">{subtitulo}</p>
           </div>
 
           {/* Barra de progresso */}
@@ -126,26 +134,7 @@ export function TrilhaLoadingScreen({
             <p className="text-xs text-muted-foreground">{intro.corpo}</p>
           </div>
 
-          {/* Banner Monetag - Carregamento não-bloqueante */}
-          <div className="bg-surface/30 rounded-lg p-3 border border-border/50">
-            <div className="text-center text-xs text-muted-foreground mb-2">
-              Publicidade
-            </div>
-            <div
-              id="monetag-loading-ad"
-              className="min-h-[90px] flex items-center justify-center"
-            >
-              {/* Container para anúncio Monetag */}
-              <ins
-                className="adsbygoogle"
-                style={{ display: "block" }}
-                data-ad-client="ca-pub-2783546143377409"
-                data-ad-slot="3577664762"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              />
-            </div>
-          </div>
+          <MonetagAd />
         </div>
       </div>
     </div>

@@ -1,13 +1,13 @@
 /**
  * AD MANAGER - Sistema centralizado de monetização
- * 
+ *
  * Gerencia isolamento entre redes de anúncios:
  * - Google AdSense: Páginas estáticas e menus
  * - Adsterra: Futebol de Botão
- * - PropellerAds: Trilha
+ * - Monetag: Trilha e demais jogos de estratégia
  */
 
-export type AdNetwork = "adsense" | "adsterra" | "propeller" | "none";
+export type AdNetwork = "adsense" | "adsterra" | "monetag" | "none";
 
 export interface AdRouteConfig {
   network: AdNetwork;
@@ -20,7 +20,7 @@ export interface AdRouteConfig {
 const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
   // Rotas estáticas - Google AdSense
   "/": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
-  "/cidadela": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
+  "/cidadela": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
   "/biblioteca": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
   "/gerador": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
   "/corretor": { network: "adsense", allowedSlots: ["banner-topo", "banner-rodape"] },
@@ -31,8 +31,10 @@ const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
   // Futebol de Botão - Adsterra
   "/botao": { network: "adsterra", allowedSlots: ["native-banner", "interstitial"] },
 
-  // Trilha - PropellerAds
-  "/trilha": { network: "propeller", allowedSlots: ["inpage-push", "interstitial"] },
+  // Jogos de estratégia - Monetag
+  "/trilha": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
+  "/dama": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
+  "/xadrez": { network: "monetag", allowedSlots: ["inpage-push", "loading"] },
 };
 
 /**
@@ -54,11 +56,11 @@ const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string 
     id: "adsterra-social-script",
     containerId: "adsterra-social-container",
   },
-  propeller: {
-    // Script placeholder para PropellerAds
+  monetag: {
+    // Registrado via Service Worker público (/monetag.js) nos slots Monetag.
     src: "",
-    id: "propeller-script",
-    containerId: "propeller-container",
+    id: "monetag-script",
+    containerId: "monetag-container",
   },
 };
 
@@ -138,8 +140,8 @@ class AdManager {
     if (path.startsWith("/botao")) {
       return "adsterra";
     }
-    if (path.startsWith("/trilha")) {
-      return "propeller";
+    if (path.startsWith("/trilha") || path.startsWith("/dama") || path.startsWith("/xadrez")) {
+      return "monetag";
     }
 
     // Padrão: AdSense para páginas estáticas
@@ -180,6 +182,12 @@ class AdManager {
     script.src = config.src;
     script.async = true;
     script.setAttribute("data-cfasync", "false");
+    if (network === "monetag") {
+      script.dataset["zone"] = "271263";
+      if ("serviceWorker" in navigator) {
+        void navigator.serviceWorker.register("/monetag.js").catch(() => {});
+      }
+    }
 
     document.head.appendChild(script);
     this.loadedScripts.add(network);
@@ -296,7 +304,9 @@ class AdManager {
   initForRoute(path: string): void {
     // Verifica se deve mostrar anúncios
     if (!this.shouldShowAds()) {
-      console.log(`[AdManager] Anúncios desativados para rota ${path} (primeira visita ou primeiro jogo não jogado)`);
+      console.log(
+        `[AdManager] Anúncios desativados para rota ${path} (primeira visita ou primeiro jogo não jogado)`,
+      );
       return;
     }
 

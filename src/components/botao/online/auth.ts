@@ -26,21 +26,6 @@ export type Perfil = {
 
 export const CORES_PADRAO = ["#FF0000", "#00FF00", "#0000FF"];
 
-export const STORAGE_KEYS = {
-  LOGGED_IN: "botao_online_logged_in",
-  PERFIL_ID: "botao_online_usuario_id",
-  EMAIL: "botao_online_email",
-  NOME: "botao_online_nome",
-  TIME: "botao_online_time_personalizado",
-  ABREVIACAO: "botao_online_abreviacao_time",
-  NUMERO: "botao_online_numero_jogador",
-  CORES: "botao_online_cores",
-  TATICA: "botao_online_tatica",
-  BOTOES: "botao_online_botoes_nomes",
-  LOBBY_ID: "botao_online_lobby_id",
-  BLOCO_ID: "botao_online_bloco_id",
-} as const;
-
 /** Validação simples de email */
 export const validarEmail = (email: string) => {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -74,24 +59,27 @@ export function validarCadastro(input: {
   return null;
 }
 
-export function cachePerfil(p: Perfil) {
-  if (typeof window === "undefined") return;
-  const ls = window.localStorage;
-  ls.setItem(STORAGE_KEYS.LOGGED_IN, "true");
-  ls.setItem(STORAGE_KEYS.PERFIL_ID, p.id);
-  ls.setItem(STORAGE_KEYS.EMAIL, p.email);
-  ls.setItem(STORAGE_KEYS.NOME, p.nome);
-  ls.setItem(STORAGE_KEYS.TIME, p.time_personalizado);
-  ls.setItem(STORAGE_KEYS.ABREVIACAO, p.abreviacao_time);
-  ls.setItem(STORAGE_KEYS.NUMERO, String(p.numero_jogador));
-  ls.setItem(STORAGE_KEYS.CORES, JSON.stringify(p.cores));
-  if (p.tatica) ls.setItem(STORAGE_KEYS.TATICA, p.tatica);
-  if (p.botoes_nomes) ls.setItem(STORAGE_KEYS.BOTOES, JSON.stringify(p.botoes_nomes));
+export function cachePerfil(_p: Perfil) {
+  // Perfil é resolvido do Supabase a cada sessão; não cacheia dados em memória do browser.
+}
+
+function limparStorage(storage: Storage | undefined) {
+  if (typeof window === "undefined" || !storage) return;
+  const prefixos = ["botao", "qgfrases_", "trilha_", "cidadela_"];
+  for (let i = storage.length - 1; i >= 0; i--) {
+    const chave = storage.key(i);
+    if (chave && prefixos.some((p) => chave.startsWith(p))) storage.removeItem(chave);
+  }
+}
+
+function limparCachesDeJogo() {
+  limparStorage(window.localStorage);
+  limparStorage(window.sessionStorage);
 }
 
 export function limparCache() {
   if (typeof window === "undefined") return;
-  Object.values(STORAGE_KEYS).forEach((k) => window.localStorage.removeItem(k));
+  limparCachesDeJogo();
 }
 
 export async function buscarPerfil(userId: string): Promise<Perfil | null> {
@@ -106,6 +94,7 @@ export async function buscarPerfil(userId: string): Promise<Perfil | null> {
 
 export async function entrar(email: string, senha: string): Promise<Perfil | null> {
   assertSupabaseConfigured();
+  limparCache();
   const { data, error } = await supabase.auth.signInWithPassword({
     email: email,
     password: senha,
@@ -127,6 +116,7 @@ export async function cadastrar(input: {
   cores: string[];
 }) {
   assertSupabaseConfigured();
+  limparCache();
   const erro = validarCadastro(input);
   if (erro) throw new Error(erro);
 

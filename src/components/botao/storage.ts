@@ -1,9 +1,6 @@
 import type { Difficulty, Tournament } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 
-const KEY = "botao:progress:v1";
-const TOURNAMENT_KEY = "botao:tournament:v1";
-
 export type Progress = {
   titles: Record<Difficulty, number>;
   trophies: { difficulty: Difficulty; teamId: string; date: string }[];
@@ -22,19 +19,12 @@ const EMPTY: Progress = {
 };
 
 export function loadProgress(): Progress {
-  if (typeof window === "undefined") return EMPTY;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return EMPTY;
-    return { ...EMPTY, ...(JSON.parse(raw) as Progress) };
-  } catch {
-    return EMPTY;
-  }
+  // Isolamento: estado de jogo não usa cache compartilhado do navegador.
+  return EMPTY;
 }
 
-export function saveProgress(p: Progress) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(p));
+export function saveProgress(_p: Progress) {
+  // Persistência é feita apenas no Supabase.
 }
 
 export type ProgressPatch = Omit<Partial<Progress>, "tournament"> & {
@@ -117,29 +107,19 @@ export async function deleteProgressFromSupabase(userId: string) {
 }
 
 export function deleteProgressLocal() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY);
+  // Dados da campanha não ficam em cache do navegador.
 }
 
 export function loadTournament(): Tournament | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(TOURNAMENT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as Tournament;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-export function saveTournament(t: Tournament) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(t));
+export function saveTournament(_t: Tournament) {
+  // Persistência é feita apenas no Supabase.
 }
 
 export function deleteTournamentLocal() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(TOURNAMENT_KEY);
+  // Dados da campanha não ficam em cache do navegador.
 }
 
 export async function saveTournamentToSupabase(userId: string, t: Tournament | null) {

@@ -30,6 +30,9 @@ export function useBotaoAuth() {
 
       const currentUserId = u?.id ?? null;
       if (currentUserId === lastUserId && lastUserId !== null) return;
+      if (lastUserId && lastUserId !== currentUserId) {
+        limparCache();
+      }
       if (!vivo) return;
 
       syncInProgress = true;
@@ -87,6 +90,7 @@ export function useBotaoAuth() {
   }, [user]);
 
   const logout = useCallback(async () => {
+    limparCache();
     if (isSupabaseConfigured()) await sair();
     setUser(null);
     setPerfil(null);

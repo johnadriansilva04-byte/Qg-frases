@@ -15,7 +15,7 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
   const [isMounted, setIsMounted] = useState(false);
   const [hasError, setHasError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { init, createContainer, getNetwork } = useAdManager("/botao");
+  const { createContainer, getNetwork } = useAdManager("/botao");
 
   useEffect(() => {
     // Garante que rode apenas no client-side
@@ -26,9 +26,6 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
     if (!isMounted || hasError) return;
 
     try {
-      // Inicializa AdManager para rota /botao
-      init();
-
       // Verifica se a rede correta está ativa
       const network = getNetwork();
       if (network !== "adsterra") {
@@ -48,7 +45,8 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
       if (!script) {
         const newScript = document.createElement("script");
         newScript.id = "adsterra-script";
-        newScript.src = "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js";
+        newScript.src =
+          "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js";
         newScript.async = true;
         newScript.setAttribute("data-cfasync", "false");
         newScript.onerror = () => {
@@ -70,7 +68,7 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
     }
 
     return undefined;
-  }, [slotId, init, createContainer, getNetwork, isMounted, hasError]);
+  }, [slotId, createContainer, getNetwork, isMounted, hasError]);
 
   // Não renderiza nada durante SSR ou se houver erro
   if (!isMounted || hasError) {

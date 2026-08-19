@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   time_personalizado TEXT NOT NULL DEFAULT 'Meu Time',
   abreviacao_time TEXT NOT NULL DEFAULT 'MTI',
   numero_jogador INTEGER NOT NULL DEFAULT 10,
-  pontos_soberania INTEGER NOT NULL DEFAULT 0,
+  pontos_soberania INTEGER NOT NULL DEFAULT 50,
   partidas_jogadas INTEGER NOT NULL DEFAULT 0,
   partidas_vencidas INTEGER NOT NULL DEFAULT 0,
   progresso_caminpanha JSONB NOT NULL DEFAULT '{"titles":{"amador":0,"profissional":0,"lenda":0},"trophies":[],"friendlies":{"w":0,"d":0,"l":0}}',
@@ -28,6 +28,11 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   -- Constraint para garantir que as 3 cores sejam únicas por usuário
   CONSTRAINT check_cores_unicas CHECK (array_length(cores, 1) = 3 AND cores[1] IS DISTINCT FROM cores[2] AND cores[2] IS DISTINCT FROM cores[3] AND cores[1] IS DISTINCT FROM cores[3])
 );
+
+-- Bônus de boas-vindas para perfis novos. Idempotente e não altera contas existentes.
+ALTER TABLE public.botao_usuarios
+  ALTER COLUMN pontos_soberania SET DEFAULT 50;
+
 
 -- Tabela de times
 CREATE TABLE IF NOT EXISTS public.botao_times (
@@ -135,7 +140,7 @@ BEGIN
 
   -- Criar usuário com ON CONFLICT para evitar duplicatas
   BEGIN
-    INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador)
+    INSERT INTO public.botao_usuarios (user_id, email, nome, cores, time_personalizado, abreviacao_time, numero_jogador, pontos_soberania)
     VALUES (
       v_usuario_id,
       NEW.email,
@@ -143,7 +148,8 @@ BEGIN
       v_cores,
       v_time_personalizado,
       v_abreviacao_time,
-      v_numero_jogador
+      v_numero_jogador,
+      50
     )
     ON CONFLICT (user_id) DO UPDATE SET
       email = EXCLUDED.email,
@@ -303,10 +309,13 @@ DROP POLICY IF EXISTS "Todos podem ver usuarios" ON public.botao_usuarios;
 CREATE POLICY "Todos podem ver usuarios" ON public.botao_usuarios FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Autenticados podem criar usuarios" ON public.botao_usuarios;
-CREATE POLICY "Autenticados podem criar usuarios" ON public.botao_usuarios FOR INSERT WITH CHECK (true);
+CREATE POLICY "Dono pode criar proprio perfil" ON public.botao_usuarios
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Autenticados podem atualizar usuarios" ON public.botao_usuarios;
-CREATE POLICY "Autenticados podem atualizar usuarios" ON public.botao_usuarios FOR UPDATE USING (true);
+CREATE POLICY "Dono pode atualizar proprio perfil" ON public.botao_usuarios
+  FOR UPDATE USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 -- Excluir a própria conta (personalização/excluir conta). Só o dono.
 DROP POLICY IF EXISTS "Dono pode excluir propria conta" ON public.botao_usuarios;

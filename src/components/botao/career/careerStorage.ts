@@ -1,4 +1,4 @@
-import { CAREER_KEY, type CareerState, type Coach, type Headline } from "./types";
+import { type CareerState, type Coach, type Headline } from "./types";
 
 const EMPTY_COACH: Coach = {
   nome: "",
@@ -30,25 +30,16 @@ export const EMPTY_CAREER: CareerState = {
 };
 
 export function loadCareer(): CareerState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(CAREER_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CareerState;
-    return { ...EMPTY_CAREER, ...parsed, coach: { ...EMPTY_COACH, ...parsed.coach } };
-  } catch {
-    return null;
-  }
+  // Isolamento: a carreira não usa localStorage compartilhado entre contas.
+  return null;
 }
 
-export function saveCareer(c: CareerState) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(CAREER_KEY, JSON.stringify(c));
+export function saveCareer(_c: CareerState) {
+  // Persistência é feita apenas no Supabase.
 }
 
 export function deleteCareer() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(CAREER_KEY);
+  // Dados da carreira não ficam em cache do navegador.
 }
 
 export function addHeadlines(state: CareerState, novas: Headline[]): CareerState {
