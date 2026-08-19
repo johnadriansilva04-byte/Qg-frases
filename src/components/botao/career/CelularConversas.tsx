@@ -3,7 +3,9 @@ import {
   Bot,
   ClipboardList,
   ChevronLeft,
+  Heart,
   MessageSquare,
+  Newspaper,
   Send,
   Smartphone,
   Store,
@@ -22,15 +24,23 @@ import {
   type MissaoDiaria,
 } from "@/lib/cidadela/pracinhaCore";
 import type { ConversaCelular, DesafioPatrocinador } from "./types";
+import { eventoPorId } from "./rpg/eventos";
+import type { PostFeed } from "./rpg/types";
 
-type AbaCelular = "mensagens" | "missoes" | "grupo" | "mercado";
+type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado";
 
 type Props = {
   conversas: ConversaCelular[];
   /** Desafio de patrocinador ativo: vira uma conversa "virtual" no topo. */
   desafioPatrocinador?: DesafioPatrocinador | null;
+  /** Feed da Rede da Cidadela (posts reativos ao jogo). */
+  feed?: PostFeed[] | undefined;
+  /** Conversa cujo NPC está "digitando..." no momento. */
+  npcDigitandoId?: string | null | undefined;
   onEnviarMensagem: (conversaId: string, texto: string) => void;
   onExcluirConversa: (conversaId: string) => void;
+  /** Escolha num dilema RPG anexado à conversa. */
+  onEscolhaRpg?: ((conversaId: string, indice: number) => void) | undefined;
   onVoltar: () => void;
   userId?: string | null | undefined;
   nomeJogador?: string | null | undefined;
@@ -39,8 +49,11 @@ type Props = {
 export function CelularConversas({
   conversas,
   desafioPatrocinador,
+  feed = [],
+  npcDigitandoId = null,
   onEnviarMensagem,
   onExcluirConversa,
+  onEscolhaRpg,
   onVoltar,
   userId = null,
   nomeJogador = null,
@@ -178,6 +191,7 @@ export function CelularConversas({
 
   const tituloAba: Record<AbaCelular, string> = {
     mensagens: "Mensagens",
+    rede: "Rede da Cidadela",
     missoes: "Missões do Pracinha",
     grupo: "Grupo da Cidadela",
     mercado: "Feira / Marketplace",
@@ -224,16 +238,58 @@ export function CelularConversas({
                     msg.remetente === "eu" ? "phone-bubble-me" : "phone-bubble-them"
                   }`}
                 >
-                  <div className="phone-bubble">
+                  <div
+                    className={`phone-bubble ${
+                      conversaAtiva.eventoRpg?.tom === "terror" && msg.remetente === "outro"
+                        ? "border border-red-900/60 bg-red-950/40"
+                        : conversaAtiva.eventoRpg?.tom === "suspense" && msg.remetente === "outro"
+                          ? "border border-indigo-900/60 bg-indigo-950/40"
+                          : ""
+                    }`}
+                  >
                     <p className="whitespace-pre-line text-sm leading-relaxed">{msg.texto}</p>
                   </div>
                   <span className="phone-bubble-time">{msg.timestamp}</span>
                 </div>
               ))}
+
+              {/* NPC digitando... */}
+              {npcDigitandoId === conversaAtiva.id && (
+                <div className="phone-bubble-wrap phone-bubble-them">
+                  <div className="phone-bubble">
+                    <p className="text-sm italic text-slate-400">digitando…</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Escolhas do dilema RPG (se ainda não respondido) */}
+              {conversaAtiva.eventoRpg &&
+                !conversaAtiva.eventoRpg.respondido &&
+                (() => {
+                  const ev = eventoPorId(conversaAtiva.eventoRpg.eventoId);
+                  if (!ev) return null;
+                  return (
+                    <div className="mt-3 space-y-2 rounded-xl border border-amber-800/50 bg-amber-950/30 p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
+                        {ev.tom === "terror" ? "⚠ Decisão sob pressão" : "Sua decisão"}
+                      </p>
+                      {ev.escolhas.map((esc, i) => (
+                        <button
+                          key={i}
+                          onClick={() => onEscolhaRpg?.(conversaAtiva.id, i)}
+                          className="w-full rounded-lg border border-amber-700/40 bg-slate-900/80 px-3 py-2.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-500 hover:bg-amber-900/30 active:scale-[0.98]"
+                        >
+                          {esc.texto}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
             </div>
 
             {/* Input de mensagem (apenas para conversas do usuário, não a virtual do patrocinador) */}
-            {conversaAtiva.id !== "conv-patrocinador" ? (
+            {conversaAtiva.id !== "conv-patrocinador" &&
+            !(conversaAtiva.eventoRpg && !conversaAtiva.eventoRpg.respondido) ? (
               <div className="phone-chat-input">
                 <input
                   type="text"
@@ -280,10 +336,11 @@ export function CelularConversas({
             <Smartphone className="size-4 text-slate-400" />
           </div>
 
-          <div className="grid grid-cols-4 border-b border-slate-700/60 bg-slate-950/70 text-[10px] font-bold">
+          <div className="grid grid-cols-5 border-b border-slate-700/60 bg-slate-950/70 text-[10px] font-bold">
             {(
               [
                 ["mensagens", MessageSquare, "Msgs"],
+                ["rede", Newspaper, "Rede"],
                 ["missoes", ClipboardList, "Missões"],
                 ["grupo", Users, "Grupo"],
                 ["mercado", Store, "Feira"],
@@ -345,6 +402,66 @@ export function CelularConversas({
                         </div>
                       </div>
                     </button>
+                  ))}
+                </div>
+              )
+            )}
+
+            {aba === "rede" && (
+              feed.length === 0 ? (
+                <div className="text-center py-8">
+                  <Newspaper className="size-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-sm text-slate-400">A Rede ainda está quieta</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Jogue uma partida e a Cidadela inteira vai comentar.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {feed.map((post) => (
+                    <article
+                      key={post.id}
+                      className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"
+                    >
+                      <header className="mb-2 flex items-center gap-2">
+                        <span className="phone-avatar">{post.avatar}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-white">{post.autor}</p>
+                          <p className="text-[10px] text-slate-500">
+                            Rodada {post.rodada} · {post.timestamp}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                            post.selo === "noticia"
+                              ? "bg-sky-400/15 text-sky-300"
+                              : post.selo === "rumor"
+                                ? "bg-purple-400/15 text-purple-300"
+                                : post.selo === "rival"
+                                  ? "bg-red-400/15 text-red-300"
+                                  : "bg-emerald-400/15 text-emerald-300"
+                          }`}
+                        >
+                          {post.selo}
+                        </span>
+                      </header>
+                      <p className="text-xs leading-relaxed text-slate-200">{post.texto}</p>
+                      <div className="mt-2 flex items-center gap-1 text-[10px] text-pink-400">
+                        <Heart className="size-3 fill-pink-400" /> {post.curtidas}
+                      </div>
+                      {post.comentarios.length > 0 && (
+                        <div className="mt-2 space-y-1.5 border-t border-white/5 pt-2">
+                          {post.comentarios.map((c, i) => (
+                            <p key={i} className="text-[11px] leading-snug text-slate-400">
+                              <span className="font-bold text-slate-300">
+                                {c.avatar} {c.autor}:
+                              </span>{" "}
+                              {c.texto}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </article>
                   ))}
                 </div>
               )

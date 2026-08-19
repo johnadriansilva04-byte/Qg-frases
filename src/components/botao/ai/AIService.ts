@@ -173,6 +173,27 @@ export const AIService = {
     }
   },
 
+  /**
+   * Conversa com persona livre (NPCs do RPG). Tenta apenas a LLM local — se
+   * indisponível, retorna null e o chamador usa o fallback procedural. Isso
+   * mantém a voz do personagem: template genérico estragaria a persona.
+   */
+  async generatePersona(systemPrompt: string, userPrompt: string): Promise<string | null> {
+    const hw = await detectarHardware();
+    if (hw.veredito !== "potente") return null;
+    const engine = await getEngine(hw);
+    if (!engine) return null;
+    try {
+      const prompt = `${systemPrompt}\n\n${userPrompt}\nResponda em português, no máximo 2 frases, sem sair do personagem.`;
+      const out = await engine.generate(prompt, { max_tokens: 90 });
+      if (out && out.trim()) return out.trim();
+      return null;
+    } catch {
+      activeEngine = null;
+      return null;
+    }
+  },
+
   /** Encerra o engine local (libera memória da GPU). */
   async shutdown(): Promise<void> {
     if (activeEngine) {

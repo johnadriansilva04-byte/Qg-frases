@@ -119,6 +119,12 @@ export type ConversaCelular = {
     timestamp: string;
   }>;
   naoLida: boolean;
+  /** NPC do RPG que responde em tempo real nesta conversa. */
+  npcId?: import("./rpg/types").NpcId | undefined;
+  /** Evento RPG com escolhas (dilema) anexado à conversa. */
+  eventoRpg?:
+    | { eventoId: string; respondido: boolean; tom: "drama" | "suspense" | "terror" }
+    | undefined;
 };
 
 export type CareerState = {
@@ -161,6 +167,10 @@ export type CareerState = {
   woProximaPartida?: boolean | undefined;
   desfalqueBotaoProxima?: number | undefined;
   perdaPontosProxima?: number | undefined;
+  // Memória narrativa do RPG (relacionamentos, segredos, sequência).
+  memoriaRpg?: import("./rpg/types").MemoriaRpg | undefined;
+  // Feed da Rede da Cidadela (posts reativos a eventos do jogo).
+  feedCidadela?: import("./rpg/types").PostFeed[] | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

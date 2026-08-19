@@ -88,6 +88,14 @@ import {
 } from "./career/narrativeEngine";
 import { NarrativeModal } from "./career/NarrativeModal";
 import { CelularConversas } from "./career/CelularConversas";
+import {
+  aplicarEscolhaRpg,
+  atualizarSequenciaRpg,
+  garantirContatosRpg,
+  processarEventosRpg,
+  responderContatoNpc,
+} from "./career/rpg/rpgEngine";
+import { anexarPost, gerarPostPartida } from "./career/rpg/socialEngine";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
@@ -185,7 +193,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
   const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
-  const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
+  const [career, setCareer] = useState<CareerState | null>(() => {
+    const c = loadCareer();
+    return c ? garantirContatosRpg(c) : c;
+  });
+  // NPC respondendo no celular (conversaId) — exibe "digitando...".
+  const [npcDigitando, setNpcDigitando] = useState<string | null>(null);
   const hydratedUserRef = useRef<string | null>(null);
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
@@ -1079,6 +1092,28 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const novo: CareerState = { ...career, conversas: novasConversas };
     persistCareer(novo);
     setCareer(novo);
+
+    // Contato RPG responde em tempo real (LLM local → fallback procedural).
+    const alvo = career.conversas.find((c) => c.id === conversaId);
+    if (alvo?.npcId) {
+      setNpcDigitando(conversaId);
+      void responderContatoNpc(novo, conversaId, texto)
+        .then((atualizado) => {
+          persistCareer(atualizado);
+          setCareer(atualizado);
+          setNpcDigitando(null);
+        })
+        .catch(() => setNpcDigitando(null));
+    }
+  };
+
+  // Escolha num dilema RPG (suspense/terror/drama): aplica efeitos reais.
+  const handleEscolhaRpg = (conversaId: string, indice: number) => {
+    if (!career) return;
+    const { career: comEscolha, desfecho } = aplicarEscolhaRpg(career, conversaId, indice);
+    persistCareer(comEscolha);
+    setCareer(comEscolha);
+    setToast(`Escolha registrada: ${desfecho.slice(0, 90)}${desfecho.length > 90 ? "…" : ""}`);
   };
 
   const handleExcluirConversa = (conversaId: string) => {
@@ -1441,6 +1476,33 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         },
       };
       novaCareer = addHeadlines(novaCareer, novas);
+
+      // === RPG narrativo: sequência, rede social e gatilhos de eventos ===
+      const resultadoRpg = gf > ga ? ("vitoria" as const) : gf < ga ? ("derrota" as const) : ("empate" as const);
+      novaCareer = atualizarSequenciaRpg(novaCareer, resultadoRpg);
+      const advId = userIsHome ? r.awayId : r.homeId;
+      const advNome = teamByIdSync(advId)?.name ?? advId;
+      const tipoPost =
+        gf - ga >= 3
+          ? ("goleada_pro" as const)
+          : ga - gf >= 3
+            ? ("goleada_contra" as const)
+            : resultadoRpg;
+      novaCareer = anexarPost(
+        novaCareer,
+        gerarPostPartida(novaCareer, {
+          tipo: tipoPost,
+          timeNome: userTeam.name,
+          adversarioNome: advNome,
+          golsPro: gf,
+          golsContra: ga,
+          divisao: novaCareer.divisao,
+        }),
+      );
+      const comEvento = processarEventosRpg(novaCareer);
+      if (comEvento) novaCareer = comEvento;
+      // === fim RPG ===
+
       // Se o torneio ainda não acabou e ainda tem próxima do usuário, prepara evento
       if (t.phase !== "fim" && nextUserFixture(t)) {
         const proximoFix = nextUserFixture(t)!;
@@ -1812,10 +1874,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               <CelularConversas
                 conversas={career?.conversas ?? []}
                 desafioPatrocinador={career?.desafioPatrocinador ?? null}
+                feed={career?.feedCidadela ?? []}
+                npcDigitandoId={npcDigitando}
                 userId={perfil?.user_id ?? null}
                 nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
                 onEnviarMensagem={handleEnviarMensagem}
                 onExcluirConversa={handleExcluirConversa}
+                onEscolhaRpg={handleEscolhaRpg}
                 onVoltar={() => setScreen("hub")}
               />
             )}
@@ -1836,10 +1901,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         <CelularConversas
           conversas={career.conversas}
           desafioPatrocinador={career.desafioPatrocinador ?? null}
+          feed={career.feedCidadela ?? []}
+          npcDigitandoId={npcDigitando}
           userId={perfil?.user_id ?? null}
           nomeJogador={career.coach.apelido || career.coach.nome}
           onEnviarMensagem={handleEnviarMensagem}
           onExcluirConversa={handleExcluirConversa}
+          onEscolhaRpg={handleEscolhaRpg}
           onVoltar={() => setScreen("hub")}
         />
       </Shell>
