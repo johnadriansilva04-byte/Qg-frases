@@ -20,9 +20,9 @@ export function AuthScreen({ onPronto }: Props) {
   const [cooldown, setCooldown] = useState(0);
 
   const submit = async () => {
-    console.log('Modo atual:', modo);
-    console.log('Email digitado:', email);
-    
+    console.log("Modo atual:", modo);
+    console.log("Email digitado:", email);
+
     if (cooldown > 0) {
       setErro(`Aguarde ${cooldown} segundos antes de tentar novamente.`);
       return;
@@ -32,28 +32,36 @@ export function AuthScreen({ onPronto }: Props) {
     setCarregando(true);
     try {
       if (modo === "login") {
-        console.log('Chamando função entrar com:', email);
-        await entrar(email, senha);
-        onPronto();
+        console.log("Chamando função entrar com:", email);
+        const p = await entrar(email, senha);
+        if (!p) {
+          throw new Error("Login feito, mas o perfil não foi encontrado. Tente novamente.");
+        }
+        cachePerfil(p);
+        onPronto(p);
       } else {
-        console.log('Chamando função cadastrar com:', { email, nome, time });
+        console.log("Chamando função cadastrar com:", { email, nome, time });
         const p = await cadastrar({ email, senha, nome, time, abreviacao, numero, cores });
         cachePerfil(p);
         onPronto(p);
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";
-      console.error('Erro no submit:', errorMessage);
-      
+      console.error("Erro no submit:", errorMessage);
+
       // Melhorar mensagem para email rate limit
       const friendlyMessage = errorMessage.includes("email rate limit")
         ? "Muitas tentativas de criação de conta. Aguarde 1 minuto antes de tentar novamente."
         : errorMessage;
-      
+
       setErro(friendlyMessage);
-      
+
       // Se for erro de rate limiting (429 ou email rate limit), adicionar cooldown
-      if (errorMessage.includes("Too Many Requests") || errorMessage.includes("429") || errorMessage.includes("email rate limit")) {
+      if (
+        errorMessage.includes("Too Many Requests") ||
+        errorMessage.includes("429") ||
+        errorMessage.includes("email rate limit")
+      ) {
         setCooldown(60);
         const interval = setInterval(() => {
           setCooldown((prev) => {
@@ -105,11 +113,21 @@ export function AuthScreen({ onPronto }: Props) {
         {modo === "cadastro" && (
           <>
             <Campo label="Seu nome">
-              <input className="field-input" maxLength={40} value={nome} onChange={(e) => setNome(e.target.value)} />
+              <input
+                className="field-input"
+                maxLength={40}
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+              />
             </Campo>
             <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto]">
               <Campo label="Nome do time">
-                <input className="field-input" maxLength={30} value={time} onChange={(e) => setTime(e.target.value)} />
+                <input
+                  className="field-input"
+                  maxLength={30}
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                />
               </Campo>
               <Campo label="Sigla">
                 <input
@@ -147,9 +165,19 @@ export function AuthScreen({ onPronto }: Props) {
 
         {erro && <p className="text-sm text-destructive">{erro}</p>}
 
-        <button onClick={submit} disabled={carregando || cooldown > 0} className="btn-primary w-full disabled:opacity-60">
+        <button
+          onClick={submit}
+          disabled={carregando || cooldown > 0}
+          className="btn-primary w-full disabled:opacity-60"
+        >
           {modo === "login" ? <LogIn className="size-4" /> : <UserPlus className="size-4" />}
-          {carregando ? "Aguarde..." : cooldown > 0 ? `Aguarde ${cooldown}s` : modo === "login" ? "Entrar" : "Criar conta"}
+          {carregando
+            ? "Aguarde..."
+            : cooldown > 0
+              ? `Aguarde ${cooldown}s`
+              : modo === "login"
+                ? "Entrar"
+                : "Criar conta"}
         </button>
       </div>
 

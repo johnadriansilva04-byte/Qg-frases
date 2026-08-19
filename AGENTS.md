@@ -17,6 +17,9 @@
   lança erro limpo.
 - `useBotaoAuth` depende do evento `INITIAL_SESSION` de `onAuthStateChange`
   (não chamar `getUser()` antes, pois isso causava loading infinito).
+- `entrar()` deve retornar o perfil (`Promise<Perfil | null>`). Tela login
+  precisa chamar `onPronto(perfil)`; `onPronto(undefined)` é reservado para
+  logout/exclusão de conta.
 - `/cidadela` lê `localStorage` só no cliente (`hydrated` gate) para evitar
   erro SSR/hidratação. `vite dev` atrás do proxy do work-host pode falhar no
   entry `@tanstack/react-start` (ambiental); validar com curl ou build.

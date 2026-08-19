@@ -104,13 +104,17 @@ export async function buscarPerfil(userId: string): Promise<Perfil | null> {
   return (data as Perfil | null) ?? null;
 }
 
-export async function entrar(email: string, senha: string) {
+export async function entrar(email: string, senha: string): Promise<Perfil | null> {
   assertSupabaseConfigured();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: email,
     password: senha,
   });
   if (error) throw new Error("Email ou senha incorretos.");
+
+  const user = data.user;
+  if (!user) throw new Error("Não foi possível carregar o usuário.");
+  return buscarPerfil(user.id);
 }
 
 export async function cadastrar(input: {

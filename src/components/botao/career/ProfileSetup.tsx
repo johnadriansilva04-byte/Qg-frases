@@ -76,8 +76,12 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
     setSalvando(true);
     try {
       if (modo === "login") {
-        await entrar(email, senha);
-        onPronto();
+        const p = await entrar(email, senha);
+        if (!p) {
+          throw new Error("Login feito, mas o perfil não foi encontrado. Tente novamente.");
+        }
+        cachePerfil(p);
+        onPronto(p);
       } else {
         if (!validarCoresUnicas(cores)) {
           throw new Error("As três cores devem ser diferentes.");
