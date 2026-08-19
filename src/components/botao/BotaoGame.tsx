@@ -2008,8 +2008,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
-      {/* Social Bar da Adsterra - global no Futebol de Botão */}
-      <AdsterraSocialBar />
+      {/* Social Bar da Adsterra - desativada temporariamente para evitar redirecionamentos */}
+      {/* <AdsterraSocialBar /> */}
 
       {carregando && !loading && <LoadingScreen pronto={false} onCompleto={() => {}} />}
       {loading && <LoadingScreen pronto={loadingReady} onCompleto={loadingOnComplete} />}
