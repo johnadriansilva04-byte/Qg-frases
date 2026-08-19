@@ -5,14 +5,16 @@
  * sponsorGate (intervalo/fim de partida, entrada no Modo Carreira, fim de
  * jogo da Trilha) e o usuário foi avisado. Sem gate: bloqueado sempre.
  *
- * Intercepta: window.open, location.assign, window.location.href
+ * Intercepta: window.open, location.assign, e remove script Monetag quando gate não armado
  */
 
-import { consumirSponsorGate } from "./sponsorGate";
+import { consumirSponsorGate, onSponsorChange, sponsorArmado } from "./sponsorGate";
 
 const STORAGE_KEY = "ad_popguard_last_open";
+const MONETAG_SCRIPT_ID = "monetag-script";
 
 let patched = false;
+let monetagScriptRemoved = false;
 
 function isInternal(url: string): boolean {
   if (!url) return true;
@@ -30,6 +32,22 @@ function markOpen(now: number): void {
   } catch {
     // sem storage: gate segue mandando
   }
+}
+
+function removeMonetagScript(): void {
+  const script = document.getElementById(MONETAG_SCRIPT_ID);
+  if (script) {
+    script.remove();
+    monetagScriptRemoved = true;
+    console.log("[AdGuard] Script Monetag removido (gate desarmado)");
+  }
+}
+
+function restoreMonetagScript(): void {
+  if (!monetagScriptRemoved) return;
+  // O script será recarregado pelo adManager quando necessário
+  monetagScriptRemoved = false;
+  console.log("[AdGuard] Script Monetag pode ser restaurado (gate armado)");
 }
 
 export function initAdClickGuard(): void {
@@ -78,47 +96,18 @@ export function initAdClickGuard(): void {
     console.warn("[AdGuard] Não foi possível interceptar location.assign:", error);
   }
 
-  // Intercepta window.location.href setter - com verificação de segurança
-  try {
-    if (window.location) {
-      let currentHref = window.location.href;
-      const originalDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, "href");
-
-      Object.defineProperty(window.location, "href", {
-        get() {
-          return originalDescriptor?.get?.call(this) ?? currentHref;
-        },
-        set(url: string) {
-          if (isInternal(url)) {
-            if (originalDescriptor?.set) {
-              originalDescriptor.set.call(this, url);
-            } else {
-              currentHref = url;
-              window.location.href = url;
-            }
-            return;
-          }
-
-          // Único caminho legítimo: gate armado em ponto estratégico.
-          if (consumirSponsorGate()) {
-            markOpen(Date.now());
-            console.log("[AdGuard] Redirecionamento via href liberado (ponto estratégico)");
-            if (originalDescriptor?.set) {
-              originalDescriptor.set.call(this, url);
-            } else {
-              currentHref = url;
-              window.location.href = url;
-            }
-            return;
-          }
-
-          console.log("[AdGuard] Redirecionamento via href bloqueado (nenhum ponto estratégico armado)");
-        },
-        configurable: true,
-      });
+  // Monitora mudanças no sponsorGate para controlar o script Monetag
+  onSponsorChange((armado) => {
+    if (armado) {
+      restoreMonetagScript();
+    } else {
+      removeMonetagScript();
     }
-  } catch (error) {
-    console.warn("[AdGuard] Não foi possível interceptar window.location.href:", error);
+  });
+
+  // Verifica estado inicial
+  if (!sponsorArmado()) {
+    removeMonetagScript();
   }
 
   console.log("[AdGuard] Proteção contra redirecionamentos ativada");
