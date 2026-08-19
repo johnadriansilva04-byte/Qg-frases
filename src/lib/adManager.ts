@@ -54,11 +54,7 @@ const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string;
     id: "adsterra-script",
     containerId: "container-0ad480fbab555d4ab76b3d9548942579",
   },
-  adsterra_social: {
-    src: "https://pl30913394.effectivecpmnetwork.com/2c/11/c4/2c11c437d41b62fa1a87e6cb055a054c.js",
-    id: "adsterra-social-script",
-    containerId: "adsterra-social-container",
-  },
+  // REMOVIDO: adsterra_social - causava disparos indevidos em cliques globais
   monetag: {
     // Tag script do Monetag (zona 11607595) — sem Service Worker.
     src: "https://al5sm.com/tag.min.js",
@@ -181,7 +177,7 @@ class AdManager {
    */
   private cleanupOtherNetworks(targetNetwork: AdNetwork): void {
     Object.keys(AD_SCRIPTS).forEach((network) => {
-      if (network !== targetNetwork && network !== "none" && network !== "adsterra_social") {
+      if (network !== targetNetwork && network !== "none") {
         this.removeScript(network as AdNetwork);
       }
     });
@@ -270,11 +266,10 @@ class AdManager {
   }
 
   /**
-   * Limpa apenas scripts da Adsterra (incluindo Social Bar)
+   * Limpa apenas scripts da Adsterra
    */
   cleanupAdsterra(): void {
     this.removeScript("adsterra" as AdNetwork);
-    this.removeScript("adsterra_social" as AdNetwork);
     this.cleanupContainers();
     console.log("[AdManager] Cleanup Adsterra completo");
   }

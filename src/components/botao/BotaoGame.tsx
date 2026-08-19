@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
-import { AdsterraSocialBar } from "@/components/AdsterraSocialBar";
 import { useAdManager } from "@/lib/adManager";
 import { adManager } from "@/lib/adManager";
 import {
@@ -2003,9 +2002,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   return (
     <Shell>
-      {/* Social Bar da Adsterra - global no Futebol de Botão */}
-      <AdsterraSocialBar />
-
+      {/* REMOVIDO: AdsterraSocialBar - causava disparos indevidos em cliques globais */}
       {carregando && !loading && <LoadingScreen pronto={false} onCompleto={() => {}} />}
       {loading && <LoadingScreen pronto={loadingReady} onCompleto={loadingOnComplete} />}
       {veredito && career && (

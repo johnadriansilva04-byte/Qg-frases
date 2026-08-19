@@ -59,22 +59,9 @@ export function initAdClickGuard(): void {
     console.warn("[AdGuard] Não foi possível interceptar location.assign:", error);
   }
 
-  // Intercepta todos os cliques no documento para bloquear redirecionamentos
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const link = target.closest("a");
-
-    if (!link) return;
-
-    const href = link.getAttribute("href");
-    if (!href) return;
-
-    if (isInternal(href)) return;
-
-    console.log("[AdGuard] Clique em link externo bloqueado");
-    event.preventDefault();
-    event.stopPropagation();
-  }, true); // Use capture phase para interceptar antes de outros handlers
+  // REMOVIDO: Interceptação global de cliques (violava regra de "NENHUM CLIQUE GLOBAL")
+  // O Adsterra Social Bar reagia a cliques indevidos através deste listener global.
+  // Proteção contra redirecionamentos agora depende apenas de window.open e location.assign.
 
   // Intercepta window.location.href setter
   try {

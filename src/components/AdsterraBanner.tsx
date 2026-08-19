@@ -1,19 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { adManager, useAdManager } from "@/lib/adManager";
+import { ControlledAdButton } from "./ControlledAdButton";
 
 interface AdsterraBannerProps {
   slotId?: string;
   className?: string;
+  showButton?: boolean; // Se true, mostra botão controlado em vez de carregar automaticamente
 }
 
 /**
  * Componente Native Banner da Adsterra
  * Uso exclusivo no Futebol de Botão
  * Rode apenas client-side (SSR-safe)
+ *
+ * MODIFICADO: Não carrega script automaticamente. Requer ação explícita do usuário
+ * através do ControlledAdButton quando showButton=true.
  */
-export function AdsterraBanner({ slotId = "native-banner", className = "" }: AdsterraBannerProps) {
+export function AdsterraBanner({ slotId = "native-banner", className = "", showButton = false }: AdsterraBannerProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { createContainer, getNetwork } = useAdManager("/botao");
 
@@ -22,8 +28,10 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!isMounted || hasError) return;
+  const loadAdsterraScript = async () => {
+    if (scriptLoaded || hasError) return;
+
+    console.log("[AD] loading-adsterra-script");
 
     try {
       // Verifica se a rede correta está ativa
@@ -56,19 +64,40 @@ export function AdsterraBanner({ slotId = "native-banner", className = "" }: Ads
         document.head.appendChild(newScript);
       }
 
-      return () => {
-        // Cleanup ao desmontar
-        if (container && container.parentNode) {
-          container.parentNode.removeChild(container);
-        }
-      };
+      setScriptLoaded(true);
+      console.log("[AD] adsterra-script-loaded");
     } catch (error) {
       console.error("[AdsterraBanner] Erro:", error);
       setHasError(true);
     }
+  };
 
-    return undefined;
-  }, [slotId, createContainer, getNetwork, isMounted, hasError]);
+  // Se showButton, renderiza botão controlado em vez de carregar automaticamente
+  if (showButton) {
+    return (
+      <div className={`w-full ${className}`}>
+        <ControlledAdButton onAdExecute={loadAdsterraScript} className="w-full">
+          Ver anúncio
+        </ControlledAdButton>
+      </div>
+    );
+  }
+
+  // Comportamento original para slots que não requerem botão (loading, intervalo)
+  useEffect(() => {
+    if (!isMounted || hasError) return;
+
+    // REMOVIDO: Carregamento automático do script
+    // O script só deve ser carregado via ação explícita do usuário
+    // Este componente agora serve apenas como container passivo
+
+    return () => {
+      // Cleanup ao desmontar
+      if (containerRef.current && containerRef.current.firstChild) {
+        containerRef.current.removeChild(containerRef.current.firstChild);
+      }
+    };
+  }, [isMounted, hasError]);
 
   // Não renderiza nada durante SSR ou se houver erro
   if (!isMounted || hasError) {
