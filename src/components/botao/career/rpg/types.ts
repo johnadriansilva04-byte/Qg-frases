@@ -104,6 +104,11 @@ export interface EscolhaRpg {
     relacao?: { npc: NpcId; delta: number };
     /** Cria um segredo que pode ser cobrado depois. */
     segredo?: Omit<SegredoNarrativo, "id" | "rodada" | "cobrado">;
+    /**
+     * Gera pedido pendente no Cartório da Cidadela (contrato/peticao/multa).
+     * O BotaoGame cria o pedido e anexa link para a Biblioteca na conversa.
+     */
+    cartorio?: { tipo: "contrato" | "peticao" | "multa"; titulo: string };
   };
 }
 

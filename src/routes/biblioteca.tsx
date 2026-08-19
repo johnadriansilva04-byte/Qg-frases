@@ -2,13 +2,30 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { listarLivros } from "@/lib/livros.functions";
 import { AdSlot } from "@/components/AdSlot";
+import { CartorioPanel } from "@/components/botao/cartorio/CartorioPanel";
+import type { CartorioTipo } from "@/components/botao/career/rpg/cartorioApi";
 
 const livrosQuery = queryOptions({
   queryKey: ["livros"],
   queryFn: () => listarLivros(),
 });
 
+const ACAO_VALIDA = new Set<CartorioTipo>(["contrato", "peticao", "multa"]);
+
+type BibliotecaSearch = {
+  acao?: CartorioTipo | undefined;
+  pedidoId?: string | undefined;
+  [key: string]: string | CartorioTipo | undefined;
+};
+
 export const Route = createFileRoute("/biblioteca")({
+  validateSearch: (search: Record<string, unknown>): BibliotecaSearch => {
+    const acao = typeof search["acao"] === "string" ? (search["acao"] as CartorioTipo) : undefined;
+    return {
+      acao: acao && ACAO_VALIDA.has(acao) ? acao : undefined,
+      pedidoId: typeof search["pedidoId"] === "string" ? search["pedidoId"] : undefined,
+    };
+  },
   head: () => ({
     meta: [
       { title: "Biblioteca de Livros | QG Frases" },
@@ -49,6 +66,32 @@ function Aviso({ texto }: { texto: string }) {
 
 function Biblioteca() {
   const { data: livros } = useSuspenseQuery(livrosQuery);
+  const search = Route.useSearch();
+  const acao = search.acao;
+
+  // Cartório da Cidadela: quando há pedido do jogo, a Biblioteca vira o balcão
+  // da Bibliotecária (dados pré-preenchidos, redação via IA e lavratura).
+  if (acao) {
+    return (
+      <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
+        <main className="painel w-full max-w-5xl rounded-3xl p-5 shadow-2xl md:p-8">
+          <header className="mb-6 text-center">
+            <Link to="/cidadela" className="text-xs font-semibold text-muted-foreground hover:text-primary">
+              ← Voltar para a Cidadela
+            </Link>
+            <h1 className="texto-marca mt-3 text-3xl font-black md:text-4xl">Cartório da Cidadela</h1>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+              A Bibliotecária lavra contratos, petições e quitações com o selo da casa.
+            </p>
+          </header>
+          <CartorioPanel acao={acao} pedidoId={search.pedidoId} />
+        </main>
+        <footer className="my-4 text-center text-xs text-muted-foreground/70">
+          <p>© 2026 QG Frases — Cartório da Cidadela.</p>
+        </footer>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">

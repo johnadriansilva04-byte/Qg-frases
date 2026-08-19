@@ -220,29 +220,93 @@ export const EVENTOS_RPG: EventoRpg[] = [
     ],
   },
   {
-    id: "mae-preocupada",
-    remetente: "npc-donacida",
-    titulo: "Sua mãe viu o jornal",
+    id: "contrato-pendente",
+    remetente: "npc-dario",
+    titulo: "O contrato do clube",
     tom: "drama",
     texto:
-      "Dona Cida, com a voz apertada:\n\n" +
-      "«Filho, li uma coisa no jornal sobre apostas e o seu nome perto dessa " +
-      "história. Me diz que não é verdade. Você não se meteu com essa gente, " +
-      "meteu? Me promete, filho.»",
+      "Dário Fontoura, direto ao ponto como sempre:\n\n" +
+      "«Treinador, o clube cresceu e agora tudo precisa constar em papel: cláusulas, " +
+      "temporada, valores. Leva isso ao Cartório da Cidadela e formalise o vínculo — " +
+      "ou deixe a relação cair no informal de novo. Sua escolha.»",
     escolhas: [
       {
-        texto: "Jurar que está tudo limpo (mesmo que não esteja)",
+        texto: "Levar o vínculo ao Cartório (formaliza em papel)",
         desfecho:
-          "Ela respira aliviada. Você desliga e fica olhando para o telefone. Mentir " +
-          "pra mãe tem um peso que nenhum placar mede.",
-        efeitos: { moral: -5, relacao: { npc: "npc-donacida", delta: -5 } },
+          "Você recebe uma ficha do empresário preenchida com os dados do vínculo — " +
+          "basta lavrar no Cartório. A diretoria finalmente para de encher.",
+        efeitos: {
+          relacao: { npc: "npc-dario", delta: 15 },
+          cartorio: { tipo: "contrato", titulo: "Contrato do vínculo do clube" },
+        },
       },
       {
-        texto: "Contar a verdade e pedir ajuda",
+        texto: "Seguir no informal (sem papel, sem dor de cabeça)",
         desfecho:
-          "Ela chora. Depois respira fundo e diz: «A gente resolve junto. Mãe é pra " +
-          "isso.» Você não está mais sozinho nessa.",
-        efeitos: { moral: 15, relacao: { npc: "npc-donacida", delta: 15 } },
+          "Dário sorri: «Informal é rápido. Só não reclama quando a justiça " +
+          "entrar na história.» Enquanto isso, o acordo vale o saldo da confiança.",
+        efeitos: { moral: 5, relacao: { npc: "npc-dario", delta: -5 } },
+      },
+    ],
+  },
+  {
+    id: "peticao-necessaria",
+    remetente: "npc-corretor",
+    titulo: "Incidente na quadra",
+    tom: "suspense",
+    texto:
+      "O Corretor manda a desgraça em áudio, meio sorriso na voz:\n\n" +
+      "«Aquele lance na quadra? Alguém filmou e quer processar. Petício judicial " +
+      "só pega no Cartório — e o prazo é curto. Leva a descrição e as provas. Ou... " +
+      "só espera a absolta.»",
+    escolhas: [
+      {
+        texto: "Fazer a petição no Cartório (junto às provas)",
+        desfecho:
+          "Você recebe o dossiê do incidente com os detalhes — basta redigir a " +
+          "petição da defesa no Cartório e apresentá-la dentro do prazo.",
+        efeitos: {
+          moral: -5,
+          cartorio: { tipo: "peticao", titulo: "Petição de defesa do clube" },
+        },
+      },
+      {
+        texto: "Disputar pelo informal (inspira o desfecho bizarro)",
+        desfecho:
+          "O árbitro começa o processo sem a sua versão. O veredito sai pior — " +
+          "e o vestiário sente.",
+        efeitos: { soberania: -20, moral: -8 },
+      },
+    ],
+  },
+  {
+    id: "multa-judicial",
+    remetente: "npc-braganca",
+    titulo: "Multa com prazo",
+    tom: "suspense",
+    texto:
+      "Bragança, provando que o rival também avisa:\n\n" +
+      "«A justiça marcou uma multa no seu clube por aquela confusão. Pague no Cartório " +
+      "e receba a comprovação em papel — ou conteste lá próprio e arrisque dobrar. " +
+      "Prazo é curto, viu?»",
+    escolhas: [
+      {
+        texto: "Pagar a multa no Cartório (quita nos documentos)",
+        desfecho:
+          "O recibo da multa é lavrado com condição aceita — a dívida some dos " +
+          "livros.",
+        efeitos: {
+          soberania: -30,
+          moral: 5,
+          cartorio: { tipo: "multa", titulo: "Multa judicial do incidente" },
+        },
+      },
+      {
+        texto: "Contestar e arriscar",
+        desfecho:
+          "Você contesta e o juiz acredita na versão mais colorida do clube... " +
+          "mas a verdade custa o dobro quando sai pior. — aumenta a indefinição.",
+        efeitos: { moral: -10 },
       },
     ],
   },

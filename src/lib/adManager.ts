@@ -5,10 +5,28 @@
  * - Google AdSense: Páginas estáticas e menus
  * - Adsterra: Futebol de Botão
  * - Monetag: Trilha e demais jogos de estratégia
+ *
+ * CONFIGURAÇÃO: as zonas/scripts podem ser sobrescritos por env vars
+ * (VITE_ADSENSE_CLIENT, VITE_ADSTERRA_INVOKE_URL, VITE_MONETAG_SRC,
+ * VITE_MONETAG_ZONE). Se o anúncio não aparecer:
+ *  1) Confirme o domínio aprovado no painel da rede (Adsterra/Monetag).
+ *  2) Verifique bloqueadores de anúncio / CSP.
+ *  3) Rode `adManager.diagnostico()` no console do navegador.
  */
 
 import { useCallback } from "react";
 import { initAdClickGuard } from "./adClickGuard";
+
+const ENV = (typeof import.meta !== "undefined" ? import.meta.env : undefined) as
+  | Record<string, string | undefined>
+  | undefined;
+
+export const ADSENSE_CLIENT = ENV?.["VITE_ADSENSE_CLIENT"] ?? "ca-pub-2783546143377409";
+export const ADSTERRA_INVOKE_URL =
+  ENV?.["VITE_ADSTERRA_INVOKE_URL"] ??
+  "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js";
+export const MONETAG_SRC = ENV?.["VITE_MONETAG_SRC"] ?? "https://al5sm.com/tag.min.js";
+export const MONETAG_ZONE = ENV?.["VITE_MONETAG_ZONE"] ?? "11607595";
 
 export type AdNetwork = "adsense" | "adsterra" | "monetag" | "none";
 
@@ -45,22 +63,22 @@ const ROUTE_CONFIG: Record<string, AdRouteConfig> = {
  */
 const AD_SCRIPTS: Record<string, { src: string; id: string; containerId: string; zone?: string }> = {
   adsense: {
-    src: "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js",
+    src: `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`,
     id: "adsense-script",
     containerId: "adsense-container",
   },
   adsterra: {
-    src: "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js",
+    src: ADSTERRA_INVOKE_URL,
     id: "adsterra-script",
     containerId: "container-0ad480fbab555d4ab76b3d9548942579",
   },
   // REMOVIDO: adsterra_social - causava disparos indevidos em cliques globais
   monetag: {
-    // Tag script do Monetag (zona 11607595) — carregado apenas sob demanda via ControlledMonetagButton
-    src: "https://al5sm.com/tag.min.js",
+    // Tag script do Monetag — carregado apenas sob demanda via ControlledMonetagButton
+    src: MONETAG_SRC,
     id: "monetag-script",
     containerId: "monetag-container",
-    zone: "11607595",
+    zone: MONETAG_ZONE,
   },
 };
 
@@ -289,6 +307,43 @@ class AdManager {
   }
 
   /**
+   * Fonte do script da Adsterra (env var VITE_ADSTERRA_INVOKE_URL sobrescreve).
+   */
+  getAdsterraSrc(): string {
+    return ADSTERRA_INVOKE_URL;
+  }
+
+  /**
+   * Diagnóstico no console: rede ativa, scripts carregados, containers e
+   * configuração efetiva. Use no DevTools: `adManager.diagnostico()`.
+   */
+  diagnostico(): void {
+    if (typeof window === "undefined") return;
+    const caminho = window.location.pathname;
+    const info = {
+      rota: caminho,
+      redeCalculada: this.getNetworkForRoute(caminho),
+      redeAtiva: this.currentNetwork,
+      scriptsCarregados: [...this.loadedScripts],
+      containersAtivos: [...this.activeContainers],
+      config: {
+        adsenseClient: ADSENSE_CLIENT,
+        adsterraInvokeUrl: ADSTERRA_INVOKE_URL,
+        monetagSrc: MONETAG_SRC,
+        monetagZone: MONETAG_ZONE,
+      },
+      scriptsNoDOM: {
+        adsense: !!document.getElementById("adsense-script"),
+        adsterra: !!document.getElementById("adsterra-script"),
+        monetag: !!document.getElementById("monetag-script"),
+      },
+      bloqueadorDetectado: !document.querySelector("#adsense-script") && this.currentNetwork === "adsense",
+    };
+    console.table(info.config);
+    console.log("[AdManager][diagnostico]", info);
+  }
+
+  /**
    * Inicializa anúncios para uma rota
    */
   initForRoute(path: string): void {
@@ -317,6 +372,11 @@ class AdManager {
 
 // Singleton instance
 export const adManager = new AdManager();
+
+// Expõe no console do navegador para diagnóstico (console.log(adManager)).
+if (typeof window !== "undefined") {
+  (window as unknown as { adManager: AdManager }).adManager = adManager;
+}
 
 /**
  * Hook React para usar o AdManager. Callbacks são estáveis por `path` —

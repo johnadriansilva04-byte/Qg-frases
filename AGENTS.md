@@ -1,3 +1,55 @@
+## Soberania unificada com Banco Central SOV + Cartório — 2026-08-19
+
+- **Fonte de verdade da soberania**: `user_wallets.balance` (SOV) via `bank_ledger`.
+  `botao_usuarios.pontos_soberania` virou cache/backup. API unificada em
+  `src/lib/financial/sovApi.ts`: `obterSaldoSov`, `registrarTransacaoSov`,
+  `historicoTransacoesSov`, `garantirCarteira` (chamada no primeiro login em
+  `useBotaoAuth`). Source modules: 'career', 'rpg', 'online', 'market'.
+- **Todos os pontos de mutação de soberania** registram no ledger:
+  storage.ts (liga, online, vídeo/reward), careerRemote.ts (resultado, bônus de
+  posição de fim de temporada, apostas online), BotaoGame (desafio de
+  patrocinador amistoso/carreira, Copa do Brasil, narrativa dinâmica, suborno,
+  choice events com impactoFinanceiro/penaltyPontos, Ritual da Trilha — este
+  último usa `perfilRef` pois roda dentro de useEffect com deps vazias).
+  Escolhas RPG (`handleEscolhaRpg`) usam source 'rpg' com metadata
+  {eventoId, escolhaIdx, npcId}.
+- **NUNCA reintroduzir** delta local de soberania no bloco de carreira de
+  `finishTournamentMatch` — `aplicarResultadoRemoto` já devolve o saldo
+  autoritativo do ledger; somar localmente causava double-count.
+- **Cartório** (`src/components/botao/cartorio/` + `career/rpg/cartorioApi.ts`):
+  3 eventos RPG (`contrato-pendente`, `peticao-necessaria`, `multa-judicial`)
+  com efeito `cartorio` na `EscolhaRpg` criam pedido em `cartorio_pedidos`
+  (RPC `criar_pedido_cartorio`) e anexam `linkCartorio` na conversa do celular
+  (renderizado como Link em `CelularConversas`). Biblioteca abre o formulário
+  via query params `?acao=contrato|peticao|multa&pedidoId=...`
+  (`validateSearch` em `routes/biblioteca.tsx`). IA Bibliotecária
+  (`SYSTEM_PROMPT_BIBLIOTECARIA` em `cartorioTypes.ts`) gera o documento salvo
+  em `cartorio_documentos` (RPC `salvar_documento_cartorio`) e o pedido é
+  concluído (`concluir_pedido_cartorio`).
+- **SQL**: `supabase/migrations/sov_integracao_cartorio.sql` — RPCs
+  `registrar_transacao_soberania`, `obter_saldo_soberania`,
+  `historico_transacoes` + tabelas/RPCs do cartório. Depende de
+  `sov_financial_system.sql` (create_or_update_wallet/record_transaction).
+  Aplicação manual via SQL Editor.
+- **Ads**: `adManager.ts` aceita `VITE_ADSTERRA_INVOKE_URL` (override do invoke
+  URL), `getAdsterraSrc()`, `loadMonetagOnDemand()`, diagnóstico exposto em
+  `window.adManager`. `AdsterraBanner` no branch passivo agora realmente injeta
+  o script (antes só reservava espaço — bug que impedia os banners de
+  aparecer). Monetag on-click SÓ em botões com aviso (`ControlledMonetagButton`):
+  dentro do celular (tela principal), na classificação e na nova tela de fim
+  de jogo.
+- **Tela de fim de jogo** (`components/MatchEndScreen.tsx`, `MatchEndData`):
+  placar, resultado, gols, Δsoberania/Δmoral, posição na tabela, "extra"
+  (campeão), botão Continuar + bloco "Patrocínio" (Adsterra + Monetag).
+  `BotaoGame` mantém `matchEnd`/`matchEndDestino` e a renderiza após
+  amistoso/liga/copa (liga captura `patchSob/patchMoral/posTabela` no bloco de
+  carreira).
+- **Teste runtime**: módulos RPG testáveis com
+  `JITI_TSCONFIG_PATHS=true ./node_modules/.bin/jiti <teste.mts>` (jiti resolve
+  o alias `@/` do tsconfig). `selecionarEvento` NÃO é exportado do rpgEngine —
+  testar via `processarEventosRpg`/`aplicarEscolhaRpg`. Stub mínimo de career
+  precisa de `headlines: []` e `memoriaRpg: null`.
+
 ## Reconstrução da Carreira Infinita (Futebol de Botão) — 2026-08-18
 
 - Base canônica de times em `src/components/botao/data/teams.ts`: 60 clubes ficcionais, IDs únicos/persistentes, 20 por divisão (A=88..71, B=71..48, C=48..28). Reuse esses IDs — evita conflitos e sobrescrição na base.

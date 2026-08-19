@@ -49,6 +49,7 @@ import {
   sortTable,
 } from "./tournament";
 import { MatchView } from "./components/MatchView";
+import { MatchEndScreen, type MatchEndData } from "./components/MatchEndScreen";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { AuthScreen } from "./components/AuthScreen";
 import { OnlineMatchV3 } from "./components/OnlineMatchV3";
@@ -94,7 +95,13 @@ import {
   processarEventosRpg,
   responderContatoNpc,
 } from "./career/rpg/rpgEngine";
+import { eventoPorId } from "./career/rpg/eventos";
+import {
+  criarPedidoCartorio,
+  type CartorioTipo,
+} from "./career/rpg/cartorioApi";
 import { anexarPost, gerarPostPartida } from "./career/rpg/socialEngine";
+import { registrarTransacaoSov } from "@/lib/financial/sovApi";
 import { armarSponsor } from "@/lib/sponsorGate";
 import {
   aplicarRitualNaCarreira,
@@ -172,6 +179,7 @@ type Screen =
   | "tournament-setup"
   | "hub"
   | "tournament-match"
+  | "match-end"
   | "choice"
   | "suborno"
   | "celular"
@@ -212,6 +220,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [veredito, setVeredito] = useState<VereditoTemporada | null>(null);
   // Fixture de copa ativa (para distinguir do fixture de liga no finishTournament).
   const [currentCopaFix, setCurrentCopaFix] = useState<Fixture | null>(null);
+  // Dados da tela de fim de jogo (estatísticas + monetização discreta).
+  const [matchEnd, setMatchEnd] = useState<MatchEndData | null>(null);
+  // Tela de destino do botão "Continuar" da tela de fim de jogo.
+  const [matchEndDestino, setMatchEndDestino] = useState<Screen>("menu");
   // Tela de carregamento (splash) controlada por contexto: inicia de carreira,
   // entrada em campo, consultas ao Supabase e inicialização da IA.
   const [loading, setLoading] = useState(false);
@@ -269,9 +281,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // pendente, consumir e integrar na carreira — SOV, sombra, feed social.
   // Checa na montagem e ao voltar o foco (ex.: usuário voltou da aba da Trilha).
   const careerRef = useRef<CareerState | null>(null);
+  const perfilRef = useRef<Perfil | null>(null);
   useEffect(() => {
     careerRef.current = career;
-  }, [career]);
+    perfilRef.current = perfil;
+  }, [career, perfil]);
 
   useEffect(() => {
     const consumir = () => {
@@ -281,6 +295,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (!atual) return;
       const { career: novo, resumo } = aplicarRitualNaCarreira(atual, pendente.resultado);
       persistCareer(novo);
+      // Ritual da Trilha move soberania: registra no Banco Central (module 'rpg').
+      const deltaRitual = (novo.coach?.soberania ?? 0) - (atual.coach?.soberania ?? 0);
+      const uidRitual = perfilRef.current?.user_id;
+      if (deltaRitual !== 0 && uidRitual) {
+        void registrarTransacaoSov(
+          uidRitual,
+          deltaRitual,
+          deltaRitual > 0 ? "reward" : "penalty",
+          "Ritual da Trilha — integração de carreira",
+          "rpg",
+          { ritual: pendente.resultado },
+        );
+      }
       setToast(resumo);
     };
     consumir();
@@ -644,22 +671,47 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     persist(novoProgresso);
 
-    // Atualizar pontos de soberania se estiver logado
+    // Atualizar pontos de soberania se estiver logado (Banco Central SOV)
     if (perfil?.user_id) {
       const vitoria = gf > ga;
-      atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
+      void atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
     }
 
     // Patrocinador: valida a meta da partida no modo carreira também.
     if (career?.desafioPatrocinador) {
       const rDesafio = aplicarDesafioPatrocinador(career, gf, ga, true);
       persistCareer(rDesafio.estado);
+      // Recompensa do patrocinador no Banco Central SOV.
+      if (rDesafio.ganhou > 0 && perfil?.user_id) {
+        void registrarTransacaoSov(
+          perfil.user_id,
+          rDesafio.ganhou,
+          "reward",
+          "Desafio de patrocinador cumprido (amistoso)",
+          "career",
+          { golsPro: gf, golsContra: ga, tipo: "amistoso" },
+        );
+      }
     }
 
     setToast(
       gf > ga ? "Vitória no amistoso!" : gf < ga ? "Derrota no amistoso." : "Empate no amistoso.",
     );
-    setScreen("menu");
+    const advId = userIsHome ? r.awayId : r.homeId;
+    const advTeam = teamByIdSync(advId);
+    setMatchEnd({
+      resultado: gf > ga ? "vitoria" : gf < ga ? "derrota" : "empate",
+      placarUser: gf,
+      placarAdv: ga,
+      timeUserNome: userTeam.name,
+      timeAdvNome: advTeam?.name ?? advId,
+      competicao: "Amistoso",
+      rodada: "Jogo único",
+      soberaniaDelta: 0,
+      moralDelta: 0,
+    });
+    setMatchEndDestino("menu");
+    setScreen("match-end");
   };
 
   /* ---------- torneio ---------- */
@@ -875,6 +927,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
     persistCareer(novo);
     setCareer(novo);
+    // Narrativa move soberania: registra no Banco Central (module 'rpg').
+    if (efeitos.soberania && perfil?.user_id) {
+      void registrarTransacaoSov(
+        perfil.user_id,
+        efeitos.soberania,
+        efeitos.soberania >= 0 ? "reward" : "penalty",
+        `Narrativa: ${career.narrativa?.cenaAtual ?? "cena"} — escolha narrativa`,
+        "rpg",
+        { cena: career.narrativa?.cenaAtual },
+      );
+    }
     // No desfecho, registra manchete narrativa e zera a história.
     if (finalizado && novoState.desfecho) {
       const tag =
@@ -994,6 +1057,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
     persistCareer(novo);
     setCareer(novo);
+    // Suborno move soberania: registra no Banco Central (module 'rpg').
+    if (efeitos.soberania && perfil?.user_id) {
+      void registrarTransacaoSov(
+        perfil.user_id,
+        efeitos.soberania,
+        efeitos.soberania >= 0 ? "reward" : "penalty",
+        `Suborno: escolha "${escolha}" — efeito de soberania`,
+        "rpg",
+        { subornoEscolha: escolha, node: novoSub.nodeAtual },
+      );
+    }
     // Se a cena resolveu o capítulo, gera manchete narrativa do desfecho.
     if (finalizado && novoSub.desfecho) {
       const manchete =
@@ -1084,6 +1158,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         () => {},
       );
       void registrarEventoMissao("celular_decisao");
+      // Impacto financeiro/penalty imediato no Banco Central SOV (module 'rpg').
+      const deltaEscolha =
+        (choice.penaltyPontos && choice.penaltyPontos < 0 ? choice.penaltyPontos : 0) +
+        (choice.impactoFinanceiro ?? 0);
+      if (deltaEscolha !== 0) {
+        void registrarTransacaoSov(
+          perfil.user_id,
+          deltaEscolha,
+          deltaEscolha > 0 ? "reward" : "penalty",
+          `Decisão de carreira: ${evento?.titulo ?? choice.id}`,
+          "rpg",
+          { choiceId: choice.id, eventoId: career.eventoPendenteId },
+        );
+      }
     }
 
     // Feedback de sanções graves.
@@ -1147,6 +1235,60 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     persistCareer(comEscolha);
     setCareer(comEscolha);
     setToast(`Escolha registrada: ${desfecho.slice(0, 90)}${desfecho.length > 90 ? "…" : ""}`);
+
+    // Integrações externas da escolha: SOV no Banco Central + pedido no Cartório.
+    const conversa = career.conversas.find((c) => c.id === conversaId);
+    const evento = conversa?.eventoRpg ? eventoPorId(conversa.eventoRpg.eventoId) : undefined;
+    const efeitos = evento?.escolhas[indice]?.efeitos;
+    const userId = perfil?.user_id;
+
+    if (evento && efeitos?.soberania && userId) {
+      void registrarTransacaoSov(
+        userId,
+        efeitos.soberania,
+        efeitos.soberania >= 0 ? "reward" : "penalty",
+        `RPG: ${evento.titulo} — "${efeitos.soberania >= 0 ? "ganho" : "custo"} de soberania"`,
+        "rpg",
+        { eventoId: evento.id, escolha: indice, titulo: evento.titulo },
+      );
+    }
+
+    if (evento && efeitos?.cartorio) {
+      const { tipo, titulo } = efeitos.cartorio;
+      if (userId) {
+        void (async () => {
+          const dados = {
+            eventoId: evento.id,
+            temporada: career.temporada ?? 1,
+            rodada: career.rodadaAtual,
+            timeId: userTeam.id,
+            timeNome: userTeam.name,
+            coach: career.coach.nome,
+            soberania: career.coach.soberania,
+          };
+          const pedidoId = await criarPedidoCartorio(
+            userId,
+            tipo as CartorioTipo,
+            titulo,
+            dados,
+          );
+          const link = `/biblioteca?acao=${tipo}&pedidoId=${pedidoId ?? ""}`;
+          const atualizado: CareerState = {
+            ...comEscolha,
+            conversas: comEscolha.conversas.map((cv) =>
+              cv.id === conversaId ? { ...cv, linkCartorio: link } : cv,
+            ),
+          };
+          persistCareer(atualizado);
+          setCareer(atualizado);
+          setToast(
+            pedidoId
+              ? "Pedido criado no Cartório! A conversa ganhou um link para a Biblioteca."
+              : "A conversa ganhou um link para a Biblioteca.",
+          );
+        })();
+      }
+    }
   };
 
   const handleExcluirConversa = (conversaId: string) => {
@@ -1225,6 +1367,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       coach: { ...career.coach, soberania: Math.max(0, novaSoberania) },
     };
     if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
+
+    // Resultado da copa no Banco Central SOV (module 'career').
+    const deltaCopa = Math.max(0, novaSoberania) - career.coach.soberania;
+    if (deltaCopa !== 0 && perfil?.user_id) {
+      void registrarTransacaoSov(
+        perfil.user_id,
+        deltaCopa,
+        deltaCopa > 0 ? "reward" : "penalty",
+        `Copa do Brasil: ${gf}x${ga} (${currentCopaFix.stage})`,
+        "career",
+        {
+          competicao: "copa-do-brasil",
+          stage: currentCopaFix.stage,
+          campeao: copa.finished && copa.champion === userTeam.id,
+        },
+      );
+    }
+
     if (perfil?.user_id) {
       void registrarPartidaRemota(
         perfil.user_id,
@@ -1245,6 +1405,29 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             ? "Eliminado da Copa do Brasil."
             : "Avançou nos pênaltis na Copa.",
     );
+
+    // Tela de fim de jogo com estatísticas da copa (estilo esportivo).
+    const adversario = currentCopaFix.homeId === userTeam.id ? currentCopaFix.awayId : currentCopaFix.homeId;
+    const advNome = resolveTeam(adversario, userTeam).name;
+    const sobAnterior = career.coach.soberania;
+    const moralAnterior = career.moralTime;
+    setMatchEnd({
+      resultado: gf > ga ? "vitoria" : gf < ga ? "derrota" : "empate",
+      placarUser: gf,
+      placarAdv: ga,
+      timeUserNome: userTeam.name,
+      timeAdvNome: advNome,
+      competicao: "Copa do Brasil",
+      rodada: currentCopaFix.stage,
+      soberaniaDelta: (novaCareer.coach.soberania ?? 0) - sobAnterior,
+      moralDelta: (novaCareer.moralTime ?? 0) - moralAnterior,
+      extra:
+        copa.finished && copa.champion === userTeam.id
+          ? "CAMPEÃO DA COPA DO BRASIL!"
+          : undefined,
+    });
+    setMatchEndDestino("hub");
+    setScreen("match-end");
   };
 
   const finishTournamentMatch = (r: MatchResult) => {
@@ -1262,11 +1445,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     // Copa do Brasil (paralela ao Brasileirão): se a partida atual é da copa,
     // aplica o resultado ao chaveamento da copa e NÃO avança o Brasileirão.
+    // A própria `finishCopaMatch` navega para a tela de fim de jogo.
     if (currentCopaFix && career?.copaBrasil) {
       finishCopaMatch(r, gf, ga);
       setCurrent(null);
       setCurrentCopaFix(null);
-      setScreen("hub");
       return;
     }
 
@@ -1376,6 +1559,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
 
     // ============ CARREIRA / SOBERANIA / MANCHETES ============
+    // Variáveis capturadas no bloco de carreira para a tela de fim de jogo.
+    let patchSob = 0;
+    let patchMoral = 0;
+    let posTabela: number | undefined;
+    let extraMsg: string | undefined;
     if (career) {
       let novaSoberania = career.coach.soberania;
       let moral = career.moralTime;
@@ -1548,6 +1736,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       novaCareer = rDesafio.estado;
       persistCareer(novaCareer);
 
+      // Recompensa do patrocinador no Banco Central SOV (module 'career').
+      if (rDesafio.ganhou > 0 && perfil?.user_id) {
+        void registrarTransacaoSov(
+          perfil.user_id,
+          rDesafio.ganhou,
+          "reward",
+          "Desafio de patrocinador cumprido (carreira)",
+          "career",
+          { rodada: career.rodadaAtual, golsPro: gf, golsContra: ga },
+        );
+      }
+
+      // Captura para a tela de fim de jogo (deltas reais pós-desafio).
+      patchSob = novaCareer.coach.soberania - career.coach.soberania;
+      patchMoral = novaCareer.moralTime - career.moralTime;
+      posTabela = posicaoUsuario > 0 ? posicaoUsuario : undefined;
+      extraMsg = manchetesFim[0];
+
       // Fim de temporada (liga concluída): economia de Soberania decide se o
       // treinador segue (temporada infinita) ou é demitido (Game Over).
       if (t.phase === "fim") {
@@ -1610,11 +1816,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
     persist(novoProgresso);
 
-    // Atualizar pontos de soberania se estiver logado
-    if (perfil?.user_id) {
-      const vitoria = gf > ga;
-      atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
-    }
+    // A soberania da partida de carreira já foi registrada no Banco Central por
+    // `aplicarResultadoRemoto` (module 'career'). A escrita anterior dobrava o
+    // delta — removida como parte da migração SOV.
 
     persistTournament(t);
     setCurrent(null);
@@ -1698,7 +1902,29 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
     })();
 
-    setScreen("hub");
+    // Tela de fim de jogo com estatísticas reais (estilo esportivo). O botão
+    // "Continuar" volta ao hub.
+    {
+      const advId2 = userIsHome ? r.awayId : r.homeId;
+      const advNome2 = teamByIdSync(advId2)?.name ?? advId2;
+      setMatchEnd({
+        resultado: gf > ga ? "vitoria" : gf < ga ? "derrota" : "empate",
+        placarUser: gf,
+        placarAdv: ga,
+        timeUserNome: userTeam.name,
+        timeAdvNome: advNome2,
+        competicao: career
+          ? `Brasileirão · ${(career.divisao ?? "serie-a").replace("-", " ").toUpperCase()}`
+          : "Torneio",
+        rodada: current.stage,
+        soberaniaDelta: patchSob,
+        moralDelta: patchMoral,
+        posicaoTabela: posTabela,
+        extra: extraMsg,
+      });
+      setMatchEndDestino("hub");
+      setScreen("match-end");
+    }
   };
 
   const qualified = (t: Tournament) =>
@@ -1706,6 +1932,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     false;
 
   /* ---------- telas ---------- */
+  if (screen === "match-end" && matchEnd) {
+    return (
+      <MatchEndScreen
+        dados={matchEnd}
+        onContinuar={() => {
+          setMatchEnd(null);
+          setScreen(matchEndDestino);
+        }}
+      />
+    );
+  }
+
   if (screen === "online") {
     return (
       <Shell>

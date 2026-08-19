@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { adManager, useAdManager } from "@/lib/adManager";
 import { ControlledAdButton } from "./ControlledAdButton";
 
 interface AdsterraBannerProps {
   slotId?: string;
   className?: string;
-  showButton?: boolean; // Se true, mostra botão controlado em vez de carregar automaticamente
+  /** Se true, mostra botão controlado (carrega sob clique) em vez do banner direto. */
+  showButton?: boolean;
 }
 
 /**
@@ -13,8 +14,10 @@ interface AdsterraBannerProps {
  * Uso exclusivo no Futebol de Botão
  * Rode apenas client-side (SSR-safe)
  *
- * MODIFICADO: Não carrega script automaticamente. Requer ação explícita do usuário
- * através do ControlledAdButton quando showButton=true.
+ * Comportamento:
+ * - showButton=false (padrão): o banner nativo é carregado ao montar — seguro,
+ *   pois o invoke.js só preenche o container, sem pop-ups ou redirecionamentos.
+ * - showButton=true: renderiza botão com aviso e carrega somente após clique.
  */
 export function AdsterraBanner({ slotId = "native-banner", className = "", showButton = false }: AdsterraBannerProps) {
   const [isMounted, setIsMounted] = useState(false);
@@ -23,14 +26,8 @@ export function AdsterraBanner({ slotId = "native-banner", className = "", showB
   const containerRef = useRef<HTMLDivElement>(null);
   const { createContainer, getNetwork } = useAdManager("/botao");
 
-  useEffect(() => {
-    // Garante que rode apenas no client-side
-    setIsMounted(true);
-  }, []);
-
-  const loadAdsterraScript = async () => {
+  const loadAdsterraScript = useCallback(async () => {
     if (scriptLoaded || hasError) return;
-
     console.log("[AD] loading-adsterra-script");
 
     try {
@@ -49,12 +46,10 @@ export function AdsterraBanner({ slotId = "native-banner", className = "", showB
       containerRef.current.appendChild(container);
 
       // Carrega script Adsterra apenas se não existir (evita recarregar)
-      const script = document.getElementById("adsterra-script");
-      if (!script) {
+      if (!document.getElementById("adsterra-script")) {
         const newScript = document.createElement("script");
         newScript.id = "adsterra-script";
-        newScript.src =
-          "https://pl30913396.effectivecpmnetwork.com/0ad480fbab555d4ab76b3d9548942579/invoke.js";
+        newScript.src = adManager.getAdsterraSrc();
         newScript.async = true;
         newScript.setAttribute("data-cfasync", "false");
         newScript.onerror = () => {
@@ -70,7 +65,24 @@ export function AdsterraBanner({ slotId = "native-banner", className = "", showB
       console.error("[AdsterraBanner] Erro:", error);
       setHasError(true);
     }
-  };
+  }, [scriptLoaded, hasError, getNetwork, createContainer, slotId]);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Banner nativo: carrega ao montar (seguro — preenche apenas o container).
+  useEffect(() => {
+    if (!isMounted || showButton || hasError) return;
+    void loadAdsterraScript();
+
+    return () => {
+      // Cleanup ao desmontar
+      if (containerRef.current && containerRef.current.firstChild) {
+        containerRef.current.removeChild(containerRef.current.firstChild);
+      }
+    };
+  }, [isMounted, showButton, hasError, loadAdsterraScript]);
 
   // Se showButton, renderiza botão controlado em vez de carregar automaticamente
   if (showButton) {
@@ -82,22 +94,6 @@ export function AdsterraBanner({ slotId = "native-banner", className = "", showB
       </div>
     );
   }
-
-  // Comportamento original para slots que não requerem botão (loading, intervalo)
-  useEffect(() => {
-    if (!isMounted || hasError) return;
-
-    // REMOVIDO: Carregamento automático do script
-    // O script só deve ser carregado via ação explícita do usuário
-    // Este componente agora serve apenas como container passivo
-
-    return () => {
-      // Cleanup ao desmontar
-      if (containerRef.current && containerRef.current.firstChild) {
-        containerRef.current.removeChild(containerRef.current.firstChild);
-      }
-    };
-  }, [isMounted, hasError]);
 
   // Não renderiza nada durante SSR ou se houver erro
   if (!isMounted || hasError) {

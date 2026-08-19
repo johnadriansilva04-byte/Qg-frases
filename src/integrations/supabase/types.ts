@@ -649,6 +649,73 @@ export type Database = {
         };
         Relationships: [];
       };
+      cartorio_pedidos: {
+        Row: {
+          id: string;
+          user_id: string;
+          tipo: string;
+          status: string;
+          titulo: string;
+          dados: Json;
+          created_at: string;
+          updated_at: string;
+          concluido_em: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          tipo: string;
+          status?: string;
+          titulo: string;
+          dados?: Json;
+          created_at?: string;
+          updated_at?: string;
+          concluido_em?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          tipo?: string;
+          status?: string;
+          titulo?: string;
+          dados?: Json;
+          concluido_em?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cartorio_documentos: {
+        Row: {
+          id: string;
+          user_id: string;
+          pedido_id: string | null;
+          tipo: string;
+          titulo: string;
+          conteudo: string;
+          dados: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          pedido_id?: string | null;
+          tipo: string;
+          titulo: string;
+          conteudo: string;
+          dados?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          pedido_id?: string | null;
+          tipo?: string;
+          titulo?: string;
+          conteudo?: string;
+          dados?: Json;
+        };
+        Relationships: [];
+      };
       sov_market_transactions: {
         Row: {
           id: string;
@@ -997,6 +1064,53 @@ export type Database = {
           p_description: string | null;
           p_source_module: string;
           p_metadata?: Json;
+        };
+        Returns: string;
+      };
+      registrar_transacao_soberania: {
+        Args: {
+          p_user_id: string;
+          p_amount: number;
+          p_type: string;
+          p_description: string;
+          p_source_module: string;
+          p_metadata?: Json;
+        };
+        Returns: number;
+      };
+      obter_saldo_soberania: {
+        Args: { p_user_id: string };
+        Returns: number;
+      };
+      historico_transacoes: {
+        Args: { p_user_id: string; p_limite?: number };
+        Returns: Array<{
+          id: string;
+          transaction_type: string;
+          amount: number;
+          balance_after: number;
+          description: string | null;
+          source_module: string;
+          metadata: Json;
+          created_at: string;
+        }>;
+      };
+      criar_pedido_cartorio: {
+        Args: { p_user_id: string; p_tipo: string; p_titulo: string; p_dados?: Json };
+        Returns: string;
+      };
+      concluir_pedido_cartorio: {
+        Args: { p_pedido_id: string };
+        Returns: boolean;
+      };
+      salvar_documento_cartorio: {
+        Args: {
+          p_user_id: string;
+          p_pedido_id: string | null;
+          p_tipo: string;
+          p_titulo: string;
+          p_conteudo: string;
+          p_dados?: Json;
         };
         Returns: string;
       };

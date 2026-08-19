@@ -7,6 +7,7 @@ import {
 } from "@/integrations/supabase/client";
 import { buscarPerfil, cachePerfil, limparCache, sair, type Perfil } from "./auth";
 import { criarPerfilSeNaoExistir } from "@/lib/botao/api";
+import { garantirCarteira } from "@/lib/financial/sovApi";
 
 export function useBotaoAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -49,6 +50,9 @@ export function useBotaoAuth() {
 
         let p = await buscarPerfil(u.id);
         if (!vivo) return;
+
+        // Banco Central SOV: garante a carteira do usuário na primeira vez.
+        void garantirCarteira(u.id);
 
         if (p) {
           cachePerfil(p);

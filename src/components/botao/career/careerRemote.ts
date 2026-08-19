@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import {
+  obterSaldoSov,
+  registrarTransacaoSov,
+} from "@/lib/financial/sovApi";
 import type { CareerState, Headline } from "./types";
 import type { Fixture, MatchResult } from "../types";
 import { teamByIdSync } from "../data/teams";
@@ -60,6 +64,9 @@ export async function loadCareerFromSupabase(
       .maybeSingle();
 
     if (!prog.career) return null;
+    // Fonte de verdade: user_wallets.balance (SOV). Se o Banco Central não
+    // estiver disponível (migration pendente), cai no cache pontos_soberania.
+    const saldoSov = await obterSaldoSov(userId);
     const coachFallback = fallbackCoach ?? EMPTY_CAREER.coach;
     const coachSalvo = prog.career.coach ?? EMPTY_CAREER.coach;
     const nomeCoach =
@@ -76,7 +83,7 @@ export async function loadCareerFromSupabase(
         apelido: coachSalvo.apelido?.trim() || coachFallback.apelido?.trim() || nomeCoach,
         cidade: coachSalvo.cidade?.trim() || coachFallback.cidade?.trim() || "",
         bio: coachSalvo.bio?.trim() || coachFallback.bio?.trim() || "",
-        soberania: u?.pontos_soberania ?? coachSalvo.soberania ?? 0,
+        soberania: saldoSov ?? u?.pontos_soberania ?? coachSalvo.soberania ?? 0,
       },
     };
   } catch (e) {
@@ -161,6 +168,8 @@ export async function aplicarResultadoRemoto(
     const uid = sess?.user?.id;
     if (!uid) return null;
 
+    const { delta, moralDelta } = computeSovereigntyDelta(golsPro, golsContra, ultimaEscolha);
+
     const { data: current } = await (supabase as any)
       .from("botao_usuarios")
       .select("pontos_soberania, partidas_jogadas, partidas_vencidas, progresso_caminpanha")
@@ -168,8 +177,19 @@ export async function aplicarResultadoRemoto(
       .maybeSingle();
     if (!current) return null;
 
-    const { delta, moralDelta } = computeSovereigntyDelta(golsPro, golsContra, ultimaEscolha);
-    const novaSob = Math.max(0, (current.pontos_soberania ?? 0) + delta);
+    // Fonte de verdade: Banco Central SOV (module 'career').
+    const saldoSov = await registrarTransacaoSov(
+      uid,
+      delta,
+      delta >= 0 ? "reward" : "penalty",
+      `Resultado de carreira: ${golsPro}x${golsContra}`,
+      "career",
+      { golsPro, golsContra, ultimaEscolha },
+    );
+
+    // Cache legado + fallback local quando o ledger não responde.
+    const novaSob =
+      saldoSov ?? Math.max(0, (current.pontos_soberania ?? 0) + delta);
     const partidasJog = (current.partidas_jogadas ?? 0) + 1;
     const partidasVen = (current.partidas_vencidas ?? 0) + (golsPro > golsContra ? 1 : 0);
 
@@ -237,6 +257,16 @@ export async function aplicarFimCampanhaRemoto(
         : 0;
     const totalBonus = bonusPos + bonusDif;
 
+    // Fonte de verdade: Banco Central SOV — bônus de posição final ('career').
+    const saldoSov = await registrarTransacaoSov(
+      uid,
+      totalBonus,
+      "reward",
+      `Fim de campanha: posição ${posicao} (${dificuldade})`,
+      "career",
+      { posicao, dificuldade, totalBonus },
+    );
+
     const { data: cur } = await (supabase as any)
       .from("botao_usuarios")
       .select("pontos_soberania, progresso_caminpanha")
@@ -244,7 +274,8 @@ export async function aplicarFimCampanhaRemoto(
       .maybeSingle();
     if (!cur) return null;
 
-    const novaSob = Math.max(0, (cur.pontos_soberania ?? 0) + totalBonus);
+    const novaSob =
+      saldoSov ?? Math.max(0, (cur.pontos_soberania ?? 0) + totalBonus);
     const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
     const career = prog.career ?? EMPTY_CAREER;
     const novoTit = (career.coach.titulos ?? 0) + (posicao === "campeao" ? 1 : 0);
@@ -355,14 +386,19 @@ export async function aplicarApostaSoberania(
     const uid = sess?.user?.id;
     if (!uid) return null;
 
-    const { data: cur } = await (supabase as any)
-      .from("botao_usuarios")
-      .select("pontos_soberania")
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (!cur) return null;
+    // Saldo vem do Banco Central (fonte de verdade) com fallback no cache.
+    const saldoAtual = (await obterSaldoSov(uid));
+    const atual =
+      saldoAtual ??
+      (
+        await (supabase as any)
+          .from("botao_usuarios")
+          .select("pontos_soberania")
+          .eq("user_id", uid)
+          .maybeSingle()
+      )?.data?.pontos_soberania ??
+      0;
 
-    const atual = cur.pontos_soberania ?? 0;
     // Nunca arrisca mais do que o saldo disponível.
     const risco = Math.min(aposta, atual);
     let delta = 0;
@@ -370,6 +406,18 @@ export async function aplicarApostaSoberania(
     else if (venceu)
       delta = risco; // ganha o equivalente à aposta (dobro)
     else delta = -risco;
+
+    if (delta !== 0) {
+      // Registra no ledger: bet_win (crédito) ou bet_loss (débito).
+      await registrarTransacaoSov(
+        uid,
+        delta,
+        delta > 0 ? "bet_win" : "bet_loss",
+        `Aposta de soberania online (${venceu ? "venceu" : "perdeu"})`,
+        "online",
+        { aposta: risco, empate, venceu },
+      );
+    }
 
     const novoSaldo = Math.max(0, atual + delta);
     await (supabase as any)

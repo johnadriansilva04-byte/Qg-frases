@@ -1,5 +1,6 @@
 import type { Difficulty, Tournament } from "./types";
 import { supabase } from "@/integrations/supabase/client";
+import { registrarTransacaoSov } from "@/lib/financial/sovApi";
 
 export type Progress = {
   titles: Record<Difficulty, number>;
@@ -160,6 +161,19 @@ export async function atualizarPontosSoberania(
     const pontosResultado = vitoria ? 3 : -4;
     const pontosTotais = pontosGols + pontosResultado;
 
+    // Fonte de verdade: Banco Central SOV (user_wallets + bank_ledger).
+    // O saldo retornado vira o novo cache em botao_usuarios.pontos_soberania.
+    const saldoSov = await registrarTransacaoSov(
+      userId,
+      pontosTotais,
+      pontosTotais >= 0 ? "reward" : "penalty",
+      vitoria
+        ? `Partida de carreira: ${golsFeitos}x${golsSofridos} (vitória)`
+        : `Partida de carreira: ${golsFeitos}x${golsSofridos} (derrota)`,
+      "career",
+      { golsFeitos, golsSofridos, vitoria },
+    );
+
     const { data: currentData } = await supabase
       .from("botao_usuarios")
       .select("pontos_soberania, partidas_jogadas, partidas_vencidas, progresso_caminpanha")
@@ -168,7 +182,10 @@ export async function atualizarPontosSoberania(
 
     if (!currentData) return;
 
-    const novosPontos = Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
+    // Fallback: se o Banco Central não respondeu (migration pendente), usa o
+    // cálculo local — nunca deixa o jogo travar por causa do ledger.
+    const novosPontos =
+      saldoSov ?? Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias = vitoria
       ? (currentData.partidas_vencidas || 0) + 1
@@ -208,6 +225,22 @@ export async function atualizarEstatisticasOnline(
   _campeonatoGanho: boolean = false,
 ) {
   try {
+    // Pontuação escassa alinhada com carreira: V=+3, E=+1, D=-3
+    let pontosTotais = 0;
+    if (resultado === "vitoria") pontosTotais = 3;
+    else if (resultado === "empate") pontosTotais = 1;
+    else pontosTotais = -3;
+
+    // Fonte de verdade: Banco Central SOV — módulo 'online'.
+    const saldoSov = await registrarTransacaoSov(
+      userId,
+      pontosTotais,
+      pontosTotais >= 0 ? "reward" : "penalty",
+      `Partida online: ${golsFeitos}x${golsSofridos} (${resultado})`,
+      "online",
+      { resultado, golsFeitos, golsSofridos },
+    );
+
     const { data: currentData } = await supabase
       .from("botao_usuarios")
       .select("pontos_soberania, partidas_jogadas, partidas_vencidas, progresso_caminpanha")
@@ -216,13 +249,9 @@ export async function atualizarEstatisticasOnline(
 
     if (!currentData) return;
 
-    // Pontuação escassa alinhada com carreira: V=+3, E=+1, D=-3
-    let pontosTotais = 0;
-    if (resultado === "vitoria") pontosTotais = 3;
-    else if (resultado === "empate") pontosTotais = 1;
-    else pontosTotais = -3;
-
-    const novosPontos = Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
+    // Fallback local quando o ledger não responde (cache ainda é atualizado).
+    const novosPontos =
+      saldoSov ?? Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias =
       resultado === "vitoria"
@@ -257,15 +286,26 @@ export async function atualizarEstatisticasOnline(
 
 export async function adicionarPontosVideo(userId: string, pontos: number = 5) {
   try {
+    // Fonte de verdade: Banco Central SOV — recompensa de publicidade ('market').
+    const saldoSov = await registrarTransacaoSov(
+      userId,
+      pontos,
+      "reward",
+      "Vídeo de publicidade assistido",
+      "market",
+      { pontos },
+    );
+
     const { data: currentData } = await supabase
       .from("botao_usuarios")
       .select("pontos_soberania")
       .eq("user_id", userId)
       .single();
 
-    if (!currentData) return;
+    if (!currentData) return null;
 
-    const novosPontos = (currentData.pontos_soberania || 0) + pontos;
+    // Fallback local quando o ledger não responde.
+    const novosPontos = saldoSov ?? (currentData.pontos_soberania || 0) + pontos;
 
     const { error } = await supabase
       .from("botao_usuarios")

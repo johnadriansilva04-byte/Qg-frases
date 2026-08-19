@@ -119,6 +119,8 @@ export type ConversaCelular = {
   eventoRpg?:
     | { eventoId: string; respondido: boolean; tom: "drama" | "suspense" | "terror" }
     | undefined;
+  /** Link (rota interna) para o Cartório/Biblioteca com contexto do pedido. */
+  linkCartorio?: string | undefined;
 };
 
 export type CareerState = {

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Bot,
   ClipboardList,
   ChevronLeft,
+  FileSignature,
   Heart,
   MessageSquare,
   Newspaper,
@@ -290,6 +292,22 @@ export function CelularConversas({
                     </div>
                   );
                 })()}
+
+              {/* Link para o Cartório (pedido pendente da escolha escolhida). */}
+              {conversaAtiva.linkCartorio ? (
+                <div className="mt-3 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+                    📎 Cartório da Cidadela
+                  </p>
+                  <Link
+                    to={conversaAtiva.linkCartorio}
+                    className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-500"
+                  >
+                    <FileSignature className="size-4" />
+                    Abrir pedido na Biblioteca
+                  </Link>
+                </div>
+              ) : null}
             </div>
 
             {/* Input de mensagem (apenas para conversas do usuário, não a virtual do patrocinador) */}

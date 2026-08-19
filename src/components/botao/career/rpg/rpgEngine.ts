@@ -52,6 +52,10 @@ function selecionarEvento(career: CareerState): EventoRpg | null {
   if (soberania >= 30 && soberania < 120) candidatos.push("proposta-dario");
   if (mem.derrotasSeguidas === 0 && career.rodadaAtual >= 4) candidatos.push("festa-convite");
   if (mem.segredos.length > 0) candidatos.push("mae-preocupada");
+  // Folda do Cartório: vínculo formal, defesa e quitação de multa via documento.
+  if (career.rodadaAtual >= 2) candidatos.push("contrato-pendente");
+  if (career.rodadaAtual >= 3) candidatos.push("peticao-necessaria");
+  if (career.rodadaAtual >= 5) candidatos.push("multa-judicial");
 
   const novos = candidatos.filter((id) => !mem.eventosVistos.includes(id));
   if (novos.length === 0) return null;
