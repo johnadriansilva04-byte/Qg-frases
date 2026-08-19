@@ -137,16 +137,11 @@ function Cidadela() {
         passos={[
           "Limpando sessão anterior...",
           "Preparando jogos...",
-          "Carregando publicidade Monetag...",
+          "Carregando conteúdo da Cidadela...",
           "Pronto!",
         ]}
-        intros={[
-          {
-            titulo: "Cidadela do Pracinha",
-            corpo: "Cada módulo carrega de forma isolada para evitar dados de sessões anteriores.",
-          },
-        ]}
-        duracao={1200}
+        categoria="COMUNIDADE"
+        duracao={2600}
         onCompleto={() => setHydrated(true)}
       />
     );
@@ -193,14 +188,8 @@ function Cidadela() {
           "Preparando times...",
           "Pronto!",
         ]}
-        intros={[
-          {
-            titulo: "Bem-vindo ao Futebol de Botão",
-            corpo:
-              "Seus dados são carregados apenas do seu usuário autenticado. Aguarde a sincronização segura.",
-          },
-        ]}
-        duracao={1800}
+        categoria="MASTER_LIGA"
+        duracao={2600}
         onCompleto={() => {
           setLoadingGame(null);
           setActiveGame("botao");
@@ -212,7 +201,8 @@ function Cidadela() {
   if (loadingGame === "trilha") {
     return (
       <TrilhaLoadingScreen
-        duracao={1800}
+        categoria="DICAS"
+        duracao={2600}
         onCompleto={() => {
           setLoadingGame(null);
           setActiveGame("trilha");

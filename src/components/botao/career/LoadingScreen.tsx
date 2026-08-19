@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
+import {
+  selecionarConteudo,
+  introsPorDuracao,
+  type IntroTexto,
+  type LoadingCategoria,
+} from "@/data/loadingContent";
 
 /**
  * LoadingScreen — Tela de carregamento leve, 100% código (CSS/JS), zero
- * imagens. Usada em transições do jogo: início de carreira, entrada em campo,
- * consultas ao Supabase e inicialização da IA.
- *
- * Mostra:
- *  - barra de progresso 0→100% com indicador animado;
- *  - textos de boas-vindas/dicas REAIS do jogo (relacionados às mecânicas
- *    ativas: soberania, celular, W.O., portal de notícias).
+ * imagens. UMA informação por vez: quando o carregamento é curto (≈2–3s),
+ * escolhemos UMA intro aleatória e deixamos tempo de leitura; quando é longa,
+ * 2 intros com intervalo confortable. A publicidade nunca bloqueia.
  */
 
 const PASSOS_PADRAO = [
@@ -21,50 +23,14 @@ const PASSOS_PADRAO = [
   "Tudo pronto! Boa partida, treinador.",
 ];
 
-export interface IntroTexto {
-  titulo: string;
-  corpo: string;
-}
-
-const INTROS_PADRAO: IntroTexto[] = [
-  {
-    titulo: "Bem-vindo à sua jornada de treinador!",
-    corpo:
-      "Conquiste títulos, suba de divisão, pague os salários do seu elenco e acumule " +
-      "Soberania para se tornar uma lenda do Futebol de Botão.",
-  },
-  {
-    titulo: "Este não é apenas um jogo de futebol.",
-    corpo:
-      "No seu celular de treinador, você receberá chamadas da diretoria, empresários, " +
-      "torcedores e propostas obscuras. Cada resposta sua mudará o rumo da sua carreira.",
-  },
-  {
-    titulo: "Alerta de impacto real",
-    corpo:
-      "Cuidado ao responder no celular: decisões mal pensadas afetam a moral dos botões, " +
-      "provocam desfalques, perdas financeiras e até derrotas por W.O.",
-  },
-  {
-    titulo: "Dica de Soberania",
-    corpo:
-      "Manter a Soberania alta protege seu time de crises, atrai patrocinadores melhores " +
-      "e evita esquemas de suborno dos adversários.",
-  },
-  {
-    titulo: "Segredo da carreira",
-    corpo:
-      "Fique atento ao Portal de Notícias: fofocas e vazamentos de bastidores dão pistas " +
-      "sobre o clima no vestiário antes de você entrar em campo.",
-  },
-];
-
-interface LoadingScreenProps {
+export interface LoadingScreenProps {
   /** Mensagens de passo (status) exibidas abaixo da barra. */
   passos?: string[];
-  /** Rotação de textos introdutórios/dicas (boas-vindas). */
+  /** Categoria de conteúdo do loadingContent (default: aleatório). */
+  categoria?: LoadingCategoria;
+  /** Rotação de textos introdutórios/dicas (fallback sobrescrito por categoria). */
   intros?: IntroTexto[];
-  /** Duração total alvo em ms (default ~2200ms). A barra preenche suavemente. */
+  /** Duração total alvo em ms (default ~2600ms). */
   duracao?: number;
   /** Quando false, a barra permanece em 100% até o backend estar pronto. */
   pronto?: boolean;
@@ -74,13 +40,19 @@ interface LoadingScreenProps {
 
 export function LoadingScreen({
   passos = PASSOS_PADRAO,
-  intros = INTROS_PADRAO,
-  duracao = 2200,
+  categoria,
+  intros,
+  duracao = 2600,
   pronto = true,
   onCompleto,
 }: LoadingScreenProps) {
   const [pct, setPct] = useState(0);
   const [introIdx, setIntroIdx] = useState(0);
+  // Seleciona a intro(s) UMA vez na montagem: nunca fica mudando a cada tick.
+  const [selecao] = useState<IntroTexto[]>(() =>
+    intros?.length ? intros : selecionarConteudo(categoria, introsPorDuracao(duracao)),
+  );
+
   const startRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
   const readyRef = useRef(pronto);
@@ -110,17 +82,18 @@ export function LoadingScreen({
     };
   }, [duracao, onCompleto]);
 
-  // Rotaciona os textos introdutórios durante o carregamento.
+  // Rotaciona lentamente (só se houver mais de uma intro selecionada).
   useEffect(() => {
-    const intervalo = Math.max(600, Math.floor(duracao / intros.length));
+    if (selecao.length <= 1) return;
+    const intervalo = duracao / selecao.length;
     const id = setInterval(() => {
-      setIntroIdx((i) => (i + 1) % intros.length);
+      setIntroIdx((i) => (i + 1) % selecao.length);
     }, intervalo);
     return () => clearInterval(id);
-  }, [duracao, intros.length]);
+  }, [duracao, selecao]);
 
   const passoIdx = Math.min(passos.length - 1, Math.floor((pct / 100) * passos.length));
-  const intro = intros[introIdx % intros.length]!;
+  const intro = selecao[introIdx % selecao.length]!;
 
   return (
     <div className="splash-overlay" role="status" aria-live="polite">
@@ -160,4 +133,4 @@ export function LoadingScreen({
   );
 }
 
-export { INTROS_PADRAO, PASSOS_PADRAO };
+export { PASSOS_PADRAO };

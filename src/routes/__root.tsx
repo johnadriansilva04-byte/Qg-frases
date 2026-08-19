@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { CookieBanner } from "../components/CookieBanner";
+import { PracinhaGuide } from "../components/PracinhaGuide";
 import { Sidebar } from "../components/Sidebar";
 import { adManager } from "../lib/adManager";
 
@@ -176,6 +177,7 @@ function RootComponent() {
       <Outlet />
 
       <CookieBanner />
+      <PracinhaGuide />
     </QueryClientProvider>
   );
 }

@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Target, Trophy, Gamepad2 } from "lucide-react";
 import { MonetagAd } from "@/components/MonetagAd";
+import {
+  selecionarConteudo,
+  introsPorDuracao,
+  type IntroTexto,
+  type LoadingCategoria,
+} from "@/data/loadingContent";
 
 /**
- * TrilhaLoadingScreen — Tela de carregamento específica para Trilha
- * Integra anúncios Monetag de forma não-bloqueante
+ * TrilhaLoadingScreen — Tela de carregamento específica para Trilha.
+ * UMA informação por vez: seleciona intros na montagem; nunca troca rápido.
+ * Integra anúncios Monetag de forma não-bloqueante.
  */
 
 const PASSOS_TRILHA = [
@@ -15,24 +22,6 @@ const PASSOS_TRILHA = [
   "Pronto para batalha!",
 ];
 
-const INTROS_TRILHA = [
-  {
-    titulo: "Bem-vindo à Trilha!",
-    corpo:
-      "O jogo de estratégia tática da FEB. Planeje seus movimentos e domine o campo de batalha.",
-  },
-  {
-    titulo: "Dica de Estratégia",
-    corpo:
-      "Forme trilhas para capturar peças inimigas. Tente criar trilhas duplas para máxima eficiência.",
-  },
-  {
-    titulo: "Sistema de Fases",
-    corpo:
-      "Complete fases para se tornar o Mestre da Trilha. Cada desafio é mais difícil que o anterior.",
-  },
-];
-
 interface TrilhaLoadingScreenProps {
   /** Título do módulo em transição. */
   titulo?: string;
@@ -40,9 +29,11 @@ interface TrilhaLoadingScreenProps {
   subtitulo?: string;
   /** Mensagens de passo (status) exibidas abaixo da barra. */
   passos?: string[];
-  /** Rotação de textos introdutórios/dicas. */
-  intros?: Array<{ titulo: string; corpo: string }>;
-  /** Duração total alvo em ms (default ~2000ms). */
+  /** Categoria de conteúdo do loadingContent (default: aleatório). */
+  categoria?: LoadingCategoria;
+  /** Rotação de textos introdutórios/dicas (fallback sobrescrito por categoria). */
+  intros?: IntroTexto[];
+  /** Duração total alvo em ms (default ~2600ms). */
   duracao?: number;
   /** Callback ao chegar em 100%. */
   onCompleto?: () => void;
@@ -52,12 +43,18 @@ export function TrilhaLoadingScreen({
   titulo = "Carregando Trilha",
   subtitulo = "Preparando o campo de batalha",
   passos = PASSOS_TRILHA,
-  intros = INTROS_TRILHA,
-  duracao = 2000,
+  categoria,
+  intros,
+  duracao = 2600,
   onCompleto,
 }: TrilhaLoadingScreenProps) {
   const [pct, setPct] = useState(0);
   const [introIdx, setIntroIdx] = useState(0);
+  // Seleciona intros UMA vez na montagem: sem trocas frenéticas durante o load.
+  const [selecao] = useState<IntroTexto[]>(() =>
+    intros?.length ? intros : selecionarConteudo(categoria, introsPorDuracao(duracao)),
+  );
+
   const startRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
   const doneRef = useRef(false);
@@ -82,17 +79,18 @@ export function TrilhaLoadingScreen({
     };
   }, [duracao, onCompleto]);
 
-  // Rotaciona os textos introdutórios durante o carregamento.
+  // Rotaciona lentamente (só se houver mais de uma intro selecionada).
   useEffect(() => {
-    const intervalo = Math.max(600, Math.floor(duracao / intros.length));
+    if (selecao.length <= 1) return;
+    const intervalo = duracao / selecao.length;
     const id = setInterval(() => {
-      setIntroIdx((i) => (i + 1) % intros.length);
+      setIntroIdx((i) => (i + 1) % selecao.length);
     }, intervalo);
     return () => clearInterval(id);
-  }, [duracao, intros.length]);
+  }, [duracao, selecao]);
 
   const passoIdx = Math.min(passos.length - 1, Math.floor((pct / 100) * passos.length));
-  const intro = intros[introIdx % intros.length]!;
+  const intro = selecao[introIdx % selecao.length]!;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
