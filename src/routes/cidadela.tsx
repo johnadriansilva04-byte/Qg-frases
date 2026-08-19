@@ -6,6 +6,7 @@ import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
+import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
@@ -232,9 +233,10 @@ function Cidadela() {
     <>
       <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
         <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
-          <header className="mb-6 text-center">
+          <header className="mb-6 flex flex-col items-center text-center">
+            <CidadelaEmblem className="mb-3 h-16 w-16 drop-shadow-lg md:h-20 md:w-20" />
             <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
-              🏰 Cidadela de Jogos
+              Cidadela de Jogos
             </h1>
             <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
               Uma cidade de jogos para se divertir e bater recorde

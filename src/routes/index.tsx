@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Cpu, Globe, Rocket, Star, Sparkles } from "lucide-react";
+import { Globe, Rocket, Star, Sparkles } from "lucide-react";
+import { CidadelaEmblem, PergaminhoIcon, Amelas } from "@/components/CidadelaBranding";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,7 +31,7 @@ const SECTIONS = [
     bgColor: "bg-purple-500/10",
   },
   {
-    icon: "sparkles",
+    icon: "pergaminho",
     title: "Desenvolvimento do Brio",
     description: "Biblioteca, Cartório e Ferramentas de Texto",
     link: "/brio",
@@ -50,17 +51,19 @@ function Index() {
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
 
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-4 md:p-8">
-        {/* Header */}
-        <header className="text-center mb-12 md:mb-16">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center animate-spin-slow">
-              <Cpu className="w-6 h-6" />
+        {/* Header — emblema da cidadela */}
+        <header className="text-center mb-12 md:mb-16 flex flex-col items-center">
+          <div className="relative mb-5">
+            <div className="absolute -inset-4 rounded-[2rem] bg-purple-500/25 blur-2xl animate-pulse" />
+            <div className="relative rounded-3xl border border-purple-400/30 bg-gradient-to-b from-slate-800/90 to-slate-900/90 p-4 md:p-5 shadow-2xl shadow-purple-900/40">
+              <CidadelaEmblem />
             </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
-              CIDADELA DO PRACINHA
-            </h1>
           </div>
-          <p className="text-lg md:text-xl text-slate-300 mb-2">Jogos clássicos com propósito</p>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
+            CIDADELA DO PRACINHA
+          </h1>
+          <Amelas className="mt-4 text-purple-500/40" />
+          <p className="mt-5 text-lg md:text-xl text-slate-300 mb-2">Jogos clássicos com propósito</p>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
             Nossa intenção é educar e ensinar economia, educação financeira e raciocínio lógico
             para crianças e jovens através de jogos clássicos.
@@ -97,6 +100,7 @@ function Index() {
                         </defs>
                       </svg>
                     )}
+                    {section.icon === "pergaminho" && <PergaminhoIcon />}
                     {section.icon === "book" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#bookGrad)" />
