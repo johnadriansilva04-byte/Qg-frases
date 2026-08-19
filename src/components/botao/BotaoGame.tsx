@@ -96,6 +96,12 @@ import {
   responderContatoNpc,
 } from "./career/rpg/rpgEngine";
 import { anexarPost, gerarPostPartida } from "./career/rpg/socialEngine";
+import { armarSponsor } from "@/lib/sponsorGate";
+import {
+  aplicarRitualNaCarreira,
+  consumirRitualPendente,
+  missoesTrilha,
+} from "./career/trilhaIntegracao";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
@@ -258,6 +264,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // o Motor de Templates Procedurais assume automaticamente.
   useEffect(() => {
     AIService.init().catch(() => {});
+  }, []);
+
+  // Ritual da Trilha (mesmo universo): se a TrilhaGame marcou um resultado
+  // pendente, consumir e integrar na carreira — SOV, sombra, feed social.
+  // Checa na montagem e ao voltar o foco (ex.: usuário voltou da aba da Trilha).
+  const careerRef = useRef<CareerState | null>(null);
+  useEffect(() => {
+    careerRef.current = career;
+  }, [career]);
+
+  useEffect(() => {
+    const consumir = () => {
+      const pendente = consumirRitualPendente();
+      if (!pendente) return;
+      const atual = careerRef.current;
+      if (!atual) return;
+      const { career: novo, resumo } = aplicarRitualNaCarreira(atual, pendente.resultado);
+      persistCareer(novo);
+      setToast(resumo);
+    };
+    consumir();
+    window.addEventListener("focus", consumir);
+    document.addEventListener("visibilitychange", consumir);
+    return () => {
+      window.removeEventListener("focus", consumir);
+      document.removeEventListener("visibilitychange", consumir);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A tela atual fica apenas em memória; nunca restaura estado de outra sessão.
@@ -592,6 +626,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const finishFriendly = (r: MatchResult) => {
     // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
     markFirstGamePlayed();
+    // Ponto estratégico: fim de partida → próxima ação pode ser patrocinada.
+    armarSponsor("partida-fim");
 
     const userIsHome = r.homeId === userTeam.id;
     const gf = userIsHome ? r.homeGoals : r.awayGoals;
@@ -1216,6 +1252,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const finishTournamentMatch = (r: MatchResult) => {
     if (!tour || !current) return;
+    // Ponto estratégico: fim de partida da carreira → próxima ação pode ser
+    // patrocinada (o usuário já viu o aviso no overlay de finalização).
+    armarSponsor("partida-fim");
     let t: Tournament = structuredClone(tour);
     let ligasAtualizadas: LigasTemporada | undefined;
     let resultadoTemp: ReturnType<typeof processarResultadoTemporada> | null = null;
@@ -1875,6 +1914,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                 conversas={career?.conversas ?? []}
                 desafioPatrocinador={career?.desafioPatrocinador ?? null}
                 feed={career?.feedCidadela ?? []}
+                trilhaMissoes={career ? missoesTrilha(career) : []}
                 npcDigitandoId={npcDigitando}
                 userId={perfil?.user_id ?? null}
                 nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
@@ -1902,6 +1942,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           conversas={career.conversas}
           desafioPatrocinador={career.desafioPatrocinador ?? null}
           feed={career.feedCidadela ?? []}
+          trilhaMissoes={missoesTrilha(career)}
           npcDigitandoId={npcDigitando}
           userId={perfil?.user_id ?? null}
           nomeJogador={career.coach.apelido || career.coach.nome}

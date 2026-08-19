@@ -13,6 +13,7 @@ import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { armarSponsor } from "@/lib/sponsorGate";
 
 type Props = {
   homeId: string;
@@ -132,6 +133,9 @@ export function MatchView({
     if (turnsLeft <= metade && turnsLeft > 0) {
       halftimeShownRef.current = true;
       setHalftime(true);
+      // Ponto estratégico: intervalo → o próximo clique pode ser patrocinado
+      // (avisado pelo SponsorNotice discreto no topo).
+      armarSponsor("partida-intervalo");
     }
   }, [turnsLeft, turns, isOnline, ended]);
 

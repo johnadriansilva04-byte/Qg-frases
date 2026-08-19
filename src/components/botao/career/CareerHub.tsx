@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Calendar, ChevronRight } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
@@ -8,6 +9,7 @@ import { CalendarView } from "./CalendarView";
 import { ChampionshipModule } from "./ChampionshipModule";
 import { NewsPortal } from "./NewsPortal";
 import { SovereigntyPanel } from "./SovereigntyPanel";
+import { condicaoSombria, conviteTrilha } from "./trilhaIntegracao";
 import {
   CUSTO_MANUTENCAO,
   DIVISAO_SHORT,
@@ -171,6 +173,25 @@ export function CareerHub({
           <button onClick={onExit} className="btn-ghost w-full">
             Voltar ao menu
           </button>
+
+          {/* Ritual da Trilha — válvula narrativa: aparece quando a carreira
+              está sob a sombra (SOV < 30 ou 3+ derrotas seguidas). */}
+          {career && condicaoSombria(career) && (
+            <Link
+              to="/cidadela"
+              className="block rounded-xl border border-red-900/50 bg-gradient-to-br from-red-950/60 via-slate-950 to-slate-950 p-3 transition hover:border-red-700/70"
+            >
+              <p className="font-display text-sm tracking-wide text-red-300">
+                ☾ Ritual da Trilha
+              </p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                {conviteTrilha(career)}
+              </p>
+              <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.15em] text-red-400">
+                Abra a Cidadela e jogue a Trilha — vencer alivia a sombra: +8 SOV · sequência zerada →
+              </p>
+            </Link>
+          )}
         </div>
 
         <ChampionshipModule

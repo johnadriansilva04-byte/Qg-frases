@@ -9,6 +9,7 @@ import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
+import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
 
 export const Route = createFileRoute("/cidadela")({
@@ -122,6 +123,9 @@ function Cidadela() {
 
   const handleGameSelect = (game: Game) => {
     if (game === "botao" || game === "trilha") {
+      // Ponto estratégico: o carregamento avisa que a continuação pode abrir
+      // uma aba de patrocinador (Monetag OnClick, zona /cidadela).
+      armarSponsor(game === "botao" ? "carreira-entrar" : "trilha-intervalo");
       setLoadingGame(game);
       return;
     }

@@ -134,3 +134,21 @@ export function gerarPostEvento(career: CareerState, titulo: string, tom: string
 export function anexarPost(career: CareerState, post: PostFeed): CareerState {
   return { ...career, feedCidadela: [post, ...(career.feedCidadela ?? [])].slice(0, 25) };
 }
+
+/** Post manual (usado por integrações como o Ritual da Trilha). */
+export function gerarPostManual(
+  career: CareerState,
+  dados: { autor: string; avatar: string; selo: PostFeed["selo"]; texto: string },
+): PostFeed {
+  return {
+    id: `post-man-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    autor: dados.autor,
+    avatar: dados.avatar,
+    selo: dados.selo,
+    texto: dados.texto,
+    curtidas: Math.floor(Math.random() * 120) + 20,
+    comentarios: [],
+    rodada: career.rodadaAtual,
+    timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+  };
+}

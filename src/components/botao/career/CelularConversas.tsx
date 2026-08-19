@@ -26,6 +26,7 @@ import {
 import type { ConversaCelular, DesafioPatrocinador } from "./types";
 import { eventoPorId } from "./rpg/eventos";
 import type { PostFeed } from "./rpg/types";
+import type { MissaoTrilhaLocal } from "./trilhaIntegracao";
 
 type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado";
 
@@ -35,6 +36,8 @@ type Props = {
   desafioPatrocinador?: DesafioPatrocinador | null;
   /** Feed da Rede da Cidadela (posts reativos ao jogo). */
   feed?: PostFeed[] | undefined;
+  /** Missões locais da Trilha (válvula narrativa do Modo Carreira). */
+  trilhaMissoes?: MissaoTrilhaLocal[] | undefined;
   /** Conversa cujo NPC está "digitando..." no momento. */
   npcDigitandoId?: string | null | undefined;
   onEnviarMensagem: (conversaId: string, texto: string) => void;
@@ -50,6 +53,7 @@ export function CelularConversas({
   conversas,
   desafioPatrocinador,
   feed = [],
+  trilhaMissoes = [],
   npcDigitandoId = null,
   onEnviarMensagem,
   onExcluirConversa,
@@ -478,6 +482,43 @@ export function CelularConversas({
                     </div>
                   </div>
                 </div>
+
+                {/* Missões da Trilha — mesmos tabuleiros, mesmo universo. */}
+                {trilhaMissoes.length > 0 && (
+                  <div className="space-y-2 rounded-2xl border border-purple-400/20 bg-purple-400/5 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-purple-300">
+                      Ritual da Trilha · diário
+                    </p>
+                    {trilhaMissoes.map((m) => (
+                      <div key={m.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-white">{m.titulo}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-400">{m.descricao}</p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-black ${
+                              m.completa
+                                ? "bg-emerald-400/20 text-emerald-300"
+                                : "bg-purple-400/20 text-purple-200"
+                            }`}
+                          >
+                            {m.completa ? "✓" : `${m.progresso}/${m.alvo}`}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all"
+                            style={{ width: `${Math.min(100, (m.progresso / m.alvo) * 100)}%` }}
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[10px] text-slate-500">
+                          Recompensa do ritual: +{m.recompensaSov} SOV ao completar na Trilha.
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {!userId ? (
                   <p className="py-6 text-center text-xs text-slate-400">Entre com sua conta para receber as 5 missões diárias.</p>

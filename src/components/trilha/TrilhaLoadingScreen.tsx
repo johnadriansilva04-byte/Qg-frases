@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Target, Trophy, Gamepad2 } from "lucide-react";
+import { Loader2, Megaphone, Target, Trophy, Gamepad2 } from "lucide-react";
 import { MonetagAd } from "@/components/MonetagAd";
+import { sponsorArmado } from "@/lib/sponsorGate";
 import {
   selecionarConteudo,
   introsPorDuracao,
@@ -91,6 +92,7 @@ export function TrilhaLoadingScreen({
 
   const passoIdx = Math.min(passos.length - 1, Math.floor((pct / 100) * passos.length));
   const intro = selecao[introIdx % selecao.length]!;
+  const avisoSponsor = sponsorArmado();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -131,6 +133,14 @@ export function TrilhaLoadingScreen({
             <p className="font-semibold text-sm text-foreground mb-1">{intro.titulo}</p>
             <p className="text-xs text-muted-foreground">{intro.corpo}</p>
           </div>
+
+          {/* Aviso de patrocinador (ponto estratégico armado) */}
+          {avisoSponsor && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2">
+              <Megaphone className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+              <p className="text-[11px] leading-snug text-amber-100">{avisoSponsor.mensagem}</p>
+            </div>
+          )}
 
           <MonetagAd />
         </div>

@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2 } from "lucide-react";
+import { armarSponsor } from "@/lib/sponsorGate";
+import { marcarRitualPendente } from "@/components/botao/career/trilhaIntegracao";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { GameEndAdModal } from "./GameEndAdModal";
@@ -436,6 +438,12 @@ function TrilhaGameBoard({
 
       // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
       markFirstGamePlayed();
+      // Ponto estratégico: fim de jogo da Trilha → próxima ação pode ser
+      // patrocinada (o usuário é avisado pelo SponsorNotice).
+      armarSponsor("trilha-fim");
+      // Ritual da Trilha: mesmo universo do Modo Carreira — marcar o resultado
+      // para o BotaoGame integrar na carreira (SOV, sombra, rede social).
+      marcarRitualPendente(result === "victory" ? "vitoria" : "derrota");
 
       // Registrar vitória/derrota no sistema de fases
       console.log('[TrilhaGame] Resultado:', result, 'Fase atual:', phases.progress.currentPhase);

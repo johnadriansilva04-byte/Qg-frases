@@ -1,13 +1,15 @@
 /**
- * AD CLICK GUARD — limita pop-unders/onclick ads a 1 por 5 minutos.
+ * AD CLICK GUARD — a zona OnClick do Monetag abre pop em QUALQUER clique.
  *
- * Zonas "OnClick" (Monetag, Adsterra Social) instalam handler global que abre
- * nova janela em QUALQUER clique. Interceptamos window.open e bloqueamos
- * quando o cooldown está ativo. NÃO sobrescrevemos location.assign — é
- * read-only e derrubaria o módulo inteiro.
+ * Regra: pop externo só passa quando um ponto estratégico foi "armado" pelo
+ * sponsorGate (intervalo/fim de partida, entrada no Modo Carreira, fim de
+ * jogo da Trilha) e o usuário foi avisado. Sem gate: bloqueado sempre.
+ *
+ * NÃO sobrescrevemos location.assign — read-only, derrubava o módulo.
  */
 
-const COOLDOWN_MS = 5 * 60 * 1000;
+import { consumirSponsorGate } from "./sponsorGate";
+
 const STORAGE_KEY = "ad_popguard_last_open";
 
 let patched = false;
@@ -22,19 +24,11 @@ function isInternal(url: string): boolean {
   }
 }
 
-function lastOpen(): number {
-  try {
-    return Number(localStorage.getItem(STORAGE_KEY) ?? "0");
-  } catch {
-    return 0;
-  }
-}
-
 function markOpen(now: number): void {
   try {
     localStorage.setItem(STORAGE_KEY, String(now));
   } catch {
-    // sem storage: não bloqueia novamente nesta sessão
+    // sem storage: gate segue mandando
   }
 }
 
@@ -48,17 +42,14 @@ export function initAdClickGuard(): void {
     const urlStr = String(url ?? "");
     if (isInternal(urlStr)) return originalOpen(url, target, features);
 
-    const now = Date.now();
-    const last = lastOpen();
-
-    if (last > 0 && now - last < COOLDOWN_MS) {
-      const restante = Math.ceil((COOLDOWN_MS - (now - last)) / 60000);
-      console.log(`[AdGuard] Pop bloqueado — próximo em ~${restante} min`);
-      return null;
+    // Único caminho legítimo: gate armado em ponto estratégico.
+    if (consumirSponsorGate()) {
+      markOpen(Date.now());
+      console.log("[AdGuard] Pop de patrocinador liberado (ponto estratégico)");
+      return originalOpen(url, target, features);
     }
 
-    markOpen(now);
-    console.log("[AdGuard] Pop liberado (cooldown de 5 min iniciado)");
-    return originalOpen(url, target, features);
+    console.log("[AdGuard] Pop externo bloqueado (nenhum ponto estratégico armado)");
+    return null;
   };
 }

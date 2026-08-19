@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Megaphone } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { sponsorArmado } from "@/lib/sponsorGate";
 import {
   selecionarConteudo,
   introsPorDuracao,
@@ -94,6 +95,9 @@ export function LoadingScreen({
 
   const passoIdx = Math.min(passos.length - 1, Math.floor((pct / 100) * passos.length));
   const intro = selecao[introIdx % selecao.length]!;
+  // Se um ponto estratégico foi armado antes desta transição, o aviso de
+  // patrocinador aparece aqui — espaço natural de espera, sem bloquear nada.
+  const avisoSponsor = sponsorArmado();
 
   return (
     <div className="splash-overlay" role="status" aria-live="polite">
@@ -123,6 +127,14 @@ export function LoadingScreen({
           <p className="splash-intro-title">{intro.titulo}</p>
           <p className="splash-intro-corpo">{intro.corpo}</p>
         </div>
+
+        {/* Aviso de patrocinador (quando um ponto estratégico foi armado) */}
+        {avisoSponsor && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-left">
+            <Megaphone className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+            <p className="text-[11px] leading-snug text-amber-100">{avisoSponsor.mensagem}</p>
+          </div>
+        )}
 
         {/* Adsterra Banner durante loading */}
         <div className="mt-4">

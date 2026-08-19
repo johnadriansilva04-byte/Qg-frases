@@ -171,6 +171,15 @@ export type CareerState = {
   memoriaRpg?: import("./rpg/types").MemoriaRpg | undefined;
   // Feed da Rede da Cidadela (posts reativos a eventos do jogo).
   feedCidadela?: import("./rpg/types").PostFeed[] | undefined;
+  // Ritual da Trilha: válvula narrativa do Modo Carreira (progresso diário).
+  trilhaRitual?:
+    | {
+        ultimoDia: string;
+        jogosHoje: number;
+        vitoriasHoje: number;
+        pagasHoje: string[];
+      }
+    | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";
