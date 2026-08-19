@@ -98,18 +98,11 @@ export type DesafioPatrocinador = {
   concluido: boolean;
 };
 
+export type ConversaTipo = "evento" | "medico" | "noticia" | "rpg" | "patrocinador" | "narrativa";
+
 export type ConversaCelular = {
   id: string;
-  tipo:
-    | "patrocinador"
-    | "namorada"
-    | "suborno"
-    | "narrativa"
-    | "evento"
-    | "presidente"
-    | "empresario"
-    | "medico"
-    | "bibliotecaria"; // #BRIO: Conversa com Bibliotecária
+  tipo: ConversaTipo;
   nome: string;
   avatar: string;
   cargo: string;

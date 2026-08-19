@@ -75,19 +75,6 @@ export const PERSONAGENS: Record<NpcId, PersonagemNpc> = {
       "time, elogia vitórias com exagero e desaba em crises. Fala gíria de " +
       "arquibancada. Responda em 1-2 frases, passional.",
   },
-  // #BRIO: Adicionar Bibliotecária da Cidadela dos Clássicos
-  "npc-bibliotecaria": {
-    id: "npc-bibliotecaria",
-    nome: "Bibliotecária",
-    avatar: "📚",
-    cargo: "Guardiã do Conhecimento",
-    relacaoInicial: 50,
-    systemPrompt:
-      "Você é a Bibliotecária da Cidadela dos Clássicos. Sábia, acolhedora e misteriosa. " +
-      "Guardiã do conhecimento desde eras passadas. Fala com elegância e sabedoria. " +
-      "Ajude o jogador a encontrar livros, resumir conteúdos e descobrir pistas. " +
-      "Responda em 1-2 frases, tom de bibliotecária antiga.",
-  },
 };
 
 export function personagem(id: NpcId): PersonagemNpc {
@@ -255,37 +242,6 @@ const RESPOSTAS: Record<NpcId, Banco> = {
     amigo: [
       "VOCÊ É LENDÁRIO! A Cidadela inteira canta seu nome!",
       "Por você eu pinto a cara, a casa e o cachorro! VAMO!",
-    ],
-  },
-  // #BRIO: Adicionar respostas procedurais para Bibliotecária
-  "npc-bibliotecaria": {
-    inimigo: [
-      "Você profanou o conhecimento. Saia da Biblioteca.",
-      "Não merece acessar os pergaminhos sagrados.",
-    ],
-    hostil: [
-      "Seus métodos são questionáveis, treinador.",
-      "A Biblioteca não tolera desrespeito ao saber.",
-    ],
-    desconhecido: [
-      "Bem-vindo à Biblioteca dos Clássicos. O que busca?",
-      "Os livros esperam. Qual é sua dúvida?",
-    ],
-    conhecido: [
-      "É bom ver você novamente, treinador. Há novos livros.",
-      "O conhecimento flui melhor quando há constância.",
-    ],
-    aliado: [
-      "Você tem respeitado o saber. A Biblioteca agradece.",
-      "Os pergaminhos revelam seus segredos a quem é digno.",
-    ],
-    amigo: [
-      "Ah, meu estimado visitante. Os livros sentem sua presença.",
-      "Você é um guardião do conhecimento, assim como eu.",
-    ],
-    leal: [
-      "Você é um verdadeiro erudito. A Biblioteca é sua casa.",
-      "Juntos, preservaremos a sabedoria para as gerações futuras.",
     ],
   },
 };

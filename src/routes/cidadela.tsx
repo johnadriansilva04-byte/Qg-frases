@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, Book, PenTool } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3 } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
@@ -11,12 +11,6 @@ import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
-// #BRIO: Importar BibliotecaBRIO e ForjaPalavras
-import { BibliotecaBRIO } from "@/components/botao/career/BibliotecaBRIO";
-import { ForjaPalavras } from "@/components/botao/career/ForjaPalavras";
-// #BRIO: Importar tipos para conversa com Bibliotecária
-import type { ConversaCelular } from "@/components/botao/career/types";
-import { personagem } from "@/components/botao/career/rpg/personagens";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -41,7 +35,16 @@ export const Route = createFileRoute("/cidadela")({
 });
 
 // #BRIO: Adicionar biblioteca e forja ao tipo Game
-type Game = "trilha" | "botao" | "dado" | "forca" | "velha" | "snake" | "dama" | "xadrez" | "biblioteca" | "forja" | null;
+type Game =
+  | "trilha"
+  | "dado"
+  | "forca"
+  | "jogodavelha"
+  | "botao"
+  | "online"
+  | "campeonato"
+  | "brio" // #BRIO: Módulo Desenvolvimento do Brio
+  | null;
 
 const GAMES = [
   {
@@ -58,19 +61,12 @@ const GAMES = [
     icon: Trophy,
     status: "disponível",
   },
-  // #BRIO: Adicionar Biblioteca e Forja como áreas de conhecimento
+  // #BRIO: Módulo Desenvolvimento do Brio
   {
-    id: "biblioteca" as Game,
-    label: "Biblioteca",
-    description: "Livros, resumos e a Bibliotecária IA",
-    icon: Book,
-    status: "disponível",
-  },
-  {
-    id: "forja" as Game,
-    label: "Forja de Palavras",
-    description: "Gerador de textos e correção com IA",
-    icon: PenTool,
+    id: "brio" as Game,
+    label: "Desenvolvimento do Brio",
+    description: "Biblioteca, Cartório e Ferramentas",
+    icon: Grid3X3,
     status: "disponível",
   },
   {
@@ -143,14 +139,14 @@ function Cidadela() {
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
   const closeModal = () => setActiveModal(null);
 
-  // #BRIO: Adicionar lógica para abrir Biblioteca e Forja
+  // #BRIO: Abrir módulo Desenvolvimento do Brio
   const handleGameSelect = (game: Game) => {
     if (game === "botao" || game === "trilha") {
       setLoadingGame(game);
       return;
     }
-    // #BRIO: Abrir Biblioteca/Forja diretamente (sem loading por enquanto)
-    if (game === "biblioteca" || game === "forja") {
+    // #BRIO: Abrir módulo Brio
+    if (game === "brio") {
       setActiveGame(game);
       return;
     }
@@ -193,37 +189,16 @@ function Cidadela() {
   }
 
   if (phoneOpen) {
-    // #BRIO: Criar conversa com Bibliotecária para o celular
-    const bibliotecaria = personagem("npc-bibliotecaria");
-    const conversaBibliotecaria: ConversaCelular = {
-      id: "conv-bibliotecaria",
-      tipo: "bibliotecaria",
-      nome: bibliotecaria.nome,
-      avatar: bibliotecaria.avatar,
-      cargo: bibliotecaria.cargo,
-      npcId: bibliotecaria.id,
-      mensagens: [
-        {
-          id: "msg-1",
-          texto: "Bem-vindo à Biblioteca dos Clássicos. O que busca hoje?",
-          remetente: "outro",
-          timestamp: new Date().toISOString(),
-        },
-      ],
-      naoLida: true,
-    };
-
+    // Celular da Cidadela usa CelularConversas com estado vazio (sem conversas de carreira)
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0f2e24_0%,#020617_55%)]">
-        <CelularConversas
-          conversas={[conversaBibliotecaria]}
-          userId={perfil?.user_id ?? null}
-          nomeJogador={perfil?.nome ?? "Recruta"}
-          onEnviarMensagem={() => undefined}
-          onExcluirConversa={() => undefined}
-          onVoltar={() => setPhoneOpen(false)}
-        />
-      </div>
+      <CelularConversas
+        conversas={[]}
+        onVoltar={() => setPhoneOpen(false)}
+        onExcluirConversa={() => {}}
+        onEnviarMensagem={() => {}}
+        userId={perfil?.user_id ?? null}
+        nomeJogador={perfil?.nome ?? null}
+      />
     );
   }
 
@@ -268,14 +243,56 @@ function Cidadela() {
     return <BotaoGame onBack={() => setActiveGame(null)} />;
   }
 
-  // #BRIO: Renderizar BibliotecaBRIO
-  if (activeGame === "biblioteca") {
-    return <BibliotecaBRIO onBack={() => setActiveGame(null)} />;
-  }
-
-  // #BRIO: Renderizar ForjaPalavras
-  if (activeGame === "forja") {
-    return <ForjaPalavras onBack={() => setActiveGame(null)} />;
+  // #BRIO: Renderizar módulo Desenvolvimento do Brio
+  if (activeGame === "brio") {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#2a1a1e_0%,#1a0f1a_55%)]">
+        <div className="p-4">
+          <button
+            onClick={() => setActiveGame(null)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
+          >
+            ← Voltar para Cidadela
+          </button>
+          <h2 className="texto-marca text-2xl font-black mb-6">Desenvolvimento do Brio</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Link
+              to="/biblioteca"
+              className="flex items-center gap-4 p-6 rounded-xl border border-border bg-surface/50 hover:bg-primary/10 hover:border-primary transition-all"
+            >
+              <div className="p-3 rounded-lg bg-primary/20 text-primary">
+                📚
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-foreground">Biblioteca</h3>
+                <p className="text-sm text-muted-foreground">Livros e indicações</p>
+              </div>
+            </Link>
+            <Link
+              to="/gerador"
+              className="flex items-center gap-4 p-6 rounded-xl border border-border bg-surface/50 hover:bg-primary/10 hover:border-primary transition-all"
+            >
+              <div className="p-3 rounded-lg bg-primary/20 text-primary">
+                ✏️
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-foreground">Gerador de Texto</h3>
+                <p className="text-sm text-muted-foreground">Frases e corretor</p>
+              </div>
+            </Link>
+            <div className="flex items-center gap-4 p-6 rounded-xl border border-border bg-surface/50 opacity-60">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
+                📜
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-foreground">Cartório</h3>
+                <p className="text-sm text-muted-foreground">Petição e contratos (em breve)</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

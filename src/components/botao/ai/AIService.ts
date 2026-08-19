@@ -99,12 +99,6 @@ function buildUserPrompt(promptType: PromptType, ctx: AIContext): string {
     noticia: "Escreva uma manchete de bastidores conectada ao jogo.",
     pracinha:
       "Fale como Pracinha, o robô militar retrô e guia da Cidadela. Convoque o jogador para missões diárias, exploração dos Pergaminhos e partidas online em tom heroico e intrigante.",
-    bibliotecaria: "Fale como a Bibliotecária da Cidadela dos Clássicos. Sábia, acolhedora e misteriosa. Ajude o jogador a encontrar conhecimento, resumir livros e descobrir pistas.",
-    forja: "Fale como o mestre da Forja de Palavras. Criativo, eloquente e inspirador. Ajude o jogador a gerar textos, corrigir frases e criar conteúdo filosófico.",
-    resumo: "Resuma o conteúdo de forma clara e objetiva. Destaque os pontos principais e o contexto.",
-    pergunta: "Responda à pergunta do jogador de forma informativa e contextualizada.",
-    explicacao: "Explique o conceito de forma simples e acessível, como se estivesse ensinando alguém.",
-    filosofia: "Crie uma frase filosófica profunda e inspiradora sobre o tema solicitado.",
   };
   const vars: string[] = [];
   if (ctx.coach) vars.push(`Treinador: ${ctx.coach}`);

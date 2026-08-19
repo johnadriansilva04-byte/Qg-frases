@@ -262,27 +262,6 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
       },
     ],
   },
-  // #BRIO: Missão de prova - O Pergaminho Perdido
-  {
-    id: "livro-perdido",
-    titulo: "O Pergaminho Perdido",
-    descricao:
-      "Treinador, aqui é a Bibliotecária. Encontrei um pergaminho antigo que parece conter uma pista sobre a origem da Cidadela. Para decifrá-lo, precisamos de conhecimento. Como deseja proceder?",
-    escolhas: [
-      {
-        id: "pesquisar-biblioteca",
-        texto: "Pesquisar na Biblioteca",
-        descricao: "+5 soberania se encontrar a pista. Requer acesso à Biblioteca.",
-        bonusMoral: 3,
-        impactoFinanceiro: 5,
-      },
-      {
-        id: "ignorar",
-        texto: "Deixar para depois",
-        descricao: "Sem efeito imediato. A Bibliotecária guarda o pergaminho.",
-      },
-    ],
-  },
 ];
 
 export function sortearEvento(idsUsadosRecentes: string[]): ChoiceEvent {

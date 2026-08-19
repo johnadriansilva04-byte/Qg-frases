@@ -12,8 +12,7 @@ export type NpcId =
   | "npc-braganca"
   | "npc-corretor"
   | "npc-donacida"
-  | "npc-torcedor"
-  | "npc-bibliotecaria"; // #BRIO: Bibliotecária da Cidadela dos Clássicos
+  | "npc-torcedor";
 
 export interface PersonagemNpc {
   id: NpcId;
