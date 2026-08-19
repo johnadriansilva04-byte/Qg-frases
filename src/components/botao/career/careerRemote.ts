@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CareerState, Headline } from "./types";
 import { EMPTY_CAREER } from "./careerStorage";
-import type { Progress } from "../storage";
+import { mergeProgressInSupabase, type Progress } from "../storage";
 
 /**
  * Persistência 100% dentro da coluna JSONB `progresso_caminpanha` da tabela
@@ -34,33 +34,44 @@ async function readProgress(userId: string): Promise<ExtendedProgress> {
   return (data?.progresso_caminpanha ?? {}) as ExtendedProgress;
 }
 
-async function writeProgress(userId: string, patch: ExtendedProgress, extra?: Record<string, any>) {
-  const current = await readProgress(userId);
-  const merged: ExtendedProgress = { ...current, ...patch };
-  await (supabase as any)
-    .from("botao_usuarios")
-    .update({ progresso_caminpanha: merged, ...(extra ?? {}) })
-    .eq("user_id", userId);
+async function writeProgress(
+  userId: string,
+  patch: ExtendedProgress,
+  extra?: Record<string, unknown>,
+) {
+  await mergeProgressInSupabase(userId, patch, extra);
 }
 
-export async function loadCareerFromSupabase(userId: string): Promise<CareerState | null> {
+export async function loadCareerFromSupabase(
+  userId: string,
+  fallbackCoach?: CareerState["coach"],
+): Promise<CareerState | null> {
   try {
     const prog = await readProgress(userId);
-    // Ler tb pontos_soberania real da coluna (autoritativo)
     const { data: u } = await (supabase as any)
       .from("botao_usuarios")
-      .select("pontos_soberania, partidas_vencidas, partidas_jogadas")
+      .select("pontos_soberania, partidas_vencidas, partidas_jogadas, nome")
       .eq("user_id", userId)
       .maybeSingle();
-    if (!prog.career?.coach?.nome) return null;
+
+    if (!prog.career) return null;
+    const coachFallback = fallbackCoach ?? EMPTY_CAREER.coach;
+    const coachSalvo = prog.career.coach ?? EMPTY_CAREER.coach;
+    const nomeCoach =
+      coachSalvo.nome?.trim() || coachFallback.nome?.trim() || u?.nome?.trim() || "Treinador";
+
     return {
       ...EMPTY_CAREER,
       ...prog.career,
       coach: {
         ...EMPTY_CAREER.coach,
-        ...prog.career.coach,
-        // pontos_soberania real sempre ganha sobre o JSONB (fonte da verdade)
-        soberania: u?.pontos_soberania ?? prog.career.coach.soberania ?? 0,
+        ...coachFallback,
+        ...coachSalvo,
+        nome: nomeCoach,
+        apelido: coachSalvo.apelido?.trim() || coachFallback.apelido?.trim() || nomeCoach,
+        cidade: coachSalvo.cidade?.trim() || coachFallback.cidade?.trim() || "",
+        bio: coachSalvo.bio?.trim() || coachFallback.bio?.trim() || "",
+        soberania: u?.pontos_soberania ?? coachSalvo.soberania ?? 0,
       },
     };
   } catch (e) {
@@ -72,7 +83,11 @@ export async function loadCareerFromSupabase(userId: string): Promise<CareerStat
 export async function saveCareerToSupabase(userId: string, c: CareerState): Promise<void> {
   try {
     // Salva o snapshot completo no JSONB E atualiza pontos_soberania real
-    await writeProgress(userId, { career: c }, { pontos_soberania: Math.max(0, c.coach.soberania) });
+    await writeProgress(
+      userId,
+      { career: c },
+      { pontos_soberania: Math.max(0, c.coach.soberania) },
+    );
   } catch (e) {
     console.error("[careerRemote] saveCareer error:", e);
   }
@@ -104,12 +119,23 @@ export async function inserirManchetesRemotas(
 }
 
 /** Regras de pontuação escassa (as mesmas de carreira offline). */
-function computeSovereigntyDelta(golsPro: number, golsContra: number, ultimaEscolha: string | null) {
+function computeSovereigntyDelta(
+  golsPro: number,
+  golsContra: number,
+  ultimaEscolha: string | null,
+) {
   let delta = 0;
   let moralDelta = 0;
-  if (golsPro > golsContra) { delta = 3; moralDelta = 4; }
-  else if (golsPro < golsContra) { delta = 0; moralDelta = -6; }
-  else { delta = 1; moralDelta = -1; }
+  if (golsPro > golsContra) {
+    delta = 3;
+    moralDelta = 4;
+  } else if (golsPro < golsContra) {
+    delta = 0;
+    moralDelta = -6;
+  } else {
+    delta = 1;
+    moralDelta = -1;
+  }
   if (ultimaEscolha === "goleada") {
     if (golsPro - golsContra >= 2) delta += 5;
     else if (golsPro < golsContra) delta -= 3;
@@ -146,25 +172,27 @@ export async function aplicarResultadoRemoto(
     const career = prog.career ?? EMPTY_CAREER;
     const nextMoral = Math.max(0, Math.min(100, (career.moralTime ?? 65) + moralDelta));
 
-    const nextProg: ExtendedProgress = {
-      ...prog,
-      gols_feitos: (prog.gols_feitos ?? 0) + golsPro,
-      gols_sofridos: (prog.gols_sofridos ?? 0) + golsContra,
-      career: {
-        ...career,
-        moralTime: nextMoral,
-        bonusProximaPartida: 0,
-        penaltiesProximaPartida: 0,
-        coach: { ...career.coach, soberania: novaSob },
-      },
+    const nextCareer: CareerState = {
+      ...career,
+      moralTime: nextMoral,
+      bonusProximaPartida: 0,
+      penaltiesProximaPartida: 0,
+      coach: { ...career.coach, soberania: novaSob },
     };
 
-    await (supabase as any).from("botao_usuarios").update({
-      pontos_soberania: novaSob,
-      partidas_jogadas: partidasJog,
-      partidas_vencidas: partidasVen,
-      progresso_caminpanha: nextProg,
-    }).eq("user_id", uid);
+    await writeProgress(
+      uid,
+      {
+        gols_feitos: (prog.gols_feitos ?? 0) + golsPro,
+        gols_sofridos: (prog.gols_sofridos ?? 0) + golsContra,
+        career: nextCareer,
+      },
+      {
+        pontos_soberania: novaSob,
+        partidas_jogadas: partidasJog,
+        partidas_vencidas: partidasVen,
+      },
+    );
 
     return { soberania: novaSob, moralTime: nextMoral, titulos: career.coach.titulos ?? 0 };
   } catch (e) {
@@ -185,10 +213,23 @@ export async function aplicarFimCampanhaRemoto(
 
     // Campeão ganha entre +100 e +200 de Soberania (base + bônus por dificuldade).
     const bonusPos =
-      posicao === "campeao" ? 100 : posicao === "vice" ? 15 : posicao === "terceiro" ? 10 : posicao === "quarto" ? 5 : 0;
-    const bonusDif = posicao === "campeao"
-      ? (dificuldade === "lenda" ? 100 : dificuldade === "profissional" ? 50 : 0)
-      : 0;
+      posicao === "campeao"
+        ? 100
+        : posicao === "vice"
+          ? 15
+          : posicao === "terceiro"
+            ? 10
+            : posicao === "quarto"
+              ? 5
+              : 0;
+    const bonusDif =
+      posicao === "campeao"
+        ? dificuldade === "lenda"
+          ? 100
+          : dificuldade === "profissional"
+            ? 50
+            : 0
+        : 0;
     const totalBonus = bonusPos + bonusDif;
 
     const { data: cur } = await (supabase as any)
@@ -203,23 +244,17 @@ export async function aplicarFimCampanhaRemoto(
     const career = prog.career ?? EMPTY_CAREER;
     const novoTit = (career.coach.titulos ?? 0) + (posicao === "campeao" ? 1 : 0);
 
-    const nextProg: ExtendedProgress = {
-      ...prog,
-      career: {
-        ...career,
-        dificuldadeAtual: null,
-        eventoPendenteId: null,
-        moralTime: 65,
-        ultimasEscolhas: [],
-        ultimaRodadaProcessada: -1,
-        coach: { ...career.coach, soberania: novaSob, titulos: novoTit },
-      },
+    const nextCareer: CareerState = {
+      ...career,
+      dificuldadeAtual: null,
+      eventoPendenteId: null,
+      moralTime: 65,
+      ultimasEscolhas: [],
+      ultimaRodadaProcessada: -1,
+      coach: { ...career.coach, soberania: novaSob, titulos: novoTit },
     };
 
-    await (supabase as any).from("botao_usuarios").update({
-      pontos_soberania: novaSob,
-      progresso_caminpanha: nextProg,
-    }).eq("user_id", uid);
+    await writeProgress(uid, { career: nextCareer }, { pontos_soberania: novaSob });
 
     return { soberania: novaSob, titulos: novoTit };
   } catch (e) {
@@ -248,20 +283,15 @@ export async function aplicarEscolhaRemoto(
 
     const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
     const career = prog.career ?? EMPTY_CAREER;
-    const nextProg: ExtendedProgress = {
-      ...prog,
-      career: {
-        ...career,
-        bonusProximaPartida: (career.bonusProximaPartida ?? 0) + deltaPoder,
-        moralTime: Math.max(0, Math.min(100, (career.moralTime ?? 65) + deltaMoral)),
-        ultimasEscolhas: [...(career.ultimasEscolhas ?? []), choiceId].slice(-8),
-        eventoPendenteId: null,
-      },
+    const nextCareer: CareerState = {
+      ...career,
+      bonusProximaPartida: (career.bonusProximaPartida ?? 0) + deltaPoder,
+      moralTime: Math.max(0, Math.min(100, (career.moralTime ?? 65) + deltaMoral)),
+      ultimasEscolhas: [...(career.ultimasEscolhas ?? []), choiceId].slice(-8),
+      eventoPendenteId: null,
     };
 
-    await (supabase as any).from("botao_usuarios")
-      .update({ progresso_caminpanha: nextProg })
-      .eq("user_id", uid);
+    await writeProgress(uid, { career: nextCareer });
   } catch (e) {
     console.error("[careerRemote] aplicarEscolha error:", e);
   }
@@ -285,25 +315,20 @@ export async function iniciarCampanhaRemota(
 
     const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
     const career = prog.career ?? EMPTY_CAREER;
-    const nextProg: ExtendedProgress = {
-      ...prog,
-      career: {
-        ...career,
-        dificuldadeAtual: dificuldade,
-        moralTime: 65,
-        bonusProximaPartida: 0,
-        penaltiesProximaPartida: 0,
-        eventoPendenteId: null,
-        ultimasEscolhas: [],
-        ultimaRodadaProcessada: -1,
-        headlines: [],
-        coach: { ...career.coach, campanhasJogadas: (career.coach.campanhasJogadas ?? 0) + 1 },
-      },
+    const nextCareer: CareerState = {
+      ...career,
+      dificuldadeAtual: dificuldade,
+      moralTime: 65,
+      bonusProximaPartida: 0,
+      penaltiesProximaPartida: 0,
+      eventoPendenteId: null,
+      ultimasEscolhas: [],
+      ultimaRodadaProcessada: -1,
+      headlines: [],
+      coach: { ...career.coach, campanhasJogadas: (career.coach.campanhasJogadas ?? 0) + 1 },
     };
 
-    await (supabase as any).from("botao_usuarios")
-      .update({ progresso_caminpanha: nextProg })
-      .eq("user_id", uid);
+    await writeProgress(uid, { career: nextCareer });
   } catch (e) {
     console.error("[careerRemote] iniciarCampanha error:", e);
   }
@@ -337,11 +362,13 @@ export async function aplicarApostaSoberania(
     const risco = Math.min(aposta, atual);
     let delta = 0;
     if (empate) delta = 0;
-    else if (venceu) delta = risco; // ganha o equivalente à aposta (dobro)
+    else if (venceu)
+      delta = risco; // ganha o equivalente à aposta (dobro)
     else delta = -risco;
 
     const novoSaldo = Math.max(0, atual + delta);
-    await (supabase as any).from("botao_usuarios")
+    await (supabase as any)
+      .from("botao_usuarios")
       .update({ pontos_soberania: novoSaldo })
       .eq("user_id", uid);
     return novoSaldo;

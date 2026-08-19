@@ -295,6 +295,14 @@ drama em 1ª pessoa via celular), economia de Soberania e temporada infinita.
   botão "Concluir" sintético (`id:"concluir"`, sem `proximoId`, com `desfecho`)
   que dispara `avancarNarrativa` retornando `finalizado=true` + registra headline.
 - `career/SeasonTransition.tsx`: veredito de fim de temporada (continua/falência).
+- Persistência do torneio/carreira: todo patch de `progresso_caminpanha` deve
+  passar por `mergeProgressInSupabase` (`storage.ts`), que serializa escritas por
+  usuário e preserva chaves (`career`, `tournament`, gols). Não fazer update do
+  JSONB inteiro — isso apagava a carreira/torneio em chamadas concorrentes.
+- `BotaoGame.hidratarCampanha` carrega progresso + torneio + career do Supabase
+  uma vez por usuário (auto-login e login manual). Se remoto vazio, preserva o
+  save local e o envia ao Supabase. `persistTournament(null)` remove também o
+  localStorage para não voltar um torneio antigo.
 
 ### Fluxo do BotaoGame
 - `preparaEscolha`: prioridade suborno > narrativa > choice event.

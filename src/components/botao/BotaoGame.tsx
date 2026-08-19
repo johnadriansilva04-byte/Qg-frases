@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy,
   Swords,
@@ -34,8 +34,8 @@ import {
   deleteProgressLocal,
   saveTournament,
   loadTournament,
+  deleteTournamentLocal,
   saveTournamentToSupabase,
-  loadTournamentFromSupabase,
   atualizarPontosSoberania,
   adicionarPontosVideo,
   type Progress,
@@ -114,7 +114,14 @@ import {
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
 import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { gerarDesafioPatrocinador, cumpriuDesafio } from "./career/patrocinadorEngine";
-import { POINTS, type CareerState, type Choice, type ConversaCelular, type Divisao, type Headline } from "./career/types";
+import {
+  POINTS,
+  type CareerState,
+  type Choice,
+  type ConversaCelular,
+  type Divisao,
+  type Headline,
+} from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
 import { LeaderboardTreinadores } from "./career/LeaderboardTreinadores";
 import { formacaoById } from "./career/formacoes";
@@ -156,8 +163,7 @@ interface BotaoGameProps {
  * 100 de bônus conforme a dificuldade (amador 0, profissional 50, lenda 100).
  */
 function bonusCampeao(dificuldade: Difficulty): number {
-  const bonus =
-    dificuldade === "lenda" ? 100 : dificuldade === "profissional" ? 50 : 0;
+  const bonus = dificuldade === "lenda" ? 100 : dificuldade === "profissional" ? 50 : 0;
   return POINTS.CAMPEAO_BASE + bonus;
 }
 
@@ -169,6 +175,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
   const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
   const [career, setCareer] = useState<CareerState | null>(() => loadCareer());
+  const hydratedUserRef = useRef<string | null>(null);
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
   // Veredito de fim de temporada (continua/Game Over). Quando presente, exibe
@@ -182,7 +189,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
 
   // Inicializa AdManager para rota /botao (Adsterra)
-  const { init: initAdManager, cleanup: cleanupAdManager, markFirstGamePlayed } = useAdManager("/botao");
+  const {
+    init: initAdManager,
+    cleanup: cleanupAdManager,
+    markFirstGamePlayed,
+  } = useAdManager("/botao");
 
   useEffect(() => {
     initAdManager();
@@ -274,7 +285,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     try {
       const raw = localStorage.getItem("botao_online_botoes_nomes");
       if (raw) botoesNomes = JSON.parse(raw);
-    } catch {}
+    } catch {
+      botoesNomes = undefined;
+    }
     return {
       nome: timeNome,
       short: abreviacao,
@@ -347,9 +360,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const persistTournament = (t: Tournament | null) => {
     setTour(t);
     if (t) saveTournament(t);
-    // Salvar no Supabase se o usuário estiver logado
+    else deleteTournamentLocal();
+
     const uid = perfil?.user_id;
-    if (uid && t) {
+    if (uid) {
       saveTournamentToSupabase(uid, t);
     }
   };
@@ -364,9 +378,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   };
 
-  // Carregar carreira ao iniciar (localStorage primeiro, depois Supabase)
+  // Carregar carreira ao iniciar (localStorage primeiro para UX instantânea)
   useEffect(() => {
-    // Tenta carregar do localStorage primeiro
     const localCareer = loadCareer();
     if (localCareer && localCareer.coach.nome) {
       console.log("[BotaoGame] Carreira carregada do localStorage:", localCareer);
@@ -374,35 +387,84 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   }, []);
 
-  // Ao logar (perfil ficar disponível), puxar carreira do Supabase
+  const progressTemConteudo = (p: Progress) =>
+    Object.values(p.titles ?? {}).some((v) => v > 0) ||
+    (p.trophies?.length ?? 0) > 0 ||
+    Object.values(p.friendlies ?? {}).some((v) => v > 0) ||
+    (p.gols_feitos ?? 0) > 0 ||
+    (p.gols_sofridos ?? 0) > 0 ||
+    !!p.tournament;
+
+  /**
+   * Hidrata progresso + carreira + torneio do Supabase uma vez por usuário.
+   * Se o remoto estiver vazio, preserva o save local e sobe esse save.
+   */
+  const hidratarCampanha = useCallback(async (userId: string) => {
+    if (hydratedUserRef.current === userId) return;
+    hydratedUserRef.current = userId;
+
+    try {
+      const localProgress = loadProgress();
+      const localTournament = loadTournament();
+      const localCareer = loadCareer();
+      const [remoteProgress, remoteCareer] = await Promise.all([
+        loadProgressFromSupabase(userId),
+        loadCareerFromSupabase(userId, localCareer?.coach),
+      ]);
+
+      const nextProgress = progressTemConteudo(remoteProgress) ? remoteProgress : localProgress;
+      setProgress(nextProgress);
+      saveProgress(nextProgress);
+      if (!progressTemConteudo(remoteProgress) && progressTemConteudo(localProgress)) {
+        void saveProgressToSupabase(userId, localProgress);
+      }
+
+      const remoteTournament = remoteProgress.tournament ?? null;
+      if (remoteTournament) {
+        console.log("[BotaoGame] Torneio carregado do Supabase:", remoteTournament);
+        setTour(remoteTournament);
+        saveTournament(remoteTournament);
+      } else if (localTournament) {
+        console.log("[BotaoGame] Torneio remoto vazio; mantendo local");
+        setTour(localTournament);
+        void saveTournamentToSupabase(userId, localTournament);
+      } else {
+        setTour(null);
+        deleteTournamentLocal();
+      }
+
+      if (remoteCareer && remoteCareer.coach.nome) {
+        console.log("[BotaoGame] Carreira carregada do Supabase:", remoteCareer);
+        setCareer(remoteCareer);
+        saveCareer(remoteCareer);
+        // Repara registros antigos que tinham coach vazio no JSONB.
+        void saveCareerToSupabase(userId, remoteCareer);
+      } else if (localCareer?.coach.nome) {
+        console.log("[BotaoGame] Carreira remota vazia; mantendo local:", localCareer);
+        setCareer(localCareer);
+        void saveCareerToSupabase(userId, localCareer);
+      } else {
+        setCareer(null);
+        deleteCareer();
+      }
+    } catch (error) {
+      hydratedUserRef.current = null;
+      console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
+      const localCareer = loadCareer();
+      if (localCareer?.coach.nome) setCareer(localCareer);
+      const localTournament = loadTournament();
+      if (localTournament) setTour(localTournament);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!perfil?.user_id) return;
-    loadCareerFromSupabase(perfil.user_id)
-      .then((remote) => {
-        console.log("[BotaoGame] Carreira carregada do Supabase:", remote);
-        if (remote && remote.coach.nome) {
-          setCareer(remote);
-          saveCareer(remote);
-        } else {
-          console.log("[BotaoGame] Carreira não encontrada no Supabase ou sem nome do coach");
-          // Se não encontrou no Supabase, mantém a carreira local se existir
-          const localCareer = loadCareer();
-          if (localCareer && localCareer.coach.nome) {
-            console.log("[BotaoGame] Mantendo carreira local:", localCareer);
-            setCareer(localCareer);
-          }
-        }
-      })
-      .catch((error) => {
-        console.error("[BotaoGame] Erro ao carregar carreira do Supabase:", error);
-        // Em caso de erro, mantém a carreira local se existir
-        const localCareer = loadCareer();
-        if (localCareer && localCareer.coach.nome) {
-          console.log("[BotaoGame] Mantendo carreira local após erro:", localCareer);
-          setCareer(localCareer);
-        }
-      });
-  }, [perfil?.user_id]);
+    const userId = perfil?.user_id;
+    if (!userId) {
+      hydratedUserRef.current = null;
+      return;
+    }
+    void hidratarCampanha(userId);
+  }, [perfil?.user_id, hidratarCampanha]);
 
   const handleLogout = async () => {
     if (emPartidaOnline) {
@@ -424,18 +486,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       return;
     }
     aplicarPerfil(p);
-    // Carregar progresso do Supabase se o usuário estiver logado
-    if (p.user_id) {
-      const supabaseProgress = await loadProgressFromSupabase(p.user_id);
-      setProgress(supabaseProgress);
-      saveProgress(supabaseProgress);
-
-      // Carregar torneio do Supabase
-      const supabaseTournament = await loadTournamentFromSupabase(p.user_id);
-      if (supabaseTournament) {
-        persistTournament(supabaseTournament);
-      }
-    }
+    void hidratarCampanha(p.user_id);
     setScreen("menu");
     setToast("Bem-vindo de volta!");
   };
@@ -451,9 +502,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     deleteProgressLocal();
 
     // Excluir progresso do Supabase (se usuário estiver logado)
-    const email = localStorage.getItem("botao_online_email");
-    if (email) {
-      await deleteProgressFromSupabase(email);
+    if (perfil?.user_id) {
+      await deleteProgressFromSupabase(perfil.user_id);
     }
 
     // Resetar estado do torneio
@@ -745,7 +795,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const rodada = career.rodadaAtual;
     if (career.copaBrasil) {
       const copaFix = proximoJogoCopa(career.copaBrasil, userTeam.id);
-      if (copaFix && copaDisponivelNaRodada(rodada, career.copaBrasil, userTeam.id, career.divisao)) {
+      if (
+        copaFix &&
+        copaDisponivelNaRodada(rodada, career.copaBrasil, userTeam.id, career.divisao)
+      ) {
         // Splash curto de "entrada em campo" (inicializa mesa + IA).
         runWithLoading(() => {
           setCurrentCopaFix(copaFix);
@@ -947,8 +1000,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const woProximaPartida = choice.wo ? true : career.woProximaPartida;
     const desfalqueBotaoProxima =
       (career.desfalqueBotaoProxima ?? 0) + (choice.desfalqueBotao ?? 0);
-    const perdaPontosProxima =
-      (career.perdaPontosProxima ?? 0) + (choice.perdaPontos ?? 0);
+    const perdaPontosProxima = (career.perdaPontosProxima ?? 0) + (choice.perdaPontos ?? 0);
 
     const evento = CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId);
     const timestamp = new Date().toLocaleTimeString("pt-BR", {
@@ -966,7 +1018,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             avatar: "💬",
             cargo: "Decisão de carreira",
             mensagens: [
-              { id: `m-${Date.now()}`, texto: evento.descricao, remetente: "outro" as const, timestamp },
+              {
+                id: `m-${Date.now()}`,
+                texto: evento.descricao,
+                remetente: "outro" as const,
+                timestamp,
+              },
               { id: `r-${Date.now()}`, texto: choice.texto, remetente: "eu" as const, timestamp },
             ],
             naoLida: false,
@@ -996,7 +1053,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     // Feedback de sanções graves.
     if (choice.wo) setToast("Decisão gravíssima: a próxima partida será por W.O.!");
-    else if (choice.desfalqueBotao) setToast(`Próxima partida: desfalque de ${choice.desfalqueBotao} botão(ões).`);
+    else if (choice.desfalqueBotao)
+      setToast(`Próxima partida: desfalque de ${choice.desfalqueBotao} botão(ões).`);
     else if (choice.perdaPontos) setToast(`Punição: -${choice.perdaPontos} pts na tabela.`);
 
     // Volta à lista de mensagens do celular (não inicia o jogo automaticamente
@@ -1007,7 +1065,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Handlers para o sistema de conversas do celular
   const handleEnviarMensagem = (conversaId: string, texto: string) => {
     if (!career) return;
-    const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const timestamp = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     const novasConversas = career.conversas.map((conv) => {
       if (conv.id === conversaId) {
         return {
@@ -1192,12 +1253,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             setCareer(careerAtualizado);
 
             if (promovido) {
-              const label =
-                novaDivisao === "serie-a" ? "SÉRIE A" : "SÉRIE B";
+              const label = novaDivisao === "serie-a" ? "SÉRIE A" : "SÉRIE B";
               setToast(`PROMOÇÃO! Você subiu para a ${label}!`);
             } else if (rebaixado) {
-              const label =
-                novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
+              const label = novaDivisao === "serie-b" ? "SÉRIE B" : "SÉRIE C";
               setToast(`REBAIXAMENTO! Você caiu para a ${label}.`);
             }
           }
@@ -1493,7 +1552,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             nome: "Dr. Maurício",
             avatar: "🩺",
             cargo: "Departamento Médico",
-            mensagens: [{ id: `m-med-${Date.now()}`, texto: relMed, remetente: "outro", timestamp: agora }],
+            mensagens: [
+              { id: `m-med-${Date.now()}`, texto: relMed, remetente: "outro", timestamp: agora },
+            ],
             naoLida: true,
           });
         }
@@ -1505,7 +1566,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             nome: "Torcida (Redes Sociais)",
             avatar: "📱",
             cargo: "Menções da rodada",
-            mensagens: [{ id: `m-red-${Date.now()}-${i}`, texto: t, remetente: "outro", timestamp: agora }],
+            mensagens: [
+              { id: `m-red-${Date.now()}-${i}`, texto: t, remetente: "outro", timestamp: agora },
+            ],
             naoLida: true,
           });
         }
@@ -1683,7 +1746,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               <div>
                 <p className="font-display text-lg">{nomeTreinador ?? "Treinador"}</p>
                 <p className="text-xs text-muted-foreground">
-                  {career ? `Temporada ${career.temporada} · ${career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}` : "Aguardando campanha"}
+                  {career
+                    ? `Temporada ${career.temporada} · ${career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}`
+                    : "Aguardando campanha"}
                 </p>
               </div>
               <button onClick={() => setScreen("hub")} className="celular-close">
@@ -1743,10 +1808,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   }
 
-  if (
-    screen === "celular-conversas" &&
-    career
-  ) {
+  if (screen === "celular-conversas" && career) {
     return (
       <Shell>
         <CelularConversas
@@ -1815,9 +1877,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       {/* Social Bar da Adsterra - global no Futebol de Botão */}
       <AdsterraSocialBar />
 
-      {loading && (
-        <LoadingScreen onCompleto={loadingOnComplete} />
-      )}
+      {loading && <LoadingScreen onCompleto={loadingOnComplete} />}
       {veredito && career && (
         <SeasonTransition
           veredito={veredito}
@@ -2210,7 +2270,8 @@ function Hub({
 
   // Contagem de mensagens não lidas no celular (narrativa + suborno + decisões +
   // desafio de patrocinador). O desafio fica sempre acessível no celular.
-  const temDesafioPatrocinador = !!career?.desafioPatrocinador && !career.desafioPatrocinador.concluido;
+  const temDesafioPatrocinador =
+    !!career?.desafioPatrocinador && !career.desafioPatrocinador.concluido;
   const mensagensPendentes =
     (career?.eventoPendenteId ? 1 : 0) +
     (career?.suborno?.nodeAtual ? 1 : 0) +
@@ -2223,11 +2284,16 @@ function Hub({
       : 0;
 
   // Determina o próximo jogo (prioriza Copa do Brasil se disponível)
-  const proximoJogo = copaFixPend && copaDisponivelNaRodada(career?.rodadaAtual ?? 0, copaBrasil, userTeam.id, divisao)
-    ? { fixture: copaFixPend, tipo: "Copa do Brasil" }
-    : next
-      ? { fixture: next, tipo: tour.phase === "grupos" ? "Brasileirão" : stage?.stage ?? "Mata-mata" }
-      : null;
+  const proximoJogo =
+    copaFixPend &&
+    copaDisponivelNaRodada(career?.rodadaAtual ?? 0, copaBrasil, userTeam.id, divisao)
+      ? { fixture: copaFixPend, tipo: "Copa do Brasil" }
+      : next
+        ? {
+            fixture: next,
+            tipo: tour.phase === "grupos" ? "Brasileirão" : (stage?.stage ?? "Mata-mata"),
+          }
+        : null;
 
   return (
     <div className="space-y-5">
@@ -2244,9 +2310,7 @@ function Hub({
       <div className="next-match-card">
         <div className="next-match-head">
           <span className="next-match-tag">
-            {tour.phase === "fim"
-              ? "Campanha encerrada"
-              : proximoJogo?.tipo ?? "Aguardando"}
+            {tour.phase === "fim" ? "Campanha encerrada" : (proximoJogo?.tipo ?? "Aguardando")}
           </span>
           <span className="next-match-div">{divisaoShort}</span>
         </div>
@@ -2299,9 +2363,7 @@ function Hub({
                     : "Tudo em dia por aqui"}
               </span>
             </div>
-            {mensagensPendentes > 0 && (
-              <span className="celular-badge">{mensagensPendentes}</span>
-            )}
+            {mensagensPendentes > 0 && <span className="celular-badge">{mensagensPendentes}</span>}
             <span className="celular-cta">Abrir</span>
           </button>
 
@@ -2368,37 +2430,37 @@ function Hub({
                     {sortTable(tour.groups[0]!.table)
                       .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
                       .map((r, i) => {
-                      const position = i + 1;
-                      const zone =
-                        position <= 4
-                          ? "libertadores"
-                          : position <= 6
-                            ? "copa-brasil"
-                            : position >= 18
-                              ? "rebaixamento"
-                              : "";
-                      return (
-                        <tr
-                          key={r.teamId}
-                          className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
-                        >
-                          <td className="py-1 text-center font-bold">{position}º</td>
-                          <td className="py-1">
-                            <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                              <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                            </span>
-                          </td>
-                          <td className="py-1 text-center font-bold">{r.p}</td>
-                          <td className="py-1 text-center">{r.j}</td>
-                          <td className="py-1 text-center text-emerald-300">{r.v}</td>
-                          <td className="py-1 text-center text-muted-foreground">{r.e}</td>
-                          <td className="py-1 text-center text-rose-300">{r.d}</td>
-                          <td className="py-1 text-center">{r.gp}</td>
-                          <td className="py-1 text-center">{r.gc}</td>
-                          <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
-                        </tr>
-                      );
-                    })}
+                        const position = i + 1;
+                        const zone =
+                          position <= 4
+                            ? "libertadores"
+                            : position <= 6
+                              ? "copa-brasil"
+                              : position >= 18
+                                ? "rebaixamento"
+                                : "";
+                        return (
+                          <tr
+                            key={r.teamId}
+                            className={`zone-row zone-${zone} ${r.teamId === tour.userTeamId ? "is-user" : ""}`}
+                          >
+                            <td className="py-1 text-center font-bold">{position}º</td>
+                            <td className="py-1">
+                              <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                                <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                              </span>
+                            </td>
+                            <td className="py-1 text-center font-bold">{r.p}</td>
+                            <td className="py-1 text-center">{r.j}</td>
+                            <td className="py-1 text-center text-emerald-300">{r.v}</td>
+                            <td className="py-1 text-center text-muted-foreground">{r.e}</td>
+                            <td className="py-1 text-center text-rose-300">{r.d}</td>
+                            <td className="py-1 text-center">{r.gp}</td>
+                            <td className="py-1 text-center">{r.gc}</td>
+                            <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
