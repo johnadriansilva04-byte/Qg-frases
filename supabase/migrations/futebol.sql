@@ -2177,13 +2177,20 @@ ALTER TABLE public.botao_partidas_carreira ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.botao_tabelas_carreira ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.botao_eventos_carreira ENABLE ROW LEVEL SECURITY;
 
-CREATE OR REPLACE POLICY "dono le proprias temporadas" ON public.botao_temporadas_carreira
+DROP POLICY IF EXISTS "dono le proprias temporadas" ON public.botao_temporadas_carreira;
+CREATE POLICY "dono le proprias temporadas" ON public.botao_temporadas_carreira
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
-CREATE OR REPLACE POLICY "dono le proprias partidas carreira" ON public.botao_partidas_carreira
+
+DROP POLICY IF EXISTS "dono le proprias partidas carreira" ON public.botao_partidas_carreira;
+CREATE POLICY "dono le proprias partidas carreira" ON public.botao_partidas_carreira
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
-CREATE OR REPLACE POLICY "dono le proprias tabelas carreira" ON public.botao_tabelas_carreira
+
+DROP POLICY IF EXISTS "dono le proprias tabelas carreira" ON public.botao_tabelas_carreira;
+CREATE POLICY "dono le proprias tabelas carreira" ON public.botao_tabelas_carreira
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
-CREATE OR REPLACE POLICY "dono le proprios eventos carreira" ON public.botao_eventos_carreira
+
+DROP POLICY IF EXISTS "dono le proprios eventos carreira" ON public.botao_eventos_carreira;
+CREATE POLICY "dono le proprios eventos carreira" ON public.botao_eventos_carreira
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
 CREATE OR REPLACE FUNCTION public.registrar_temporada_carreira(
