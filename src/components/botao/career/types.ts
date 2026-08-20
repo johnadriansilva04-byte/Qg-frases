@@ -121,6 +121,9 @@ export type ConversaCelular = {
     | undefined;
   /** Link (rota interna) para o Cartório/Biblioteca com contexto do pedido. */
   linkCartorio?: string | undefined;
+  /** Link de ação genérico (rota interna) anexado à conversa — ex.: convite
+   *  do Ritual da Trilha enviado pelo Pracinha apontando para a Cidadela. */
+  linkExterno?: { rotulo: string; to: string } | undefined;
 };
 
 export type CareerState = {

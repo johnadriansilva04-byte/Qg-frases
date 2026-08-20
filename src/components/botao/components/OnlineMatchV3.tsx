@@ -226,7 +226,7 @@ export function OnlineMatchV3({
           Soberania disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm font-medium">Apostar soberania:</label>
+          <label className="text-sm font-medium">Apostar Soberania:</label>
           <input
             type="number"
             min={0}

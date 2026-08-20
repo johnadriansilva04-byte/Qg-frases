@@ -40,7 +40,7 @@ export const LOADING_CONTENT: Record<LoadingCategoria, IntroTexto[]> = {
     },
     {
       titulo: "Dica de Defesa",
-      corpo: "No Futebol de Botão, a formação 1-3-1 aguenta mais rotas de ataque no final das jogadas.",
+      corpo: "No Campeonato do Campus, a formação 1-3-1 aguenta mais rotas de ataque no final das jogadas.",
     },
   ],
   CURIOSIDADES: [
@@ -66,7 +66,7 @@ export const LOADING_CONTENT: Record<LoadingCategoria, IntroTexto[]> = {
   ],
   JOGOS: [
     {
-      titulo: "Futebol de Botão",
+      titulo: "Campeonato do Campus",
       corpo: "Física de mesa, táctica real e economia SOV. Torneios, Copa do Brasil e Master Liga a cada temporada.",
     },
     { titulo: "Trilha", corpo: "O tabuleiro clássico da disciplina: posicione, forme linhas e elimine a defesa adversária." },

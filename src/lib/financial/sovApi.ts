@@ -36,7 +36,16 @@ export async function registrarTransacaoSov(
       p_metadata: (metadata ?? {}) as Json,
     });
     if (error) throw error;
-    return typeof data === "number" ? data : null;
+    // A RPC retorna TABLE(balance) — o PostgREST entrega um array de linhas,
+    // não um número plano. Aceita ambos os formatos (defesa contra futuras
+    // migrações que troquem para RETURNS DECIMAL).
+    const resultado = data as unknown;
+    if (typeof resultado === "number") return resultado;
+    if (Array.isArray(resultado) && resultado.length > 0) {
+      const linha = resultado[0] as { balance?: number } | undefined;
+      if (typeof linha?.balance === "number") return linha.balance;
+    }
+    return null;
   } catch (e) {
     console.warn("[SovAPI] transação de soberania falhou:", e);
     return null;

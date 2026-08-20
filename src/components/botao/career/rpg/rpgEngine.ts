@@ -250,7 +250,8 @@ export async function responderContatoNpc(
 
 /** Garante os contatos-base do RPG na primeira vez que a carreira abre o celular. */
 export function garantirContatosRpg(career: CareerState): CareerState {
-  const temNpc = career.conversas.some((c) => c.npcId);
+  const existentes = Array.isArray(career.conversas) ? career.conversas : [];
+  const temNpc = existentes.some((c) => c.npcId);
   if (temNpc) return career;
 
   const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -266,6 +267,10 @@ export function garantirContatosRpg(career: CareerState): CareerState {
     {
       npc: "npc-torcedor",
       msg: "BEM-VINDO, PROFESSOR! A arquibancada tá com você. Só não decepciona, hein! 📣",
+    },
+    {
+      npc: "npc-pracinha",
+      msg: "Olá, treinador! 🤖 Sou o Pracinha, guardião da Cidadela. Vou te avisar por aqui sobre missões, rituais e tudo o que a cidade mexer com o seu time.",
     },
   ];
 
@@ -283,7 +288,7 @@ export function garantirContatosRpg(career: CareerState): CareerState {
     };
   });
 
-  return { ...career, conversas: [...conversas, ...career.conversas].slice(0, 30) };
+  return { ...career, conversas: [...conversas, ...existentes].slice(0, 30) };
 }
 
 export { EVENTOS_RPG };

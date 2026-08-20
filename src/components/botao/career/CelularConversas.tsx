@@ -372,6 +372,18 @@ export function CelularConversas({
                   );
                 })()}
 
+              {/* Link de ação genérico (ex.: convite do Ritual da Trilha). */}
+              {conversaAtiva.linkExterno ? (
+                <div className="mt-3 rounded-xl border border-purple-800/50 bg-purple-950/30 p-3">
+                  <Link
+                    to={conversaAtiva.linkExterno.to}
+                    className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-purple-500"
+                  >
+                    {conversaAtiva.linkExterno.rotulo}
+                  </Link>
+                </div>
+              ) : null}
+
               {/* Link para o Cartório (pedido pendente da escolha escolhida). */}
               {conversaAtiva.linkCartorio ? (
                 <div className="mt-3 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-3">

@@ -237,10 +237,10 @@ function Cidadela() {
     return (
       <LoadingScreen
         passos={[
-          "Carregando Futebol de Botão...",
+          "Abrindo o Estádio do Campus...",
           "Sincronizando sua conta com o Supabase...",
           "Inicializando IA Comentarista...",
-          "Preparando times...",
+          "Preparando o Campeonato do Campus...",
           "Pronto!",
         ]}
         categoria="MASTER_LIGA"
@@ -423,7 +423,7 @@ function Cidadela() {
       <InfoModal
         isOpen={activeModal === "soberania"}
         onClose={closeModal}
-        title="Economia da Soberania"
+        title="Economia de Soberania"
         content={SEO_CONTENT.soberania}
       />
 

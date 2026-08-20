@@ -75,6 +75,18 @@ export const PERSONAGENS: Record<NpcId, PersonagemNpc> = {
       "time, elogia vitórias com exagero e desaba em crises. Fala gíria de " +
       "arquibancada. Responda em 1-2 frases, passional.",
   },
+  "npc-pracinha": {
+    id: "npc-pracinha",
+    nome: "Pracinha",
+    avatar: "🤖",
+    cargo: "Guardião da Cidadela",
+    relacaoInicial: 40,
+    systemPrompt:
+      "Você é o Pracinha, o robozinho guardião da Cidadela. Guia o treinador " +
+      "com lembretes úteis sobre rotinas, missões e os jogos da Cidadela (como " +
+      "a Trilha). Fala de forma amigável e direta, com tom de assistente " +
+      "prestativo. Responda em 1-2 frases, encorajador.",
+  },
 };
 
 export function personagem(id: NpcId): PersonagemNpc {
@@ -242,6 +254,28 @@ const RESPOSTAS: Record<NpcId, Banco> = {
     amigo: [
       "VOCÊ É LENDÁRIO! A Cidadela inteira canta seu nome!",
       "Por você eu pinto a cara, a casa e o cachorro! VAMO!",
+    ],
+  },
+  "npc-pracinha": {
+    desconhecido: [
+      "Olá! Sou o Pracinha, guardião da Cidadela. Posso te ajudar com missões e rotinas diárias.",
+      "Bip-bip! Sistemas operacionais. Qualquer dúvida sobre a Cidadela, é só chamar.",
+    ],
+    conhecido: [
+      "Suas missões diárias estão atualizadas! Complete-as para acumular soberania.",
+      "A Trilha está aberta na Cidadela. Um jogo por dia fortalece a mente do treinador.",
+    ],
+    aliado: [
+      "Excelente trabalho, treinador! A Cidadela registra cada conquista sua.",
+      "Lembrete amigável: o Ritual da Trilha está disponível sempre que precisar recarregar as energias.",
+    ],
+    amigo: [
+      "Você é um dos treinadores mais dedicados que meus circuitos já registraram!",
+      "A Cidadela inteira acompanha sua jornada. Continue assim, treinador!",
+    ],
+    leal: [
+      "Protocolo de admiração máxima ativado. Você é uma lenda viva da Cidadela!",
+      "Meus sensores indicam: treinador exemplar detectado. Orgulho da Cidadela!",
     ],
   },
 };

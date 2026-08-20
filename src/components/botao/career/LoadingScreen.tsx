@@ -18,10 +18,10 @@ import {
  */
 
 const PASSOS_PADRAO = [
-  "Conectando ao banco Futebol SQL…",
+  "Abrindo os portões do Estádio do Campus…",
   "Carregando times e botões do clube…",
   "Inicializando a IA Comentarista…",
-  "Preparando a mesa de futebol de botão…",
+  "Preparando a mesa no Campeonato do Campus…",
   "Tudo pronto! Boa partida, treinador.",
 ];
 
@@ -104,10 +104,10 @@ export function LoadingScreen({
     <div className="splash-overlay" role="status" aria-live="polite">
       <div className="splash-card">
         <div className="splash-brand">
-          <span className="logo-chip splash-logo">FB</span>
+          <span className="logo-chip splash-logo">EC</span>
           <div className="splash-brand-text">
-            <span className="splash-title">Futebol de Botão</span>
-            <span className="splash-sub">Copa dos Botões · Master Liga</span>
+            <span className="splash-title">Campeonato do Campus</span>
+            <span className="splash-sub">Estádio do Campus · Cidadela</span>
           </div>
         </div>
 

@@ -1,4 +1,53 @@
-import { type CareerState, type Coach, type Headline } from "./types";
+import { type CareerState, type Coach, type Divisao, type Headline } from "./types";
+
+const DIVISOES_VALIDAS: Divisao[] = ["serie-a", "serie-b", "serie-c"];
+
+/**
+ * Normaliza um CareerState vindo do banco (JSONB) para a forma que a UI espera.
+ * Registros antigos podem ter coleções ausentes/nulas ou `divisao` inválida —
+ * sem esta etapa, o celular e o menu da carreira quebravam ao renderizar.
+ */
+export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
+  const base: CareerState = { ...EMPTY_CAREER, ...bruta };
+  return {
+    ...base,
+    coach: {
+      ...EMPTY_CAREER.coach,
+      ...(bruta.coach ?? {}),
+      nome: bruta.coach?.nome ?? "",
+      soberania: Number.isFinite(bruta.coach?.soberania) ? Math.max(0, Math.round(bruta.coach!.soberania)) : 0,
+      titulos: Number.isFinite(bruta.coach?.titulos) ? bruta.coach!.titulos : 0,
+      campanhasJogadas: Number.isFinite(bruta.coach?.campanhasJogadas)
+        ? bruta.coach!.campanhasJogadas
+        : 0,
+    },
+    divisao: DIVISOES_VALIDAS.includes(bruta.divisao as Divisao)
+      ? (bruta.divisao as Divisao)
+      : "serie-c",
+    rodadaAtual: Number.isFinite(bruta.rodadaAtual) ? bruta.rodadaAtual! : 0,
+    rodadasDesdeEventoNarrativo: Number.isFinite(bruta.rodadasDesdeEventoNarrativo)
+      ? bruta.rodadasDesdeEventoNarrativo!
+      : 0,
+    temporada: Number.isFinite(bruta.temporada) ? Math.max(1, bruta.temporada!) : 1,
+    ultimaRodadaProcessada: Number.isFinite(bruta.ultimaRodadaProcessada)
+      ? bruta.ultimaRodadaProcessada!
+      : -1,
+    bonusProximaPartida: Number.isFinite(bruta.bonusProximaPartida)
+      ? bruta.bonusProximaPartida!
+      : 0,
+    penaltiesProximaPartida: Number.isFinite(bruta.penaltiesProximaPartida)
+      ? bruta.penaltiesProximaPartida!
+      : 0,
+    moralTime: Number.isFinite(bruta.moralTime)
+      ? Math.max(0, Math.min(100, bruta.moralTime!))
+      : 65,
+    conversas: Array.isArray(bruta.conversas) ? bruta.conversas : [],
+    headlines: Array.isArray(bruta.headlines) ? bruta.headlines : [],
+    ultimasEscolhas: Array.isArray(bruta.ultimasEscolhas) ? bruta.ultimasEscolhas : [],
+    feedCidadela: Array.isArray(bruta.feedCidadela) ? bruta.feedCidadela : [],
+    eventoPendenteId: typeof bruta.eventoPendenteId === "string" ? bruta.eventoPendenteId : null,
+  };
+}
 
 const EMPTY_COACH: Coach = {
   nome: "",

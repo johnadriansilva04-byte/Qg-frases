@@ -7,7 +7,7 @@ import {
 import type { CareerState, Headline } from "./types";
 import type { Fixture, MatchResult } from "../types";
 import { teamByIdSync } from "../data/teams";
-import { EMPTY_CAREER } from "./careerStorage";
+import { EMPTY_CAREER, normalizarCareer } from "./careerStorage";
 import { mergeProgressInSupabase, type Progress } from "../storage";
 import { sortTable } from "../tournament";
 
@@ -67,22 +67,22 @@ export async function loadCareerFromSupabase(
     // Fonte de verdade: user_wallets.balance (SOV). Se o Banco Central não
     // estiver disponível (migration pendente), cai no cache pontos_soberania.
     const saldoSov = await obterSaldoSov(userId);
+    // Normaliza antes de usar: JSONB antigo pode ter coleções ausentes ou
+    // divisao nula — sem isso, o celular/menu quebravam ao ler o estado salvo.
+    const base = normalizarCareer(prog.career as Partial<CareerState>);
     const coachFallback = fallbackCoach ?? EMPTY_CAREER.coach;
-    const coachSalvo = prog.career.coach ?? EMPTY_CAREER.coach;
+    const coachSalvo = base.coach;
     const nomeCoach =
       coachSalvo.nome?.trim() || coachFallback.nome?.trim() || u?.nome?.trim() || "Treinador";
 
     return {
-      ...EMPTY_CAREER,
-      ...prog.career,
+      ...base,
       coach: {
-        ...EMPTY_CAREER.coach,
-        ...coachFallback,
         ...coachSalvo,
-        nome: nomeCoach,
         apelido: coachSalvo.apelido?.trim() || coachFallback.apelido?.trim() || nomeCoach,
         cidade: coachSalvo.cidade?.trim() || coachFallback.cidade?.trim() || "",
         bio: coachSalvo.bio?.trim() || coachFallback.bio?.trim() || "",
+        nome: nomeCoach,
         soberania: saldoSov ?? u?.pontos_soberania ?? coachSalvo.soberania ?? 0,
       },
     };

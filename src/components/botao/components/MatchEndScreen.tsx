@@ -1,9 +1,10 @@
-import { Trophy, TrendingUp, TrendingDown, Minus, Flag, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Trophy, TrendingUp, TrendingDown, Minus, Flag, Sparkles, CheckCircle2 } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 
 export interface MatchEndData {
+  /** Identificador único da partida (idempotência do patrocínio). */
+  partidaId?: string | undefined;
   resultado: "vitoria" | "empate" | "derrota";
   placarUser: number;
   placarAdv: number;
@@ -24,8 +25,12 @@ export interface MatchEndData {
 type Props = {
   dados: MatchEndData;
   onContinuar: () => void;
-  /** Chamado quando o usuário libera o anúncio de patrocínio (abre a entrevista). */
+  /** Chamado quando o usuário confirma o anúncio de patrocínio (abre a entrevista). */
   onPatrocinio?: (() => void) | undefined;
+  /** A recompensa de patrocínio desta partida já foi paga (idempotência). */
+  patrocinioPago?: boolean | undefined;
+  /** A entrevista já está aberta (evita reabrir ao retornar do anúncio). */
+  entrevistaAberta?: boolean | undefined;
 };
 
 const RESULTADO_MAP = {
@@ -58,25 +63,27 @@ function DeltaBadge({ valor }: { valor: number }) {
  * monetização discreta no rodapé (Adsterra nativo + Monetag sob clique com
  * aviso) — sem poluir a leitura das estatísticas.
  */
-export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
+export function MatchEndScreen({
+  dados,
+  onContinuar,
+  onPatrocinio,
+  patrocinioPago = false,
+  entrevistaAberta = false,
+}: Props) {
   const r = RESULTADO_MAP[dados.resultado];
 
-  // Gera um ID único para esta partida para controlar o estado da entrevista
-  const partidaId = `${dados.timeUserNome}-${dados.timeAdvNome}-${dados.placarUser}-${dados.placarAdv}-${dados.rodada}`;
-  const entrevistaLiberadaKey = `entrevista_liberada_${partidaId}`;
-  const [entrevistaLiberada, setEntrevistaLiberada] = useState(() => {
-    return localStorage.getItem(entrevistaLiberadaKey) === "true";
-  });
-
+  // Fluxo: clique do usuário → confirmação → anúncio → entrevista (UMA vez).
+  // Regras anti-reexecução:
+  // - `onDisparado` só abre a entrevista se ela não estiver aberta e a
+  //   recompensa ainda não tiver sido paga nesta partida;
+  // - o retorno da aba do anúncio nunca dispara o botão sozinho (o portão de
+  //   pop-up é one-shot e expira ao voltar o foco — ver adClickGuard).
   const handlePatrocinio = () => {
-    setEntrevistaLiberada(true);
-    localStorage.setItem(entrevistaLiberadaKey, "true");
+    if (patrocinioPago || entrevistaAberta) return;
     onPatrocinio?.();
   };
 
   const handleContinuar = () => {
-    // Limpa o estado ao continuar
-    localStorage.removeItem(entrevistaLiberadaKey);
     onContinuar();
   };
 
@@ -164,7 +171,12 @@ export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
           </p>
           <AdsterraBanner slotId="match-end-banner" className="min-h-[90px]" />
           <div className="mt-2">
-            {entrevistaLiberada ? (
+            {patrocinioPago ? (
+              <div className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-900/40 bg-emerald-950/30 px-4 py-3 text-xs font-bold text-emerald-300">
+                <CheckCircle2 className="size-4" />
+                Patrocínio recebido nesta partida
+              </div>
+            ) : (
               <ControlledMonetagButton
                 className="w-full text-xs"
                 message="Um empresário de uma marca quer te PATROCINAR após essa partida! Para fechar o acordo, você dará uma entrevista rápida para a imprensa. Uma página do patrocinador pode abrir em uma nova aba."
@@ -172,13 +184,6 @@ export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
               >
                 🎤 Dar Entrevista · Ganho Patrocínio
               </ControlledMonetagButton>
-            ) : (
-              <button
-                onClick={handlePatrocinio}
-                className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3 text-xs font-bold text-slate-300 transition hover:border-emerald-500/50 hover:bg-slate-800 active:scale-[0.99]"
-              >
-                🎤 Liberar Entrevista · Ganho Patrocínio
-              </button>
             )}
           </div>
         </div>

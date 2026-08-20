@@ -7,9 +7,10 @@
  * A Trilha NÃO é um jogo à parte — ela lê e escreve no MESMO CareerState.
  */
 
-import type { CareerState } from "./types";
+import type { CareerState, ConversaCelular } from "./types";
 import { anexarPost, gerarPostManual } from "./rpg/socialEngine";
 import { memoriaRpg } from "./rpg/rpgEngine";
+import { personagem } from "./rpg/personagens";
 
 export type ResultadoTrilha = "vitoria" | "derrota" | "empate";
 
@@ -136,6 +137,43 @@ export function conviteTrilha(career: CareerState): string {
     return `${derrotas} derrotas seguidas. A torcida sussurra que você precisa de outro tabuleiro por uma noite. A Trilha aceita jogadores desesperados — e devolve treinadores mais leves.`;
   }
   return "Soberania abaixo de 30. O Corretor sorri demais quando você passa. Antes que a sombra assine mais favores, jogue o ritual da Trilha.";
+}
+
+/**
+ * Envia o convite do Ritual da Trilha como NOTIFICAÇÃO no celular do
+ * treinador (mensagem do Pracinha), quando a sombra está ativa. Idempotente
+ * por rodada: um convite por temporada/rodada, sem duplicar conversas.
+ */
+export function convidarRitualTrilha(career: CareerState): CareerState {
+  if (!condicaoSombria(career)) return career;
+
+  // Idempotente por rodada: o id determinístico por temporada/rodada garante
+  // que o convite não se duplica mesmo após reload (estado vem do JSONB).
+  const conviteId = `ritual-trilha-${career.temporada ?? 1}-r${career.rodadaAtual ?? 0}`;
+  const conversas = Array.isArray(career.conversas) ? career.conversas : [];
+  if (conversas.some((c) => c.id === conviteId)) return career;
+
+  const npc = personagem("npc-pracinha");
+  const timestamp = new Date().toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const mensagem =
+    `${conviteTrilha(career)}\n\n` +
+    `☾ Quando quiser, é só tocar no link abaixo: a Trilha fica na Cidadela. ` +
+    `Vencer o ritual alivia a sombra: +8 de soberania e a sequência negativa zera.`;
+  const conversa: ConversaCelular = {
+    id: conviteId,
+    tipo: "narrativa",
+    nome: npc.nome,
+    avatar: npc.avatar,
+    cargo: `${npc.cargo} · Ritual da Trilha`,
+    npcId: "npc-pracinha",
+    mensagens: [{ id: `ritual-m-${conviteId}`, texto: mensagem, remetente: "outro", timestamp }],
+    naoLida: true,
+    linkExterno: { rotulo: "☾ Jogar o Ritual da Trilha", to: "/cidadela" },
+  };
+  return { ...career, conversas: [conversa, ...conversas].slice(0, 30) };
 }
 
 /** Missões locais da Trilha (mescladas com as missões diárias do Pracinha). */

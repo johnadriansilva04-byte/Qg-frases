@@ -1,15 +1,12 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { Calendar, ChevronRight, Trophy } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
 import { nextUserFixture, sortTable } from "../tournament";
 import type { Fixture, Tournament } from "../types";
 import { CalendarView } from "./CalendarView";
-import { ChampionshipModule } from "./ChampionshipModule";
 import { NewsPortal } from "./NewsPortal";
 import { SovereigntyPanel } from "./SovereigntyPanel";
-import { condicaoSombria, conviteTrilha } from "./trilhaIntegracao";
 import {
   CUSTO_MANUTENCAO,
   DIVISAO_LABEL,
@@ -18,11 +15,10 @@ import {
   gerarCopaBrasil,
   proximoJogoCopa,
   resolveTeam,
-  usuarioVivoNaCopa,
 } from "./competitionApi";
-import type { CareerState, Divisao } from "./types";
+import type { CareerState } from "./types";
 import type { LigasTemporada } from "./seasonEngine";
-import { ZoneLegend } from "./ChampionshipModule";
+import { ZoneLegend } from "./ClassificacaoScreen";
 
 interface CareerHubProps {
   tour: Tournament;
@@ -32,6 +28,8 @@ interface CareerHubProps {
   onPlay: () => void;
   onExit: () => void;
   onOpenCelular: () => void;
+  /** Abre a tela dedicada de Classificação Completa (área própria, fora do hub). */
+  onOpenClassificacao: () => void;
 }
 
 export function CareerHub({
@@ -42,6 +40,7 @@ export function CareerHub({
   onPlay,
   onExit,
   onOpenCelular,
+  onOpenClassificacao,
 }: CareerHubProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const next = useMemo(() => nextUserFixture(tour), [tour]);
@@ -177,36 +176,25 @@ export function CareerHub({
           )}
 
           <button onClick={onExit} className="btn-ghost w-full">
-            Voltar ao menu
+            Voltar ao Estádio
           </button>
-
-          {/* Ritual da Trilha — válvula narrativa: aparece quando a carreira
-              está sob a sombra (SOV < 30 ou 3+ derrotas seguidas). */}
-          {career && condicaoSombria(career) && (
-            <Link
-              to="/cidadela"
-              className="block rounded-xl border border-red-900/50 bg-gradient-to-br from-red-950/60 via-slate-950 to-slate-950 p-3 transition hover:border-red-700/70"
-            >
-              <p className="font-display text-sm tracking-wide text-red-300">
-                ☾ Ritual da Trilha
-              </p>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
-                {conviteTrilha(career)}
-              </p>
-              <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.15em] text-red-400">
-                Abra a Cidadela e jogue a Trilha — vencer alivia a sombra: +8 SOV · sequência zerada →
-              </p>
-            </Link>
-          )}
         </div>
 
-        {/* Coluna direita - Classificação sempre visível (top 5) */}
+        {/* Coluna direita - Classificação resumida (top 5). O botão abre a
+            tela dedicada de Classificação Completa (área própria). */}
         <div className="panel">
-          <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={onOpenClassificacao}
+            className="flex w-full items-center gap-2 mb-3 text-left"
+          >
             <Trophy className="size-4 text-amber-400" />
             <h3 className="font-display text-sm font-bold tracking-wide">Classificação</h3>
             <span className="text-xs text-muted-foreground">{DIVISAO_LABEL[divisao]}</span>
-          </div>
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-primary">
+              Classificação completa
+              <ChevronRight className="size-3.5" />
+            </span>
+          </button>
           {nextLiga.phase === "grupos" && nextLiga.groups.length > 0 ? (
             <table className="w-full text-left text-xs">
               <thead>
