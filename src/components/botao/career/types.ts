@@ -273,9 +273,6 @@ export type CareerState = {
   // História principal (John Adrian): capítulos, pergaminhos, Narrative Ledger.
   // OPCIONAL — só avança quando o jogador conclui entrevistas pós-partida.
   historia?: import("./historia/types").HistoriaState | undefined;
-  /** Entrada da campanha: 'treinador' (trabalha para clube) ou
-   *  'proprietario' (compra de um clube no Marketplace). */
-  modoEntrada?: "treinador" | "proprietario" | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

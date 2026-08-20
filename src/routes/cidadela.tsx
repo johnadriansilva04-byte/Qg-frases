@@ -5,7 +5,7 @@ import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
-import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
+import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularFixo } from "@/components/CelularFixo";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
@@ -13,7 +13,8 @@ import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
-import { InfoModal } from "@/components/InfoModal";
+import { InfoModal, InfoButton } from "@/components/InfoModal";
+import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
 import {
   carregarPerfilCidadela,
@@ -22,6 +23,7 @@ import {
   type CidadelaPerfil,
   type ProfissaoId,
 } from "@/lib/cidadela/profissoes";
+import type { Perfil } from "@/components/botao/online/auth";
 import { loadCareerFromSupabase } from "@/components/botao/career/careerRemote";
 import { garantirContatosRpg } from "@/components/botao/career/rpg/rpgEngine";
 import type { CareerState } from "@/components/botao/career/types";
@@ -93,15 +95,17 @@ const GAMES = [
   },
 ];
 
-function CidadelaCompView() {
+function Cidadela() {
   const [hydrated, setHydrated] = useState(false);
   const [activeGame, setActiveGame] = useState<Game>(null);
   const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
+  const [showPracinha, setShowPracinha] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
   const [career, setCareer] = useState<CareerState | null>(null);
-  const { perfil } = useBotaoAuth();
+  const { perfil, aplicarPerfil } = useBotaoAuth();
 
   // Identidade na Cidadela: carrega a profissão do jogador autenticado.
   useEffect(() => {
@@ -131,7 +135,21 @@ function CidadelaCompView() {
   // Sessão ativa não é persistida: cada login entra com estado limpo.
   useEffect(() => {
     window.localStorage.removeItem("cidadela_active_game");
+    const seen = window.localStorage.getItem("cidadela_intro_seen");
+    setShowIntro(!seen);
   }, []);
+
+  const handleContinueIntro = () => {
+    window.localStorage.setItem("cidadela_intro_seen", "true");
+    setShowIntro(false);
+    setShowPracinha(true);
+  };
+
+  const handleLogin = async (p: Perfil) => {
+    aplicarPerfil(p);
+    // O celular (CelularFixo, canto inferior direito) está sempre disponível
+    // para notificações — não há mais abertura automática de outra tela.
+  };
 
   const handleEscolherProfissao = async (profissao: ProfissaoId) => {
     const uid = perfil?.user_id;
@@ -171,6 +189,19 @@ function CidadelaCompView() {
         categoria="COMUNIDADE"
         duracao={2600}
         onCompleto={() => setHydrated(true)}
+      />
+    );
+  }
+
+  if (showIntro) {
+    return <CidadelaIntro onContinue={handleContinueIntro} />;
+  }
+
+  if (showPracinha) {
+    return (
+      <PracinhaIntro
+        nomeJogador={perfil?.nome}
+        onComplete={() => setShowPracinha(false)}
       />
     );
   }
@@ -381,14 +412,5 @@ function CidadelaCompView() {
         feed={career?.feedCidadela ?? []}
       />
     </>
-  );
-}
-
-// OnboardingGate: tour obrigatório do iniciante antes do hub (§2).
-function Cidadela() {
-  return (
-    <OnboardingGate destinoInicial="cidadela">
-      <CidadelaCompView />
-    </OnboardingGate>
   );
 }

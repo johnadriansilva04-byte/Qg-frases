@@ -58,7 +58,7 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
     setFeedback(null);
     const ok = await criarOfertaMarketplace(itemSelecionado, 1, valor);
     if (ok) {
-      setFeedback("Oferta publicada no Marketplace.");
+      setFeedback("Oferta publicada na Feira.");
       await carregarTudo();
     } else {
       setFeedback("Não foi possível publicar a oferta.");
@@ -93,7 +93,7 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
     return (
       <div className="p-4 text-center">
         <Store className="mx-auto mb-3 size-10 text-slate-500" />
-        <p className="text-sm font-bold text-white">Marketplace bloqueado</p>
+        <p className="text-sm font-bold text-white">Feira bloqueada</p>
         <p className="mt-1 text-xs text-slate-400">
           Entre com sua conta para negociar Pergaminhos e itens com outros jogadores.
         </p>
@@ -106,7 +106,7 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
       <div className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Marketplace da Cidadela</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Feira da Cidadela</p>
             <p className="mt-1 text-sm text-slate-200">
               Compre e venda Pergaminhos diretamente com jogadores.
             </p>
@@ -195,7 +195,7 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
         </div>
 
         {carregando ? (
-          <div className="py-6 text-center text-xs text-slate-500">Carregando Marketplace...</div>
+          <div className="py-6 text-center text-xs text-slate-500">Carregando Feira...</div>
         ) : ofertas.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
             <ScrollText className="mx-auto mb-2 size-8 text-slate-500" />
