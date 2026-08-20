@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, IdCard, GraduationCap } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, IdCard, GraduationCap, Briefcase, FlaskConical } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
@@ -11,6 +11,8 @@ import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
 import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
 import { CampusHub } from "@/components/campus/CampusHub";
+import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
+import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { armarSponsor } from "@/lib/sponsorGate";
@@ -56,6 +58,8 @@ type Game =
   | "online"
   | "campeonato"
   | "campus"
+  | "comercial"
+  | "laboratorio"
   | null;
 
 const GAMES = [
@@ -78,6 +82,20 @@ const GAMES = [
     label: "Campus Universitário",
     description: "Vida acadêmica do estudante",
     icon: GraduationCap,
+    status: "disponível",
+  },
+  {
+    id: "comercial" as Game,
+    label: "Setor Comercial",
+    description: "Escritório do empresário",
+    icon: Briefcase,
+    status: "disponível",
+  },
+  {
+    id: "laboratorio" as Game,
+    label: "Laboratórios",
+    description: "Pesquisa científica do pesquisador",
+    icon: FlaskConical,
     status: "disponível",
   },
   {
@@ -187,8 +205,8 @@ function Cidadela() {
       setLoadingGame(game);
       return;
     }
-    if (game === "campus") {
-      setActiveGame("campus");
+    if (game === "campus" || game === "comercial" || game === "laboratorio") {
+      setActiveGame(game);
       return;
     }
     // Jogos em breve não fazem nada
@@ -302,6 +320,28 @@ function Cidadela() {
   if (activeGame === "campus") {
     return (
       <CampusHub
+        userId={perfil?.user_id ?? null}
+        perfil={perfilCidadela}
+        onPerfilAtualizado={setPerfilCidadela}
+        onVoltar={() => setActiveGame(null)}
+      />
+    );
+  }
+
+  if (activeGame === "comercial") {
+    return (
+      <EmpresarioHub
+        userId={perfil?.user_id ?? null}
+        perfil={perfilCidadela}
+        onPerfilAtualizado={setPerfilCidadela}
+        onVoltar={() => setActiveGame(null)}
+      />
+    );
+  }
+
+  if (activeGame === "laboratorio") {
+    return (
+      <LaboratorioHub
         userId={perfil?.user_id ?? null}
         perfil={perfilCidadela}
         onPerfilAtualizado={setPerfilCidadela}
