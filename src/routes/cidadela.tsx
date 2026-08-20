@@ -9,6 +9,7 @@ import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
+import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
 import { CampusHub } from "@/components/campus/CampusHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
@@ -352,8 +353,14 @@ function Cidadela() {
             </div>
           </header>
 
+          {perfilCidadela && (
+            <div className="mb-6">
+              <PainelReputacao perfil={perfilCidadela} />
+            </div>
+          )}
+
           <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-4 text-foreground">Jogos Disponíveis</h2>
+            <h2 className="text-lg font-semibold mb-4 text-foreground">Jogos da Cidadela</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {GAMES.map((game) => {
                 const Icon = game.icon;

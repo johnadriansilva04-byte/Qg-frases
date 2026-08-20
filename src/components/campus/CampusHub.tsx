@@ -14,6 +14,7 @@ import {
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 import { salvareEstadoCidadelaHelper, salvareSovHelper } from "./campusHelpers";
 import { EstudanteTour } from "./EstudanteTour";
+import { atividadesDoDia } from "./integracaoEngine";
 import {
   CONFLITO_INICIAL,
   atividadesElegiveis,
@@ -120,7 +121,14 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
     );
   }
 
-  const elegiveis = atividadesElegiveis(estado);
+  const dataISO = new Date().toISOString().slice(0, 10);
+  const concluidasIds = new Set(estado.concluidas.map((c) => c.atividadeId));
+  const elegiveis = atividadesDoDia(
+    atividadesElegiveis(estado),
+    perfil.profissoes_desbloqueadas,
+    dataISO,
+    concluidasIds,
+  );
   const conflitoPendente = !estado.conflitoInicial;
   const cursoNome = CURSOS.find((c) => c.id === estado.cursoId)?.nome ?? "Curso Livre";
   const traco = tracoDominante(estado);
@@ -176,8 +184,8 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
           </h2>
           {elegiveis.length === 0 ? (
             <p className="rounded-xl border border-border bg-surface/40 p-4 text-sm text-muted-foreground">
-              Semestre tranquilo. As atividades concluídas renderam {estado.concluidas.length}{" "}
-              registros{traco ? ` e sua reputação de "${TRACO_LABEL[traco] ?? traco}"` : ""}.
+              Semestre tranquilo hoje. As integrações com outras profissões voltam amanhã —
+              enquanto isso, {estado.concluidas.length} decisões moldam quem você é.
             </p>
           ) : (
             <div className="grid gap-3">
