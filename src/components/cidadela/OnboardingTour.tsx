@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, Bot, Send, Smartphone } from "lucide-react";
-import { ChatAuthCard } from "@/components/cidadela/ChatAuthCard";
+import { ArrowDown, Bot, Send, Smartphone, X } from "lucide-react";
+import { AuthScreen } from "@/components/botao/components/AuthScreen";
 import {
   DESTINOS,
   destinoPorKey,
@@ -147,8 +147,7 @@ export function OnboardingTour({ perfil, destinoInicial, onboarding, onConcluir 
             </span>
           </div>
 
-          {/* Messages — rolagem vertical nativa. O login vive NO CHAT (§3/§5):
-              card encaixado após a última mensagem, sem sair do celular. */}
+          {/* Messages — rolagem vertical nativa. */}
           <div
             ref={scrollRef}
             onTouchStart={() => setMostrarHintScroll(false)}
@@ -169,10 +168,6 @@ export function OnboardingTour({ perfil, destinoInicial, onboarding, onConcluir 
               </div>
             ))}
 
-            {stage === "identificacao" && !perfil && (
-              <ChatAuthCard onPronto={() => avancar()} />
-            )}
-
             {mostrarHintScroll && msgs.length > 0 && (
               <div className="flex justify-center pt-1">
                 <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
@@ -184,6 +179,12 @@ export function OnboardingTour({ perfil, destinoInicial, onboarding, onConcluir 
 
           {/* Stage Area. */}
           <div className="border-t border-slate-800 bg-slate-950/70 p-3">
+            {stage === "identificacao" && !perfil && (
+              <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-800">
+                <AuthScreen onPronto={() => avancar()} />
+              </div>
+            )}
+
             {stage === "destino" && (
               <div className="space-y-2">
                 {DESTINOS.map((d) => (

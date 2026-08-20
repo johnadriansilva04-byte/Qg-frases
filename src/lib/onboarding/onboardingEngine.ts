@@ -256,10 +256,7 @@ export function responderPracinha(
       g: ["cid", "cidadela", "pracinha"],
       resp: "A Cidadela é o meu universo. Bora conferir? 👇",
     },
-    identificacao: {
-      g: ["por qu", "pra qu", "import", "porqu", "login", "entrar", "conta", "cadast", "senha"],
-      resp: "É aqui mesmo no celular 👇 Preenche email e senha no card — se for sua primeira vez, toca em criar conta. Salva sua trajetória inteira. 🙂",
-    },
+    identificacao: { g: ["por qu", "pra qu", "import", "porqu"], resp: "Para eu te salvar de verdade — não confio só em useState. 🙂" },
     introducao: { g: ["o que", "mundo", "cell", "jog"], resp: "Aqui dentro o celular recebe notícias do jogo, e o mundo reage às suas partidas e declarações. 📱" },
     ambientes: { g: ["quad", "área", "conteúd", "coisas"], resp: "São 3 áreas. Me diz por onde quer começar e eu te acompanho. 👇" },
     sov: { g: ["sov", "soberania", "moed", "dinhe"], resp: "SOV mora no seu banco. Vem de partidas, conquistas e decisões — fica no extrato do Banco. 🪙" },
