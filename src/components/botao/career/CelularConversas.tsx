@@ -39,7 +39,15 @@ import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
 import { PainelMundo } from "@/components/cidadela/PainelMundo";
 
-type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado" | "notificacoes";
+type AbaCelular =
+  | "menu"
+  | "mensagens"
+  | "contatos"
+  | "rede"
+  | "missoes"
+  | "grupo"
+  | "mercado"
+  | "notificacoes";
 
 type JogadorOnline = {
   user_id: string;
@@ -87,7 +95,7 @@ export function CelularConversas({
   onLogin,
   perfilCidadela,
 }: Props) {
-  const [aba, setAba] = useState<AbaCelular>("mensagens");
+  const [aba, setAba] = useState<AbaCelular>("menu");
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
   const [textoInput, setTextoInput] = useState("");
   const [chatInput, setChatInput] = useState("");
@@ -106,14 +114,22 @@ export function CelularConversas({
   const [carregandoJogadores, setCarregandoJogadores] = useState(false);
   const [pesquisaJogador, setPesquisaJogador] = useState("");
 
+  /** Vai direto para o menu principal do celular (afastar da pilha de apps). */
+  const irParaMenu = () => {
+    setAba("menu");
+    setConversaSelecionada(null);
+  };
+
   // Títulos das abas
   const tituloAba: Record<AbaCelular, string> = {
-    mensagens: "Mensagens",
+    menu: "Celular do Pracinha",
+    mensagens: "Contatos",
+    contatos: "Contatos",
     rede: "Rede Social",
     missoes: "Missões Diárias",
     grupo: "Grupo da Cidadela",
     mercado: "Mercado SOV",
-    notificacoes: "Notificações",
+    notificacoes: "Alertas",
   };
 
   // Mostrar login se não tiver userId e onLogin estiver disponível
@@ -158,8 +174,21 @@ export function CelularConversas({
 
   const conversaAtiva = todasConversas.find((c) => c.id === conversaSelecionada) ?? null;
 
+  /** Badge do app Contatos: conversas não lidas (incluindo o patrocinador). */
+  const naoLidasContatos = useMemo(
+    () => todasConversas.filter((c) => c.naoLida && !lidas.has(c.id)).length,
+    [todasConversas, lidas],
+  );
+
   useEffect(() => {
     if (conversaSelecionada && !conversaAtiva) setConversaSelecionada(null);
+  }, [conversaSelecionada, conversaAtiva]);
+
+  // Aguardando uma nova conversa virar de ChatGPT — se estiver numa conversa
+  // que sumiu (excluída/resolvida pelo BotaoGame), volta ao menu de apps.
+  useEffect(() => {
+    if (conversaSelecionada && !conversaAtiva && aba !== "menu") irParaMenu();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversaSelecionada, conversaAtiva]);
 
 
@@ -217,7 +246,7 @@ export function CelularConversas({
   useEffect(() => {
     if (aba === "missoes") void carregarMissoes();
     if (aba === "mercado") void registrarEventoMissao("explorar_pergaminhos");
-    if (aba === "grupo") void carregarJogadoresOnline();
+    if (aba === "grupo" || aba === "contatos") void carregarJogadoresOnline();
   }, [aba, carregarMissoes, carregarJogadoresOnline]);
 
   useEffect(() => {
@@ -293,7 +322,7 @@ export function CelularConversas({
   }
 
 
-  if (conversaAtiva && aba === "mensagens") {
+  if (conversaAtiva && (aba === "contatos" || aba === "mensagens")) {
     return (
       <div className="mx-auto max-w-md px-4 py-6">
         <div className="phone-frame">
@@ -461,41 +490,16 @@ export function CelularConversas({
         <div className="phone-notch" />
         <div className="phone-screen">
           <div className="phone-chat-head">
-            <button onClick={onVoltar} className="phone-back" aria-label="Voltar">
+            <button onClick={aba === "menu" ? onVoltar : irParaMenu} className="phone-back" aria-label={aba === "menu" ? "Fechar" : "Menu"}>
               <ChevronLeft className="size-5" />
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold text-white">{tituloAba[aba]}</p>
-              <p className="truncate text-[10px] text-slate-400">Central integrada do jogador</p>
+              <p className="truncate text-[10px] text-slate-400">
+                {aba === "menu" ? "Celular do Pracinha" : "Voltar ao menu"}
+              </p>
             </div>
             <Smartphone className="size-4 text-slate-400" />
-          </div>
-
-          <div className="grid grid-cols-6 border-b border-slate-700/60 bg-slate-950/70 text-[10px] font-bold">
-            {(
-              [
-                ["mensagens", MessageSquare, "Msgs"],
-                ["rede", Newspaper, "Rede"],
-                ["missoes", ClipboardList, "Missões"],
-                ["grupo", Users, "Grupo"],
-                ["mercado", Store, "Feira"],
-                ["notificacoes", Bell, "Alertas"],
-              ] as const
-            ).map(([id, Icon, label]) => (
-              <button
-                key={id}
-                onClick={() => {
-                  setAba(id);
-                  setConversaSelecionada(null);
-                }}
-                className={`flex flex-col items-center gap-1 px-1 py-2 transition ${
-                  aba === id ? "bg-emerald-400/15 text-emerald-300" : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                <Icon className="size-4" />
-                {label}
-              </button>
-            ))}
           </div>
 
           <div className="phone-chat-body">
@@ -505,7 +509,47 @@ export function CelularConversas({
               </div>
             )}
 
-            {aba === "mensagens" && (
+            {aba === "menu" && (
+              <div className="p-3">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                  Aplicativos do Pracinha
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(
+                    [
+                      ["contatos", MessageSquare, "Contatos"],
+                      ["rede", Newspaper, "Rede"],
+                      ["missoes", ClipboardList, "Missões"],
+                      ["grupo", Users, "Grupo"],
+                      ["mercado", Store, "Feira"],
+                      ["notificacoes", Bell, "Alertas"],
+                    ] as const
+                  ).map(([id, Icon, label]) => (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        setAba(id);
+                        setConversaSelecionada(null);
+                      }}
+                      className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 transition hover:border-emerald-500/40 hover:bg-slate-800/80 active:scale-95"
+                    >
+                      <Icon className="mb-2 size-6 text-emerald-300" />
+                      <span className="text-[10px] font-bold text-slate-200">{label}</span>
+                      {id === "contatos" && naoLidasContatos > 0 && (
+                        <span className="mt-1 flex min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[9px] font-black text-white">
+                          {naoLidasContatos > 99 ? "99+" : naoLidasContatos}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-4 text-center text-[10px] text-slate-600">
+                  Toque num aplicativo para continuar
+                </p>
+              </div>
+            )}
+
+            {(aba === "contatos" || aba === "mensagens") && (
               todasConversas.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageSquare className="size-12 text-slate-600 mx-auto mb-3" />

@@ -1,3 +1,18 @@
+## Celular da Cidadela como overlay com menu de apps (2026-08-20, 4ª passada)
+
+Reestruturação completa do celular (§1–§19 do prompt mestre). O botão Celular
+no header da Cidadela e as cards de notificações (`PainelReputacao`/
+`PainelMundo`) foram removidos — a Cidadela fica limpa e eventos chegam ao
+celular. O CelularFixo virou overlay de tela cheia (`fixed inset-0`) com
+container max-w-md, cabeçalho e botão Fechar. `CelularConversas` ganhou menu
+inicial com 6 app-cards (Contatos / Rede / Missões / Grupo / Feira / Alertas)
+em 2 colunas; abrir um app exibe header com voltar-para-menu. `AbaCelular`
+estendeu com `"menu"` e `"contatos"` (alias para a lista de conversas);
+badge de não-lidas no card Contatos (`naoLidasContatos`). Estado único de
+aba; navegação interna por state sem remontar CelularFixo. Rota /cidadela
+limpa — só puxa CelularFixo (botFixo sempre disponível, sem CelularConversas
+inline). tsc 0 erros; build OK.
+
 ## Reestruturação do Modo Carreira — Prompt Mestre (2026-08-20, 3ª passada)
 
 Implementação dos pontos §1–§34 do prompt mestre (personagens-IA, coletiva,

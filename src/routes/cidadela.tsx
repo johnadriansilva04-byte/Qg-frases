@@ -1,17 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, IdCard, GraduationCap, Briefcase, FlaskConical } from "lucide-react";
+import { Target, Trophy, Crown, Grid3X3, IdCard } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
-import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { CelularFixo } from "@/components/CelularFixo";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
-import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
-import { PainelMundo } from "@/components/cidadela/PainelMundo";
 import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
@@ -101,7 +98,6 @@ function Cidadela() {
   const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
   const [showIntro, setShowIntro] = useState(false);
   const [showPracinha, setShowPracinha] = useState(false);
-  const [phoneOpen, setPhoneOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
@@ -138,8 +134,8 @@ function Cidadela() {
 
   const handleLogin = async (p: Perfil) => {
     aplicarPerfil(p);
-    // Após login, abre celular com mensagem do Pracinha
-    setPhoneOpen(true);
+    // O celular (CelularFixo, canto inferior direito) está sempre disponível
+    // para notificações — não há mais abertura automática de outra tela.
   };
 
   const handleEscolherProfissao = async (profissao: ProfissaoId) => {
@@ -192,11 +188,7 @@ function Cidadela() {
     return (
       <PracinhaIntro
         nomeJogador={perfil?.nome}
-        onComplete={() => {
-          setShowPracinha(false);
-          // Abre celular automaticamente após PracinhaIntro
-          setPhoneOpen(true);
-        }}
+        onComplete={() => setShowPracinha(false)}
       />
     );
   }
@@ -213,23 +205,6 @@ function Cidadela() {
         perfil={perfilCidadela}
         nomeJogador={perfil?.nome}
         onEscolher={handleEscolherProfissao}
-      />
-    );
-  }
-
-  if (phoneOpen) {
-    // Celular da Cidadela usa CelularConversas com estado vazio (sem conversas de carreira)
-    // Passa onLogin para permitir login dentro do celular
-    return (
-      <CelularConversas
-        conversas={[]}
-        onVoltar={() => setPhoneOpen(false)}
-        onExcluirConversa={() => {}}
-        onEnviarMensagem={() => {}}
-        userId={perfil?.user_id ?? null}
-        nomeJogador={perfil?.nome ?? null}
-        onLogin={handleLogin}
-        perfilCidadela={perfilCidadela}
       />
     );
   }
@@ -320,15 +295,8 @@ function Cidadela() {
             <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
               Jogos do Campus
             </p>
-            <div className="mt-3 flex flex-wrap justify-center gap-3">
-              <button
-                onClick={() => setPhoneOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/20"
-              >
-                <Smartphone className="size-4" />
-                Celular
-              </button>
-              {perfilCidadela?.profissao_atual && (
+            {perfilCidadela?.profissao_atual && (
+              <div className="mt-3">
                 <button
                   onClick={() => setMostrarProfissoes(true)}
                   className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-300 transition hover:bg-amber-400/20"
@@ -337,17 +305,11 @@ function Cidadela() {
                   {profissaoById(perfilCidadela.profissao_atual)?.nome ?? "Profissão"} · Nv.{" "}
                   {perfilCidadela.nivel_cidadela}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </header>
 
-          {perfilCidadela && (
-            <div className="mb-6">
-              <PainelReputacao perfil={perfilCidadela} />
-            </div>
-          )}
-
-          <PainelMundo perfil={perfilCidadela} />
+          {/* Acontecimentos/notificações chegam ao celular (§1) — Cidadela limpa. */}
 
           <div className="mb-6">
             <div className="grid gap-3 sm:grid-cols-2">
