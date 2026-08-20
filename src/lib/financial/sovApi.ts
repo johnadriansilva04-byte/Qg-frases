@@ -10,7 +10,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
-export type SovModule = "career" | "rpg" | "online" | "market";
+export type SovModule = "career" | "rpg" | "online" | "market" | "campus";
 export type SovTipo = "reward" | "penalty" | "bet_win" | "bet_loss" | "fee" | "transfer";
 
 /**

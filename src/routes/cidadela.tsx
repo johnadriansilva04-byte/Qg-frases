@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, IdCard } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, IdCard, GraduationCap } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
@@ -9,6 +9,7 @@ import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
+import { CampusHub } from "@/components/campus/CampusHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { armarSponsor } from "@/lib/sponsorGate";
@@ -53,6 +54,7 @@ type Game =
   | "botao"
   | "online"
   | "campeonato"
+  | "campus"
   | null;
 
 const GAMES = [
@@ -68,6 +70,13 @@ const GAMES = [
     label: "Futebol de Botão",
     description: "Campeonato com física realista",
     icon: Trophy,
+    status: "disponível",
+  },
+  {
+    id: "campus" as Game,
+    label: "Campus Universitário",
+    description: "Vida acadêmica do estudante",
+    icon: GraduationCap,
     status: "disponível",
   },
   {
@@ -177,6 +186,10 @@ function Cidadela() {
       setLoadingGame(game);
       return;
     }
+    if (game === "campus") {
+      setActiveGame("campus");
+      return;
+    }
     // Jogos em breve não fazem nada
     console.log("Jogo em breve:", game);
   };
@@ -283,6 +296,17 @@ function Cidadela() {
 
   if (activeGame === "trilha") {
     return <TrilhaGame onBack={() => setActiveGame(null)} />;
+  }
+
+  if (activeGame === "campus") {
+    return (
+      <CampusHub
+        userId={perfil?.user_id ?? null}
+        perfil={perfilCidadela}
+        onPerfilAtualizado={setPerfilCidadela}
+        onVoltar={() => setActiveGame(null)}
+      />
+    );
   }
 
   if (activeGame === "botao") {
