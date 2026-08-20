@@ -1,13 +1,17 @@
 /**
- * AD CLICK GUARD — a zona OnClick do Monetag abre pop em QUALQUER clique.
+ * AD CLICK GUARD — portão de autorização ÚNICA para zonas OnClick.
  *
- * Bloqueia todos os redirecionamentos externos não autorizados.
- * Intercepta: window.open, location.assign, e eventos de clique globais
+ * Problema original: a tag do Monetag instala listeners globais que
+ * SOBREVIVEM à remoção do <script> — depois da primeira liberação, cada
+ * clique do usuário disparava de novo. Aqui, toda navegação externa
+ * (window.open, location.assign, location.href, âncoras target=_blank)
+ * passa por `consumirAutorizacao()`: só a ÚNICA navegação dentro da
+ * janela autorizada é liberada; o resto é bloqueado até nova confirmação.
  */
 
-const STORAGE_KEY = "ad_popguard_last_open";
-
 let patched = false;
+let autorizadoAte = 0;
+let disparado = false;
 
 function isInternal(url: string): boolean {
   if (!url) return true;
@@ -19,84 +23,76 @@ function isInternal(url: string): boolean {
   }
 }
 
-function markOpen(now: number): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, String(now));
-  } catch {
-    // sem storage: gate segue mandando
-  }
+/** Libera exatamente UMA navegação externa dentro da janela `janelaMs`. */
+export function liberarPopupUnico(janelaMs = 5000): void {
+  autorizadoAte = Date.now() + janelaMs;
+  disparado = false;
+  console.log("[AdGuard] Autorização única liberada por", janelaMs, "ms");
+}
+
+/** Fecha o portão imediatamente (ex.: janela expirou, script removido). */
+export function cancelarAutorizacao(): void {
+  autorizadoAte = 0;
+  disparado = false;
+}
+
+/**
+ * Semântica "uma vez": true só para a PRIMEIRA navegação externa dentro
+ * da janela autorizada; as demais são bloqueadas até nova liberação.
+ */
+function consumirAutorizacao(): boolean {
+  const agora = Date.now();
+  if (agora > autorizadoAte || disparado) return false;
+  disparado = true;
+  autorizadoAte = 0;
+  console.log("[AdGuard] Navegação externa autorizada (consumida)");
+  return true;
 }
 
 export function initAdClickGuard(): void {
-  if (patched || typeof window === "undefined") return;
+  if (patched || typeof window === "undefined" || typeof document === "undefined") return;
   patched = true;
 
-  // Intercepta window.open
+  // window.open — o caminho clássico das zonas OnClick
   const originalOpen = window.open.bind(window);
-
   window.open = function (url?: string | URL, target?: string, features?: string) {
     const urlStr = String(url ?? "");
     if (isInternal(urlStr)) return originalOpen(url, target, features);
-
+    if (consumirAutorizacao()) return originalOpen(url, target, features);
     console.log("[AdGuard] Pop externo bloqueado");
     return null;
   };
 
-  // Intercepta location.assign - com verificação de segurança
+  // location.assign — redirecionamento na mesma aba
   try {
-    if (typeof Location !== "undefined" && Location.prototype && window.location) {
-      const originalAssign = Location.prototype.assign;
-
-      Location.prototype.assign = function (url: string | URL) {
-        const urlStr = String(url);
-        if (isInternal(urlStr)) return originalAssign.call(this, url);
-
-        console.log("[AdGuard] Redirecionamento externo bloqueado");
-        return;
-      };
-    }
+    const originalAssign = Location.prototype.assign;
+    Location.prototype.assign = function (url: string | URL) {
+      const urlStr = String(url);
+      if (isInternal(urlStr)) return originalAssign.call(this, url);
+      if (consumirAutorizacao()) return originalAssign.call(this, url);
+      console.log("[AdGuard] Redirecionamento externo (assign) bloqueado");
+    };
   } catch (error) {
     console.warn("[AdGuard] Não foi possível interceptar location.assign:", error);
   }
 
-  // REMOVIDO: Interceptação global de cliques (violava regra de "NENHUM CLIQUE GLOBAL")
-  // O Adsterra Social Bar reagia a cliques indevidos através deste listener global.
-  // Proteção contra redirecionamentos agora depende apenas de window.open e location.assign.
-
-  // Intercepta window.location.href setter
-  try {
-    if (window.location) {
-      const originalDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, "href");
-
-      // Verifica se já foi interceptado para evitar erro "Cannot redefine property"
-      const currentDescriptor = Object.getOwnPropertyDescriptor(window.location, "href");
-      if (currentDescriptor && currentDescriptor.set !== originalDescriptor?.set) {
-        console.log("[AdGuard] window.location.href já foi interceptado anteriormente");
-        return;
+  // Âncoras target=_blank — disparadas via click() programático da tag
+  document.addEventListener(
+    "click",
+    (event) => {
+      const alvo = event.target instanceof Element ? event.target : null;
+      const ancora = alvo?.closest("a[href]");
+      if (!(ancora instanceof HTMLAnchorElement)) return;
+      const href = ancora.getAttribute("href") ?? "";
+      if (ancora.target !== "_blank" || isInternal(href)) return;
+      if (!consumirAutorizacao()) {
+        console.log("[AdGuard] Clique em âncora externa (_blank) bloqueado");
+        event.preventDefault();
+        event.stopImmediatePropagation();
       }
+    },
+    true,
+  );
 
-      Object.defineProperty(window.location, "href", {
-        get() {
-          return originalDescriptor?.get?.call(this) ?? window.location.href;
-        },
-        set(url: string) {
-          if (isInternal(url)) {
-            if (originalDescriptor?.set) {
-              originalDescriptor.set.call(this, url);
-            } else {
-              window.location.href = url;
-            }
-            return;
-          }
-
-          console.log("[AdGuard] Redirecionamento via href bloqueado");
-        },
-        configurable: true,
-      });
-    }
-  } catch (error) {
-    console.warn("[AdGuard] Não foi possível interceptar window.location.href:", error);
-  }
-
-  console.log("[AdGuard] Proteção contra redirecionamentos ativada");
+  console.log("[AdGuard] Portão de autorização única ativado");
 }

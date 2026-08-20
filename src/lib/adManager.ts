@@ -15,7 +15,7 @@
  */
 
 import { useCallback } from "react";
-import { initAdClickGuard } from "./adClickGuard";
+import { cancelarAutorizacao, initAdClickGuard, liberarPopupUnico } from "./adClickGuard";
 
 const ENV = (typeof import.meta !== "undefined" ? import.meta.env : undefined) as
   | Record<string, string | undefined>
@@ -316,6 +316,10 @@ class AdManager {
    */
   dispararMonetagUmaVez(janelaMs = 3000): void {
     if (typeof window === "undefined") return;
+    // Autoriza a PRÓXIMA navegação externa e só ela: a tag do Monetag
+    // mantém listeners globais mesmo sem o <script>; sem este portão,
+    // cada clique do usuário disparava de novo (bug dos disparos infinitos).
+    liberarPopupUnico(janelaMs);
     // Garante recarga limpa caso um disparo anterior ainda esteja no DOM.
     this.removeScript("monetag");
     this.loadScript("monetag", true);
@@ -324,6 +328,7 @@ class AdManager {
     }
     this.monetagTimer = window.setTimeout(() => {
       this.removeScript("monetag");
+      cancelarAutorizacao();
       this.monetagTimer = null;
       console.log("[AdManager] Monetag: janela de permissão expirada — script removido");
     }, janelaMs);
