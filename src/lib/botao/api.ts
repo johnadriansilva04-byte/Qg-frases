@@ -4,6 +4,8 @@
  * botao_times, botao_lobbies e botao_blocos.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { bonusCadastro } from "@/lib/financial/sovBankApi";
+import { registrarTransacaoSov } from "@/lib/financial/sovApi";
 
 export type TimeBotao = {
   id: string;
@@ -164,6 +166,9 @@ export async function criarPerfilSeNaoExistir(
 
   try {
     await supabase.rpc("create_or_update_wallet", { p_user_id: userId });
+    // Bônus de cadastro rastreável no SOV BANK (idempotente por usuário;
+    // alinha o cache inicial pontos_soberania=50 ao ledger).
+    await bonusCadastro(userId);
   } catch {
     // Carteira SOV é opcional até a migração financeira ser aplicada.
   }
@@ -189,12 +194,28 @@ export async function salvarResultado(params: {
   }
   if (params.titulo) progresso.titles[params.titulo] += 1;
 
+  // Regra do SOV Bank: nenhum Sovereign entra/sai fora do ledger. O saldo
+  // autoritativo retornado pela RPC vira o cache pontos_soberania.
+  let saldoSov: number | null = null;
+  if (params.pontos !== 0) {
+    saldoSov = await registrarTransacaoSov(
+      params.usuario.user_id,
+      params.pontos,
+      params.pontos >= 0 ? "reward" : "penalty",
+      `Resultado de partida (${params.resultado === "v" ? "vitória" : params.resultado === "e" ? "empate" : "derrota"})`,
+      "online",
+      { resultado: params.resultado },
+      { sourceEvent: "salvar_resultado" },
+    );
+  }
+
   const { data, error } = await supabase
     .from("botao_usuarios")
     .update({
       partidas_jogadas: params.usuario.partidas_jogadas + 1,
       partidas_vencidas: params.usuario.partidas_vencidas + (params.resultado === "v" ? 1 : 0),
-      pontos_soberania: Math.max(0, params.usuario.pontos_soberania + params.pontos),
+      pontos_soberania:
+        saldoSov ?? Math.max(0, params.usuario.pontos_soberania + params.pontos),
       progresso_caminpanha: progresso as unknown as never,
       updated_at: new Date().toISOString(),
     })

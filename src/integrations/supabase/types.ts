@@ -1095,6 +1095,76 @@ export type Database = {
           created_at: string;
         }>;
       };
+      sov_bank_registrar: {
+        Args: {
+          p_user_id: string;
+          p_amount: number;
+          p_type: string;
+          p_description: string;
+          p_source_module: string;
+          p_source_event?: string | null;
+          p_idempotency_key?: string | null;
+          p_metadata?: Json;
+        };
+        Returns: Array<{
+          transaction_id: string;
+          balance: number;
+          duplicated: boolean;
+        }>;
+      };
+      sov_bank_extrato: {
+        Args: { p_user_id: string; p_limite?: number };
+        Returns: Array<{
+          id: string;
+          transaction_type: string;
+          amount: number;
+          currency: string;
+          balance_before: number | null;
+          balance_after: number;
+          description: string | null;
+          source_module: string;
+          source_event: string | null;
+          idempotency_key: string | null;
+          metadata: Json;
+          created_at: string;
+        }>;
+      };
+      sov_bank_reconciliar: {
+        Args: { p_user_id: string };
+        Returns: Array<{
+          saldo_carteira: number;
+          saldo_ledger: number;
+          consistente: boolean;
+        }>;
+      };
+      sov_bank_stats: {
+        Args: Record<never, never>;
+        Returns: Json;
+      };
+      sov_bank_bonus_cadastro: {
+        Args: { p_user_id: string };
+        Returns: Array<{ credited: boolean; balance: number }>;
+      };
+      sov_bank_noticias: {
+        Args: Record<never, never>;
+        Returns: Json;
+      };
+      feira_conceder_item: {
+        Args: { p_item_slug: string; p_evento: string; p_quantidade?: number };
+        Returns: boolean;
+      };
+      feira_publicar_oferta: {
+        Args: { p_item_slug: string; p_quantidade: number; p_preco: number };
+        Returns: string;
+      };
+      feira_cancelar_oferta: {
+        Args: { p_oferta_id: string };
+        Returns: boolean;
+      };
+      feira_comprar: {
+        Args: { p_oferta_id: string };
+        Returns: Array<{ balance: number }>;
+      };
       criar_pedido_cartorio: {
         Args: { p_user_id: string; p_tipo: string; p_titulo: string; p_dados?: Json };
         Returns: string;
@@ -1198,6 +1268,23 @@ export type Database = {
         Args: { p_status?: string };
         Returns: Json;
       };
+      tempo_cidadao_heartbeat: {
+        Args: { p_segundos?: number };
+        Returns: Array<{
+          tempo_total_segundos: number;
+          horas_recompensadas: number;
+          horas_pagas_agora: number;
+          online: boolean;
+        }>;
+      };
+      cidadela_perfil_publico: {
+        Args: { p_user_id: string };
+        Returns: Json;
+      };
+      cidadela_atualizar_perfil: {
+        Args: { p_nome?: string | null; p_bio?: string | null };
+        Returns: Json;
+      };
       cidadela_listar_jogadores: {
         Args: Record<string, never>;
         Returns: {
@@ -1206,6 +1293,17 @@ export type Database = {
           profissao_atual: string;
           ultima_atividade: string;
           status: string;
+        }[];
+      };
+      cidadela_listar_membros: {
+        Args: Record<string, never>;
+        Returns: {
+          user_id: string;
+          nome: string;
+          profissao_atual: string;
+          ultima_atividade: string;
+          status: string;
+          online: boolean;
         }[];
       };
     };

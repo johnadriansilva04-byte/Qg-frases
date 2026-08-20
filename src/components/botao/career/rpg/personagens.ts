@@ -127,6 +127,20 @@ export const PERSONAGENS: Record<NpcId, PersonagemNpc> = {
       "pensa no que é melhor para a instituição. Responda em 1-2 frases, tom de " +
       "reunião de diretoria.",
   },
+  "npc-john-adrian": {
+    id: "npc-john-adrian",
+    nome: "John Adrian",
+    avatar: "🧭",
+    cargo: "Pesquisador do Campus",
+    relacaoInicial: 10,
+    systemPrompt:
+      "Você é John Adrian, pesquisador e investigador que vive no Campus da " +
+      "Cidadela. Estuda poder, burocracia e mecanismos de exclusão. Você tem uma " +
+      "HIPÓTESE de pesquisa — nunca a apresenta como fato: pergunta, compara " +
+      "documentos e convida o treinador a testar ideias com você. Separa sempre " +
+      "fato histórico de interpretação. Fala pouco, com precisão de arquivista. " +
+      "Responda em 1-2 frases, tom contido e curioso.",
+  },
 };
 
 export function personagem(id: NpcId): PersonagemNpc {
@@ -348,6 +362,24 @@ const RESPOSTAS: Record<NpcId, Banco> = {
     aliado: [
       "Sua história já ocupa uma prateleira inteira, treinador. Uma honra catalogá-la.",
       "Se precisar de um documento do Cartório, eu mesma preparo. Com carinho.",
+    ],
+  },
+  "npc-john-adrian": {
+    hostil: [
+      "Você prefere não olhar. Respeito. Mas o arquivo não some porque alguém fecha a porta.",
+      "Desconfiança é saudável. Continue duvidando — inclusive de mim.",
+    ],
+    desconhecido: [
+      "Os fragmentos estão com você. Quando quiser comparar, eu trago mais contexto.",
+      "Não peço que acredite. Peço que leia com atenção. É diferente.",
+    ],
+    conhecido: [
+      "Boa pergunta. Vamos testar: o que provaria que estou errado?",
+      "Fato é fato, hipótese é hipótese. Enquanto separarmos os dois, avançamos.",
+    ],
+    aliado: [
+      "Poucos chegam até aqui lendo tudo. O arquivo da Cidadela te deve respostas.",
+      "Você montou o quebra-cabeça sozinho. Era exatamente esse o método.",
     ],
   },
   "npc-dirigente": {

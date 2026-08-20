@@ -1,3 +1,164 @@
+## Grupo Cidadela — fictício, 100% interno (2026-08-20, 8ª passada)
+
+- **Correção de interpretação**: o "Grupo Cidadela" NÃO é WhatsApp/Evolution/
+  webhook — é um **app fictício dentro do celular do jogo**. Nenhuma integração
+  externa existe ou é necessária; a referência visual é só inspiração.
+- **Membros reais do próprio app (§2/§5)**: RPC `cidadela_listar_membros()`
+  (seção 7 de `tempo_cidadao.sql`) lista TODOS os cidadãos registrados (a RPC
+  legada `cidadela_listar_jogadores` filtrava 30min e escondia quem saiu) com
+  presença real computada (heartbeat ≤3min → ● online, senão ○), online
+  primeiro. `grupoCidadao.listarMembrosGrupo` usa a nova com fallback na legada.
+- **Mesmo user_id (§4)**: zero cadastro/identidade/autenticação paralela —
+  o grupo lê `cidadela_jogadores_online` (mantida pelo heartbeat do Tempo de
+  Cidadão) e o perfil lê `cidadela_perfil_publico`. Clique no nome → PerfilApp
+  público (implementado na 7ª passada).
+- **Grupo vivo (§6)**: `grupoCidadao.textoEventoGrupo` (PURO, determinístico
+  via hash — retry não muda a fala) gera falas de NPCs (Valéria, Dirigente,
+  Torcedor, Cícero Ramos, Helena Páginas) sobre eventos REAIS: resultado de
+  partida da carreira, coletiva concluída (com o tom da declaração), sinal do
+  acervo. Postadas em `cidadela_chat_messages` tipo 'sistema' (sender fictício,
+  sender_id NULL) por `postarNoGrupoUmaVez(chave, evento)` no BotaoGame —
+  guard `grupoPostadoRef` idempotente por partidaId.
+- **Notificação (§7)**: `useNotificacaoGrupo` — poll leve (90s, só aba
+  visível, só com o celular fechado), posição de leitura em localStorage
+  (`cidadela:grupo:visto`, marcada também ao abrir o grupo), nunca notifica
+  a própria mensagem nem o histórico. `💬 Nova mensagem no Grupo Cidadela`
+  clicável + `tocarSom("mensagem")` → abre o celular já no GRUPO (prop
+  `abaInicial` do CelularConversas). Fechar reseta a aba-alvo.
+- **Verificação**: engine jiti 8/8; estruturais OK; `tsc --noEmit` 0 erros;
+  `npm run build` OK.
+
+## Tempo de Cidadão + Presença + Perfil + Sons (2026-08-20, 7ª passada)
+
+- **`supabase/migrations/tempo_cidadao.sql`** (10ª migração, ordem no
+  `migrations/README.md`): colunas `nome`/`bio` em `cidadela_perfis` (corrige
+  bug latente — `cidadela_atualizar_status` lia `nome` inexistente); tabela
+  `cidadela_tempo` (tempo_total_segundos, horas_recompensadas,
+  primeira_entrada); RPCs `tempo_cidadao_heartbeat` (≤120s/chamada travado no
+  servidor; 1h=+10 SOV via `sov_bank_registrar` chave `tempo:{user}:{hora}`;
+  hora não paga se o teto barrar — retenta depois), `cidadela_perfil_publico`
+  (só dados públicos; online = heartbeat ≤3min) e `cidadela_atualizar_perfil`
+  (SÓ nome/bio — SOV/tempo/decisões nunca editáveis).
+- **`lib/cidadela/tempoCidadao.ts`**: `useTempoCidadao(userId, onRecompensa)` —
+  heartbeat 1x/min só com aba visível, líder entre abas via lock em
+  localStorage (TTL 90s), `formatarTempoCidadao` ("10h 24min"). Montado no
+  `CelularFixo` (cobre BotaoGame e /cidadela); recompensa → `tocarSom(
+  "recompensa")` + badge "💰 +10 SOV · Tempo de Cidadão".
+- **PerfilApp** (`components/cidadela/PerfilApp.tsx`): 9º app do celular —
+  nome + ●ONLINE real, Tempo de Cidadão, entrada, partidas/missões (RPC),
+  decisões/entrevistas (statsCarreira do BotaoGame), SOV (só no próprio
+  perfil, via obterSaldoSov), bio editável inline. Grupo → clique no cidadão
+  abre perfil público (`cidadela_perfil_publico`).
+- **Sons centralizados** (`lib/notificacao.ts`): `tocarSom(categoria)` com 6
+  categorias (mensagem/missao/recompensa/entrevista/noticia/pergaminho),
+  WebAudio sem assets. `tocarNotificacao()` virou alias de "mensagem". A fila
+  do celular mapeia conversa.tipo→categoria (Helena/John = "pergaminho").
+- **Restauração pós-refresh (§20-22)**: `botao:resume:v1` em sessionStorage
+  guarda matchEnd+destino por usuário (2h); refresh na tela de fim de partida
+  → volta à mesma tela (entrevista reabre fechada, abertura idempotente).
+  Removido ao sair da tela ou trocar de usuário.
+- **Auditoria One Click**: entrevista (`!entrevistaAberta && !coletivaJaPaga`
+  + `patrocinioPagoPartida` + chave `coletiva:{partidaId}` no SOV Bank),
+  patrocínio (ControlledMonetagButton executionLockRef + cooldown 3s, volta
+  ao idle), nova aba (adClickGuard consome autorização única; pageshow/
+  visibilitychange invalidam o restante — sem reexecução). Grupo/WhatsApp:
+  interpretação corrigida na 8ª passada (grupo fictício interno, nada externo).
+- **Verificação**: 56 testes estruturais OK; `tsc --noEmit` 0 erros;
+  `npm run build` OK.
+
+## Finalização SOV BANK + História Principal John Adrian (2026-08-20, 6ª passada)
+
+- **§2 correção de semântica**: 200.000 SOV = estoque econômico TOTAL da
+  remessa (nunca por usuário); 50 SOV = bônus de cadastro. UI do SovBankApp
+  deixa explícito; `sov_bank_stats` ganhou `transacoes_total` e
+  `alertas_reconciliacao` (admin agregado na aba Economia).
+- **Feira implementada** (`supabase/migrations/feira.sql`): `cidadela_itens`
+  (pergaminhos), `cidadela_inventory`, `cidadela_market_listings`,
+  `cidadela_item_grants` + RPCs `feira_publicar_oferta` / `feira_cancelar_oferta` /
+  `feira_comprar` / `feira_conceder_item`. Compra = débito do comprador +
+  crédito do vendedor via `sov_bank_registrar` (chaves `feira:compra:{oferta}:{uid}`
+  / `feira:venda:{oferta}`), lock FOR UPDATE na oferta, preço sempre do banco.
+  Schemas alinhados aos tipos JÁ existentes em `integrations/supabase/types.ts`
+  (`raridade`, `comprador_id`). Stubs do pracinhaCore substituídos por RPCs reais.
+- **Legado §6**: `salvarResultado` (lib/botao/api.ts) agora registra no ledger
+  via `registrarTransacaoSov` (sourceEvent `salvar_resultado`) — se o morto
+  OnlineMatchV2 for reativado, não cria SOV fora do banco.
+- **História principal (John Adrian)** em `career/historia/`:
+  - `types.ts`: `HistoriaState` (capítulo, pergaminhos, perfil, ledger,
+    entrevistasProcessadas, posicaoFinal) + `ClassificacaoFonte` (7 classes,
+    §19) + `DecisaoHistoria` (Narrative Ledger §29-30).
+  - `referencias.ts`: banco de referências reais (USHMM/eugenia, Nuremberg,
+    FEB/Arquivo Nacional, Jane Jacobs, Tesla/Smithsonian, Meyer=UNVERIFIED_CLAIM,
+    tese de John Adrian=HYPOTHESIS). Nunca hipótese como fato (§33).
+  - `pergaminhos.ts`: 8 fragmentos (perg-01..08), fragmento→referência→pergunta.
+  - `historiaEngine.ts` (PURO, jiti): `processarGatilhoEntrevista` — gatilho
+    ÚNICO = entrevista concluída (§20/§39), idempotente por partidaId, 1
+    capítulo por entrevista; Helena (npc-bibliotecaria) entrega caps 1-3, John
+    Adrian (NOVO `npc-john-adrian` em personagens.ts/NpcId) do cap 4; perfil de
+    decisão acumulado dos tons (§21) varia o texto da revelação; post críptico
+    p/ a Rede (§26); `registrarPosicaoFinal` = desfecho não-dogmático com 3
+    posições (§28); `dicaInvestigacao` vaga de propósito (§27).
+  - `ArquivoApp.tsx`: 8º app do celular ("Arquivo") — fragmentos com badge de
+    classificação (fato/hipótese/ficção), referência e pergunta; desfecho com
+    3 posições; estado final registrado.
+  - Integração: `BotaoGame.concluirColetiva` chama o gatilho (após
+    consequenciasEntrevista), entrega conversas na fila, registra SOV
+    "Recompensa de investigação" (chave `historia:cap{n}:{partidaId}`, §31);
+    `handleRegistrarPosicao` idempotente (`historia:desfecho:{uid}`).
+    `careerStorage.normalizarHistoria` saneia JSONB antigo. Quem pula a
+    coletiva não avança (§40) — carreira continua 100% jogável (§23).
+- **Migrações**: `supabase/migrations/README.md` documenta ordem de aplicação
+  manual + verificação (`SELECT * FROM sov_bank_config`).
+- **Verificação**: 36 testes jiti da história + 31 estruturais da Feira OK;
+  `tsc --noEmit` 0 erros; `npm run build` OK.
+
+## SOV BANK — livro-caixa central da Cidadela (2026-08-20, 5ª passada)
+
+Centralização e rastreabilidade da economia SOV (prompt mestre SOV BANK §1–§28).
+Já existiam `user_wallets`/`bank_ledger`/`record_transaction`
+(`sov_financial_system.sql`) — o SOV BANK NÃO recria, só reforça:
+
+- **SQL `supabase/migrations/sov_bank.sql`** (aplicação manual no SQL Editor):
+  - `sov_bank_config` (única fonte dos limites da 1ª remessa:
+    `max_users_initial=100`, `max_sovereign_initial=200000`, `signup_bonus=50`).
+  - `bank_ledger` ganha `idempotency_key`, `source_event`, `currency` ('SOV'),
+    `balance_before` + índice único parcial `(user_id, idempotency_key)`.
+  - RPC `sov_bank_registrar` = porta de entrada central: valida auth.uid,
+    idempotência (mesmo evento → retorna existente, `duplicated=true`),
+    teto de emissão (soma de créditos > limite → exception), usa
+    `record_transaction` e enriquece a linha (origem/moeda/balance_before).
+  - RPCs `sov_bank_extrato` (extrato rastreável), `sov_bank_reconciliar`
+    (saldo vs SUM(amount); divergência → `anti_cheat_log`
+    `reconciliation_mismatch`, NUNCA corrige), `sov_bank_stats` (estoque
+    monetário agregado JSONB), `sov_bank_bonus_cadastro` (50 SOV idempotente
+    `signup:{user}`; acima do limite de usuários não emite, não quebra o app),
+    `sov_bank_noticias` (boletins derivados de dados reais do ledger).
+  - **Bug corrigido**: `cidadela_resgatar_missao` creditava a carteira com
+    UPDATE direto (SOV sem registro); agora passa por `sov_bank_registrar`
+    com chave `missao:{missao_id}`.
+- **Frontend**: `src/lib/financial/sovBankConfig.ts` (espelho dos limites p/ UI),
+  `src/lib/financial/sovBankApi.ts` (extrato/stats/notícias/reconciliar/bônus).
+  `registrarTransacaoSov` (sovApi) virou wrapper da RPC central com
+  `opcoes?: {sourceEvent?, idempotencyKey?}`; fallback p/ RPC legada SÓ em
+  erro PGRST202/42883 (função inexistente) — nunca em duplicidade/teto.
+  `SovModule` estendeu com `'mission'|'system'`.
+- **UI**: `components/financial/SovBankApp.tsx` — saldo, badge de reconciliação,
+  últimas movimentações, abas Extrato/Notícias/Economia (dados reais).
+  Virou 7º app-card "Banco" (ícone Landmark) no menu do `CelularConversas`
+  (aba `"banco"`) — SEM segundo celular.
+- **Chaves idempotentes em call sites**: coletiva `coletiva:{partidaId}`,
+  dividendos `dividendo:{temporada}:r{rodada}`; bônus de cadastro chamado em
+  `criarPerfilSeNaoExistir` (alinha cache inicial 50 ao ledger).
+- **Gaps conhecidos (reportados, não corrigidos)**: `salvarResultado`
+  (lib/botao/api.ts) muta `pontos_soberania` fora do ledger — só é chamado
+  pelo morto `OnlineMatchV2`; `SovMarket` (Feira) lê saldo mas
+  compra/venda são stubs (tabelas `cidadela_inventory`/
+  `cidadela_market_listings` não existem em nenhuma migração);
+  módulos mortos `careerManager/bettingSystem/recoverySystem/antiCheat`
+  (lib/financial) não são importados por ninguém.
+- **Verificação**: testes runtime Node (28 invariantes: config, SQL, chaves,
+  wire-in do celular) OK; `tsc --noEmit` 0 erros; `npm run build` OK.
+
 ## Celular da Cidadela como overlay com menu de apps (2026-08-20, 4ª passada)
 
 Reestruturação completa do celular (§1–§19 do prompt mestre). O botão Celular

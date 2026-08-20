@@ -3,6 +3,9 @@ import { Smartphone, X, MessageSquare, Users, ClipboardList, Store, Bot } from "
 import { CelularConversas } from "./botao/career/CelularConversas";
 import type { Perfil } from "./botao/online/auth";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
+import { useTempoCidadao } from "@/lib/cidadela/tempoCidadao";
+import { tocarSom } from "@/lib/notificacao";
+import { useNotificacaoGrupo, type UltimaMensagemGrupo } from "@/lib/cidadela/grupoCidadao";
 
 type Props = {
   userId?: string | null;
@@ -17,11 +20,19 @@ type Props = {
   onExcluirConversa?: (conversaId: string) => void;
   onEscolhaRpg?: (conversaId: string, indice: number) => void;
   perfilCidadela?: CidadelaPerfil | null;
+  /** História principal (John Adrian) — alimenta o app Arquivo do celular. */
+  historia?: import("./botao/career/historia/types").HistoriaState | undefined;
+  /** Registra a posição final do primeiro arco da história (desfecho). */
+  onRegistrarPosicao?:
+    | ((posicao: import("./botao/career/historia/types").PosicaoFinal) => void)
+    | undefined;
   /** Conteúdo prioritário (ex.: decisão de suborno/narrativa/choice) renderizado
    *  no celular oficial quando aberto — substitui a lista de conversas. */
   prioridade?: React.ReactNode | undefined;
   /** Quantidade de mensagens não lidas (badge da notificação). */
   naoLidas?: number | undefined;
+  /** Stats da carreira exibidos no Perfil (decisões/entrevistas reais). */
+  statsCarreira?: { decisoes: number; entrevistas: number } | undefined;
 };
 
 export function CelularFixo({
@@ -37,13 +48,54 @@ export function CelularFixo({
   onExcluirConversa = () => {},
   onEscolhaRpg,
   perfilCidadela = null,
+  historia,
+  onRegistrarPosicao,
   prioridade,
   naoLidas = 0,
+  statsCarreira,
 }: Props) {
   const [aberto, setAberto] = useState(false);
+  const [recompensaTempo, setRecompensaTempo] = useState<number | null>(null);
+
+  // Presença real + Tempo de Cidadão: heartbeat 1x/min com a aba visível,
+  // líder entre abas, recompensa por hora via SOV Bank (idempotente).
+  useTempoCidadao(userId, (horasPagas) => {
+    if (horasPagas <= 0) return;
+    tocarSom("recompensa");
+    setRecompensaTempo(horasPagas);
+    window.setTimeout(() => setRecompensaTempo(null), 5000);
+  });
+
+  // Grupo Cidadela (§7): nova mensagem → som de mensagem + notificação
+  // clicável que abre o celular já no Grupo. Só quando o celular está
+  // fechado (aberto, o usuário já está olhando o app).
+  const [novaMsgGrupo, setNovaMsgGrupo] = useState<UltimaMensagemGrupo | null>(null);
+  const [irAoGrupo, setIrAoGrupo] = useState<"grupo" | null>(null);
+  useNotificacaoGrupo(userId ?? null, Boolean(userId) && !aberto, (msg) => {
+    tocarSom("mensagem");
+    setNovaMsgGrupo(msg);
+    window.setTimeout(() => setNovaMsgGrupo((atual) => (atual?.id === msg.id ? null : atual)), 8000);
+  });
 
   if (!aberto) {
     return (
+      <>
+        {/* Notificação clicável: nova mensagem no Grupo Cidadela (§7). */}
+        {novaMsgGrupo && (
+          <button
+            onClick={() => {
+              setIrAoGrupo("grupo");
+              setNovaMsgGrupo(null);
+              setAberto(true);
+            }}
+            className="fixed bottom-20 right-4 z-50 max-w-[240px] rounded-xl border border-emerald-500/40 bg-slate-900/95 px-3 py-2 text-left shadow-xl"
+          >
+            <p className="text-xs font-black text-emerald-300">💬 Nova mensagem no Grupo Cidadela</p>
+            <p className="mt-0.5 truncate text-[10px] text-slate-400">
+              {novaMsgGrupo.sender_nome}: {novaMsgGrupo.texto}
+            </p>
+          </button>
+        )}
       <button
         onClick={() => setAberto(true)}
         className="fixed bottom-4 right-4 z-50 flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-2xl shadow-emerald-900/50 hover:scale-110 transition-transform active:scale-95 border-2 border-emerald-400/30"
@@ -59,7 +111,17 @@ export function CelularFixo({
             )}
           </div>
         )}
+        {/* Recompensa por Tempo de Cidadão (1h = +10 SOV via SOV Bank). */}
+        {recompensaTempo != null && recompensaTempo > 0 && (
+          <div className="fixed bottom-20 right-4 z-50 rounded-xl border border-amber-500/40 bg-slate-900/95 px-3 py-2 shadow-xl">
+            <p className="text-xs font-black text-amber-300">💰 +{recompensaTempo * 10} SOV</p>
+            <p className="text-[10px] text-slate-400">
+              Tempo de Cidadão · {recompensaTempo}h concluída{recompensaTempo > 1 ? "s" : ""}
+            </p>
+          </div>
+        )}
       </button>
+      </>
     );
   }
 
@@ -73,13 +135,25 @@ export function CelularFixo({
             <span className="text-xs font-bold uppercase tracking-widest">Celular da Cidadela</span>
           </div>
           <button
-            onClick={() => setAberto(false)}
+            onClick={() => {
+              setIrAoGrupo(null);
+              setAberto(false);
+            }}
             className="flex items-center gap-1 rounded-lg bg-slate-800/80 px-2 py-1 text-[10px] font-bold text-slate-300 transition hover:bg-slate-700 hover:text-white"
           >
             <X className="size-3" />
             Fechar
           </button>
         </div>
+
+        {/* Recompensa por Tempo de Cidadão com o celular aberto. */}
+        {recompensaTempo != null && recompensaTempo > 0 && (
+          <div className="mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center">
+            <p className="text-xs font-black text-amber-300">
+              💰 +{recompensaTempo * 10} SOV — Tempo de Cidadão
+            </p>
+          </div>
+        )}
 
         {prioridade ? (
           // Decisão prioritária (ex.: suborno/narrativa/choice) — auto-gerencia
@@ -101,6 +175,10 @@ export function CelularFixo({
             nomeJogador={nomeJogador}
             onLogin={onLogin}
             perfilCidadela={perfilCidadela}
+            historia={historia}
+            onRegistrarPosicao={onRegistrarPosicao}
+            statsCarreira={statsCarreira}
+            abaInicial={irAoGrupo}
           />
         )}
       </div>

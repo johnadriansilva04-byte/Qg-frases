@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   FileSignature,
   Heart,
+  Landmark,
   MessageSquare,
   Newspaper,
   Send,
@@ -14,12 +15,14 @@ import {
   Trash2,
   Users,
   Search,
-  UserPlus,
   Bell,
+  ScrollText,
+  UserRound,
 } from "lucide-react";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { supabase } from "@/integrations/supabase/client";
 import { SovMarket } from "@/components/financial/SovMarket";
+import { SovBankApp } from "@/components/financial/SovBankApp";
 import { AuthScreen } from "../components/AuthScreen";
 import {
   carregarChatCidadela,
@@ -30,6 +33,7 @@ import {
   type MensagemChatCidadela,
   type MissaoDiaria,
 } from "@/lib/cidadela/pracinhaCore";
+import { listarMembrosGrupo, marcarGrupoVisto } from "@/lib/cidadela/grupoCidadao";
 import type { ConversaCelular, DesafioPatrocinador } from "./types";
 import { eventoPorId } from "./rpg/eventos";
 import type { PostFeed } from "./rpg/types";
@@ -38,6 +42,8 @@ import type { Perfil } from "../online/auth";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
 import { PainelMundo } from "@/components/cidadela/PainelMundo";
+import { ArquivoApp } from "./historia/ArquivoApp";
+import { PerfilApp } from "@/components/cidadela/PerfilApp";
 
 type AbaCelular =
   | "menu"
@@ -47,6 +53,9 @@ type AbaCelular =
   | "missoes"
   | "grupo"
   | "mercado"
+  | "banco"
+  | "arquivo"
+  | "perfil"
   | "notificacoes";
 
 type JogadorOnline = {
@@ -55,6 +64,7 @@ type JogadorOnline = {
   profissao_atual: string | null;
   ultima_atividade: string;
   status: string;
+  online: boolean;
 };
 
 type Props = {
@@ -78,6 +88,14 @@ type Props = {
   onLogin?: ((perfil: Perfil) => void) | undefined;
   /** Perfil da Cidadela para notificações */
   perfilCidadela?: CidadelaPerfil | null;
+  /** História principal (John Adrian) — alimenta o app Arquivo. */
+  historia?: import("./historia/types").HistoriaState | undefined;
+  /** Registra a posição final do primeiro arco (desfecho no Arquivo). */
+  onRegistrarPosicao?: ((posicao: import("./historia/types").PosicaoFinal) => void) | undefined;
+  /** Stats derivados da carreira para o Perfil (nunca editáveis). */
+  statsCarreira?: { decisoes: number; entrevistas: number } | undefined;
+  /** Abre o celular já numa aba específica (ex.: notificação → grupo). */
+  abaInicial?: AbaCelular | null;
 };
 
 export function CelularConversas({
@@ -94,8 +112,17 @@ export function CelularConversas({
   nomeJogador = null,
   onLogin,
   perfilCidadela,
+  historia,
+  onRegistrarPosicao,
+  statsCarreira,
+  abaInicial = null,
 }: Props) {
   const [aba, setAba] = useState<AbaCelular>("menu");
+  // Notificação externa pede uma aba específica (§7: clique → abre o grupo).
+  useEffect(() => {
+    if (abaInicial) setAba(abaInicial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaInicial]);
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
   const [textoInput, setTextoInput] = useState("");
   const [chatInput, setChatInput] = useState("");
@@ -113,6 +140,8 @@ export function CelularConversas({
   const [jogadoresOnline, setJogadoresOnline] = useState<JogadorOnline[]>([]);
   const [carregandoJogadores, setCarregandoJogadores] = useState(false);
   const [pesquisaJogador, setPesquisaJogador] = useState("");
+  // Perfil público aberto a partir do Grupo (§9); null = próprio perfil.
+  const [perfilPublicoId, setPerfilPublicoId] = useState<string | null>(null);
 
   /** Vai direto para o menu principal do celular (afastar da pilha de apps). */
   const irParaMenu = () => {
@@ -129,6 +158,9 @@ export function CelularConversas({
     missoes: "Missões Diárias",
     grupo: "Grupo da Cidadela",
     mercado: "Mercado SOV",
+    banco: "SOV BANK",
+    arquivo: "Arquivo do Campus",
+    perfil: "Perfil do Cidadão",
     notificacoes: "Alertas",
   };
 
@@ -220,8 +252,13 @@ export function CelularConversas({
 
   const carregarChat = useCallback(async () => {
     setCarregandoChat(true);
-    setChat(await carregarChatCidadela());
+    const msgs = await carregarChatCidadela();
+    setChat(msgs);
     setCarregandoChat(false);
+    // Leu o grupo: grava a posição — a notificação externa não reativa (§14).
+    if (msgs.length > 0) {
+      marcarGrupoVisto(msgs[msgs.length - 1]!.created_at);
+    }
   }, []);
 
   const carregarJogadoresOnline = useCallback(async () => {
@@ -230,12 +267,8 @@ export function CelularConversas({
     try {
       // Atualiza status do usuário atual
       await supabase.rpc("cidadela_atualizar_status", { p_status: "online" });
-      
-      // Carrega lista de jogadores
-      const { data, error } = await supabase.rpc("cidadela_listar_jogadores");
-      if (!error && data) {
-        setJogadoresOnline(data as JogadorOnline[]);
-      }
+      // Comunidade completa: TODOS os cidadãos com presença real (●/○).
+      setJogadoresOnline(await listarMembrosGrupo());
     } catch (err) {
       console.warn("[Celular] Erro ao carregar jogadores online:", err);
     } finally {
@@ -522,6 +555,9 @@ export function CelularConversas({
                       ["missoes", ClipboardList, "Missões"],
                       ["grupo", Users, "Grupo"],
                       ["mercado", Store, "Feira"],
+                      ["banco", Landmark, "Banco"],
+                      ["arquivo", ScrollText, "Arquivo"],
+                      ["perfil", UserRound, "Perfil"],
                       ["notificacoes", Bell, "Alertas"],
                     ] as const
                   ).map(([id, Icon, label]) => (
@@ -767,7 +803,8 @@ export function CelularConversas({
                 ) : (
                   <div className="space-y-2">
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                      {jogadoresOnline.length} jogadores online
+                      {jogadoresOnline.filter((j) => j.online).length} online ·{" "}
+                      {jogadoresOnline.length} cidadãos
                     </p>
                     {jogadoresOnline
                       .filter((j) =>
@@ -783,15 +820,16 @@ export function CelularConversas({
                             <div className="phone-avatar">{j.profissao_atual === 'tecnico' ? '⚽' : j.profissao_atual === 'estudante' ? '📚' : j.profissao_atual === 'empresario' ? '💼' : j.profissao_atual === 'bibliotecario' ? '📖' : j.profissao_atual === 'pesquisador' ? '🔬' : '👤'}</div>
                             <div className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-slate-900 ${j.status === 'online' ? 'bg-emerald-400' : j.status === 'jogando' ? 'bg-amber-400' : 'bg-slate-500'}`} />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <button
+                            onClick={() => {
+                              setPerfilPublicoId(j.user_id);
+                              setAba("perfil");
+                            }}
+                            className="min-w-0 flex-1 text-left"
+                            title="Ver perfil do cidadão"
+                          >
                             <p className="text-sm font-bold text-white truncate">{j.nome}</p>
                             <p className="text-[10px] text-slate-400 capitalize">{j.profissao_atual || 'Recruta'}</p>
-                          </div>
-                          <button
-                            className="rounded-lg p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 transition"
-                            title="Adicionar amigo"
-                          >
-                            <UserPlus className="size-4" />
                           </button>
                         </div>
                       ))}
@@ -856,6 +894,45 @@ export function CelularConversas({
             )}
 
             {aba === "mercado" && <SovMarket userId={userId} compact />}
+
+            {aba === "banco" && <SovBankApp userId={userId} />}
+
+            {aba === "perfil" &&
+              (userId ? (
+                <PerfilApp
+                  userId={perfilPublicoId ?? userId}
+                  meuUserId={userId}
+                  extras={
+                    (perfilPublicoId ?? userId) === userId
+                      ? {
+                          decisoes: statsCarreira?.decisoes,
+                          entrevistas: statsCarreira?.entrevistas,
+                        }
+                      : undefined
+                  }
+                  onVoltar={
+                    perfilPublicoId
+                      ? () => {
+                          setPerfilPublicoId(null);
+                          setAba("grupo");
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-500">
+                  Entre na sua conta para ver o perfil do cidadão.
+                </div>
+              ))}
+
+            {aba === "arquivo" &&
+              (historia ? (
+                <ArquivoApp historia={historia} onRegistrarPosicao={onRegistrarPosicao} />
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-500">
+                  O Arquivo acompanha a sua carreira. Comece uma carreira no Estádio do Campus.
+                </div>
+              ))}
 
             {aba === "notificacoes" && (
               <div className="space-y-3 p-3">

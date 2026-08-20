@@ -299,35 +299,99 @@ export async function enviarMensagemCidadela(
   return true;
 }
 
-// Funções de marketplace e inventário - retornam vazio quando Supabase não tem tabelas
+// Funções de marketplace e inventário (Feira da Cidadela — migração feira.sql).
+// Catálogo de itens (cacheado por sessão) para enriquecer inventário/ofertas.
+let catalogoCache: Map<string, ItemCidadela> | null = null;
+
+async function carregarCatalogo(): Promise<Map<string, ItemCidadela>> {
+  if (catalogoCache) return catalogoCache;
+  const { data, error } = await supabase.from("cidadela_itens").select("slug,nome,tipo,descricao");
+  if (error) {
+    console.warn("[Pracinha] Catálogo indisponível:", error.message);
+    return new Map();
+  }
+  catalogoCache = new Map(
+    ((data ?? []) as ItemCidadela[]).map((i) => [i.slug, i]),
+  );
+  return catalogoCache;
+}
+
 export async function carregarInventario(_userId: string): Promise<InventarioCidadela[]> {
   const { data, error } = await supabase.from("cidadela_inventory").select("item_slug,quantidade");
   if (error) {
     console.warn("[Pracinha] Inventário indisponível:", error.message);
     return [];
   }
-  return (data ?? []) as InventarioCidadela[];
+  const catalogo = await carregarCatalogo();
+  return ((data ?? []) as InventarioCidadela[]).map((inv) => ({
+    ...inv,
+    item: catalogo.get(inv.item_slug),
+  }));
 }
 
 export async function carregarOfertasMarketplace(): Promise<OfertaCidadela[]> {
-  const { data, error } = await supabase.from("cidadela_market_listings").select("*");
+  const { data, error } = await supabase
+    .from("cidadela_market_listings")
+    .select("id,seller_id,seller_nome,item_slug,quantidade,preco_sov")
+    .eq("status", "ativa")
+    .order("created_at", { ascending: false })
+    .limit(40);
   if (error) {
     console.warn("[Pracinha] Marketplace indisponível:", error.message);
     return [];
   }
-  return (data ?? []) as OfertaCidadela[];
+  const catalogo = await carregarCatalogo();
+  return ((data ?? []) as OfertaCidadela[]).map((o) => ({
+    ...o,
+    item: catalogo.get(o.item_slug),
+  }));
 }
 
 export async function criarOfertaMarketplace(
-  _itemSlug: string,
-  _quantidade: number,
-  _precoSov: number,
+  itemSlug: string,
+  quantidade: number,
+  precoSov: number,
 ): Promise<boolean> {
-  return false;
+  const { error } = await supabase.rpc("feira_publicar_oferta", {
+    p_item_slug: itemSlug,
+    p_quantidade: quantidade,
+    p_preco: precoSov,
+  });
+  if (error) {
+    console.warn("[Pracinha] publicar oferta falhou:", error.message);
+    return false;
+  }
+  void registrarEventoMissao("market_trade");
+  return true;
 }
 
-export async function comprarOfertaMarketplace(_ofertaId: string): Promise<number | null> {
-  return null;
+/** Compra uma oferta: débito/crédito passam pelo SOV Bank (RPC autoritativa). */
+export async function comprarOfertaMarketplace(ofertaId: string): Promise<number | null> {
+  const { data, error } = await supabase.rpc("feira_comprar", { p_oferta_id: ofertaId });
+  if (error) {
+    console.warn("[Pracinha] compra falhou:", error.message);
+    return null;
+  }
+  const linha = (data as { balance?: number }[] | null)?.[0];
+  return typeof linha?.balance === "number" ? linha.balance : null;
+}
+
+/** Concede um item por evento real do jogo (idempotente por usuário+evento). */
+export async function concederItemFeira(
+  itemSlug: string,
+  evento: string,
+  quantidade = 1,
+): Promise<boolean> {
+  const { error } = await supabase.rpc("feira_conceder_item", {
+    p_item_slug: itemSlug,
+    p_evento: evento,
+    p_quantidade: quantidade,
+  });
+  if (error) {
+    console.warn("[Pracinha] concessão de item falhou:", error.message);
+    return false;
+  }
+  return true;
 }
 
 export async function obterSaldoSov(userId: string): Promise<number> {

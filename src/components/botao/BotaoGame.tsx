@@ -97,7 +97,7 @@ import {
   criarPedidoCartorio,
   type CartorioTipo,
 } from "./career/rpg/cartorioApi";
-import { anexarPost, gerarPostPartida } from "./career/rpg/socialEngine";
+import { anexarPost, gerarPostManual, gerarPostPartida } from "./career/rpg/socialEngine";
 import { registrarTransacaoSov } from "@/lib/financial/sovApi";
 import {
   aplicarRitualNaCarreira,
@@ -111,12 +111,18 @@ import { SeasonTransition } from "./career/SeasonTransition";
 import { LoadingScreen } from "./career/LoadingScreen";
 import { AIService } from "./ai/AIService";
 import { relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
-import { tocarNotificacao } from "@/lib/notificacao";
+import { tocarSom } from "@/lib/notificacao";
+import { textoEventoGrupo, postarEventoNoGrupo, type EventoGrupo } from "@/lib/cidadela/grupoCidadao";
 import {
   consequenciasEntrevista,
   registrarEntrevista,
   type DadosEntrevista,
 } from "./career/entrevistaEngine";
+import {
+  processarGatilhoEntrevista,
+  registrarPosicaoFinal,
+} from "./career/historia/historiaEngine";
+import type { PosicaoFinal } from "./career/historia/types";
 import {
   comprarAtivo,
   custoCompra,
@@ -401,6 +407,55 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // ===== Restauração de estado após refresh (§20/§22) =====
+  // Fim de partida/entrevista vivem só em memória; um refresh os perderia.
+  // Persistimos o mínimo em sessionStorage (por aba, por usuário) e
+  // restauramos uma única vez após o login ser reconhecido — mesma sessão,
+  // mesma página. A entrevista em si reabre fechada (o jogador clica "Dar
+  // Entrevista" de novo — abertura idempotente).
+  const RESUME_KEY = "botao:resume:v1";
+  const resumeRestauradoRef = useRef(false);
+  useEffect(() => {
+    const uid = perfil?.user_id;
+    if (!uid) return;
+    try {
+      if (screen === "match-end" && matchEnd) {
+        sessionStorage.setItem(
+          RESUME_KEY,
+          JSON.stringify({ uid, matchEnd, matchEndDestino, ts: Date.now() }),
+        );
+      } else {
+        // Saiu da tela de fim de partida: nada a restaurar depois.
+        sessionStorage.removeItem(RESUME_KEY);
+      }
+    } catch {
+      /* storage indisponível */
+    }
+  }, [screen, matchEnd, matchEndDestino, perfil?.user_id]);
+  useEffect(() => {
+    const uid = perfil?.user_id;
+    if (!uid || resumeRestauradoRef.current) return;
+    resumeRestauradoRef.current = true;
+    try {
+      const bruto = sessionStorage.getItem(RESUME_KEY);
+      if (!bruto) return;
+      sessionStorage.removeItem(RESUME_KEY);
+      const salvo = JSON.parse(bruto) as {
+        uid: string;
+        matchEnd: MatchEndData | null;
+        matchEndDestino: Screen;
+        ts: number;
+      };
+      // Só restaura para o MESMO usuário e por até 2h (sessão recente).
+      if (salvo.uid !== uid || !salvo.matchEnd || Date.now() - salvo.ts > 2 * 3600_000) return;
+      setMatchEnd(salvo.matchEnd);
+      setMatchEndDestino(salvo.matchEndDestino);
+      setScreen("match-end");
+    } catch {
+      /* blob corrompido: ignora */
+    }
+  }, [perfil?.user_id]);
+
   /**
    * Mostra a tela de carregamento (splash) e executa o callback ao completar.
    * Usado em transições pesadas: início de carreira, entrada em campo, consultas
@@ -452,6 +507,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
    */
   const filaConversasRef = useRef<ConversaCelular[]>([]);
   const filaProcessandoRef = useRef(false);
+  // GRUPO CIDADELA (fictício/interno §8): partidaId já comentado no grupo.
+  const grupoPostadoRef = useRef<Set<string>>(new Set());
+
+  /** Comenta um evento real no Grupo Cidadela (fictício; idempotente por chave). */
+  const postarNoGrupoUmaVez = (chave: string, evento: EventoGrupo) => {
+    if (grupoPostadoRef.current.has(chave)) return;
+    grupoPostadoRef.current.add(chave);
+    const fala = textoEventoGrupo(evento);
+    void postarEventoNoGrupo(fala.autor, fala.texto).catch(() => {});
+  };
   const enfileirarConversas = (novas: ConversaCelular[]) => {
     if (novas.length === 0) return;
     filaConversasRef.current.push(...novas);
@@ -469,7 +534,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         persistCareer({ ...atual, conversas: [prox, ...convs].slice(0, 30) });
       }
       setToast(`📱 Nova mensagem: ${prox.nome}`);
-      tocarNotificacao();
+      // Identidade sonora por categoria (§13): mensagem de NPC vs notícia do
+      // mundo vs relatório financeiro — sons distintos, centralizados.
+      tocarSom(
+        prox.tipo === "narrativa" || prox.tipo === "rpg"
+          ? prox.npcId === "npc-bibliotecaria" || prox.npcId === "npc-john-adrian"
+            ? "pergaminho"
+            : "mensagem"
+          : prox.tipo === "patrocinador"
+            ? "recompensa"
+            : "noticia",
+      );
       window.setTimeout(drain, 2600);
     };
     window.setTimeout(drain, 1200);
@@ -1395,6 +1470,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           adversario: matchEnd.timeAdvNome,
           placar: `${matchEnd.placarUser}x${matchEnd.placarAdv}`,
         },
+        // Idempotência também no servidor: a chave por partida bloqueia
+        // duplo clique/retry além do guarda local patrocinioPagoPartida.
+        { sourceEvent: "coletiva", idempotencyKey: `coletiva:${partidaAtual}` },
       );
     }
 
@@ -1429,12 +1507,84 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       };
       const res = consequenciasEntrevista(c, dadosEnt);
       c = res.career;
+
+      // HISTÓRIA PRINCIPAL (§20, §39): a entrevista concluída é o gatilho.
+      // Quem pula a coletiva nunca chega aqui — a história não avança (§40).
+      // Idempotente por partidaId: a mesma entrevista não avança 2 capítulos.
+      const gatilho = processarGatilhoEntrevista(c, partidaAtual, declaracoes);
+      c = gatilho.career;
+      if (gatilho.post) {
+        c = anexarPost(c, gerarPostManual(c, gatilho.post));
+      }
       persistCareer(c);
-      enfileirarConversas(res.reacoes);
-      setToast("🎙️ Contexto registrado. Recompensa coletada.");
+      enfileirarConversas([...res.reacoes, ...gatilho.conversas]);
+
+      // Economia + narrativa (§31): recompensa discreta no SOV Bank — o
+      // extrato diz "Recompensa de investigação", nunca revela o segredo.
+      if (gatilho.recompensaSov > 0 && uid) {
+        const capNovo = c.historia?.capitulo ?? 0;
+        void registrarTransacaoSov(
+          uid,
+          gatilho.recompensaSov,
+          "reward",
+          "Recompensa de investigação",
+          "career",
+          { capitulo: capNovo, partidaId: partidaAtual },
+          {
+            sourceEvent: "investigacao",
+            idempotencyKey: `historia:cap${capNovo}:${partidaAtual}`,
+          },
+        );
+        if (capNovo > 0) setToast(`📜 Um documento chamou sua atenção. (+${gatilho.recompensaSov} SOV)`);
+        else setToast("🎙️ Contexto registrado. Recompensa coletada.");
+
+        // GRUPO CIDADELA (§6): Cícero comenta a coletiva; se um sinal novo
+        // surgiu, Helena/Valéria comentam o acervo (sem revelar o segredo).
+        const tomFinal = declaracoes[declaracoes.length - 1]?.tom ?? "neutro";
+        postarNoGrupoUmaVez(`entrevista:${partidaAtual}`, {
+          tipo: "entrevista",
+          tecnico: c.coach?.apelido || c.coach?.nome || userTeam.name,
+          tom: tomFinal,
+        });
+        if (capNovo > 0) {
+          postarNoGrupoUmaVez(`pergaminho:${partidaAtual}:cap${capNovo}`, {
+            tipo: "pergaminho",
+            capitulo: capNovo,
+          });
+        }
+      } else {
+        setToast("🎙️ Contexto registrado. Recompensa coletada.");
+      }
     } else {
       setToast("🎙️ Entrevista concluída. Recompensa coletada.");
     }
+  };
+
+  /**
+   * Desfecho do primeiro arco (§28): o jogador registra sua posição sobre a
+   * questão central no Arquivo. Persistido no Narrative Ledger e recompensado
+   * no SOV Bank uma única vez (chave idempotente por usuário).
+   */
+  const handleRegistrarPosicao = (posicao: PosicaoFinal) => {
+    const atual = careerRef.current;
+    if (!atual) return;
+    const res = registrarPosicaoFinal(atual, posicao);
+    if (res.recompensaSov === 0) return; // já registrado ou arco incompleto
+    persistCareer(res.career);
+    enfileirarConversas(res.conversas);
+    const uid = perfil?.user_id;
+    if (uid) {
+      void registrarTransacaoSov(
+        uid,
+        res.recompensaSov,
+        "reward",
+        "Recompensa de investigação",
+        "career",
+        { posicao },
+        { sourceEvent: "investigacao", idempotencyKey: `historia:desfecho:${uid}` },
+      );
+    }
+    setToast("📜 Sua posição foi registrada no arquivo. (+40 SOV)");
   };
 
   /** Compra/venda na Bolsa (§23-25): débito/crédito SOV no ledger (module
@@ -1955,6 +2105,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               "Dividendos da Bolsa de Valores da Cidadela",
               "market",
               { rodada: novaCareer.rodadaAtual, tipo: "dividendo" },
+              // Dividendo por rodada: idempotente também no servidor
+              // (reforça o guarda local ultimaRodadaBolsa).
+              {
+                sourceEvent: "dividendo",
+                idempotencyKey: `dividendo:${novaCareer.temporada}:r${novaCareer.rodadaAtual}`,
+              },
             );
           }
         } else {
@@ -2004,6 +2160,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           aplicarResultadoRemoto(gf, ga, lastChoice).catch(() => {});
           void registrarEventoMissao("botao_partida_carreira");
           if (gf > ga) void registrarEventoMissao("botao_vitoria_carreira");
+          // GRUPO CIDADELA (§6): NPCs comentam o resultado — o grupo parece vivo.
+          const advIdGrupo = current.homeId === t.userTeamId ? current.awayId : current.homeId;
+          postarNoGrupoUmaVez(`partida:${current.id}`, {
+            tipo: "partida-resultado",
+            resultado: gf > ga ? "vitoria" : gf === ga ? "empate" : "derrota",
+            tecnico: userTeam.name,
+            adversario: resolveTeam(advIdGrupo, userTeam).name,
+          });
         }
         if (t.phase === "fim") {
           void finalizarTemporadaRemota(perfil.user_id, novaCareer);
@@ -2569,6 +2733,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         onEnviarMensagem={handleEnviarMensagem}
         onExcluirConversa={handleExcluirConversa}
         onEscolhaRpg={handleEscolhaRpg}
+        historia={career?.historia}
+        onRegistrarPosicao={handleRegistrarPosicao}
+        statsCarreira={
+          career
+            ? {
+                decisoes:
+                  (career.historia?.ledger.length ?? 0) +
+                  (Array.isArray(career.ultimasEscolhas) ? career.ultimasEscolhas.length : 0),
+                entrevistas: Array.isArray(career.entrevistas) ? career.entrevistas.length : 0,
+              }
+            : undefined
+        }
         prioridade={prioridadeCelular}
         naoLidas={naoLidasCelular}
         perfilCidadela={perfilCidadela}

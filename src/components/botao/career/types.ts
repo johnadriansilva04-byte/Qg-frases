@@ -270,6 +270,9 @@ export type CareerState = {
         pagasHoje: string[];
       }
     | undefined;
+  // História principal (John Adrian): capítulos, pergaminhos, Narrative Ledger.
+  // OPCIONAL — só avança quando o jogador conclui entrevistas pós-partida.
+  historia?: import("./historia/types").HistoriaState | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

@@ -16,7 +16,8 @@ export type NpcId =
   | "npc-pracinha"
   | "npc-jornalista"
   | "npc-bibliotecaria"
-  | "npc-dirigente";
+  | "npc-dirigente"
+  | "npc-john-adrian";
 
 export interface PersonagemNpc {
   id: NpcId;

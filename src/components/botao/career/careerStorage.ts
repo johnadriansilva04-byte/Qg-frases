@@ -1,6 +1,36 @@
 import { type CareerState, type Coach, type Divisao, type Headline } from "./types";
+import { HISTORIA_INICIAL, type HistoriaState } from "./historia/types";
 
 const DIVISOES_VALIDAS: Divisao[] = ["serie-a", "serie-b", "serie-c"];
+
+/** Saneia a história principal vinda do JSONB (registros antigos não a têm). */
+export function normalizarHistoria(bruta: unknown): HistoriaState {
+  const b = (bruta ?? {}) as Partial<HistoriaState>;
+  return {
+    capitulo: Number.isFinite(b.capitulo) ? Math.max(0, b.capitulo!) : HISTORIA_INICIAL.capitulo,
+    pergaminhos: Array.isArray(b.pergaminhos) ? b.pergaminhos : [],
+    perfil: {
+      curiosidade: b.perfil?.curiosidade ?? 0,
+      ceticismo: b.perfil?.ceticismo ?? 0,
+      confronto: b.perfil?.confronto ?? 0,
+      prudencia: b.perfil?.prudencia ?? 0,
+    },
+    ledger: Array.isArray(b.ledger) ? b.ledger : [],
+    entrevistasProcessadas: Array.isArray(b.entrevistasProcessadas)
+      ? b.entrevistasProcessadas
+      : [],
+    posicaoFinal:
+      b.posicaoFinal === "padrao_existe" ||
+      b.posicaoFinal === "padrao_nao_existe" ||
+      b.posicaoFinal === "inconclusivo"
+        ? b.posicaoFinal
+        : null,
+    ultimoMensageiro:
+      b.ultimoMensageiro === "npc-bibliotecaria" || b.ultimoMensageiro === "npc-john-adrian"
+        ? b.ultimoMensageiro
+        : null,
+  };
+}
 
 /**
  * Normaliza um CareerState vindo do banco (JSONB) para a forma que a UI espera.
@@ -48,6 +78,7 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     memoriaNarrativa: Array.isArray(bruta.memoriaNarrativa) ? bruta.memoriaNarrativa : [],
     entrevistas: Array.isArray(bruta.entrevistas) ? bruta.entrevistas : [],
     eventoPendenteId: typeof bruta.eventoPendenteId === "string" ? bruta.eventoPendenteId : null,
+    historia: normalizarHistoria(bruta.historia),
   };
 }
 
