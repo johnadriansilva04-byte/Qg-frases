@@ -66,15 +66,16 @@ function selecionarEvento(career: CareerState): EventoRpg | null {
 /** Converte o evento em conversa de celular com escolhas clicáveis. */
 function eventoParaConversa(evento: EventoRpg): ConversaCelular {
   const npc = personagem(evento.remetente);
+  const timestamp = Date.now();
   return {
-    id: `rpg-${evento.id}-${Date.now()}`,
+    id: `rpg-${evento.id}-${timestamp}`,
     tipo: "narrativa",
     nome: npc.nome,
     avatar: npc.avatar,
     cargo: `${npc.cargo} · ${evento.titulo}`,
     mensagens: [
       {
-        id: `rpg-m-${Date.now()}`,
+        id: `rpg-m-${timestamp}`,
         texto: evento.texto,
         remetente: "outro",
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -189,7 +190,7 @@ export function aplicarEscolhaRpg(
     memoriaRpg: { ...mem, relacoes, segredos },
     headlines: [
       {
-        id: `rpg-${evento.id}-${Date.now()}`,
+        id: `rpg-${evento.id}-${msgTimestamp}`,
         manchete: evento.titulo,
         subtitulo: escolha.desfecho.slice(0, 120),
         tag: "polemica" as const,
@@ -234,13 +235,14 @@ export async function responderContatoNpc(
   if (!resposta) resposta = respostaProcedural(npcId, score);
 
   const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const msgTimestamp = Date.now();
   const conversas = career.conversas.map((c) =>
     c.id === conversaId
       ? {
           ...c,
           mensagens: [
             ...c.mensagens,
-            { id: `npc-${Date.now()}`, texto: resposta!, remetente: "outro" as const, timestamp },
+            { id: `npc-${msgTimestamp}`, texto: resposta!, remetente: "outro" as const, timestamp },
           ],
         }
       : c,
@@ -274,16 +276,16 @@ export function garantirContatosRpg(career: CareerState): CareerState {
     },
   ];
 
-  const conversas: ConversaCelular[] = iniciais.map(({ npc, msg }) => {
+  const conversas: ConversaCelular[] = iniciais.map(({ npc, msg }, idx) => {
     const p = personagem(npc);
     return {
-      id: `${npc}-${Date.now()}`,
+      id: `${npc}-${Date.now()}-${idx}`,
       tipo: "narrativa" as const,
       nome: p.nome,
       avatar: p.avatar,
       cargo: p.cargo,
       npcId: npc,
-      mensagens: [{ id: `npc-i-${npc}`, texto: msg, remetente: "outro" as const, timestamp }],
+      mensagens: [{ id: `npc-i-${npc}-${idx}`, texto: msg, remetente: "outro" as const, timestamp }],
       naoLida: true,
     };
   });

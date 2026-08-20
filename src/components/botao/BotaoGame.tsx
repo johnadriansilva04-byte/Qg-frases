@@ -1129,22 +1129,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     });
     // Registra a decisão como conversa de celular (histórico em 1ª pessoa),
     // sem poluir com mensagens automáticas — só decisões reais do treinador.
+    const msgTimestamp = Date.now();
     const novaConversa = evento
       ? [
           {
-            id: `conv-${Date.now()}`,
+            id: `conv-${msgTimestamp}`,
             tipo: "evento" as const,
             nome: evento.titulo,
             avatar: "💬",
             cargo: "Decisão de carreira",
             mensagens: [
               {
-                id: `m-${Date.now()}`,
+                id: `m-${msgTimestamp}`,
                 texto: evento.descricao,
                 remetente: "outro" as const,
                 timestamp,
               },
-              { id: `r-${Date.now()}`, texto: choice.texto, remetente: "eu" as const, timestamp },
+              { id: `r-${msgTimestamp + 1}`, texto: choice.texto, remetente: "eu" as const, timestamp },
             ],
             naoLida: false,
           },
@@ -1204,6 +1205,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       hour: "2-digit",
       minute: "2-digit",
     });
+    const msgTimestamp = Date.now();
     const novasConversas = career.conversas.map((conv) => {
       if (conv.id === conversaId) {
         return {
@@ -1211,7 +1213,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           mensagens: [
             ...conv.mensagens,
             {
-              id: `msg-${Date.now()}`,
+              id: `msg-${msgTimestamp}`,
               texto,
               remetente: "eu" as const,
               timestamp,
@@ -1879,16 +1881,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           hour: "2-digit",
           minute: "2-digit",
         });
+        const msgTimestamp = Date.now();
         const novasConv: ConversaCelular[] = [];
         if (relMed) {
           novasConv.push({
-            id: `ia-med-${Date.now()}`,
+            id: `ia-med-${msgTimestamp}`,
             tipo: "medico",
             nome: "Dr. Maurício",
             avatar: "🩺",
             cargo: "Departamento Médico",
             mensagens: [
-              { id: `m-med-${Date.now()}`, texto: relMed, remetente: "outro", timestamp: agora },
+              { id: `m-med-${msgTimestamp}`, texto: relMed, remetente: "outro", timestamp: agora },
             ],
             naoLida: true,
           });
@@ -1896,13 +1899,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         for (let i = 0; i < (redes?.length ?? 0); i++) {
           const t = redes[i]!;
           novasConv.push({
-            id: `ia-redes-${Date.now()}-${i}`,
+            id: `ia-redes-${msgTimestamp}-${i}`,
             tipo: "evento",
             nome: "Torcida (Redes Sociais)",
             avatar: "📱",
             cargo: "Menções da rodada",
             mensagens: [
-              { id: `m-red-${Date.now()}-${i}`, texto: t, remetente: "outro", timestamp: agora },
+              { id: `m-red-${msgTimestamp}-${i}`, texto: t, remetente: "outro", timestamp: agora },
             ],
             naoLida: true,
           });
