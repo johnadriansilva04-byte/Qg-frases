@@ -1114,6 +1114,22 @@ export type Database = {
         };
         Returns: string;
       };
+      obter_perfil_cidadela: {
+        Args: Record<never, never>;
+        Returns: Json;
+      };
+      escolher_profissao: {
+        Args: { p_profissao: string };
+        Returns: Json;
+      };
+      atualizar_estado_cidadela: {
+        Args: { p_estado?: Json | null; p_reputacao_delta?: number };
+        Returns: Json;
+      };
+      obter_world_state: {
+        Args: Record<never, never>;
+        Returns: Json;
+      };
       update_reserve_allocation: {
         Args: { p_reserve_type: string; p_amount: number; p_operation: string };
         Returns: boolean;

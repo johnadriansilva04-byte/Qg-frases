@@ -95,9 +95,9 @@ export function CelularConversas({
     }
   }, [userId, onLogin]);
 
-  const handleLogin = (perfil: Perfil) => {
+  const handleLogin = (perfil?: Perfil | undefined) => {
     setMostrarLogin(false);
-    onLogin?.(perfil);
+    if (perfil) onLogin?.(perfil);
   };
   // a partir do estado real — nunca gera mensagem automática sem evento.
   const convPatrocinador: ConversaCelular | null = desafioPatrocinador && !desafioPatrocinador.concluido

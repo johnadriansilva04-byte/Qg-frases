@@ -1,9 +1,31 @@
 import { supabase } from "@/integrations/supabase/client";
 import { AIService } from "@/components/botao/ai/AIService";
 import { initializeSovereignBank } from "@/lib/financial/sovereignBank";
-import { obterSaldoSov, registrarTransacaoSov } from "@/lib/financial/sovApi";
 
 export type MissaoStatus = "ativa" | "completa" | "resgatada";
+
+export type ItemCidadela = {
+  slug: string;
+  nome: string;
+  tipo: string;
+  descricao?: string | undefined;
+};
+
+export type InventarioCidadela = {
+  item_slug: string;
+  quantidade: number;
+  item?: ItemCidadela | undefined;
+};
+
+export type OfertaCidadela = {
+  id: string;
+  item_slug: string;
+  quantidade: number;
+  preco_sov: number;
+  seller_id?: string | undefined;
+  seller_nome?: string | undefined;
+  item?: ItemCidadela | undefined;
+};
 
 export type MissaoDiaria = {
   id: string;
@@ -278,29 +300,33 @@ export async function enviarMensagemCidadela(
 }
 
 // Funções de marketplace e inventário - retornam vazio quando Supabase não tem tabelas
-export async function carregarInventario(_userId: string): Promise<any[]> {
-  const { error } = await supabase.from("cidadela_inventory").select("item_slug,quantidade");
+export async function carregarInventario(_userId: string): Promise<InventarioCidadela[]> {
+  const { data, error } = await supabase.from("cidadela_inventory").select("item_slug,quantidade");
   if (error) {
     console.warn("[Pracinha] Inventário indisponível:", error.message);
     return [];
   }
-  return [];
+  return (data ?? []) as InventarioCidadela[];
 }
 
-export async function carregarOfertasMarketplace(): Promise<any[]> {
-  const { error } = await supabase.from("cidadela_market_listings").select("*");
+export async function carregarOfertasMarketplace(): Promise<OfertaCidadela[]> {
+  const { data, error } = await supabase.from("cidadela_market_listings").select("*");
   if (error) {
     console.warn("[Pracinha] Marketplace indisponível:", error.message);
     return [];
   }
-  return [];
+  return (data ?? []) as OfertaCidadela[];
 }
 
-export async function criarOfertaMarketplace(): Promise<boolean> {
+export async function criarOfertaMarketplace(
+  _itemSlug: string,
+  _quantidade: number,
+  _precoSov: number,
+): Promise<boolean> {
   return false;
 }
 
-export async function comprarOfertaMarketplace(): Promise<number | null> {
+export async function comprarOfertaMarketplace(_ofertaId: string): Promise<number | null> {
   return null;
 }
 

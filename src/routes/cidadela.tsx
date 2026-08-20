@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3 } from "lucide-react";
+import { Target, Dice2, Skull, CircleDot, Gamepad2, Trophy, Smartphone, Crown, Grid3X3, IdCard } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
@@ -8,10 +8,18 @@ import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
+import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
+import {
+  carregarPerfilCidadela,
+  escolherProfissao,
+  profissaoById,
+  type CidadelaPerfil,
+  type ProfissaoId,
+} from "@/lib/cidadela/profissoes";
 import type { Perfil } from "@/components/botao/online/auth";
 
 export const Route = createFileRoute("/cidadela")({
@@ -114,7 +122,25 @@ function Cidadela() {
   const [showPracinha, setShowPracinha] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
-  const { perfil, entrar, cadastrar, cachePerfil } = useBotaoAuth();
+  const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
+  const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
+  const { perfil, aplicarPerfil } = useBotaoAuth();
+
+  // Identidade na Cidadela: carrega a profissão do jogador autenticado.
+  useEffect(() => {
+    const uid = perfil?.user_id;
+    if (!uid) {
+      setPerfilCidadela(null);
+      return;
+    }
+    let vivo = true;
+    void carregarPerfilCidadela(uid).then((p) => {
+      if (vivo) setPerfilCidadela(p);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [perfil?.user_id]);
 
   // Sessão ativa não é persistida: cada login entra com estado limpo.
   useEffect(() => {
@@ -130,9 +156,17 @@ function Cidadela() {
   };
 
   const handleLogin = async (p: Perfil) => {
-    cachePerfil(p);
+    aplicarPerfil(p);
     // Após login, abre celular com mensagem do Pracinha
     setPhoneOpen(true);
+  };
+
+  const handleEscolherProfissao = async (profissao: ProfissaoId) => {
+    const uid = perfil?.user_id;
+    if (!uid) return;
+    const atualizado = await escolherProfissao(uid, profissao);
+    setPerfilCidadela(atualizado);
+    setMostrarProfissoes(false);
   };
 
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
@@ -178,6 +212,22 @@ function Cidadela() {
           // Abre celular automaticamente após PracinhaIntro
           setPhoneOpen(true);
         }}
+      />
+    );
+  }
+
+  // Portão de identidade: jogador autenticado sem profissão escolhe quem é
+  // na Cidadela antes de seguir. Pode ser reaberto pelo botão "Profissão".
+  if (
+    perfilCidadela &&
+    perfil?.user_id &&
+    (mostrarProfissoes || !perfilCidadela.profissao_atual)
+  ) {
+    return (
+      <ProfissaoSelect
+        perfil={perfilCidadela}
+        nomeJogador={perfil?.nome}
+        onEscolher={handleEscolherProfissao}
       />
     );
   }
@@ -265,6 +315,16 @@ function Cidadela() {
                 <Smartphone className="size-4" />
                 Celular da Cidadela
               </button>
+              {perfilCidadela?.profissao_atual && (
+                <button
+                  onClick={() => setMostrarProfissoes(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-300 transition hover:bg-amber-400/20"
+                >
+                  <IdCard className="size-4" />
+                  {profissaoById(perfilCidadela.profissao_atual)?.nome ?? "Profissão"} · Nv.{" "}
+                  {perfilCidadela.nivel_cidadela}
+                </button>
+              )}
             </div>
           </header>
 
