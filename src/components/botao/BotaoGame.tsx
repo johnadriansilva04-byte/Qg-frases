@@ -178,6 +178,8 @@ import {
   type LigasTemporada,
 } from "./career/seasonEngine";
 import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
+import { carregarPerfilCidadela } from "@/lib/cidadela/profissoes";
+import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 
 type Screen =
   | "auth"
@@ -246,6 +248,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [loading, setLoading] = useState(false);
   const [loadingReady, setLoadingReady] = useState(true);
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
+  const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
 
   // Inicializa AdManager para rota /botao (Adsterra)
   const { init: initAdManager, markFirstGamePlayed } = useAdManager("/botao");
@@ -548,9 +551,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!userId) {
       hydratedUserRef.current = null;
       zerarEstadoDaConta();
+      setPerfilCidadela(null);
       return;
     }
     void hidratarCampanha(userId);
+    void carregarPerfilCidadela(userId).then(setPerfilCidadela).catch(() => {});
   }, [perfil?.user_id, hidratarCampanha, zerarEstadoDaConta]);
 
   const handleLogout = async () => {
@@ -2552,6 +2557,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         onEscolhaRpg={handleEscolhaRpg}
         prioridade={prioridadeCelular}
         naoLidas={naoLidasCelular}
+        perfilCidadela={perfilCidadela}
       />
     </Shell>
   );
