@@ -56,6 +56,9 @@ export function CareerHub({
       ? sortTable(nextLiga.groups[0]!.table).findIndex((row) => row.teamId === userTeam.id) + 1
       : 0;
 
+  // Helper para buscar time
+  const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
+
   const temDesafioPatrocinador =
     !!career?.desafioPatrocinador && !career.desafioPatrocinador.concluido;
   const mensagensPendentes =

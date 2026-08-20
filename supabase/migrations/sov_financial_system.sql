@@ -106,6 +106,7 @@ CREATE OR REPLACE FUNCTION create_or_update_wallet(p_user_id UUID)
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_wallet_id UUID;
