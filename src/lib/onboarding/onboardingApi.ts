@@ -1,0 +1,86 @@
+import { supabase } from "@/integrations/supabase/client";
+import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
+import {
+  estadoInicialOnboarding,
+  normalizarEstadoOnboarding,
+  type OnboardingEstado,
+} from "./onboardingEngine";
+
+/**
+ * Persistência do onboarding (§6/§7):
+ *  - Fonte de verdade: `cidadela_perfis.estado.onboarding` (JSONB) via RPC.
+ *  - Espelho local: localStorage `cidadela:onboarding:{userId}` (not signed in
+ *    yet? guardamos igual, e quando fizer login sincroniza).
+ *
+ * RELOAD seguro (§30): níCassandrao que só useState seria usado.
+ */
+
+const CHAVE = (userId: string) => `cidadela:onboarding:${userId}`;
+
+export function lerOnboardingLocal(userId: string | null): OnboardingEstado | null {
+  if (!userId) return null;
+  try {
+    const raw = localStorage.getItem(CHAVE(userId));
+    if (!raw) return null;
+    return normalizarEstadoOnboarding(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function salvarOnboardingLocal(userId: string | null, estado: OnboardingEstado): void {
+  if (!userId) return;
+  try {
+    localStorage.setItem(CHAVE(userId), JSON.stringify(estado));
+  } catch {
+    /* sem storage */
+  }
+}
+
+/** Extrai o onboarding do perfil Supabase (coluna `estado` JSONB). */
+export function extrairOnboardingDoPerfil(perfil: CidadelaPerfil | null): OnboardingEstado | null {
+  if (!perfil) return null;
+  const raw = (perfil.estado as Record<string, unknown> | null)?.["onboarding"];
+  if (!raw) return null;
+  return normalizarEstadoOnboarding(raw);
+}
+
+/** "anon" — chave de dispositivo para usuários não logados (§33). */
+export const ID_ANONIMO = "anon";
+
+/**
+ * Carrega: preferência do RPC (autenticado); fallback local; estado inicial.
+ * Antes do login persiste em `anon` (localStorage); depois migra pro userId.
+ */
+export async function carregarOnboarding(userId: string | null): Promise<OnboardingEstado> {
+  const chave = userId ?? ID_ANONIMO;
+  const local = lerOnboardingLocal(chave);
+  if (userId) {
+    try {
+      const { data, error } = await supabase.rpc("obter_perfil_cidadela");
+      if (!error && data) {
+        const remoto = extrairOnboardingDoPerfil(
+          data as unknown as CidadelaPerfil,
+        );
+        if (remoto) return remoto;
+      }
+    } catch {
+      /* offline → local */
+    }
+  }
+  return local ?? estadoInicialOnboarding();
+}
+
+/** Salva em local sempre; RPC quando autenticado. */
+export async function salvarOnboarding(userId: string | null, estado: OnboardingEstado): Promise<void> {
+  salvarOnboardingLocal(userId ?? ID_ANONIMO, estado);
+  if (!userId) return;
+  try {
+    // Cast: estado puro segue Json (objeto com chaves string). Seguro.
+    await supabase.rpc("atualizar_estado_cidadela", {
+      p_estado: { onboarding: estado } as unknown as import("@/integrations/supabase/types").Json,
+    });
+  } catch {
+    /* local espelhado continua válido */
+  }
+}

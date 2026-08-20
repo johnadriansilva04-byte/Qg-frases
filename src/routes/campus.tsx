@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CelularFixo } from "@/components/CelularFixo";
+import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 
 export const Route = createFileRoute("/campus")({
   head: () => ({
@@ -48,7 +49,7 @@ const SECTIONS: {
   },
 ];
 
-function Campus() {
+function CampusView() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
       {/* Efeito de grade cyberpunk */}
@@ -219,5 +220,14 @@ function Campus() {
       {/* Celular fixo no cantinho da tela */}
       <CelularFixo />
     </div>
+  );
+}
+
+// OnboardingGate: tour obrigatório do iniciante antes do campus (§2).
+function Campus() {
+  return (
+    <OnboardingGate destinoInicial="campus">
+      <CampusView />
+    </OnboardingGate>
   );
 }

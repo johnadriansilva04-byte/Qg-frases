@@ -554,7 +554,7 @@ export function CelularConversas({
                       ["rede", Newspaper, "Rede"],
                       ["missoes", ClipboardList, "Missões"],
                       ["grupo", Users, "Grupo"],
-                      ["mercado", Store, "Feira"],
+                      ["mercado", Store, "Marketplace"],
                       ["banco", Landmark, "Banco"],
                       ["arquivo", ScrollText, "Arquivo"],
                       ["perfil", UserRound, "Perfil"],

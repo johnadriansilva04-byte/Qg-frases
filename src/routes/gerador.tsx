@@ -4,6 +4,7 @@ import { CATEGORIAS, buscarFrases, fraseAleatoria, totalDeFrases } from "@/data/
 import { AdSlot, AdVideoSlot } from "@/components/AdSlot";
 import { AnuncioPessoal } from "@/components/AnuncioPessoal";
 import { NewsModule } from "@/components/NewsModule";
+import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 
 export const Route = createFileRoute("/gerador")({
   head: () => ({
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/gerador")({
 
 type Tab = "frases" | "corretor";
 
-function Gerador() {
+function GeradorView() {
   const [activeTab, setActiveTab] = useState<Tab>("frases");
 
   // Estados do gerador de frases
@@ -329,5 +330,14 @@ function Gerador() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// OnboardingGate: tour obrigatório do iniciante antes do gerador (§2).
+function Gerador() {
+  return (
+    <OnboardingGate destinoInicial="gerador">
+      <GeradorView />
+    </OnboardingGate>
   );
 }

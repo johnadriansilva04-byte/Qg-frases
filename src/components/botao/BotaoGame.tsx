@@ -98,12 +98,16 @@ import {
 } from "./career/rpg/cartorioApi";
 import { anexarPost, gerarPostManual, gerarPostPartida } from "./career/rpg/socialEngine";
 import { registrarTransacaoSov } from "@/lib/financial/sovApi";
+import { atualizarPerfilClube } from "@/lib/botao/api";
 import {
   aplicarRitualNaCarreira,
   consumirRitualPendente,
   convidarRitualTrilha,
   missoesTrilha,
 } from "./career/trilhaIntegracao";
+import { CareerIntro } from "./career/CareerIntro";
+import type { ModoEntrada } from "./career/CareerIntro";
+import { precoClube } from "./career/marketplaceClubes";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
@@ -191,6 +195,7 @@ type Screen =
   | "menu"
   | "profile"
   | "career-menu"
+  | "career-intro"
   | "friendly-setup"
   | "friendly-match"
   | "online"
@@ -753,19 +758,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
    */
   const handleNewCareer = async () => {
     if (!perfil?.user_id) {
-      // Offline: vai direto à criação do treinador/setup.
+      // Offline: entrada triunfal → setup (treinador direto).
       if (!career?.coach.nome) setScreen("coach-setup");
-      else setScreen("tournament-setup");
-      return;
-    }
-    const ok = confirm(
-      "Iniciar uma NOVA carreira? A campanha atual será substituída por um novo registro no servidor (a conta/treinador é mantido).",
-    );
-    if (!ok) return;
-
-    // Se não há treinador ainda, cria antes de iniciar a campanha.
-    if (!career?.coach.nome) {
-      setScreen("coach-setup");
+      else setScreen("career-intro");
       return;
     }
 
@@ -779,17 +774,65 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         coach: { ...(career?.coach ?? EMPTY_CAREER.coach) },
         temporada: 1,
         conversas: [],
+        // A entrada é escolhida na tela triunfal (§11).
+        modoEntrada: undefined,
       };
       persistCareer(zerada);
       persistTournament(null);
       setCurrent(null);
       setCurrentCopaFix(null);
-      setToast("Nova carreira criada! Escolha a dificuldade para começar.");
-      setScreen("tournament-setup");
+      setScreen("career-intro");
     } catch (e) {
       console.error("[BotaoGame] handleNewCareer error:", e);
       setToast("Não foi possível criar a nova carreira. Tente novamente.");
     }
+  };
+
+  /**
+   * ESCOLHA DA ENTRADA (§11/§12): 'treinador' vai ao settlement velho; 
+   * 'proprietario' compra o clube via SOV Bank (débito no ledger, §15),
+   * atualiza a identidade do clube no perfil (§16) e segue.
+   */
+  const handleEscolherEntrada = async (modo: ModoEntrada, clube: Team | null) => {
+    if (modo === "proprietario" && clube && perfil?.user_id) {
+      const preco = precoClube(clube);
+      // Débito no SOV Bank idempotente por compra (§21/§22: 1 clique = 1 execução).
+      await registrarTransacaoSov(
+        perfil.user_id,
+        -preco,
+        "transfer",
+        `Compra do clube ${clube.name}`,
+        "market",
+        { clubeId: clube.id, power: clube.power },
+        { sourceEvent: "compra_clube", idempotencyKey: `clube:compra:${clube.id}:${perfil.user_id}` },
+      );
+      // A identidade do clube adquirido passa a orientar o time do usuário.
+      await atualizarPerfilClube(perfil.user_id, {
+        time: clube.name,
+        abreviacao: clube.short,
+        cores: [clube.primary, clube.secondary, clube.primary],
+      });
+      if (perfil) {
+        aplicarPerfil({
+          ...perfil,
+          time_personalizado: clube.name,
+          abreviacao_time: clube.short,
+          cores: [clube.primary, clube.secondary, clube.primary],
+        });
+      }
+      setToast(`Clube ${clube.name} adquirido por ${preco} SOV! 🏟️`);
+    }
+
+    const nova: CareerState = {
+      ...(career ?? EMPTY_CAREER),
+      modoEntrada: modo,
+    };
+    persistCareer(nova);
+    setCareer(nova);
+
+    // A entrada segue: sem coach, cria; com coach, vai direto à dificuldade.
+    if (!nova.coach.nome) setScreen("coach-setup");
+    else setScreen("tournament-setup");
   };
 
   const handleAssistirVideo = async (): Promise<boolean> => {
@@ -2516,6 +2559,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onBack={() => setScreen("menu")}
           />
         </div>
+      </Shell>
+    );
+  }
+
+  if (screen === "career-intro") {
+    return (
+      <Shell>
+        <CareerIntro
+          userId={perfil?.user_id ?? null}
+          onEscolher={handleEscolherEntrada}
+          onBack={() => setScreen("career-menu")}
+        />
       </Shell>
     );
   }
