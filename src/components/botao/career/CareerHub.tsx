@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Calendar, ChevronRight } from "lucide-react";
+import { Calendar, ChevronRight, Trophy } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
 import { nextUserFixture, sortTable } from "../tournament";
@@ -12,6 +12,7 @@ import { SovereigntyPanel } from "./SovereigntyPanel";
 import { condicaoSombria, conviteTrilha } from "./trilhaIntegracao";
 import {
   CUSTO_MANUTENCAO,
+  DIVISAO_LABEL,
   DIVISAO_SHORT,
   copaDisponivelNaRodada,
   gerarCopaBrasil,
@@ -21,6 +22,7 @@ import {
 } from "./competitionApi";
 import type { CareerState, Divisao } from "./types";
 import type { LigasTemporada } from "./seasonEngine";
+import { ZoneLegend } from "./ChampionshipModule";
 
 interface CareerHubProps {
   tour: Tournament;
@@ -125,8 +127,9 @@ export function CareerHub({
         )}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
-        <div className="flex flex-col gap-3">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Coluna esquerda - Módulos em quadradinhos */}
+        <div className="grid gap-3">
           <button onClick={onOpenCelular} className="celular-card">
             <span className="celular-emoji">📱</span>
             <div className="celular-info">
@@ -194,13 +197,62 @@ export function CareerHub({
           )}
         </div>
 
-        <ChampionshipModule
-          tour={tour}
-          userTeam={userTeam}
-          currentDivisao={divisao}
-          ligas={ligas}
-          copaBrasil={copaBrasil}
-        />
+        {/* Coluna direita - Classificação sempre visível (top 5) */}
+        <div className="panel">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="size-4 text-amber-400" />
+            <h3 className="font-display text-sm font-bold tracking-wide">Classificação</h3>
+            <span className="text-xs text-muted-foreground">{DIVISAO_LABEL[divisao]}</span>
+          </div>
+          {nextLiga.phase === "grupos" && nextLiga.groups.length > 0 ? (
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="w-8 py-1">#</th>
+                  <th className="py-1">TIME</th>
+                  <th className="w-8 text-center">P</th>
+                  <th className="w-8 text-center">J</th>
+                  <th className="w-6 text-center">V</th>
+                  <th className="w-6 text-center">E</th>
+                  <th className="w-6 text-center">D</th>
+                  <th className="w-8 text-center">SG</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortTable(nextLiga.groups[0]!.table)
+                  .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
+                  .slice(0, 5)
+                  .map((r, i) => {
+                  const position = i + 1;
+                  const zone =
+                    position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                  return (
+                    <tr
+                      key={r.teamId}
+                      className={`zone-row zone-${zone} ${r.teamId === nextLiga.userTeamId ? "is-user" : ""}`}
+                    >
+                      <td className="py-1 text-center font-bold">{position}º</td>
+                      <td className="py-1">
+                        <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                          <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                        </span>
+                      </td>
+                      <td className="py-1 text-center font-bold">{r.p}</td>
+                      <td className="py-1 text-center">{r.j}</td>
+                      <td className="py-1 text-center text-emerald-300">{r.v}</td>
+                      <td className="py-1 text-center text-muted-foreground">{r.e}</td>
+                      <td className="py-1 text-center text-rose-300">{r.d}</td>
+                      <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-xs text-muted-foreground">Classificação indisponível nesta fase.</p>
+          )}
+          <ZoneLegend />
+        </div>
       </div>
     </div>
   );
