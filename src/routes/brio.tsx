@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { AdSlot } from "@/components/AdSlot";
 
 export const Route = createFileRoute("/brio")({
   head: () => ({
@@ -184,6 +185,11 @@ function Brio() {
               </Link>
             );
           })}
+        </div>
+
+        {/* Publicidade discreta no rodapé (mesmo padrão das demais páginas estáticas) */}
+        <div className="w-full max-w-5xl mb-8">
+          <AdSlot rotulo="Banner Rodapé" />
         </div>
 
         {/* Voltar */}

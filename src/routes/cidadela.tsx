@@ -10,6 +10,7 @@ import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
 import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
+import { PainelMundo } from "@/components/cidadela/PainelMundo";
 import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
@@ -398,6 +399,8 @@ function Cidadela() {
               <PainelReputacao perfil={perfilCidadela} />
             </div>
           )}
+
+          <PainelMundo perfil={perfilCidadela} />
 
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-4 text-foreground">Jogos da Cidadela</h2>
