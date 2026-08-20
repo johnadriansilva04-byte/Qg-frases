@@ -100,6 +100,90 @@ export type DesafioPatrocinador = {
 
 export type ConversaTipo = "evento" | "medico" | "noticia" | "rpg" | "patrocinador" | "narrativa";
 
+/**
+ * Memória narrativa dos personagens (§5): um acontecimento relevante que um ou
+ * mais personagens "conhecem" e podem usar em reações futuras. Não armazena
+ * tudo — só o que tem importância para a continuidade da história.
+ */
+export type EventoNarrativo = {
+  id: string;
+  /** Declaração do jogador (entrevista), resultado de partida, reação de NPC. */
+  tipo: "declaracao" | "resultado" | "reacao";
+  /** Personagem afetado/proprietário do fato (quem "sabe" disto). */
+  npc?: import("./rpg/types").NpcId | undefined;
+  /** Fato registrado (ex.: "Venceu o rival por 5x1", "Disse: '...'"). */
+  evento: string;
+  /** Interpretação da IA (ex.: "Declaração provocativa contra o adversário"). */
+  interpretacao?: string | undefined;
+  importancia: "alta" | "media" | "baixa";
+  rodada: number;
+  temporada: number;
+};
+
+/** Uma declaração do jogador numa entrevista, já interpretada pelo sistema. */
+export type DeclaracaoEntrevista = {
+  texto: string;
+  interpretacao: string;
+  tom: "provocacao" | "humildade" | "orgulho" | "neutro";
+  importancia: "alta" | "media" | "baixa";
+};
+
+/** Registro completo de uma entrevista coletiva pós-jogo. */
+export type EntrevistaRegistro = {
+  id: string;
+  partidaId: string;
+  competicao: string;
+  adversario: string;
+  placar: string;
+  rodada: number;
+  temporada: number;
+  declaracoes: DeclaracaoEntrevista[];
+  /** Recompensa em Soberania coletada ao final. */
+  recompensa: number;
+};
+
+/* ----------------------- Bolsa de Valores da Cidadela ----------------------- */
+
+export type AtivoId = "clube" | "ciencia" | "biblioteca" | "trilha";
+
+export type PosicaoBolsa = {
+  ativoId: AtivoId;
+  quantidade: number;
+  /** Preço médio de compra (SOV por cota). */
+  custoMedio: number;
+};
+
+export type TransacaoBolsa = {
+  id: string;
+  tipo: "compra" | "venda" | "dividendo";
+  ativoId: AtivoId;
+  quantidade: number;
+  /** Valor total em SOV (positivo = crédito, negativo = débito). */
+  valor: number;
+  rodada: number;
+  temporada: number;
+  timestamp: string;
+};
+
+/**
+ * Estado da bolsa persistido no JSONB da carreira (fonte de verdade = Supabase,
+ * via `progresso_caminpanha`). Preços evoluem com os acontecimentos reais da
+ * carreira (resultados, eventos do mundo) — nunca são valores de tela.
+ */
+export type BolsaState = {
+  precos: Record<AtivoId, number>;
+  /** Preço da rodada anterior (para variação exibida). */
+  precosAnteriores: Record<AtivoId, number>;
+  /** Histórico curto de preços por ativo (sparkline, últimas 12 rodadas). */
+  historicoPrecos: Partial<Record<AtivoId, number[]>>;
+  carteira: PosicaoBolsa[];
+  transacoes: TransacaoBolsa[];
+  /** Última rodada em que preços/dividendos foram processados. */
+  ultimaRodadaBolsa: number;
+  /** Patrimônio total da Cidadela (índice econômico do ecossistema). */
+  patrimonioCidadela: number;
+};
+
 export type ConversaCelular = {
   id: string;
   tipo: ConversaTipo;
@@ -168,6 +252,13 @@ export type CareerState = {
   perdaPontosProxima?: number | undefined;
   // Memória narrativa do RPG (relacionamentos, segredos, sequência).
   memoriaRpg?: import("./rpg/types").MemoriaRpg | undefined;
+  // Memória narrativa dos personagens-IA: declarações, resultados e reações
+  // relevantes que alimentam o contexto futuro de cada personagem (§5).
+  memoriaNarrativa?: EventoNarrativo[] | undefined;
+  // Histórico de entrevistas coletivas concedidas (§6: fonte narrativa).
+  entrevistas?: EntrevistaRegistro[] | undefined;
+  // Carteira na Bolsa de Valores da Cidadela (§22-25).
+  bolsa?: BolsaState | undefined;
   // Feed da Rede da Cidadela (posts reativos a eventos do jogo).
   feedCidadela?: import("./rpg/types").PostFeed[] | undefined;
   // Ritual da Trilha: válvula narrativa do Modo Carreira (progresso diário).

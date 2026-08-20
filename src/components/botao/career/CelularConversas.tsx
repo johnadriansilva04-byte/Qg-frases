@@ -67,7 +67,7 @@ type Props = {
   userId?: string | null | undefined;
   nomeJogador?: string | null | undefined;
   /** Callback quando login é realizado no celular */
-  onLogin?: (perfil: Perfil) => void;
+  onLogin?: ((perfil: Perfil) => void) | undefined;
   /** Perfil da Cidadela para notificações */
   perfilCidadela?: CidadelaPerfil | null;
 };

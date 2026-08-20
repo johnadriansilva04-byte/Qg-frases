@@ -1,6 +1,5 @@
-import { Trophy, TrendingUp, TrendingDown, Minus, Flag, Sparkles, CheckCircle2 } from "lucide-react";
+import { Trophy, TrendingUp, TrendingDown, Minus, Flag, Sparkles, CheckCircle2, Mic } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
-import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 
 export interface MatchEndData {
   /** Identificador único da partida (idempotência do patrocínio). */
@@ -25,9 +24,9 @@ export interface MatchEndData {
 type Props = {
   dados: MatchEndData;
   onContinuar: () => void;
-  /** Chamado quando o usuário confirma o anúncio de patrocínio (abre a entrevista). */
+  /** Abre a entrevista coletiva (SEM anúncio — o onClick só existe na coleta). */
   onPatrocinio?: (() => void) | undefined;
-  /** A recompensa de patrocínio desta partida já foi paga (idempotência). */
+  /** A recompensa de coletiva desta partida já foi coletada (idempotência). */
   patrocinioPago?: boolean | undefined;
   /** A entrevista já está aberta (evita reabrir ao retornar do anúncio). */
   entrevistaAberta?: boolean | undefined;
@@ -72,12 +71,9 @@ export function MatchEndScreen({
 }: Props) {
   const r = RESULTADO_MAP[dados.resultado];
 
-  // Fluxo: clique do usuário → confirmação → anúncio → entrevista (UMA vez).
-  // Regras anti-reexecução:
-  // - `onDisparado` só abre a entrevista se ela não estiver aberta e a
-  //   recompensa ainda não tiver sido paga nesta partida;
-  // - o retorno da aba do anúncio nunca dispara o botão sozinho (o portão de
-  //   pop-up é one-shot e expira ao voltar o foco — ver adClickGuard).
+  // Fluxo NOVO (§8-§9): botão comum abre a entrevista — NENHUM anúncio aqui.
+  // O "onClick" de processamento só existe no botão final [COLETAR] dentro da
+  // entrevista. Anti-reexecução: se já paga ou aberta, nada acontece.
   const handlePatrocinio = () => {
     if (patrocinioPago || entrevistaAberta) return;
     onPatrocinio?.();
@@ -164,28 +160,36 @@ export function MatchEndScreen({
           Continuar
         </button>
 
-        {/* Monetização discreta no rodapé (profissional, sem poluir). */}
+        {/* Coletiva de imprensa + monetização discreta no rodapé. */}
         <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
           <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">
-            Patrocínio
+            Imprensa
           </p>
           <AdsterraBanner slotId="match-end-banner" className="min-h-[90px]" />
           <div className="mt-2">
             {patrocinioPago ? (
               <div className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-900/40 bg-emerald-950/30 px-4 py-3 text-xs font-bold text-emerald-300">
                 <CheckCircle2 className="size-4" />
-                Patrocínio recebido nesta partida
+                Coletiva concluída — recompensa coletada nesta partida
+              </div>
+            ) : entrevistaAberta ? (
+              <div className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-900/40 bg-sky-950/30 px-4 py-3 text-xs font-bold text-sky-300">
+                <Mic className="size-4" />
+                Coletiva em andamento…
               </div>
             ) : (
-              <ControlledMonetagButton
-                className="w-full text-xs"
-                message="Um empresário de uma marca quer te PATROCINAR após essa partida! Para fechar o acordo, você dará uma entrevista rápida para a imprensa. Uma página do patrocinador pode abrir em uma nova aba."
-                onDisparado={handlePatrocinio}
+              <button
+                type="button"
+                onClick={handlePatrocinio}
+                className={`btn-primary w-full text-xs ${entrevistaAberta ? "opacity-60" : ""}`}
               >
-                🎤 Dar Entrevista · Ganho Patrocínio
-              </ControlledMonetagButton>
+                🎤 Dar coletiva de imprensa · +SOV
+              </button>
             )}
           </div>
+          <p className="mt-2 text-center text-[10px] text-slate-500">
+            O jornalista da Cidadela quer suas declarações — seguras, sem anúncios até a coleta.
+          </p>
         </div>
       </div>
     </div>

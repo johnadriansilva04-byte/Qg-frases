@@ -161,6 +161,7 @@ export function aplicarEscolhaRpg(
   }
 
   const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const msgTimestamp = Date.now();
   const conversas = career.conversas.map((c) =>
     c.id === conversaId
       ? {

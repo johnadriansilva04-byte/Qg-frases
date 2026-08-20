@@ -1,3 +1,65 @@
+## Reestruturação do Modo Carreira — Prompt Mestre (2026-08-20, 3ª passada)
+
+Implementação dos pontos §1–§34 do prompt mestre (personagens-IA, coletiva,
+celular único, interface focada, economia/bolsa). Ordem: mapa completo →
+tipos/engines → UI → integração no BotaoGame → testes jiti.
+
+- **Jornalista/Bibliotecária/Dirigente são NPCs com systemPrompt** (§1-§2):
+  `npc-jornalista` (Cícero Ramos), `npc-bibliotecaria` (Helena Páginas),
+  `npc-dirigente` (Dir. Aldemir) em `career/rpg/personagens.ts`; `NpcId`
+  estendido em `rpg/types.ts`. Compartilham o AIService (§32 — sem spaghetti de IA).
+- **Entrevista Coletiva = IA-jornalista** (§6-§12): `career/entrevistaEngine.ts`
+  com contexto escopado (§31: só dados da partida + declarações passadas
+  públicas) via `contextoJornalista`/`gerarPerguntaJornalista` (persona IA
+  > fallback procedural). `interpretarDeclaracao` classifica provocacao/
+  humildade/orgulho/neutro + importância (§11). `registrarEntrevista` guarda
+  na memória narrativa (`EventoNarrativo` em `career.memoriaNarrativa`, §5),
+  idempotente por `partidaId`. `consequenciasEntrevista` (§12): provocação →
+  reação do rival (rel-coes do `memoriaRpg`), headline e post no feed.
+- **NADA de segunda entrevista** (§8): `EntrevistaPatrocinio` REMOVIDO; a
+  coletiva descartada de `finishTournamentMatch` (Promise.all [coletiva,
+  relMed, redes]) virou só `[relMed, redes]`. Única entrevista:
+  `components/EntrevistaColetiva.tsx` (intro → q1 → q2 -> COLETAR).
+- **onClick SÓ na coleta final** (§9): `concluirColetiva(declaracoes)` é o
+  único disparo (recompensa SOV + registrarEntrevista + consequencias +
+  persistCareer + fila). Idempotência: `patrocinioPagoPartida === partidaId`
+  + guarda de partidaId no registrarEntrevista. ControlledMonetagButton só
+  existe no rodapé da EntrevistaColetiva ("Apoie a imprensa") — nunca gateia
+  o fluxo da entrevista.
+- **Fila de mensagens do celular** (§13-§14): `filaConversasRef` +
+  `filaProcessandoRef` no BotaoGame; `enfileirarConversas(novas)` entrega uma
+  por vez (2.6s), com toast `📱 Nova mensagem: {nome}` + som `tocarNotificacao()`
+  (`src/lib/notificacao.ts`, WebAudio). Relatório médico/redes sociais e
+  reações da entrevista SÓ chegam por essa fila.
+- **UM celular** (§15): telas `celular`, `celular-conversas` e `suborno`
+  REMOVIDAS do Screen. `CelularFixo` ganhou props `prioridade` (ReactNode —
+  renderiza SubornoStory/NarrativeModal/ChoiceModal quando há decisão pendente,
+  calculados no BotaoGame via `prioridadeCelular`) e `naoLidas` (badge).
+  CareerHub sem card/celular interno. `aplicarEscolha` volta ao `hub`.
+- **Interface focada** (§16-§18): CareerHub com botões compactos (menu-card
+  com icon) Calendário/Bolsa/Tabela → cada um abre em tela própria (`calendario`,
+  `economia`, `classificacao` = Screen). Classificação resumida top-5 +
+  ZoneLegend. CoachSetup subtítulo reduzido para 1 linha curta.
+- **Bolsa de Valores da Cidadela** (§22-§26): `career/bolsaEngine.ts` —
+  ATIVOS = clube/ciencia/biblioteca/trilha nomes/fix/setores/yield/cap.
+  `evoluirBolsa(bolsa, imp)`: drift determinístico por rodada (`ruidoRodada`
+  hash) para setores não-clube; clube reage ao resultado/moral; eventos do
+  mundo (crise/cartorio/ritual/provocação/ciência) impactam setores.
+  atualiza `patrimonioCidadela`. `pagarDividendos` a cada 3 rodadas,
+  idempotente por rodada via `ultimaRodadaBolsa`. `comprarAtivo`/`venderAtivo`
+  atualizam carteira com custo médio. Integrado em `finishTournamentMatch` do
+  bloco career (antes do persistCareer). Compras/vendas/dividendos passam
+  pelo ledger SOV com module `'market'`. `EconomiaScreen.tsx` é a tela do
+  módulo (patrimônio da Cidadela + carteira + fila de transações).
+- **Pré-existentes corrigidos** sem regressar: `CelularFixo` import ruim
+  (`./lib/cidadela/profissoes` → `@/...`), `CelularConversas.onLogin` tipo
+  (`| undefined`), `rpgEngine` msgTimestamp indefinido em `aplicarEscolhaRpg`,
+  RPCs `cidadela_atualizar_status`/`cidadela_listar_jogadores` agora tipadas
+  em `integrations/supabase/types.ts`.
+- **Verificação**: `tsc --noEmit` 0 erros, `npm run build` OK. Engines com
+  testes jiti runtime (coletiva provocação→rival reage/memória salva;
+  idempotência; bolsa determinística/compra/venda/dividendos idempotentes).
+
 ## Auditoria integral do Modo Carreira (2026-08-20, 2ª passada)
 
 - **Ritual da Trilha é notificação do celular, não card**: `CareerHub` NÃO tem

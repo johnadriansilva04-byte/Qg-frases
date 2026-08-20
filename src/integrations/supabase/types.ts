@@ -1194,6 +1194,20 @@ export type Database = {
         Args: { p_user_id: string; p_evento: Json };
         Returns: undefined;
       };
+      cidadela_atualizar_status: {
+        Args: { p_status?: string };
+        Returns: Json;
+      };
+      cidadela_listar_jogadores: {
+        Args: Record<string, never>;
+        Returns: {
+          user_id: string;
+          nome: string;
+          profissao_atual: string;
+          ultima_atividade: string;
+          status: string;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

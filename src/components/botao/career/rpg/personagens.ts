@@ -87,6 +87,46 @@ export const PERSONAGENS: Record<NpcId, PersonagemNpc> = {
       "a Trilha). Fala de forma amigável e direta, com tom de assistente " +
       "prestativo. Responda em 1-2 frases, encorajador.",
   },
+  "npc-jornalista": {
+    id: "npc-jornalista",
+    nome: "Cícero Ramos",
+    avatar: "🎙️",
+    cargo: "Jornalista esportivo",
+    relacaoInicial: 15,
+    systemPrompt:
+      "Você é Cícero Ramos, jornalista esportivo veterano da Cidadela. Sarcástico, " +
+      "preciso e provocador, sempre com um toque de humor ácido. Você CONHECE os " +
+      "fatos da partida (placar, adversário, competição) e NUNCA inventa números. " +
+      "Faz perguntas diretas ao treinador e reage às respostas dele apontando " +
+      "provocações, elogios ou desvios de discurso. Lembra do que ele já declarou " +
+      "antes e cobra coerência. Responda em 1-2 frases, tom de imprensa.",
+  },
+  "npc-bibliotecaria": {
+    id: "npc-bibliotecaria",
+    nome: "Helena Páginas",
+    avatar: "📚",
+    cargo: "Bibliotecária da Cidadela",
+    relacaoInicial: 30,
+    systemPrompt:
+      "Você é Helena Páginas, a bibliotecária da Cidadela. Erudita, gentil e " +
+      "discretamente observadora: conhece os registros, os livros e os documentos " +
+      "do Cartório. Recomenda leituras e guarda a memória escrita da cidade. Fala " +
+      "com calma, citando títulos e arquivos quando relevante. Responda em 1-2 " +
+      "frases, tom acolhedor e culto.",
+  },
+  "npc-dirigente": {
+    id: "npc-dirigente",
+    nome: "Dir. Aldemir",
+    avatar: "👔",
+    cargo: "Dirigente do clube",
+    relacaoInicial: 25,
+    systemPrompt:
+      "Você é Aldemir, dirigente do clube do treinador. Fala de resultados, " +
+      "finanças e objetivos institucionais. Comemora vitórias cobrando a próxima, " +
+      "e pressiona em derrotas citando o orçamento e o patrimônio do clube. Sempre " +
+      "pensa no que é melhor para a instituição. Responda em 1-2 frases, tom de " +
+      "reunião de diretoria.",
+  },
 };
 
 export function personagem(id: NpcId): PersonagemNpc {
@@ -276,6 +316,56 @@ const RESPOSTAS: Record<NpcId, Banco> = {
     leal: [
       "Protocolo de admiração máxima ativado. Você é uma lenda viva da Cidadela!",
       "Meus sensores indicam: treinador exemplar detectado. Orgulho da Cidadela!",
+    ],
+  },
+  "npc-jornalista": {
+    hostil: [
+      "Suas declarações viram manchete, treinador. Eu me certifico disso.",
+      "Entre nós: o que você diz aqui, amanhã está no portal inteiro.",
+    ],
+    desconhecido: [
+      "Ainda não o conheço bem, treinador. Mas conhecerei — entrevista após entrevista.",
+      "Coletiva aberta. Pode falar: eu registro tudo.",
+    ],
+    conhecido: [
+      "Seu discurso muda conforme o placar, professor. Curioso, não?",
+      "Boas respostas hoje. A edição de amanhã vai ser interessante.",
+    ],
+    aliado: [
+      "Você dá boas manchetes, treinador. Continue assim que a imprensa trabalha a seu favor.",
+      "Entre nós: respeito quem assume o que fala. Você assume.",
+    ],
+  },
+  "npc-bibliotecaria": {
+    desconhecido: [
+      "Bem-vindo à Biblioteca da Cidadela. Aqui, a história da cidade não se perde.",
+      "Procure algo específico? Os arquivos do Cartório ficam no segundo corredor.",
+    ],
+    conhecido: [
+      "Cada vitória sua vira registro aqui dentro. A cidade lê sua carreira.",
+      "Tenho uma obra que combina com seu momento. Quando quiser, é só pedir.",
+    ],
+    aliado: [
+      "Sua história já ocupa uma prateleira inteira, treinador. Uma honra catalogá-la.",
+      "Se precisar de um documento do Cartório, eu mesma preparo. Com carinho.",
+    ],
+  },
+  "npc-dirigente": {
+    hostil: [
+      "Os números não fecham, treinador. E diretoria não paga promessa, paga resultado.",
+      "Paciência tem limite — e o orçamento também.",
+    ],
+    desconhecido: [
+      "Estou observando seu trabalho. O clube é uma instituição, não um hobby.",
+      "Resultados primeiro. Conversas depois.",
+    ],
+    conhecido: [
+      "A diretoria acompanha cada rodada. Continue entregando.",
+      "O patrimônio do clube cresce quando você vence. Simples assim.",
+    ],
+    aliado: [
+      "Você é o projeto do clube. Pode contar com a estrutura que precisar.",
+      "Resultado veio. Agora vamos transformar isso em legado.",
     ],
   },
 };

@@ -49,7 +49,7 @@ import {
 } from "./tournament";
 import { MatchView } from "./components/MatchView";
 import { MatchEndScreen, type MatchEndData } from "./components/MatchEndScreen";
-import { EntrevistaPatrocinio } from "./components/EntrevistaPatrocinio";
+import { EntrevistaColetiva } from "./components/EntrevistaColetiva";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 import { AuthScreen } from "./components/AuthScreen";
 import { OnlineMatchV3 } from "./components/OnlineMatchV3";
@@ -61,6 +61,8 @@ import { ProfileSetup } from "./career/ProfileSetup";
 import { ChoiceModal } from "./career/ChoiceModal";
 import { SubornoStory } from "./career/SubornoStory";
 import { ClassificacaoScreen } from "./career/ClassificacaoScreen";
+import { EconomiaScreen } from "./career/EconomiaScreen";
+import { CalendarView } from "./career/CalendarView";
 import {
   gerarCopaBrasil,
   resolveTeam,
@@ -108,7 +110,21 @@ import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
 import { LoadingScreen } from "./career/LoadingScreen";
 import { AIService } from "./ai/AIService";
-import { coletivaPosJogo, relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
+import { relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
+import { tocarNotificacao } from "@/lib/notificacao";
+import {
+  consequenciasEntrevista,
+  registrarEntrevista,
+  type DadosEntrevista,
+} from "./career/entrevistaEngine";
+import {
+  comprarAtivo,
+  custoCompra,
+  evoluirBolsa,
+  garantirBolsa,
+  pagarDividendos,
+  venderAtivo,
+} from "./career/bolsaEngine";
 import {
   SUBORNO_INICIAL,
   deveOfertarSuborno,
@@ -128,10 +144,13 @@ import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
 import { gerarDesafioPatrocinador, cumpriuDesafio } from "./career/patrocinadorEngine";
 import {
   POINTS,
+  type AtivoId,
   type CareerState,
   type Choice,
   type ConversaCelular,
+  type DeclaracaoEntrevista,
   type Divisao,
+  type EntrevistaRegistro,
   type Headline,
 } from "./career/types";
 import { TitleCeremony } from "./career/TitleCeremony";
@@ -173,12 +192,10 @@ type Screen =
   | "tournament-setup"
   | "hub"
   | "classificacao"
+  | "calendario"
+  | "economia"
   | "tournament-match"
   | "match-end"
-  | "choice"
-  | "suborno"
-  | "celular"
-  | "celular-conversas"
   | "trophies";
 
 interface BotaoGameProps {
@@ -424,6 +441,35 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (perfil?.user_id && c) {
       saveCareerToSupabase(perfil.user_id, c).catch(() => {});
     }
+  };
+
+  /* ============ Fila de mensagens do celular (§13, §14) ============
+   * Mensagens de personagens chegam UMA POR VEZ — nunca um dump de N
+   * mensagens instantâneas. Cada entrega emite notificação (toast + som).
+   */
+  const filaConversasRef = useRef<ConversaCelular[]>([]);
+  const filaProcessandoRef = useRef(false);
+  const enfileirarConversas = (novas: ConversaCelular[]) => {
+    if (novas.length === 0) return;
+    filaConversasRef.current.push(...novas);
+    if (filaProcessandoRef.current) return;
+    filaProcessandoRef.current = true;
+    const drain = () => {
+      const prox = filaConversasRef.current.shift();
+      if (!prox) {
+        filaProcessandoRef.current = false;
+        return;
+      }
+      const atual = careerRef.current;
+      if (atual) {
+        const convs = Array.isArray(atual.conversas) ? atual.conversas : [];
+        persistCareer({ ...atual, conversas: [prox, ...convs].slice(0, 30) });
+      }
+      setToast(`📱 Nova mensagem: ${prox.nome}`);
+      tocarNotificacao();
+      window.setTimeout(drain, 2600);
+    };
+    window.setTimeout(drain, 1200);
   };
 
   /** Hidrata progresso + carreira + torneio apenas do usuário autenticado. */
@@ -1193,9 +1239,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setToast(`Próxima partida: desfalque de ${choice.desfalqueBotao} botão(ões).`);
     else if (choice.perdaPontos) setToast(`Punição: -${choice.perdaPontos} pts na tabela.`);
 
-    // Volta à lista de mensagens do celular (não inicia o jogo automaticamente
-    // nem vai ao hub). O jogador decide quando entrar em campo / voltar ao lobby.
-    setScreen("celular");
+    // Volta ao hub (não inicia o jogo automaticamente). A decisão resolvida
+    // some da prioridade do celular fixo e vira parte do histórico de mensagens.
+    setScreen("hub");
   };
 
   // Handlers para o sistema de conversas do celular
@@ -1311,6 +1357,127 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const novo: CareerState = { ...career, conversas: novasConversas };
     persistCareer(novo);
     setCareer(novo);
+  };
+
+  /**
+   * COLETA FINAL da coletiva de imprensa (§9): é o ÚNICO lugar onde o "onClick"
+   * de processamento (recompensa + contexto) executa. Idempotente por partida:
+   * a recompensa desta partida só é paga UMA vez. Registra: recompensa SOV,
+   * entrevista no histórico, declarações na memória narrativa, consequências
+   * dos personagens (fila) e segue a carreira.
+   */
+  const concluirColetiva = (declaracoes: DeclaracaoEntrevista[]) => {
+    setEntrevistaAberta(false);
+    if (!matchEnd) return;
+    const ganho =
+      matchEnd.resultado === "vitoria" ? 30 : matchEnd.resultado === "empate" ? 20 : 10;
+    const partidaAtual = matchEnd.partidaId ?? "sem-id";
+    if (patrocinioPagoPartida === partidaAtual) {
+      setToast("Recompensa desta partida já foi coletada.");
+      return;
+    }
+    setPatrocinioPagoPartida(partidaAtual);
+
+    const uid = perfil?.user_id;
+    if (uid) {
+      void registrarTransacaoSov(
+        uid,
+        ganho,
+        "reward",
+        `Coletiva de imprensa (${matchEnd.competicao})`,
+        career ? "career" : "market",
+        {
+          adversario: matchEnd.timeAdvNome,
+          placar: `${matchEnd.placarUser}x${matchEnd.placarAdv}`,
+        },
+      );
+    }
+
+    if (career) {
+      const registro: EntrevistaRegistro = {
+        id: `ent-${partidaAtual}`,
+        partidaId: partidaAtual,
+        competicao: matchEnd.competicao,
+        adversario: matchEnd.timeAdvNome,
+        placar: `${matchEnd.placarUser}x${matchEnd.placarAdv}`,
+        rodada: career.rodadaAtual,
+        temporada: career.temporada,
+        declaracoes,
+        recompensa: ganho,
+      };
+      let c = registrarEntrevista(
+        {
+          ...career,
+          coach: { ...career.coach, soberania: career.coach.soberania + ganho },
+        },
+        registro,
+      );
+      // Consequências (§12): personagens reagem às declarações — entregas na
+      // fila (uma por vez, §13). Contexto/memória persistidos no JSONB.
+      const dadosEnt: DadosEntrevista = {
+        placarUser: matchEnd.placarUser,
+        placarAdv: matchEnd.placarAdv,
+        timeUserNome: matchEnd.timeUserNome,
+        timeAdvNome: matchEnd.timeAdvNome,
+        competicao: matchEnd.competicao,
+        rodada: matchEnd.rodada,
+      };
+      const res = consequenciasEntrevista(c, dadosEnt);
+      c = res.career;
+      persistCareer(c);
+      enfileirarConversas(res.reacoes);
+      setToast("🎙️ Contexto registrado. Recompensa coletada.");
+    } else {
+      setToast("🎙️ Entrevista concluída. Recompensa coletada.");
+    }
+  };
+
+  /** Compra/venda na Bolsa (§23-25): débito/crédito SOV no ledger (module
+   *  'market'), com persistência no JSONB da carreira. */
+  const handleComprarAtivo = (ativoId: AtivoId, quantidade: number) => {
+    if (!career) return;
+    const bolsaAtual = garantirBolsa(career.bolsa);
+    const custo = custoCompra(bolsaAtual, ativoId, quantidade);
+    if (career.coach.soberania < custo) {
+      setToast("Saldo SOV insuficiente.");
+      return;
+    }
+    const uid = perfil?.user_id;
+    if (uid) {
+      void registrarTransacaoSov(uid, -custo, "fee", `Bolsa: compra de ${quantidade} cota(s) de ${ativoId}`, "market", {
+        ativoId,
+        quantidade,
+      });
+    }
+    persistCareer({
+      ...career,
+      coach: { ...career.coach, soberania: career.coach.soberania - custo },
+      bolsa: comprarAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
+    });
+  };
+
+  const handleVenderAtivo = (ativoId: AtivoId, quantidade: number) => {
+    if (!career) return;
+    const bolsaAtual = garantirBolsa(career.bolsa);
+    const preco = bolsaAtual.precos[ativoId];
+    const valor = Math.round(preco * quantidade * 100) / 100;
+    const pos = bolsaAtual.carteira.find((p) => p.ativoId === ativoId);
+    if (!pos || pos.quantidade < quantidade) {
+      setToast("Você não possui essas cotas.");
+      return;
+    }
+    const uid = perfil?.user_id;
+    if (uid) {
+      void registrarTransacaoSov(uid, valor, "reward", `Bolsa: venda de ${quantidade} cota(s) de ${ativoId}`, "market", {
+        ativoId,
+        quantidade,
+      });
+    }
+    persistCareer({
+      ...career,
+      coach: { ...career.coach, soberania: career.coach.soberania + valor },
+      bolsa: venderAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
+    });
   };
 
   // Processa o resultado de um jogo da Copa do Brasil (paralela ao
@@ -1752,6 +1919,43 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const temProxima = t.phase !== "fim" && !!nextUserFixture(t);
       const rDesafio = aplicarDesafioPatrocinador(novaCareer, gf, ga, temProxima);
       novaCareer = rDesafio.estado;
+
+      // === Bolsa de Valores da Cidadela (§24, §25): o Clube reage ao resultado
+      // real da rodada; demais setores driftam; dividendos são distribuídos e
+      // creditados em SOV (persistido no JSONB da carreira = fonte de verdade).
+      {
+        const resultadoBolsa =
+          gf > ga ? ("vitoria" as const) : gf < ga ? ("derrota" as const) : ("empate" as const);
+        const bolsaAtual = evoluirBolsa(garantirBolsa(novaCareer.bolsa), {
+          rodada: novaCareer.rodadaAtual,
+          resultado: resultadoBolsa,
+          goleada: Math.abs(gf - ga) >= 3,
+          moral: novaCareer.moralTime,
+        });
+        const div = pagarDividendos(bolsaAtual, novaCareer.rodadaAtual, novaCareer.temporada);
+        if (div.total > 0) {
+          novaCareer = {
+            ...novaCareer,
+            coach: {
+              ...novaCareer.coach,
+              soberania: novaCareer.coach.soberania + div.total,
+            },
+            bolsa: div.bolsa,
+          };
+          if (perfil?.user_id) {
+            void registrarTransacaoSov(
+              perfil.user_id,
+              Math.round(div.total * 100) / 100,
+              "reward",
+              "Dividendos da Bolsa de Valores da Cidadela",
+              "market",
+              { rodada: novaCareer.rodadaAtual, tipo: "dividendo" },
+            );
+          }
+        } else {
+          novaCareer = { ...novaCareer, bolsa: div.bolsa };
+        }
+      }
       persistCareer(novaCareer);
 
       // Recompensa do patrocinador no Banco Central SOV (module 'career').
@@ -1841,10 +2045,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     persistTournament(t);
     setCurrent(null);
 
-    // Geração de conteúdo pós-jogo pela IA central (reaproveita AIService em:
-    // coletiva, relatório médico e redes sociais). Dispara e esquece: quando
-    // chega, anexa como conversas de celular na carreira. Fallback procedural
-    // garante que sempre haja texto (celular fraco / IA ausente).
+    // Geração de conteúdo pós-jogo pela IA central (relatório médico + redes
+    // sociais — a coletiva duplicada foi removida: NÃO há segunda entrevista,
+    // §8). As conversas entram na fila e chegam UMA POR VEZ (§13), com
+    // notificação (toast + som, §14). Fallback procedural garante texto.
     (async () => {
       try {
         if (!career) return;
@@ -1872,8 +2076,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           soberania: career.coach.soberania,
           rodadasRestantes: t.groupFixtures.filter((fx) => !fx.played).length,
         } as const;
-        const [, relMed, redes] = await Promise.all([
-          coletivaPosJogo(resultado),
+        const [relMed, redes] = await Promise.all([
           relatorioMedico(resultado),
           redesSociaisRodada(resultado),
         ]);
@@ -1910,18 +2113,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             naoLida: true,
           });
         }
-        if (novasConv.length > 0) {
-          // Persiste junto com o estado (não só na tela): as mensagens do
-          // celular sobrevivem ao refresh, vindas do snapshot no Supabase.
-          const prev = careerRef.current;
-          if (prev) {
-            const atuais = Array.isArray(prev.conversas) ? prev.conversas : [];
-            persistCareer({
-              ...prev,
-              conversas: [...novasConv, ...atuais].slice(0, 30),
-            });
-          }
-        }
+        // Entrega gradual: nunca dump de N mensagens de uma vez (§13).
+        enfileirarConversas(novasConv);
       } catch {
         // fallback silencioso: o jogo segue sem conteúdo IA
       }
@@ -1959,49 +2152,30 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /* ---------- telas ---------- */
   if (screen === "match-end" && matchEnd) {
-    // Ganho de patrocínio escala com o resultado (incentiva a entrevista).
-    const ganhoPatrocinio =
+    // Ganho da coletiva escala com o resultado (incentiva a entrevista).
+    const ganhoColetiva =
       matchEnd.resultado === "vitoria" ? 30 : matchEnd.resultado === "empate" ? 20 : 10;
     const partidaAtual = matchEnd.partidaId ?? "sem-id";
-    const patrocinioJaPago = patrocinioPagoPartida === partidaAtual;
-    const concluirPatrocinio = () => {
-      setEntrevistaAberta(false);
-      // Idempotente: a recompensa desta partida só pode ser paga UMA vez,
-      // não importa quantas vezes o fluxo de anúncio se repita.
-      if (patrocinioJaPago) {
-        setToast("Patrocínio desta partida já foi recebido.");
-        return;
-      }
-      setPatrocinioPagoPartida(partidaAtual);
-      const uid = perfil?.user_id;
-      if (uid) {
-        void registrarTransacaoSov(
-          uid,
-          ganhoPatrocinio,
-          "reward",
-          `Patrocínio pós-jogo — entrevista (${matchEnd.competicao})`,
-          career ? "career" : "market",
-          { adversario: matchEnd.timeAdvNome, placar: `${matchEnd.placarUser}x${matchEnd.placarAdv}` },
-        );
-      }
-      if (career) {
-        persistCareer({
-          ...career,
-          coach: { ...career.coach, soberania: career.coach.soberania + ganhoPatrocinio },
-        });
-      }
-      setToast(`🎤 Entrevista concedida! +${ganhoPatrocinio} Soberania de patrocínio`);
+    const coletivaJaPaga = patrocinioPagoPartida === partidaAtual;
+    // Career mínima para coletivas em amistosos (contexto escopado, §31).
+    const careerConvite: CareerState = career ?? {
+      ...EMPTY_CAREER,
+      coach: {
+        ...EMPTY_CAREER.coach,
+        nome: perfil?.nome ?? "Treinador",
+        apelido: perfil?.nome ?? "Treinador",
+      },
     };
     return (
       <>
         <MatchEndScreen
           dados={matchEnd}
-          patrocinioPago={patrocinioJaPago}
+          patrocinioPago={coletivaJaPaga}
           entrevistaAberta={entrevistaAberta}
           onPatrocinio={() => {
-            // Um clique novo só reabre a entrevista se ela não estiver aberta
-            // — o retorno do anúncio nunca ressuscita a ação anterior.
-            if (!entrevistaAberta && !patrocinioJaPago) setEntrevistaAberta(true);
+            // Abre a coletiva direto (SEM anúncio — §9). O retorno de qualquer
+            // aba anterior nunca ressuscita ação: guardas explícitas.
+            if (!entrevistaAberta && !coletivaJaPaga) setEntrevistaAberta(true);
           }}
           onContinuar={() => {
             setMatchEnd(null);
@@ -2010,11 +2184,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           }}
         />
         {entrevistaAberta && (
-          <EntrevistaPatrocinio
-            dados={matchEnd}
-            ganho={ganhoPatrocinio}
-            coachNome={career?.coach.apelido || career?.coach.nome || perfil?.nome || "Treinador"}
-            onConcluir={concluirPatrocinio}
+          <EntrevistaColetiva
+            career={careerConvite}
+            dados={{
+              placarUser: matchEnd.placarUser,
+              placarAdv: matchEnd.placarAdv,
+              timeUserNome: matchEnd.timeUserNome,
+              timeAdvNome: matchEnd.timeAdvNome,
+              competicao: matchEnd.competicao,
+              rodada: matchEnd.rodada,
+            }}
+            ganho={ganhoColetiva}
+            coachNome={careerConvite.coach.apelido || careerConvite.coach.nome || "Treinador"}
+            onColetar={concluirColetiva}
             onFechar={() => setEntrevistaAberta(false)}
           />
         )}
@@ -2142,152 +2324,51 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
-  if (screen === "celular") {
-    try {
-      // Inbox unificado do celular: inicia limpo (sem mensagem automática padrão)
-      // e só dispara notificações geradas por eventos reais. Ordem de prioridade:
-      // suborno > narrativa > choice event. Quando não há nada prioritário, mostra
-      // a lista de conversas (histórico de decisões) — nunca um placeholder que
-      // possa travar ao clicar.
-      const subornoAtivo = career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho);
-      let narrativaAtiva = null;
-      try {
-        narrativaAtiva = career?.narrativa?.cenaAtual ? cenaDaNarrativa(career.narrativa) : null;
-      } catch (error) {
-        console.error("[Celular] Erro ao carregar narrativa:", error);
-        narrativaAtiva = null;
-      }
-      const eventoPendente = career?.eventoPendenteId
-        ? CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId)
-        : null;
-      const nomeTreinador = career?.coach.apelido || career?.coach.nome;
-
-      return (
-        <Shell>
-          <div className="mx-auto w-full max-w-5xl px-4 pb-16">
-            <Header
-              progress={progress}
-              onTrophies={() => setScreen("trophies")}
-              onHome={() => setScreen("menu")}
-            />
-
-            {/* Cabeçalho do celular: treinador + campanha sincronizada */}
-            <div className="celular-header">
-              <div className="celular-avatar">📱</div>
-              <div>
-                <p className="font-display text-lg">{nomeTreinador ?? "Treinador"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {career
-                    ? `Temporada ${career.temporada} · ${(career.divisao ?? "serie-c").toUpperCase().replace("SERIE-", "SÉRIE ")}`
-                    : "Aguardando campanha"}
-                </p>
-              </div>
-              <button onClick={() => setScreen("hub")} className="celular-close">
-                Fechar
-              </button>
-            </div>
-
-            {/* Mensagens prioritárias: suborno, narrativa, evento (chat em 1ª pessoa) */}
-            {subornoAtivo ? (
-              <SubornoStory
-                state={career!.suborno!}
-                onAvancar={aplicarSuborno}
-                onFechar={() => {
-                  // Finalizado: volta à lista de mensagens do celular (não entra
-                  // no jogo automaticamente). Em andamento: sai do celular p/ o
-                  // hub (a mensagem prioritária continua acessível no card).
-                  if (!career?.suborno?.nodeAtual) {
-                    setScreen("celular");
-                  } else {
-                    setScreen("hub");
-                  }
-                }}
-              />
-            ) : narrativaAtiva && career?.narrativa ? (
-              <NarrativeModal
-                state={career.narrativa}
-                cena={narrativaAtiva}
-                onAvancar={aplicarNarrativa}
-                onBack={() => setScreen("hub")}
-              />
-            ) : eventoPendente ? (
-              <ChoiceModal
-                evento={eventoPendente}
-                onChoose={aplicarEscolha}
-                onBack={() => setScreen("hub")}
-              />
-            ) : (
-              // Sem mensagem automática: celular limpo. Só conversas reais
-              // (decisões anteriores + desafio de patrocinador ativo viram uma
-              // conversa, não um overlay que trava).
-              <CelularConversas
-                conversas={career?.conversas ?? []}
-                desafioPatrocinador={career?.desafioPatrocinador ?? null}
-                feed={career?.feedCidadela ?? []}
-                trilhaMissoes={career ? missoesTrilha(career) : []}
-                npcDigitandoId={npcDigitando}
-                userId={perfil?.user_id ?? null}
-                nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
-                onEnviarMensagem={handleEnviarMensagem}
-                onExcluirConversa={handleExcluirConversa}
-                onEscolhaRpg={handleEscolhaRpg}
-                onVoltar={() => setScreen("hub")}
-              />
-            )}
-          </div>
-        </Shell>
-      );
-    } catch (error) {
-      console.error("[Celular] Erro fatal ao renderizar tela do celular:", error);
-      setScreen("hub");
-      setToast("Erro ao carregar celular. Voltando ao hub.");
-      return null;
-    }
-  }
-
-  if (screen === "celular-conversas" && career) {
-    return (
-      <Shell>
-        <CelularConversas
-          conversas={career.conversas}
-          desafioPatrocinador={career.desafioPatrocinador ?? null}
-          feed={career.feedCidadela ?? []}
-          trilhaMissoes={missoesTrilha(career)}
-          npcDigitandoId={npcDigitando}
-          userId={perfil?.user_id ?? null}
-          nomeJogador={career.coach.apelido || career.coach.nome}
-          onEnviarMensagem={handleEnviarMensagem}
-          onExcluirConversa={handleExcluirConversa}
-          onEscolhaRpg={handleEscolhaRpg}
-          onVoltar={() => setScreen("hub")}
-        />
-      </Shell>
-    );
-  }
-
-  if (
-    screen === "suborno" &&
-    career?.suborno &&
-    (career.suborno.nodeAtual || career.suborno.desfecho)
-  ) {
-    return (
-      <Shell>
+  /* ---------- prioridade do celular oficial (§15) ---------- */
+  // Decisão prioritária (suborno > narrativa > choice) renderizada no celular
+  // FIXO, único celular do jogo (§15). Calculada antes das telas de jogo.
+  let prioridadeCelular: React.ReactNode = null;
+  try {
+    if (career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho)) {
+      prioridadeCelular = (
         <SubornoStory
           state={career.suborno}
           onAvancar={aplicarSuborno}
-          onFechar={() => {
-            // Finalizado: volta ao celular (lista de mensagens). Em andamento:
-            // sai para o hub. Nunca entra no jogo automaticamente.
-            if (!career.suborno?.nodeAtual) {
-              setScreen("celular");
-            } else {
-              setScreen("hub");
-            }
-          }}
+          onFechar={() => setScreen("hub")}
         />
-      </Shell>
-    );
+      );
+    } else if (career?.narrativa?.cenaAtual) {
+      const cena = cenaDaNarrativa(career.narrativa);
+      if (cena) {
+        prioridadeCelular = (
+          <NarrativeModal
+            state={career.narrativa}
+            cena={cena}
+            onAvancar={aplicarNarrativa}
+            onBack={() => setScreen("hub")}
+          />
+        );
+      }
+    } else if (career?.eventoPendenteId) {
+      const evento = CHOICE_EVENTS.find((e) => e.id === career.eventoPendenteId);
+      if (evento) {
+        prioridadeCelular = (
+          <ChoiceModal
+            evento={evento}
+            onChoose={aplicarEscolha}
+            onBack={() => setScreen("hub")}
+          />
+        );
+      }
+    }
+  } catch {
+    prioridadeCelular = null;
   }
+  const naoLidasCelular =
+    (career?.conversas?.filter((c) => c.naoLida).length ?? 0) +
+    (prioridadeCelular ? 1 : 0) +
+    (career?.desafioPatrocinador && !career.desafioPatrocinador.concluido ? 1 : 0);
+
 
   if (screen === "friendly-match" || screen === "tournament-match") {
     const f =
@@ -2402,8 +2483,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             ligas={career?.ligas}
             onPlay={playNext}
             onExit={() => setScreen("menu")}
-            onOpenCelular={() => setScreen("celular")}
             onOpenClassificacao={() => setScreen("classificacao")}
+            onOpenCalendario={() => setScreen("calendario")}
+            onOpenEconomia={() => setScreen("economia")}
           />
         )}
 
@@ -2418,14 +2500,44 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           />
         )}
 
+        {/* Módulos em tela própria (§17): título + conteúdo + voltar. */}
+        {screen === "calendario" && tour && career && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <button onClick={() => setScreen("hub")} className="btn-ghost text-sm">
+                Voltar ao Hub
+              </button>
+              <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-muted-foreground">
+                Calendário da Temporada
+              </span>
+            </div>
+            <CalendarView
+              tour={tour}
+              userTeam={userTeam}
+              currentDivisao={career.divisao ?? "serie-c"}
+              copaBrasil={career.copaBrasil ?? null}
+            />
+          </div>
+        )}
+
+        {screen === "economia" && career && (
+          <EconomiaScreen
+            career={career}
+            onComprar={handleComprarAtivo}
+            onVender={handleVenderAtivo}
+            onBack={() => setScreen("hub")}
+          />
+        )}
+
         {screen === "trophies" && (
           <TrophyRoom progress={progress} userTeam={userTeam} onBack={() => setScreen("menu")} />
         )}
       </div>
 
       {toast && <div className="toast font-display">{toast}</div>}
-      
-      {/* Celular fixo no cantinho da tela */}
+
+      {/* Celular oficial — ÚNICO celular do Modo Carreira (§15). Recebe a
+          decisão prioritária e a contagem de não lidas para a notificação. */}
       <CelularFixo
         userId={perfil?.user_id ?? null}
         nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
@@ -2438,6 +2550,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         onEnviarMensagem={handleEnviarMensagem}
         onExcluirConversa={handleExcluirConversa}
         onEscolhaRpg={handleEscolhaRpg}
+        prioridade={prioridadeCelular}
+        naoLidas={naoLidasCelular}
       />
     </Shell>
   );

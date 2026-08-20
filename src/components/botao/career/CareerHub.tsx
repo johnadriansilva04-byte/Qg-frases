@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
-import { Calendar, ChevronRight, Trophy } from "lucide-react";
+import { useMemo } from "react";
+import { Calendar, ChevronRight, Coins, Trophy } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
 import { nextUserFixture, sortTable } from "../tournament";
 import type { Fixture, Tournament } from "../types";
-import { CalendarView } from "./CalendarView";
 import { NewsPortal } from "./NewsPortal";
 import { SovereigntyPanel } from "./SovereigntyPanel";
 import {
@@ -27,11 +26,19 @@ interface CareerHubProps {
   ligas?: LigasTemporada | undefined;
   onPlay: () => void;
   onExit: () => void;
-  onOpenCelular: () => void;
   /** Abre a tela dedicada de Classificação Completa (área própria, fora do hub). */
   onOpenClassificacao: () => void;
+  /** Abre a tela dedicada do Calendário (módulo em tela própria, §17). */
+  onOpenCalendario: () => void;
+  /** Abre a Bolsa de Valores da Cidadela (módulo em tela própria, §17). */
+  onOpenEconomia: () => void;
 }
 
+/**
+ * Hub do Modo Carreira (§16-§18): MENOS ELEMENTOS + MAIS FOCO. Módulos abrem
+ * em tela própria (Calendário, Bolsa, Tabela). O celular oficial é o FIXO do
+ * canto inferior direito — nenhum card/celular interno no hub (§15).
+ */
 export function CareerHub({
   tour,
   userTeam,
@@ -39,10 +46,10 @@ export function CareerHub({
   ligas,
   onPlay,
   onExit,
-  onOpenCelular,
   onOpenClassificacao,
+  onOpenCalendario,
+  onOpenEconomia,
 }: CareerHubProps) {
-  const [showCalendar, setShowCalendar] = useState(false);
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
   const copaFixPend = copaBrasil ? proximoJogoCopa(copaBrasil, userTeam.id) : null;
@@ -55,20 +62,10 @@ export function CareerHub({
       ? sortTable(nextLiga.groups[0]!.table).findIndex((row) => row.teamId === userTeam.id) + 1
       : 0;
 
-  // Helper para buscar time
   const getTeam = (teamId: string): Team => resolveTeam(teamId, userTeam);
 
-  const temDesafioPatrocinador =
-    !!career?.desafioPatrocinador && !career.desafioPatrocinador.concluido;
-  const mensagensPendentes =
-    (career?.eventoPendenteId ? 1 : 0) +
-    (career?.suborno?.nodeAtual ? 1 : 0) +
-    (career?.narrativa?.cenaAtual ? 1 : 0);
-  const temCelular = mensagensPendentes > 0 || temDesafioPatrocinador;
-
   const proximoJogo =
-    copaFixPend &&
-    copaDisponivelNaRodada(career?.rodadaAtual ?? 0, copaBrasil, userTeam.id, divisao)
+    copaFixPend && copaDisponivelNaRodada(career?.rodadaAtual ?? 0, copaBrasil, userTeam.id, divisao)
       ? { fixture: copaFixPend, tipo: "Copa do Brasil" }
       : next
         ? {
@@ -109,19 +106,14 @@ export function CareerHub({
                 <span className="font-display text-2xl text-muted-foreground">×</span>
                 <TeamBadge team={resolveTeam(userFixture.awayId, userTeam)} size="md" />
               </div>
-              <button
-                data-testid="entrar-em-campo"
-                onClick={onPlay}
-                className="btn-primary px-5 py-2.5 text-sm"
-              >
+              <button data-testid="entrar-em-campo" onClick={onPlay} className="btn-primary px-5 py-2.5 text-sm">
                 Entrar em campo
               </button>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <span>{userFixture.stage}</span>
               {userPos > 0 && <span>Posição: {userPos}º</span>}
-              <span>Custo de manutenção: {custoManutencao}</span>
-              {temCelular && <span className="text-amber-300">Celular com mensagens</span>}
+              <span>Custo: {custoManutencao}</span>
             </div>
           </>
         ) : (
@@ -130,23 +122,28 @@ export function CareerHub({
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Coluna esquerda - Módulos em quadradinhos */}
+        {/* Coluna esquerda: módulos em botões compactos (§17) + portal de notícias. */}
         <div className="grid gap-3">
-          <button onClick={onOpenCelular} className="celular-card">
-            <span className="celular-emoji">📱</span>
-            <div className="celular-info">
-              <span className="celular-title">Celular do Treinador</span>
-              <span className="celular-sub">
-                {mensagensPendentes > 0
-                  ? `${mensagensPendentes} mensagem${mensagensPendentes !== 1 ? "s" : ""} nova${mensagensPendentes !== 1 ? "s" : ""}`
-                  : temDesafioPatrocinador
-                    ? "Desafio de patrocinador ativo"
-                    : "Tudo em dia por aqui"}
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={onOpenCalendario} className="menu-card menu-accent-sky !p-3">
+              <span className="menu-card-icon menu-accent-sky !size-9">
+                <Calendar className="size-4" />
               </span>
-            </div>
-            {mensagensPendentes > 0 && <span className="celular-badge">{mensagensPendentes}</span>}
-            <span className="celular-cta">Abrir</span>
-          </button>
+              <span className="mt-1 block font-display text-xs">Calendário</span>
+            </button>
+            <button onClick={onOpenEconomia} className="menu-card menu-accent-emerald !p-3">
+              <span className="menu-card-icon menu-accent-emerald !size-9">
+                <Coins className="size-4" />
+              </span>
+              <span className="mt-1 block font-display text-xs">Bolsa</span>
+            </button>
+            <button onClick={onOpenClassificacao} className="menu-card menu-accent-amber !p-3">
+              <span className="menu-card-icon menu-accent-amber !size-9">
+                <Trophy className="size-4" />
+              </span>
+              <span className="mt-1 block font-display text-xs">Tabela</span>
+            </button>
+          </div>
 
           {career && (
             <NewsPortal
@@ -156,42 +153,19 @@ export function CareerHub({
             />
           )}
 
-          <button
-            onClick={() => setShowCalendar(!showCalendar)}
-            className="panel hover:border-emerald-500/50 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <Calendar className="size-4 text-emerald-400" />
-              <span className="font-display text-sm tracking-wide">Calendário da Temporada</span>
-            </div>
-            <ChevronRight className={`size-4 transition-transform ${showCalendar ? "rotate-90" : ""}`} />
-          </button>
-          {showCalendar && (
-            <CalendarView
-              tour={tour}
-              userTeam={userTeam}
-              currentDivisao={divisao}
-              copaBrasil={copaBrasil}
-            />
-          )}
-
-          <button onClick={onExit} className="btn-ghost w-full">
+          <button onClick={onExit} className="btn-ghost w-full text-xs">
             Voltar ao Estádio
           </button>
         </div>
 
-        {/* Coluna direita - Classificação resumida (top 5). O botão abre a
-            tela dedicada de Classificação Completa (área própria). */}
-        <div className="panel">
-          <button
-            onClick={onOpenClassificacao}
-            className="flex w-full items-center gap-2 mb-3 text-left"
-          >
+        {/* Coluna direita - Classificação resumida (top 5) → tela própria completa. */}
+        <div className="panel !p-3">
+          <button onClick={onOpenClassificacao} className="mb-3 flex w-full items-center gap-2 text-left">
             <Trophy className="size-4 text-amber-400" />
             <h3 className="font-display text-sm font-bold tracking-wide">Classificação</h3>
             <span className="text-xs text-muted-foreground">{DIVISAO_LABEL[divisao]}</span>
             <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-primary">
-              Classificação completa
+              Completa
               <ChevronRight className="size-3.5" />
             </span>
           </button>
@@ -214,29 +188,29 @@ export function CareerHub({
                   .filter((r, i, arr) => arr.findIndex((x) => x.teamId === r.teamId) === i)
                   .slice(0, 5)
                   .map((r, i) => {
-                  const position = i + 1;
-                  const zone =
-                    position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
-                  return (
-                    <tr
-                      key={r.teamId}
-                      className={`zone-row zone-${zone} ${r.teamId === nextLiga.userTeamId ? "is-user" : ""}`}
-                    >
-                      <td className="py-1 text-center font-bold">{position}º</td>
-                      <td className="py-1">
-                        <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
-                          <TeamBadge team={getTeam(r.teamId)} size="sm" />
-                        </span>
-                      </td>
-                      <td className="py-1 text-center font-bold">{r.p}</td>
-                      <td className="py-1 text-center">{r.j}</td>
-                      <td className="py-1 text-center text-emerald-300">{r.v}</td>
-                      <td className="py-1 text-center text-muted-foreground">{r.e}</td>
-                      <td className="py-1 text-center text-rose-300">{r.d}</td>
-                      <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
-                    </tr>
-                  );
-                })}
+                    const position = i + 1;
+                    const zone =
+                      position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : position >= 18 ? "rebaixamento" : "";
+                    return (
+                      <tr
+                        key={r.teamId}
+                        className={`zone-row zone-${zone} ${r.teamId === nextLiga.userTeamId ? "is-user" : ""}`}
+                      >
+                        <td className="py-1 text-center font-bold">{position}º</td>
+                        <td className="py-1">
+                          <span className={i < 2 ? "font-medium" : "text-muted-foreground"}>
+                            <TeamBadge team={getTeam(r.teamId)} size="sm" />
+                          </span>
+                        </td>
+                        <td className="py-1 text-center font-bold">{r.p}</td>
+                        <td className="py-1 text-center">{r.j}</td>
+                        <td className="py-1 text-center text-emerald-300">{r.v}</td>
+                        <td className="py-1 text-center text-muted-foreground">{r.e}</td>
+                        <td className="py-1 text-center text-rose-300">{r.d}</td>
+                        <td className="py-1 text-center font-medium">{r.gp - r.gc}</td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           ) : (

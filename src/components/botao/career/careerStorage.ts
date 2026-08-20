@@ -45,6 +45,8 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     headlines: Array.isArray(bruta.headlines) ? bruta.headlines : [],
     ultimasEscolhas: Array.isArray(bruta.ultimasEscolhas) ? bruta.ultimasEscolhas : [],
     feedCidadela: Array.isArray(bruta.feedCidadela) ? bruta.feedCidadela : [],
+    memoriaNarrativa: Array.isArray(bruta.memoriaNarrativa) ? bruta.memoriaNarrativa : [],
+    entrevistas: Array.isArray(bruta.entrevistas) ? bruta.entrevistas : [],
     eventoPendenteId: typeof bruta.eventoPendenteId === "string" ? bruta.eventoPendenteId : null,
   };
 }
