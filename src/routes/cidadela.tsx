@@ -79,27 +79,6 @@ const GAMES = [
     status: "disponível",
   },
   {
-    id: "campus" as Game,
-    label: "Campus Universitário",
-    description: "Vida acadêmica",
-    icon: GraduationCap,
-    status: "disponível",
-  },
-  {
-    id: "comercial" as Game,
-    label: "Setor Comercial",
-    description: "Escritório",
-    icon: Briefcase,
-    status: "disponível",
-  },
-  {
-    id: "laboratorio" as Game,
-    label: "Laboratórios",
-    description: "Pesquisa",
-    icon: FlaskConical,
-    status: "disponível",
-  },
-  {
     id: "xadrez" as Game,
     label: "Xadrez",
     description: "Tática clássica",

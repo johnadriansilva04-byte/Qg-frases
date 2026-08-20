@@ -1,4 +1,5 @@
 import { Trophy, TrendingUp, TrendingDown, Minus, Flag, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 
@@ -59,6 +60,25 @@ function DeltaBadge({ valor }: { valor: number }) {
  */
 export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
   const r = RESULTADO_MAP[dados.resultado];
+
+  // Gera um ID único para esta partida para controlar o estado da entrevista
+  const partidaId = `${dados.timeUserNome}-${dados.timeAdvNome}-${dados.placarUser}-${dados.placarAdv}-${dados.rodada}`;
+  const entrevistaLiberadaKey = `entrevista_liberada_${partidaId}`;
+  const [entrevistaLiberada, setEntrevistaLiberada] = useState(() => {
+    return localStorage.getItem(entrevistaLiberadaKey) === "true";
+  });
+
+  const handlePatrocinio = () => {
+    setEntrevistaLiberada(true);
+    localStorage.setItem(entrevistaLiberadaKey, "true");
+    onPatrocinio?.();
+  };
+
+  const handleContinuar = () => {
+    // Limpa o estado ao continuar
+    localStorage.removeItem(entrevistaLiberadaKey);
+    onContinuar();
+  };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-4 text-white">
@@ -131,7 +151,7 @@ export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
 
         {/* Ação principal */}
         <button
-          onClick={onContinuar}
+          onClick={handleContinuar}
           className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4 text-lg font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/40 transition hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.99]"
         >
           Continuar
@@ -144,13 +164,22 @@ export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
           </p>
           <AdsterraBanner slotId="match-end-banner" className="min-h-[90px]" />
           <div className="mt-2">
-            <ControlledMonetagButton
-              className="w-full text-xs"
-              message="Um empresário de uma marca quer te PATROCINAR após essa partida! Para fechar o acordo, você dará uma entrevista rápida para a imprensa. Uma página do patrocinador pode abrir em uma nova aba."
-              onDisparado={onPatrocinio}
-            >
-              🎤 Dar Entrevista · Ganho Patrocínio
-            </ControlledMonetagButton>
+            {entrevistaLiberada ? (
+              <ControlledMonetagButton
+                className="w-full text-xs"
+                message="Um empresário de uma marca quer te PATROCINAR após essa partida! Para fechar o acordo, você dará uma entrevista rápida para a imprensa. Uma página do patrocinador pode abrir em uma nova aba."
+                onDisparado={handlePatrocinio}
+              >
+                🎤 Dar Entrevista · Ganho Patrocínio
+              </ControlledMonetagButton>
+            ) : (
+              <button
+                onClick={handlePatrocinio}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3 text-xs font-bold text-slate-300 transition hover:border-emerald-500/50 hover:bg-slate-800 active:scale-[0.99]"
+              >
+                🎤 Liberar Entrevista · Ganho Patrocínio
+              </button>
+            )}
           </div>
         </div>
       </div>
