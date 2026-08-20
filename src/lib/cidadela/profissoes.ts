@@ -174,6 +174,17 @@ function normalizarPerfil(raw: Record<string, unknown>, userId: string): Cidadel
 }
 
 export async function carregarPerfilCidadela(userId: string): Promise<CidadelaPerfil> {
+  // Tenta carregar do localStorage primeiro (mais rápido e funciona offline)
+  const stored = localStorage.getItem(perfilKey(userId));
+  if (stored) {
+    try {
+      return normalizarPerfil(JSON.parse(stored) as Record<string, unknown>, userId);
+    } catch {
+      // cache corrompido, continua para RPC/fallback
+    }
+  }
+
+  // Tenta RPC do Supabase (se disponível)
   try {
     const { data, error } = await supabase.rpc("obter_perfil_cidadela");
     if (!error && data) {
@@ -182,17 +193,10 @@ export async function carregarPerfilCidadela(userId: string): Promise<CidadelaPe
       return perfil;
     }
   } catch (err) {
-    console.warn("[Cidadela] RPC obter_perfil_cidadela indisponível:", err);
+    console.warn("[Cidadela] RPC obter_perfil_cidadela indisponível (usando fallback local):", err);
   }
 
-  const stored = localStorage.getItem(perfilKey(userId));
-  if (stored) {
-    try {
-      return normalizarPerfil(JSON.parse(stored) as Record<string, unknown>, userId);
-    } catch {
-      // cache corrompido cai no perfil inicial
-    }
-  }
+  // Fallback: perfil inicial local
   const inicial = perfilLocalInicial(userId);
   localStorage.setItem(perfilKey(userId), JSON.stringify(inicial));
   return inicial;

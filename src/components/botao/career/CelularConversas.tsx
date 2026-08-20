@@ -648,93 +648,91 @@ export function CelularConversas({
             )}
 
             {aba === "missoes" && (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3">
-                  <div className="flex items-center gap-2">
-                    <Bot className="size-5 text-emerald-300" />
-                    <div>
-                      <p className="text-sm font-bold text-white">Rotina diária do Pracinha</p>
-                      <p className="text-[10px] text-emerald-200">Motor {motorIA} • Banco Central protegendo o orçamento</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Missões da Trilha — mesmos tabuleiros, mesmo universo. */}
+              <div className="space-y-2">
+                {/* Missões da Trilha */}
                 {trilhaMissoes.length > 0 && (
-                  <div className="space-y-2 rounded-2xl border border-purple-400/20 bg-purple-400/5 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-purple-300">
-                      Ritual da Trilha · diário
+                  <div className="rounded-xl border border-purple-400/20 bg-purple-400/5 p-2">
+                    <p className="px-2 pt-2 text-[9px] font-bold uppercase tracking-wider text-purple-300">
+                      Ritual da Trilha
                     </p>
-                    {trilhaMissoes.map((m) => (
-                      <div key={m.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-bold text-white">{m.titulo}</p>
-                            <p className="mt-1 text-xs leading-relaxed text-slate-400">{m.descricao}</p>
+                    {trilhaMissoes.map((m) => {
+                      const pct = Math.min(100, (m.progresso / m.alvo) * 100);
+                      return (
+                        <div key={m.id} className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] p-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold text-white">{m.titulo}</p>
+                            <span className="text-[10px] text-purple-300">{m.progresso}/{m.alvo}</span>
                           </div>
-                          <span
-                            className={`rounded-full px-2 py-1 text-[10px] font-black ${
-                              m.completa
-                                ? "bg-emerald-400/20 text-emerald-300"
-                                : "bg-purple-400/20 text-purple-200"
-                            }`}
-                          >
-                            {m.completa ? "✓" : `${m.progresso}/${m.alvo}`}
-                          </span>
+                          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all"
-                            style={{ width: `${Math.min(100, (m.progresso / m.alvo) * 100)}%` }}
-                          />
-                        </div>
-                        <p className="mt-1.5 text-[10px] text-slate-500">
-                          Recompensa do ritual: +{m.recompensaSov} SOV ao completar na Trilha.
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {!userId ? (
-                  <p className="py-6 text-center text-xs text-slate-400">Entre com sua conta para receber as 5 missões diárias.</p>
+                  <div className="py-4 text-center">
+                    <p className="text-xs text-slate-400">Entre para receber missões diárias</p>
+                  </div>
                 ) : carregandoMissoes ? (
-                  <p className="py-6 text-center text-xs text-slate-400">Pracinha calculando missões...</p>
+                  <div className="py-4 text-center">
+                    <p className="text-xs text-slate-400">Carregando...</p>
+                  </div>
                 ) : missoes.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400">Aplique a migração SQL da Cidadela para ativar as missões.</p>
+                  <div className="py-4 text-center">
+                    <p className="text-xs text-slate-400">Nenhuma missão disponível</p>
+                  </div>
                 ) : (
-                  missoes.map((missao) => {
-                    const pct = Math.min(100, (missao.progresso / missao.alvo) * 100);
-                    return (
-                      <div key={missao.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-bold text-white">{missao.titulo}</p>
-                            <p className="mt-1 text-xs leading-relaxed text-slate-400">{missao.descricao}</p>
+                  <div className="space-y-2">
+                    {missoes.map((missao) => {
+                      const pct = Math.min(100, (missao.progresso / missao.alvo) * 100);
+                      const completa = missao.status === "completa";
+                      return (
+                        <div
+                          key={missao.id}
+                          className={`rounded-lg border p-2.5 ${
+                            completa
+                              ? "border-emerald-400/30 bg-emerald-400/5"
+                              : "border-white/10 bg-white/[0.02]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-white">{missao.titulo}</p>
+                            <span className="shrink-0 text-[10px] text-amber-300">
+                              {missao.recompensa_sov.toFixed(1)} SOV
+                            </span>
                           </div>
-                          <span className="rounded-full bg-amber-300/20 px-2 py-1 text-[10px] font-black text-amber-200">
-                            {missao.recompensa_sov.toFixed(2)} SOV
-                          </span>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                completa ? "bg-emerald-400" : "bg-emerald-300"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-[10px] text-slate-400">
+                              {missao.progresso}/{missao.alvo}
+                            </span>
+                            {completa && (
+                              <button
+                                onClick={() => void resgatar(missao)}
+                                disabled={resgatando !== null}
+                                className="rounded bg-emerald-400 px-2 py-1 text-[10px] font-bold text-slate-950 disabled:opacity-50"
+                              >
+                                {resgatando === missao.id ? "..." : "Resgatar"}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
-                          <div className="h-full rounded-full bg-emerald-300" style={{ width: `${pct}%` }} />
-                        </div>
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                          <span>{missao.progresso}/{missao.alvo}</span>
-                          <span className="uppercase">{missao.status}</span>
-                        </div>
-                        {missao.status === "completa" && (
-                          <button
-                            onClick={() => void resgatar(missao)}
-                            disabled={resgatando !== null}
-                            className="mt-2 w-full rounded-xl bg-emerald-400 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-50"
-                          >
-                            {resgatando === missao.id ? "Resgatando..." : "Resgatar SOV"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}

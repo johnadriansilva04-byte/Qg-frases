@@ -24,6 +24,9 @@ import {
   type ProfissaoId,
 } from "@/lib/cidadela/profissoes";
 import type { Perfil } from "@/components/botao/online/auth";
+import { loadCareerFromSupabase } from "@/components/botao/career/careerRemote";
+import { garantirContatosRpg } from "@/components/botao/career/rpg/rpgEngine";
+import type { CareerState } from "@/components/botao/career/types";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -101,6 +104,7 @@ function Cidadela() {
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
+  const [career, setCareer] = useState<CareerState | null>(null);
   const { perfil, aplicarPerfil } = useBotaoAuth();
 
   // Identidade na Cidadela: carrega a profissão do jogador autenticado.
@@ -108,11 +112,20 @@ function Cidadela() {
     const uid = perfil?.user_id;
     if (!uid) {
       setPerfilCidadela(null);
+      setCareer(null);
       return;
     }
     let vivo = true;
     void carregarPerfilCidadela(uid).then((p) => {
       if (vivo) setPerfilCidadela(p);
+    });
+    // Carrega também a carreira para ter as conversas do celular
+    void loadCareerFromSupabase(uid).then((c) => {
+      if (vivo && c) {
+        setCareer(garantirContatosRpg(c));
+      }
+    }).catch(() => {
+      // Sem carreira = celular vazio (normal para novos usuários)
     });
     return () => {
       vivo = false;
@@ -395,6 +408,8 @@ function Cidadela() {
         userId={perfil?.user_id ?? null}
         nomeJogador={perfil?.nome ?? null}
         perfilCidadela={perfilCidadela}
+        conversas={career?.conversas ?? []}
+        feed={career?.feedCidadela ?? []}
       />
     </>
   );
