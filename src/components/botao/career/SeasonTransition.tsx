@@ -58,7 +58,7 @@ export function SeasonTransition({ veredito, divisao, temporada, onContinuar, on
         <div className="grid grid-cols-3 gap-3 border-y border-white/10 py-4">
           <Tile
             icon={<Coins className="size-4" />}
-            label="Soberania"
+            label="Sovereign"
             value={String(veredito.soberaniaFinal)}
             accent={continua ? "emerald" : "rose"}
           />

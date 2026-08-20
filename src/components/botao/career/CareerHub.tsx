@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Calendar, ChevronRight, Trophy } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
@@ -9,6 +9,11 @@ import { CalendarView } from "./CalendarView";
 import { ChampionshipModule } from "./ChampionshipModule";
 import { NewsPortal } from "./NewsPortal";
 import { SovereigntyPanel } from "./SovereigntyPanel";
+import { PainelMundo } from "@/components/cidadela/PainelMundo";
+import {
+  carregarPerfilCidadela,
+  type CidadelaPerfil,
+} from "@/lib/cidadela/profissoes";
 import { condicaoSombria, conviteTrilha } from "./trilhaIntegracao";
 import {
   CUSTO_MANUTENCAO,
@@ -29,6 +34,7 @@ interface CareerHubProps {
   userTeam: Team;
   career: CareerState | null;
   ligas?: LigasTemporada | undefined;
+  userId?: string | null | undefined;
   onPlay: () => void;
   onExit: () => void;
   onOpenCelular: () => void;
@@ -39,11 +45,26 @@ export function CareerHub({
   userTeam,
   career,
   ligas,
+  userId,
   onPlay,
   onExit,
   onOpenCelular,
 }: CareerHubProps) {
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showCampeonato, setShowCampeonato] = useState(false);
+  // Identidade na Cidadela: conecta o campeonato ao mundo (evento global da
+  // semana com a lente da profissão do jogador). Nunca bloqueia o hub.
+  const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    let vivo = true;
+    void carregarPerfilCidadela(userId).then((p) => {
+      if (vivo) setPerfilCidadela(p);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [userId]);
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
   const copaFixPend = copaBrasil ? proximoJogoCopa(copaBrasil, userTeam.id) : null;
@@ -90,6 +111,10 @@ export function CareerHub({
           divisao={divisao}
         />
       )}
+
+      {/* O Campus está vivo: evento global da semana da Cidadela, lido sob a
+          lente da profissão do jogador (world state compartilhado). */}
+      <PainelMundo perfil={perfilCidadela} />
 
       <section className="next-match-card">
         <div className="next-match-head">
@@ -177,7 +202,7 @@ export function CareerHub({
           )}
 
           <button onClick={onExit} className="btn-ghost w-full">
-            Voltar ao menu
+            Voltar ao Estádio
           </button>
 
           {/* Ritual da Trilha — válvula narrativa: aparece quando a carreira
@@ -200,13 +225,24 @@ export function CareerHub({
           )}
         </div>
 
-        {/* Coluna direita - Classificação sempre visível (top 5) */}
+        {/* Coluna direita - Classificação resumida (top 5). Clicar no
+            cabeçalho abre o Módulo do Campeonato completo (abaixo, largura
+            total): classificação, estatísticas, séries e Copa do Brasil. */}
         <div className="panel">
-          <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setShowCampeonato(!showCampeonato)}
+            className="flex w-full items-center gap-2 mb-3 text-left"
+          >
             <Trophy className="size-4 text-amber-400" />
             <h3 className="font-display text-sm font-bold tracking-wide">Classificação</h3>
             <span className="text-xs text-muted-foreground">{DIVISAO_LABEL[divisao]}</span>
-          </div>
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-primary">
+              Módulo completo
+              <ChevronRight
+                className={`size-3.5 transition-transform ${showCampeonato ? "rotate-90" : ""}`}
+              />
+            </span>
+          </button>
           {nextLiga.phase === "grupos" && nextLiga.groups.length > 0 ? (
             <table className="w-full text-left text-xs">
               <thead>
@@ -257,6 +293,26 @@ export function CareerHub({
           <ZoneLegend />
         </div>
       </div>
+
+      {/* Módulo do Campeonato completo (aberto a partir do resumo acima):
+          classificação detalhada, estatísticas, séries A/B/C e Copa do Brasil. */}
+      {showCampeonato && (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="size-4 text-amber-400" />
+            <h3 className="font-display text-lg font-bold tracking-wide">
+              Campeonato do Campus
+            </h3>
+          </div>
+          <ChampionshipModule
+            tour={nextLiga}
+            userTeam={userTeam}
+            currentDivisao={divisao}
+            ligas={ligas}
+            copaBrasil={copaBrasil}
+          />
+        </section>
+      )}
     </div>
   );
 }

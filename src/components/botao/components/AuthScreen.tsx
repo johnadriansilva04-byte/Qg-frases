@@ -24,7 +24,7 @@ export function AuthScreen({ onPronto }: Props) {
   // Mensagens variadas sobre mistérios/como joga
   const LOGIN_MESSAGES = [
     "Descubra os segredos da Cidadela enquanto espera...",
-    "Aprenda a dominar o Futebol de Botão com estratégia!",
+    "Aprenda a dominar o Campeonato do Campus com estratégia!",
     "Mistérios aguardam na Trilha dos Mistérios...",
     "Construa sua carreira e conquiste troféus!",
     "Desafie jogadores de todo o mundo no modo online!",

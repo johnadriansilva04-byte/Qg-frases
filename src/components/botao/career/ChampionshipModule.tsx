@@ -70,14 +70,12 @@ export function ChampionshipModule({
           <h3 className="font-display text-sm font-bold tracking-wide">Campeonatos</h3>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {currentDivisao === "serie-a" && (
-            <CompTab
-              active={competicao === "copa-brasil"}
-              onClick={() => handleCompeticaoChange("copa-brasil")}
-              icon={<Crown className="size-3.5" />}
-              label="Copa do Brasil"
-            />
-          )}
+          <CompTab
+            active={competicao === "copa-brasil"}
+            onClick={() => handleCompeticaoChange("copa-brasil")}
+            icon={<Crown className="size-3.5" />}
+            label="Copa do Brasil"
+          />
           <CompTab
             active={competicao === "brasileirao"}
             onClick={() => handleCompeticaoChange("brasileirao")}

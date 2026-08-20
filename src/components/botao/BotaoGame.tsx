@@ -2343,8 +2343,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
         {screen === "tournament-setup" && (
           <Setup
-            title="Modo Carreira"
-            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver soberania."
+            title="Carreira no Campus"
+            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver Sovereign."
             userTeam={userTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
@@ -2362,6 +2362,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             userTeam={userTeam}
             career={career}
             ligas={career?.ligas}
+            userId={perfil?.user_id ?? null}
             onPlay={playNext}
             onExit={() => setScreen("menu")}
             onOpenCelular={() => setScreen("celular")}
@@ -2397,13 +2398,13 @@ function Header({
   return (
     <header className="mb-7 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:justify-between">
       <button onClick={onHome} className="flex min-w-0 items-center gap-3 text-left">
-        <span className="logo-chip shrink-0">FB</span>
+        <span className="logo-chip shrink-0">EC</span>
         <span className="min-w-0">
           <span className="block truncate font-display text-xl leading-none sm:text-2xl">
-            Futebol de Botão
+            Estádio do Campus
           </span>
           <span className="block truncate text-[11px] tracking-[0.25em] text-muted-foreground uppercase">
-            Copa dos Botões
+            Campeonato do Campus
           </span>
         </span>
       </button>
@@ -2483,8 +2484,8 @@ function Menu({
         />
         <MenuCard
           icon={<Medal className="size-5" />}
-          title="Modo Carreira"
-          desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos."
+          title="Carreira no Campus"
+          desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos no Campeonato do Campus."
           onClick={onCareerMenu}
           accent="fuchsia"
         />

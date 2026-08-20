@@ -56,13 +56,13 @@ export const SEO_CONTENT = {
           Economia da Soberania
         </h3>
         <p className="text-sm leading-relaxed mb-3">
-          A Soberania é a moeda oficial da Pracinha Online. Você ganha soberania ao vencer
+          O Sovereign é a moeda oficial da Pracinha Online. Você ganha Sovereign ao vencer
           partidas, conquistar campeonatos e completar desafios. Use sua soberania para
           personalizar seu time, desbloquear novos modos de jogo e mostrar suas conquistas.
         </p>
         <p className="text-sm leading-relaxed">
           O sistema econômico é justo e equilibrado, recompensando habilidade e dedicação.
-          Quanto mais você joga, mais soberania acumula.
+          Quanto mais você joga, mais Sovereign acumula.
         </p>
       </section>
 

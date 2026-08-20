@@ -57,7 +57,7 @@ export function CoachSetup({ timeName, onFinish, onBack }: Props) {
       <div className="panel">
         <div className="mb-4 flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-muted-foreground">
           <Sparkles className="size-4" />
-          <span>Modo Carreira · Etapa {step + 1}/{totalSteps}</span>
+          <span>Carreira no Campus · Etapa {step + 1}/{totalSteps}</span>
         </div>
 
         {step < NARRATIVA.length && (

@@ -127,7 +127,7 @@ export function MatchEndScreen({ dados, onContinuar, onPatrocinio }: Props) {
             <p className="mt-1 text-xl font-black">{dados.placarAdv}</p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Soberania</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Sovereign</p>
             <p className="mt-1 text-xl font-black">
               <DeltaBadge valor={dados.soberaniaDelta} />
             </p>

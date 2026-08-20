@@ -223,10 +223,10 @@ export function OnlineMatchV3({
       <section className="surface mb-6 space-y-4 p-5">
         <h2 className="text-xl">Criar mesa</h2>
         <p className="text-sm text-muted-foreground">
-          Soberania disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
+          Sovereign disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm font-medium">Apostar soberania:</label>
+          <label className="text-sm font-medium">Apostar Sovereign:</label>
           <input
             type="number"
             min={0}

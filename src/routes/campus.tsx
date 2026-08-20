@@ -20,7 +20,15 @@ export const Route = createFileRoute("/campus")({
   component: Campus,
 });
 
-const SECTIONS = [
+const SECTIONS: {
+  icon: string;
+  title: string;
+  description: string;
+  link: string;
+  color: string;
+  bgColor: string;
+  disabled?: boolean;
+}[] = [
   {
     icon: "scroll",
     title: "Desenvolvimento do Brio",

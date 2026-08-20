@@ -29,9 +29,9 @@ export function CareerMenu({
 
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-4xl">Modo Carreira</h1>
+          <h1 className="font-display text-4xl">Carreira no Campus</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos.
+            Campeonato do Campus: Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos.
           </p>
         </div>
 
@@ -44,7 +44,7 @@ export function CareerMenu({
                 Temporada {career.temporada} · {career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Soberania: {career.coach.soberania} · Títulos: {career.coach.titulos}
+                Sovereign: {career.coach.soberania} · Títulos: {career.coach.titulos}
               </p>
             </div>
 

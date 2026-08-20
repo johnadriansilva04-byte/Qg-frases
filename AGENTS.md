@@ -1,3 +1,31 @@
+## Modo Carreira integrado ao Campus — nomenclatura e audição (2026-08-20)
+
+- **Nomenclatura**: "Estádio do Campus" (header/menu principal do BotaoGame),
+  "Carreira no Campus" (MenuCard principal, CareerMenu, CoachSetup) e
+  "Campeonato do Campus" (subtítulo/módulo/loading). "SOVEREIGN" em tela
+  (SovereigntyPanel eyebrow, SeasonHub, Leaderboard).
+- **CareerHub**: integra `PainelMundo` (world state da Cidadela via
+  `getProfissao(userId)`, recebe `userId` prop) + classificação em resumo
+  (top 5) com toggle "Módulo completo" que abre o `ChampionshipModule`
+  embutido (Copa do Brasil + Brasileirão + séries). Copa do Brasil tab
+  agora visível em todas as divisões (era gated em série-a — bug legado).
+  `showCalendar` é toggle sobre NewsPortal do lado da classificação.
+- **Auditoria RPG/celular (jiti)**: engines puros testados runtime —
+  `garantirContatosRpg` (3 contatos iniciais por design, idempotente),
+  `processarEventosRpg` (gatilhos + espaçamento de 3 rodadas),
+  `aplicarEscolhaRpg`, narrativa dinâmica (fecha em <=3 avanços), suborno,
+  patrocinador (`cumpriuDesafio(desafio, golsPro, golsContra)`), choicesEngine
+  (`sortearEvento(idsUsados: string[])`). Cadeia no BotaoGame:
+  `atualizarSequenciaRpg` → `anexarPost` (Rede) → `processarEventosRpg` →
+  `preparaEscolha` → `aplicarDesafioPatrocinador` a cada partida;
+  `handleEnviarMensagem` → `responderContatoNpc`; `handleEscolhaRpg` →
+  SOV ledger + cartório link.
+- **Aviso ambiental**: `vite dev` no proxy do work-host quebra a hidratação
+  do entry `@tanstack/react-start` (SSR via curl funciona) — auditar UI por
+  curl/jiti ou no dashboard Vercel. `tsc --noEmit` 0 erros, `npm run build` OK.
+- **Fix extrínseco**: `src/routes/campus.tsx` tinha erro de tipo pré-existente
+  (`section.disabled` não tipado) — declarado tipo com `disabled?: boolean`.
+
 ## Soberania unificada com Banco Central SOV + Cartório — 2026-08-19
 
 - **Fonte de verdade da soberania**: `user_wallets.balance` (SOV) via `bank_ledger`.
