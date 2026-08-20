@@ -17,6 +17,7 @@ import {
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { supabase } from "@/integrations/supabase/client";
 import { SovMarket } from "@/components/financial/SovMarket";
+import { AuthScreen } from "../components/AuthScreen";
 import {
   carregarChatCidadela,
   enviarMensagemCidadela,
@@ -30,6 +31,7 @@ import type { ConversaCelular, DesafioPatrocinador } from "./types";
 import { eventoPorId } from "./rpg/eventos";
 import type { PostFeed } from "./rpg/types";
 import type { MissaoTrilhaLocal } from "./trilhaIntegracao";
+import type { Perfil } from "../online/auth";
 
 type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado";
 
@@ -50,6 +52,8 @@ type Props = {
   onVoltar: () => void;
   userId?: string | null | undefined;
   nomeJogador?: string | null | undefined;
+  /** Callback quando login é realizado no celular */
+  onLogin?: (perfil: Perfil) => void;
 };
 
 export function CelularConversas({
@@ -64,6 +68,7 @@ export function CelularConversas({
   onVoltar,
   userId = null,
   nomeJogador = null,
+  onLogin,
 }: Props) {
   const [aba, setAba] = useState<AbaCelular>("mensagens");
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
@@ -79,8 +84,21 @@ export function CelularConversas({
   // IDs de conversas já abertas nesta sessão — limpa o indicador de "não lida"
   // ao abrir, evitando um ponto verde travado que nunca some.
   const [lidas, setLidas] = useState<Set<string>>(new Set());
+  const [mostrarLogin, setMostrarLogin] = useState(false);
 
-  // Conversa virtual do patrocinador (desafio ativo), quando houver. É montada
+  // Mostrar login se não tiver userId e onLogin estiver disponível
+  useEffect(() => {
+    if (!userId && onLogin) {
+      setMostrarLogin(true);
+    } else {
+      setMostrarLogin(false);
+    }
+  }, [userId, onLogin]);
+
+  const handleLogin = (perfil: Perfil) => {
+    setMostrarLogin(false);
+    onLogin?.(perfil);
+  };
   // a partir do estado real — nunca gera mensagem automática sem evento.
   const convPatrocinador: ConversaCelular | null = desafioPatrocinador && !desafioPatrocinador.concluido
     ? {
@@ -203,6 +221,32 @@ export function CelularConversas({
     grupo: "Grupo da Cidadela",
     mercado: "Feira / Marketplace",
   };
+
+  // Se estiver mostrando login, renderiza AuthScreen dentro do celular
+  if (mostrarLogin) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-6">
+        <div className="phone-frame">
+          <div className="phone-notch" />
+          <div className="phone-screen">
+            <div className="phone-chat-head">
+              <button onClick={onVoltar} className="phone-back" aria-label="Voltar">
+                <ChevronLeft className="size-5" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-white">Login da Cidadela</p>
+                <p className="truncate text-[10px] text-slate-400">Entre para acessar o celular</p>
+              </div>
+              <Smartphone className="size-4 text-slate-400" />
+            </div>
+            <div className="phone-chat-body p-4">
+              <AuthScreen onPronto={handleLogin} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
 
   if (conversaAtiva && aba === "mensagens") {

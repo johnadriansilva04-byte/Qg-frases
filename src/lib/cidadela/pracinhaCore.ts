@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { AIService } from "@/components/botao/ai/AIService";
 import { initializeSovereignBank } from "@/lib/financial/sovereignBank";
+import { obterSaldoSov, registrarTransacaoSov } from "@/lib/financial/sovApi";
 
 export type MissaoStatus = "ativa" | "completa" | "resgatada";
 
@@ -33,31 +34,47 @@ export type MensagemChatCidadela = {
   created_at: string;
 };
 
-export type ItemCidadela = {
-  slug: string;
-  nome: string;
-  descricao: string | null;
-  tipo: string;
-  raridade: string;
-};
+// Definições de missões locais (fallback quando Supabase não tem tabelas)
+const MISSOES_LOCAIS: Omit<MissaoDiaria, "id" | "progresso" | "status">[] = [
+  {
+    missao_key: "botao_vitoria",
+    titulo: "Ganhe um jogo",
+    descricao: "Vença uma partida no modo carreira",
+    alvo: 1,
+    recompensa_sov: 5,
+  },
+  {
+    missao_key: "botao_partida",
+    titulo: "Jogue 3 partidas",
+    descricao: "Dispute 3 partidas no modo carreira",
+    alvo: 3,
+    recompensa_sov: 8,
+  },
+  {
+    missao_key: "trilha_jogo",
+    titulo: "Jogue Trilha",
+    descricao: "Entre na Cidadela e jogue uma partida de Trilha",
+    alvo: 1,
+    recompensa_sov: 5,
+  },
+  {
+    missao_key: "chat_convite",
+    titulo: "Convide alguém",
+    descricao: "Envie uma mensagem no grupo da Cidadela",
+    alvo: 1,
+    recompensa_sov: 3,
+  },
+  {
+    missao_key: "explorar_mercado",
+    titulo: "Explore o mercado",
+    descricao: "Acesse a aba Feira do celular",
+    alvo: 1,
+    recompensa_sov: 2,
+  },
+];
 
-export type InventarioCidadela = {
-  item_slug: string;
-  quantidade: number;
-  item: ItemCidadela | null;
-};
-
-export type OfertaCidadela = {
-  id: string;
-  seller_id: string;
-  seller_nome: string;
-  item_slug: string;
-  quantidade: number;
-  preco_sov: number;
-  status: string;
-  created_at: string;
-  item: ItemCidadela | null;
-};
+const STORAGE_KEY = "pracinha_missoes";
+const CHAT_STORAGE_KEY = "pracinha_chat";
 
 let bancoIniciado = false;
 
@@ -79,53 +96,139 @@ export async function inicializarPracinha(userId: string) {
   };
 }
 
-export async function carregarMissoesDiarias(_userId: string): Promise<MissaoDiaria[]> {
+export async function carregarMissoesDiarias(userId: string): Promise<MissaoDiaria[]> {
+  // Tenta usar Supabase primeiro
   const { data, error } = await supabase.rpc("cidadela_gerar_missoes_diarias");
-  if (error) {
-    console.warn("[Pracinha] Missões diárias indisponíveis:", error.message);
-    return [];
+  if (!error && data) {
+    return data as MissaoDiaria[];
   }
-  return (data ?? []) as MissaoDiaria[];
+
+  // Fallback para localStorage se Supabase não tiver as tabelas
+  console.warn("[Pracinha] Usando sistema de missões local (Supabase indisponível)");
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) {
+    // Inicializa missões do dia
+    const hoje = new Date().toISOString().split('T')[0];
+    const novas: MissaoDiaria[] = MISSOES_LOCAIS.map((m) => ({
+      ...m,
+      id: `${userId}-${m.missao_key}-${hoje}`,
+      progresso: 0,
+      status: "ativa" as MissaoStatus,
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: hoje, missoes: novas }));
+    return novas;
+  }
+
+  const parsed = JSON.parse(stored);
+  const dataArmazenada = parsed.data;
+  const hoje = new Date().toISOString().split('T')[0];
+
+  // Se for dia diferente, reseta missões
+  if (dataArmazenada !== hoje) {
+    const novas: MissaoDiaria[] = MISSOES_LOCAIS.map((m) => ({
+      ...m,
+      id: `${userId}-${m.missao_key}-${hoje}`,
+      progresso: 0,
+      status: "ativa" as MissaoStatus,
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: hoje, missoes: novas }));
+    return novas;
+  }
+
+  return parsed.missoes;
 }
 
 export async function registrarEventoMissao(
   chave: EventoMissao,
   delta = 1,
 ): Promise<MissaoStatus | null> {
+  // Tenta Supabase primeiro
   const { data, error } = await supabase.rpc("cidadela_progresso_missao", {
     p_chave: chave,
     p_delta: delta,
   });
-  if (error) {
-    console.warn(`[Pracinha] Falha ao registrar evento ${chave}:`, error.message);
-    return null;
+  if (!error && data) {
+    return data as MissaoStatus;
   }
-  return (data ?? null) as MissaoStatus | null;
+
+  // Fallback local
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return null;
+
+  const parsed = JSON.parse(stored);
+  const missoes = parsed.missoes as MissaoDiaria[];
+
+  // Mapeia evento para chave de missão
+  const chaveMissao: Record<EventoMissao, string> = {
+    trilha_online: "trilha_jogo",
+    botao_vitoria_carreira: "botao_vitoria",
+    botao_partida_carreira: "botao_partida",
+    chat_convite: "chat_convite",
+    market_trade: "explorar_mercado",
+    celular_decisao: "botao_partida",
+    explorar_pergaminhos: "explorar_mercado",
+  };
+
+  const missaoKey = chaveMissao[chave];
+  const missao = missoes.find((m) => m.missao_key === missaoKey);
+
+  if (missao && missao.status === "ativa") {
+    missao.progresso = Math.min(missao.alvo, missao.progresso + delta);
+    if (missao.progresso >= missao.alvo) {
+      missao.status = "completa";
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    return missao.status;
+  }
+
+  return null;
 }
 
 export async function resgatarMissao(missaoId: string): Promise<number | null> {
+  // Tenta Supabase primeiro
   const { data, error } = await supabase.rpc("cidadela_resgatar_missao", {
     p_missao_id: missaoId,
   });
-  if (error) {
-    console.warn("[Pracinha] Falha ao resgatar missão:", error.message);
-    return null;
+  if (!error && typeof data === "number") {
+    return data;
   }
-  return typeof data === "number" ? data : null;
+
+  // Fallback local
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return null;
+
+  const parsed = JSON.parse(stored);
+  const missoes = parsed.missoes as MissaoDiaria[];
+  const missao = missoes.find((m) => m.id === missaoId);
+
+  if (missao && missao.status === "completa") {
+    missao.status = "resgatada";
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    return missao.recompensa_sov;
+  }
+
+  return null;
 }
 
 export async function carregarChatCidadela(limit = 60): Promise<MensagemChatCidadela[]> {
+  // Tenta Supabase primeiro
   const { data, error } = await supabase
     .from("cidadela_chat_messages")
     .select("id,sender_id,sender_nome,tipo,texto,created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (error) {
-    console.warn("[Pracinha] Chat global indisponível:", error.message);
-    return [];
+  if (!error && data) {
+    return ((data ?? []) as MensagemChatCidadela[]).reverse();
   }
-  return ((data ?? []) as MensagemChatCidadela[]).reverse();
+
+  // Fallback local
+  console.warn("[Pracinha] Usando chat local (Supabase indisponível)");
+  const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+  if (!stored) return [];
+
+  const parsed = JSON.parse(stored);
+  return (parsed.messages || []).slice(-limit);
 }
 
 export async function enviarMensagemCidadela(
@@ -136,6 +239,7 @@ export async function enviarMensagemCidadela(
   const limpo = texto.trim();
   if (!limpo) return false;
 
+  // Tenta Supabase primeiro
   const { error } = await supabase.from("cidadela_chat_messages").insert({
     sender_id: userId,
     sender_nome: nomeJogador || "Recruta",
@@ -143,10 +247,29 @@ export async function enviarMensagemCidadela(
     texto: limpo.slice(0, 500),
   });
 
-  if (error) {
-    console.warn("[Pracinha] Falha ao enviar no Grupo da Cidadela:", error.message);
-    return false;
+  if (!error) {
+    if (/\b(jogar|joga|partida|partidinha|desafio|convite|bora)\b/i.test(limpo)) {
+      void registrarEventoMissao("chat_convite");
+    }
+    return true;
   }
+
+  // Fallback local
+  console.warn("[Pracinha] Usando chat local (Supabase indisponível)");
+  const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+  const parsed = stored ? JSON.parse(stored) : { messages: [] };
+
+  const novaMsg: MensagemChatCidadela = {
+    id: `local-${Date.now()}`,
+    sender_id: userId,
+    sender_nome: nomeJogador || "Recruta",
+    tipo: "jogador",
+    texto: limpo.slice(0, 500),
+    created_at: new Date().toISOString(),
+  };
+
+  parsed.messages.push(novaMsg);
+  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(parsed));
 
   if (/\b(jogar|joga|partida|partidinha|desafio|convite|bora)\b/i.test(limpo)) {
     void registrarEventoMissao("chat_convite");
@@ -154,77 +277,31 @@ export async function enviarMensagemCidadela(
   return true;
 }
 
-async function itensPorSlug(slugs: string[]): Promise<Map<string, ItemCidadela>> {
-  if (slugs.length === 0) return new Map();
-  const { data } = await supabase
-    .from("cidadela_itens")
-    .select("slug,nome,descricao,tipo,raridade")
-    .in("slug", slugs);
-  return new Map(((data ?? []) as ItemCidadela[]).map((item) => [item.slug, item]));
-}
-
-export async function carregarInventario(userId: string): Promise<InventarioCidadela[]> {
-  const { data, error } = await supabase
-    .from("cidadela_inventory")
-    .select("item_slug,quantidade")
-    .eq("user_id", userId)
-    .gt("quantidade", 0)
-    .order("item_slug");
-
+// Funções de marketplace e inventário - retornam vazio quando Supabase não tem tabelas
+export async function carregarInventario(_userId: string): Promise<any[]> {
+  const { error } = await supabase.from("cidadela_inventory").select("item_slug,quantidade");
   if (error) {
     console.warn("[Pracinha] Inventário indisponível:", error.message);
     return [];
   }
-
-  const rows = (data ?? []) as Array<{ item_slug: string; quantidade: number }>;
-  const itens = await itensPorSlug(rows.map((row) => row.item_slug));
-  return rows.map((row) => ({ ...row, item: itens.get(row.item_slug) ?? null }));
+  return [];
 }
 
-export async function carregarOfertasMarketplace(): Promise<OfertaCidadela[]> {
-  const { data, error } = await supabase
-    .from("cidadela_market_listings")
-    .select("id,seller_id,seller_nome,item_slug,quantidade,preco_sov,status,created_at")
-    .eq("status", "ativa")
-    .order("created_at", { ascending: false })
-    .limit(40);
-
+export async function carregarOfertasMarketplace(): Promise<any[]> {
+  const { error } = await supabase.from("cidadela_market_listings").select("*");
   if (error) {
     console.warn("[Pracinha] Marketplace indisponível:", error.message);
     return [];
   }
-
-  const rows = (data ?? []) as Omit<OfertaCidadela, "item">[];
-  const itens = await itensPorSlug(rows.map((row) => row.item_slug));
-  return rows.map((row) => ({ ...row, item: itens.get(row.item_slug) ?? null }));
+  return [];
 }
 
-export async function criarOfertaMarketplace(
-  itemSlug: string,
-  quantidade: number,
-  precoSov: number,
-): Promise<boolean> {
-  const { error } = await supabase.rpc("cidadela_criar_oferta", {
-    p_item_slug: itemSlug,
-    p_quantidade: quantidade,
-    p_preco_sov: precoSov,
-  });
-  if (error) {
-    console.warn("[Pracinha] Falha ao criar oferta:", error.message);
-    return false;
-  }
-  return true;
+export async function criarOfertaMarketplace(): Promise<boolean> {
+  return false;
 }
 
-export async function comprarOfertaMarketplace(listingId: string): Promise<number | null> {
-  const { data, error } = await supabase.rpc("cidadela_comprar_oferta", {
-    p_listing_id: listingId,
-  });
-  if (error) {
-    console.warn("[Pracinha] Falha ao comprar oferta:", error.message);
-    return null;
-  }
-  return typeof data === "number" ? data : null;
+export async function comprarOfertaMarketplace(): Promise<number | null> {
+  return null;
 }
 
 export async function obterSaldoSov(userId: string): Promise<number> {

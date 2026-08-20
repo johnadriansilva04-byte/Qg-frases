@@ -1,4 +1,4 @@
-import { Brain, Coins, GraduationCap, ScrollText, Shield, Target, TrendingUp } from "lucide-react";
+import { Brain, Coins, GraduationCap, ScrollText, Shield, Target, TrendingUp, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AIService } from "@/components/botao/ai/AIService";
 import { InfoModal, InfoButton } from "./InfoModal";
@@ -142,15 +142,12 @@ export function PracinhaIntro({ nomeJogador, onComplete }: PracinhaIntroProps) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_center,#173526_0%,#0f172a_48%,#020617_100%)] p-4 text-white">
       <section className="w-full max-w-3xl rounded-[2rem] border border-emerald-300/20 bg-slate-950/80 p-6 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl sm:p-8">
-        <div className="mx-auto max-w-md">
-          <div className="relative mx-auto h-44 w-40">
-            <div className="absolute left-1/2 top-0 h-8 w-1 -translate-x-1/2 rounded bg-emerald-300/70" />
-            <div className="absolute left-1/2 top-5 h-4 w-4 -translate-x-1/2 rounded-full bg-emerald-300 shadow-[0_0_24px_rgba(110,231,183,0.8)]" />
-            <div className="absolute inset-x-2 top-8 h-20 rounded-t-[3rem] border-4 border-emerald-200/50 bg-gradient-to-b from-emerald-700 to-emerald-950 shadow-inner" />
-            <div className="absolute inset-x-5 top-24 h-20 rounded-b-[2rem] rounded-t-lg border border-emerald-300/30 bg-gradient-to-b from-slate-700 to-slate-950" />
-            <div className="absolute left-9 top-[5.8rem] h-5 w-5 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
-            <div className="absolute right-9 top-[5.8rem] h-5 w-5 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
-            <div className="absolute bottom-3 left-1/2 h-2 w-16 -translate-x-1/2 rounded-full bg-emerald-300/40" />
+        <div className="mx-auto max-w-md flex justify-center">
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-full bg-emerald-500/20 blur-2xl animate-pulse" />
+            <div className="relative p-6 rounded-3xl border border-emerald-400/30 bg-gradient-to-b from-emerald-500/10 to-emerald-900/20">
+              <Smartphone className="w-24 h-24 text-emerald-300" />
+            </div>
           </div>
         </div>
 

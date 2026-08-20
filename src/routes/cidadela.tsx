@@ -12,6 +12,7 @@ import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { InfoModal, InfoButton } from "@/components/InfoModal";
 import { armarSponsor } from "@/lib/sponsorGate";
 import { SEO_CONTENT } from "@/data/seoContent";
+import type { Perfil } from "@/components/botao/online/auth";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -113,7 +114,7 @@ function Cidadela() {
   const [showPracinha, setShowPracinha] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
-  const { perfil } = useBotaoAuth();
+  const { perfil, entrar, cadastrar, cachePerfil } = useBotaoAuth();
 
   // Sessão ativa não é persistida: cada login entra com estado limpo.
   useEffect(() => {
@@ -126,6 +127,12 @@ function Cidadela() {
     window.localStorage.setItem("cidadela_intro_seen", "true");
     setShowIntro(false);
     setShowPracinha(true);
+  };
+
+  const handleLogin = async (p: Perfil) => {
+    cachePerfil(p);
+    // Após login, abre celular com mensagem do Pracinha
+    setPhoneOpen(true);
   };
 
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
@@ -168,7 +175,8 @@ function Cidadela() {
         nomeJogador={perfil?.nome}
         onComplete={() => {
           setShowPracinha(false);
-          setPhoneOpen(!!perfil?.user_id);
+          // Abre celular automaticamente após PracinhaIntro
+          setPhoneOpen(true);
         }}
       />
     );
@@ -176,6 +184,7 @@ function Cidadela() {
 
   if (phoneOpen) {
     // Celular da Cidadela usa CelularConversas com estado vazio (sem conversas de carreira)
+    // Passa onLogin para permitir login dentro do celular
     return (
       <CelularConversas
         conversas={[]}
@@ -184,6 +193,7 @@ function Cidadela() {
         onEnviarMensagem={() => {}}
         userId={perfil?.user_id ?? null}
         nomeJogador={perfil?.nome ?? null}
+        onLogin={handleLogin}
       />
     );
   }
