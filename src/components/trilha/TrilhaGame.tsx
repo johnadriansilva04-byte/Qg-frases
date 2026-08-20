@@ -6,7 +6,7 @@ import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { GameEndAdModal } from "./GameEndAdModal";
 import { TrilhaLoadingScreen } from "./TrilhaLoadingScreen";
-import { VictoryScreen } from "./VictoryScreen";
+import { TrilhaRPGScreen } from "./TrilhaRPGScreen";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
 import { useTrilhaPhases, type Phase } from "@/hooks/useTrilhaChampionship";
@@ -751,9 +751,9 @@ function TrilhaGameBoard({
 
       {/* Tela de vitória ao completar fase */}
       {showVictoryScreen && phases.phaseJustCompleted && (
-        <VictoryScreen
-          phase={currentPhaseConfig?.difficulty || "recruta"}
-          onNextPhase={handleNextPhase}
+        <TrilhaRPGScreen
+          resultado="vitoria"
+          fase={currentPhaseConfig?.difficulty || "recruta"}
           onContinue={handleContinueSameLevel}
         />
       )}
