@@ -135,10 +135,9 @@ export const WORLD_STATE_INICIAL: WorldState = {
 };
 
 // ---------------------------------------------------------------------------
-// Persistência híbrida: Supabase (RPC) com fallback em localStorage.
+// Persistência: Apenas Supabase como fonte de verdade.
+// localStorage é usado apenas para estado temporário de UI (intro visto, etc.)
 // ---------------------------------------------------------------------------
-
-const perfilKey = (userId: string) => `cidadela_perfil_${userId}`;
 
 function perfilLocalInicial(userId: string): CidadelaPerfil {
   return {
@@ -174,32 +173,18 @@ function normalizarPerfil(raw: Record<string, unknown>, userId: string): Cidadel
 }
 
 export async function carregarPerfilCidadela(userId: string): Promise<CidadelaPerfil> {
-  // Tenta carregar do localStorage primeiro (mais rápido e funciona offline)
-  const stored = localStorage.getItem(perfilKey(userId));
-  if (stored) {
-    try {
-      return normalizarPerfil(JSON.parse(stored) as Record<string, unknown>, userId);
-    } catch {
-      // cache corrompido, continua para RPC/fallback
-    }
-  }
-
-  // Tenta RPC do Supabase (se disponível)
+  // Apenas Supabase como fonte de verdade - sem localStorage para dados persistentes
   try {
     const { data, error } = await supabase.rpc("obter_perfil_cidadela");
     if (!error && data) {
-      const perfil = normalizarPerfil(data as Record<string, unknown>, userId);
-      localStorage.setItem(perfilKey(userId), JSON.stringify(perfil));
-      return perfil;
+      return normalizarPerfil(data as Record<string, unknown>, userId);
     }
   } catch (err) {
-    console.warn("[Cidadela] RPC obter_perfil_cidadela indisponível (usando fallback local):", err);
+    console.error("[Cidadela] RPC obter_perfil_cidadela falhou:", err);
   }
 
-  // Fallback: perfil inicial local
-  const inicial = perfilLocalInicial(userId);
-  localStorage.setItem(perfilKey(userId), JSON.stringify(inicial));
-  return inicial;
+  // Se RPC falhar, retorna perfil inicial (usuário precisa ter migrations aplicadas)
+  return perfilLocalInicial(userId);
 }
 
 export async function escolherProfissao(
@@ -211,26 +196,14 @@ export async function escolherProfissao(
       p_profissao: profissao,
     });
     if (!error && data) {
-      const perfil = normalizarPerfil(data as Record<string, unknown>, userId);
-      localStorage.setItem(perfilKey(userId), JSON.stringify(perfil));
-      return perfil;
+      return normalizarPerfil(data as Record<string, unknown>, userId);
     }
   } catch (err) {
-    console.warn("[Cidadela] RPC escolher_profissao indisponível:", err);
+    console.error("[Cidadela] RPC escolher_profissao falhou:", err);
   }
 
-  const atual = await carregarPerfilCidadela(userId);
-  const desbloqueadas = atual.profissoes_desbloqueadas.includes(profissao)
-    ? atual.profissoes_desbloqueadas
-    : [...atual.profissoes_desbloqueadas, profissao];
-  const atualizado: CidadelaPerfil = {
-    ...atual,
-    profissao_atual: profissao,
-    profissoes_desbloqueadas: desbloqueadas,
-    updated_at: new Date().toISOString(),
-  };
-  localStorage.setItem(perfilKey(userId), JSON.stringify(atualizado));
-  return atualizado;
+  // Se RPC falhar, recarrega o perfil atual
+  return carregarPerfilCidadela(userId);
 }
 
 /** Mescla um patch no estado individual e aplica delta de reputação. */
@@ -245,25 +218,14 @@ export async function salvarEstadoCidadela(
       p_reputacao_delta: reputacaoDelta,
     });
     if (!error && data) {
-      const perfil = normalizarPerfil(data as Record<string, unknown>, userId);
-      localStorage.setItem(perfilKey(userId), JSON.stringify(perfil));
-      return perfil;
+      return normalizarPerfil(data as Record<string, unknown>, userId);
     }
   } catch (err) {
-    console.warn("[Cidadela] RPC atualizar_estado_cidadela indisponível:", err);
+    console.error("[Cidadela] RPC atualizar_estado_cidadela falhou:", err);
   }
 
-  const atual = await carregarPerfilCidadela(userId);
-  const reputacao = Math.max(0, atual.reputacao_global + reputacaoDelta);
-  const atualizado: CidadelaPerfil = {
-    ...atual,
-    estado: { ...atual.estado, ...patch },
-    reputacao_global: reputacao,
-    nivel_cidadela: 1 + Math.floor(reputacao / 50),
-    updated_at: new Date().toISOString(),
-  };
-  localStorage.setItem(perfilKey(userId), JSON.stringify(atualizado));
-  return atualizado;
+  // Se RPC falhar, recarrega o perfil atual
+  return carregarPerfilCidadela(userId);
 }
 
 export async function carregarWorldState(): Promise<WorldState> {

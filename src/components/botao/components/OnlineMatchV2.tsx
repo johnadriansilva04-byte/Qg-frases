@@ -26,15 +26,6 @@ import {
 
 type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado";
 
-// Chaves para persistência no localStorage
-const STORAGE_KEYS = {
-  SCREEN: 'botao_online_v2_screen',
-  NOME_SALA: 'botao_online_v2_nome_sala',
-  FORMATO: 'botao_online_v2_formato',
-  LOBBY_ID: 'botao_online_v2_lobby_id',
-  BLOCO_ID: 'botao_online_v2_bloco_id',
-};
-
 const FORMATOS = [
   { valor: "melhor_de_3", rotulo: "Melhor de 3", jogadas: 12 },
   { valor: "melhor_de_6", rotulo: "Melhor de 6", jogadas: 20 },
@@ -47,72 +38,12 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
   const { perfil } = useBotaoAuth();
 
   const [lobbyAtivo, setLobbyAtivo] = useState<Lobby | null>(null);
-  const [nomeSala, setNomeSala] = useState(() => localStorage.getItem(STORAGE_KEYS.NOME_SALA) || "");
-  const [formato, setFormato] = useState(() => localStorage.getItem(STORAGE_KEYS.FORMATO) || "melhor_de_3");
-  const [blocoId, setBlocoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.BLOCO_ID));
-  const [screen, setScreen] = useState<Screen>(() => (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list");
+  const [nomeSala, setNomeSala] = useState("");
+  const [formato, setFormato] = useState("melhor_de_3");
+  const [blocoId, setBlocoId] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>("lobby-list");
 
   const session = jogador?.user_id ?? perfil?.user_id ?? "";
-
-  // Persistir estado quando mudar
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCREEN, screen);
-  }, [screen]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.NOME_SALA, nomeSala);
-  }, [nomeSala]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.FORMATO, formato);
-  }, [formato]);
-
-  useEffect(() => {
-    if (lobbyAtivo) {
-      localStorage.setItem(STORAGE_KEYS.LOBBY_ID, lobbyAtivo.id);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.LOBBY_ID);
-    }
-  }, [lobbyAtivo]);
-
-  useEffect(() => {
-    if (blocoId) {
-      localStorage.setItem(STORAGE_KEYS.BLOCO_ID, blocoId);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.BLOCO_ID);
-    }
-  }, [blocoId]);
-
-  // Restaurar sessão ao montar
-  useEffect(() => {
-    const savedLobbyId = localStorage.getItem(STORAGE_KEYS.LOBBY_ID);
-    const savedScreen = localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen;
-
-    console.log('[OnlineMatchV2] Restaurando sessão:', { savedLobbyId, savedScreen });
-
-    if (savedScreen && savedScreen !== "lobby-list" && savedLobbyId) {
-      // Buscar o lobby salvo
-      getLobbiesAtivos().then(lobbies => {
-        const lobbySalvo = lobbies.find(l => l.id === savedLobbyId);
-        if (lobbySalvo) {
-          console.log('[OnlineMatchV2] Restaurando lobby salvo:', lobbySalvo);
-          setLobbyAtivo(lobbySalvo);
-          setScreen(savedScreen);
-        } else {
-          console.log('[OnlineMatchV2] Lobby salvo não encontrado, voltando para lista');
-          limparPersistencia();
-          setScreen("lobby-list");
-        }
-      });
-    }
-  }, []);
-
-  // Limpar persistência
-  const limparPersistencia = useCallback(() => {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-  }, []);
 
   // Timer para limpar salas antigas a cada minuto
   useEffect(() => {
@@ -253,9 +184,8 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
         onSair={() => {
           setBlocoId(null);
           setScreen("lobby-view");
-          limparPersistencia();
         }}
-        onVoltarLobby={() => { setScreen("lobby-view"); limparPersistencia(); }}
+        onVoltarLobby={() => { setScreen("lobby-view"); }}
       />
     );
   }
@@ -264,7 +194,7 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
     return (
       <main className="mx-auto w-full max-w-4xl px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => { setScreen("lobby-list"); limparPersistencia(); }} className="btn-ghost">
+          <button onClick={() => { setScreen("lobby-list"); }} className="btn-ghost">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h2 className="font-display text-2xl">{lobbyAtivo.nome}</h2>
@@ -316,14 +246,13 @@ export function OnlineMatchV2({ onBack }: { onBack?: () => void }) {
                   await encerrarLobby(lobbyAtivo.id);
                   setLobbyAtivo(null);
                   setScreen("lobby-list");
-                  limparPersistencia();
                   recarregarLobbies();
                 }}
               >
                 Encerrar sala
               </button>
             )}
-            <button className="btn-secondary" onClick={() => { setScreen("lobby-list"); limparPersistencia(); }}>
+            <button className="btn-secondary" onClick={() => { setScreen("lobby-list"); }}>
               Voltar
             </button>
           </div>

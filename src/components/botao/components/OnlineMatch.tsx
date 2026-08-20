@@ -8,15 +8,6 @@ import { atualizarEstatisticasOnline } from "../storage";
 
 type Screen = "lobby-list" | "lobby-view" | "aguardando" | "jogo" | "resultado";
 
-// Chaves para persistência no localStorage
-const STORAGE_KEYS = {
-  SCREEN: 'botao_online_screen',
-  NOME_SALA: 'botao_online_nome_sala',
-  FORMATO: 'botao_online_formato',
-  LOBBY_ID: 'botao_online_lobby_id',
-  BLOCO_ID: 'botao_online_bloco_id',
-};
-
 export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; onEstadoPartida?: (emPartida: boolean) => void }) {
   const { logout, perfil } = useBotaoAuth();
   const {
@@ -49,71 +40,16 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
   const cores = perfil?.cores || usuario?.cores || ["#FF0000", "#00FF00", "#0000FF"];
   const pontosSoberania = perfil?.pontos_soberania || 0;
 
-  // Carregar estado persistido
-  const [screen, setScreen] = useState<Screen>(() => {
-    return (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list";
-  });
+  // Estado local para UI (não persistido - sempre começa do lobby)
+  const [screen, setScreen] = useState<Screen>("lobby-list");
 
   // Notificar estado de partida online
   useEffect(() => {
-    if (onEstadoPartida) {
-      const emPartida = screen === "jogo" || screen === "aguardando";
-      onEstadoPartida(emPartida);
-    }
+    if (onEstadoPartida) onEstadoPartida(screen === "jogo");
   }, [screen, onEstadoPartida]);
   
-  // Estado local para UI
-  const [nomeSala, setNomeSala] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.NOME_SALA) || "";
-  });
-  const [formato, setFormato] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.FORMATO) || "melhor_de_3";
-  });
-
-  // Persistir estado quando mudar
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCREEN, screen);
-  }, [screen]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.NOME_SALA, nomeSala);
-  }, [nomeSala]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.FORMATO, formato);
-  }, [formato]);
-
-  // Persistir lobby/bloco IDs
-  useEffect(() => {
-    if (lobby) {
-      localStorage.setItem(STORAGE_KEYS.LOBBY_ID, lobby.id);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.LOBBY_ID);
-    }
-  }, [lobby]);
-
-  useEffect(() => {
-    if (blocoAtual) {
-      localStorage.setItem(STORAGE_KEYS.BLOCO_ID, blocoAtual.id);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.BLOCO_ID);
-    }
-  }, [blocoAtual]);
-
-  // Restaurar sessão ao montar
-  useEffect(() => {
-    const savedLobbyId = localStorage.getItem(STORAGE_KEYS.LOBBY_ID);
-    const savedBlocoId = localStorage.getItem(STORAGE_KEYS.BLOCO_ID);
-    const savedScreen = localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen;
-
-    if (savedScreen && savedScreen !== "lobby-list") {
-      setScreen(savedScreen);
-    }
-
-    if (savedLobbyId) {
-      entrarLobby(savedLobbyId);
-    }
-  }, [entrarLobby]);
+  const [nomeSala, setNomeSala] = useState("");
+  const [formato, setFormato] = useState("melhor_de_3");
 
   // Carregar lobbies ao montar
   useEffect(() => {
@@ -149,19 +85,11 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
       setScreen('resultado');
       // Auto-destruir lobby após mostrar resultado
       setTimeout(() => {
-        limparPersistencia();
         sairLobby();
         setScreen('lobby-list');
       }, 5000);
     }
   }, [blocoAtual, screen, sairLobby]);
-
-  // Limpar persistência
-  const limparPersistencia = useCallback(() => {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-  }, []);
 
   const getCorDisponivel = useCallback((coresOponente: string[]) => {
     const coresDisponiveis = cores.filter((c: string) => !coresOponente.includes(c));

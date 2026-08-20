@@ -18,10 +18,9 @@ const VIDEO_DATE_KEY = "trilha_video_date";
 export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClose }: GameEndAdModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [videosWatchedToday, setVideosWatchedToday] = useState(0);
-  const [canWatchVideo, setCanWatchVideo] = useState(true);
   const [countdown, setCountdown] = useState(5);
   const [showCancelButton, setShowCancelButton] = useState(false);
+  const [canWatchVideo] = useState(true);
 
   // Calcular pontos baseados no resultado
   const getResultInfo = () => {
@@ -61,25 +60,6 @@ export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClos
 
   const resultInfo = getResultInfo();
 
-  // Verificar limite de vídeos por dia
-  useEffect(() => {
-    const today = new Date().toDateString();
-    const savedDate = localStorage.getItem(VIDEO_DATE_KEY);
-    const savedCount = parseInt(localStorage.getItem(VIDEO_COUNT_KEY) || "0");
-    const limit = parseInt(localStorage.getItem(VIDEO_LIMIT_KEY) || "5");
-
-    if (savedDate !== today) {
-      // Novo dia, resetar contador
-      localStorage.setItem(VIDEO_DATE_KEY, today);
-      localStorage.setItem(VIDEO_COUNT_KEY, "0");
-      setVideosWatchedToday(0);
-    } else {
-      setVideosWatchedToday(savedCount);
-    }
-
-    setCanWatchVideo(savedCount < limit);
-  }, []);
-
   // Countdown para mostrar botão de cancelar
   useEffect(() => {
     if (!isOpen) {
@@ -114,17 +94,6 @@ export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClos
       const success = await onWatchVideo();
       
       if (success) {
-        // Incrementar contador de vídeos
-        const today = new Date().toDateString();
-        const currentCount = parseInt(localStorage.getItem(VIDEO_COUNT_KEY) || "0");
-        localStorage.setItem(VIDEO_DATE_KEY, today);
-        localStorage.setItem(VIDEO_COUNT_KEY, (currentCount + 1).toString());
-        setVideosWatchedToday(currentCount + 1);
-        
-        // Verificar se ainda pode assistir mais vídeos
-        const limit = parseInt(localStorage.getItem(VIDEO_LIMIT_KEY) || "5");
-        setCanWatchVideo(currentCount + 1 < limit);
-        
         onClose();
       } else {
         setError("Não temos vídeo no momento, infelizmente.");
@@ -231,7 +200,7 @@ export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClos
         {!canWatchVideo && !error && (
           <div className="mt-4 p-3 bg-muted/50 border border-border rounded-lg text-center">
             <p className="text-sm text-muted-foreground">
-              Limite diário atingido ({videosWatchedToday}/5 vídeos)
+              Limite diário atingido
             </p>
           </div>
         )}

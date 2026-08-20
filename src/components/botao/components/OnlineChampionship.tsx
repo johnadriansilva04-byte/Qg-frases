@@ -75,7 +75,7 @@ export function OnlineChampionship({
   const { markFirstGamePlayed } = useAdManager("/botao");
   const userId = jogador?.user_id ?? perfil?.user_id ?? "";
 
-  const [codigo, setCodigo] = useState<string | null>(() => localStorage.getItem(STORAGE.CODIGO));
+  const [codigo, setCodigo] = useState<string | null>(null);
   const [codigoEntrar, setCodigoEntrar] = useState("");
   const [nomeSala, setNomeSala] = useState("Campeonato Online");
   const [maxJogadores, setMaxJogadores] = useState(4);
@@ -125,11 +125,6 @@ export function OnlineChampionship({
   useEffect(() => {
     if (onEstadoPartida) onEstadoPartida(!!mesaAtiva);
   }, [mesaAtiva, onEstadoPartida]);
-
-  useEffect(() => {
-    if (codigo) localStorage.setItem(STORAGE.CODIGO, codigo);
-    else localStorage.removeItem(STORAGE.CODIGO);
-  }, [codigo]);
 
   // Limpa mesa ativa se o campeonato mudar de status finalizado
   useEffect(() => {

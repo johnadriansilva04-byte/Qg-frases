@@ -14,12 +14,7 @@ import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
 import { aplicarApostaSoberania } from "../career/careerRemote";
 import { useAdManager } from "@/lib/adManager";
 
-type Screen = "lobby-list" | "jogo" | "resultado";
-
-const STORAGE_KEYS = {
-  SCREEN: "botao_online_v3_screen",
-  MESA_ID: "botao_online_v3_mesa_id",
-};
+type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado";
 
 export function OnlineMatchV3({
   onBack,
@@ -34,12 +29,8 @@ export function OnlineMatchV3({
   const { markFirstGamePlayed } = useAdManager("/botao");
   const userId = jogador?.user_id ?? perfil?.user_id ?? "";
 
-  const [mesaId, setMesaId] = useState<string | null>(() =>
-    localStorage.getItem(STORAGE_KEYS.MESA_ID),
-  );
-  const [screen, setScreen] = useState<Screen>(
-    () => (localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen) || "lobby-list",
-  );
+  const [mesaId, setMesaId] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>("lobby-list");
   // Aposta de soberania no modo online (opcional, 0 = não apostar).
   const [apostaSoberania, setApostaSoberania] = useState<number>(0);
   const soberaniaAtual = perfil?.pontos_soberania ?? 0;
@@ -48,48 +39,6 @@ export function OnlineMatchV3({
   useEffect(() => {
     if (onEstadoPartida) onEstadoPartida(screen === "jogo");
   }, [screen, onEstadoPartida]);
-
-  // Persistir estado
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCREEN, screen);
-  }, [screen]);
-
-  useEffect(() => {
-    if (mesaId) {
-      localStorage.setItem(STORAGE_KEYS.MESA_ID, mesaId);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.MESA_ID);
-    }
-  }, [mesaId]);
-
-  // Restaurar sessão ao montar
-  useEffect(() => {
-    const savedMesaId = localStorage.getItem(STORAGE_KEYS.MESA_ID);
-    const savedScreen = localStorage.getItem(STORAGE_KEYS.SCREEN) as Screen;
-
-    if (savedScreen && savedScreen !== "lobby-list" && savedMesaId) {
-      buscarMesa(savedMesaId).then((mesa) => {
-        if (mesa) {
-          // Verificar se o usuário é participante da mesa
-          const isParticipant = mesa.jogador_1_id === userId || mesa.jogador_2_id === userId;
-          if (isParticipant) {
-            setMesaId(savedMesaId);
-            setScreen(savedScreen);
-          } else {
-            limparPersistencia();
-            setScreen("lobby-list");
-          }
-        } else {
-          limparPersistencia();
-          setScreen("lobby-list");
-        }
-      });
-    }
-  }, [userId]);
-
-  const limparPersistencia = useCallback(() => {
-    Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
-  }, []);
 
   // Time personalizado
   const meuTime = useMemo(() => {
@@ -164,7 +113,6 @@ export function OnlineMatchV3({
         onSair={() => {
           setMesaId(null);
           setScreen("lobby-list");
-          limparPersistencia();
         }}
         onFinalizada={async (r: ResultadoMesa) => {
           // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
