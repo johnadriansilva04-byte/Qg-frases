@@ -102,8 +102,7 @@ export function MatchView({
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
   const [aimPower, setAimPower] = useState(0);
   const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
-  // Intervalo da partida (halftime): exibe um container TV com anúncio AdSense
-  // quando a partida cruza a metade das jogadas. Dispara uma única vez.
+  // Intervalo da partida (halftime) removido - não funciona corretamente
   const [halftime, setHalftime] = useState(false);
   const halftimeShownRef = useRef(false);
 
