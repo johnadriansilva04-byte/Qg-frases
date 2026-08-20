@@ -25,7 +25,7 @@ export interface RitualPendente {
 /** Condição narrativa: SOV baixo OU 3+ derrotas seguidas → a sombra chama. */
 export function condicaoSombria(career: CareerState): boolean {
   const derrotas = career.memoriaRpg?.derrotasSeguidas ?? 0;
-  return career.coach.soberania < 30 || derrotas >= 3;
+  return career.coach.sov < 30 || derrotas >= 3;
 }
 
 /** Marca (deixada pela TrilhaGame) informando que um ritual foi jogado. */
@@ -87,7 +87,7 @@ export function aplicarRitualNaCarreira(
   if (resultado !== "vitoria") {
     const comBonus: CareerState =
       bonusMissoes > 0
-        ? { ...base, coach: { ...base.coach, soberania: base.coach.soberania + bonusMissoes } }
+        ? { ...base, coach: { ...base.coach, sov: base.coach.sov + bonusMissoes } }
         : base;
     return {
       career: comBonus,
@@ -101,7 +101,7 @@ export function aplicarRitualNaCarreira(
   const eraSombra = condicaoSombria(career);
   const novo: CareerState = {
     ...base,
-    coach: { ...base.coach, soberania: base.coach.soberania + 8 + bonusMissoes },
+    coach: { ...base.coach, sov: base.coach.sov + 8 + bonusMissoes },
     moralTime: Math.min(100, (career.moralTime ?? 50) + 4),
     memoriaRpg: { ...mem, derrotasSeguidas: 0 },
   };
@@ -130,13 +130,13 @@ export function aplicarRitualNaCarreira(
 /** Texto de convite exibido no hub quando a sombra está ativa. */
 export function conviteTrilha(career: CareerState): string {
   const derrotas = career.memoriaRpg?.derrotasSeguidas ?? 0;
-  if (career.coach.soberania < 30 && derrotas >= 3) {
+  if (career.coach.sov < 30 && derrotas >= 3) {
     return "Os cofres gemem e o vestiário emudeceu. Os mais antigos dizem: quando tudo fecha, a Trilha abre. Jogue o ritual — vencer lá alivia a sombra aqui.";
   }
   if (derrotas >= 3) {
     return `${derrotas} derrotas seguidas. A torcida sussurra que você precisa de outro tabuleiro por uma noite. A Trilha aceita jogadores desesperados — e devolve treinadores mais leves.`;
   }
-  return "Soberania abaixo de 30. O Corretor sorri demais quando você passa. Antes que a sombra assine mais favores, jogue o ritual da Trilha.";
+  return "SOV abaixo de 30. O Corretor sorri demais quando você passa. Antes que a sombra assine mais favores, jogue o ritual da Trilha.";
 }
 
 /**

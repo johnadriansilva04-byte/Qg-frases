@@ -45,7 +45,7 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
       ...EMPTY_CAREER.coach,
       ...(bruta.coach ?? {}),
       nome: bruta.coach?.nome ?? "",
-      soberania: Number.isFinite(bruta.coach?.soberania) ? Math.max(0, Math.round(bruta.coach!.soberania)) : 0,
+      sov: Number.isFinite(bruta.coach?.sov) ? Math.max(0, Math.round(bruta.coach!.sov)) : 0,
       titulos: Number.isFinite(bruta.coach?.titulos) ? bruta.coach!.titulos : 0,
       campanhasJogadas: Number.isFinite(bruta.coach?.campanhasJogadas)
         ? bruta.coach!.campanhasJogadas
@@ -88,7 +88,7 @@ const EMPTY_COACH: Coach = {
   cidade: "",
   estilo: "equilibrado",
   bio: "",
-  soberania: 0,
+  sov: 0,
   campanhasJogadas: 0,
   titulos: 0,
   criadoEm: new Date().toISOString(),

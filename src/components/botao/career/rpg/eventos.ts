@@ -24,7 +24,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
           "O número desaparece dos livros na mesma madrugada. Você dorme. Mas agora existe " +
           "um homem na Cidadela que pode ligar a qualquer hora. E você vai atender.",
         efeitos: {
-          soberania: 60,
+          sov: 60,
           moral: -10,
           segredo: {
             descricao: "Você deve um favor ao Corretor.",
@@ -37,7 +37,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
         desfecho:
           "«Respeito.» — é a única resposta. A dívida continua nos livros, mas a sua " +
           "consciência continua limpa. O elenco sente a firmeza.",
-        efeitos: { soberania: -25, moral: 10 },
+        efeitos: { sov: -25, moral: 10 },
       },
       {
         texto: "Ignorar a mensagem",
@@ -90,7 +90,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
         desfecho:
           "A segurança encontra apenas um celular quebrado na calçada, com uma única " +
           "foto: o seu time treinando. Tirada de dentro do CT.",
-        efeitos: { soberania: -20, moral: -5, relacao: { npc: "npc-valeria", delta: 15 } },
+        efeitos: { sov: -20, moral: -5, relacao: { npc: "npc-valeria", delta: 15 } },
       },
       {
         texto: "Dizer que é só um torcedor fanático",
@@ -117,7 +117,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
         desfecho:
           "O churrasco vai até tarde. Alguém canta. Alguém ri pela primeira vez em " +
           "semanas. Na segunda-feira, o treino tem barulho de novo.",
-        efeitos: { soberania: -30, moral: 20 },
+        efeitos: { sov: -30, moral: 20 },
       },
       {
         texto: "Convocar uma conversa dura, olho no olho",
@@ -152,7 +152,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
           "A proposta é boa. Boa demais. Você assina, e no mesmo instante percebe " +
           "que agora trabalha também para Dário. A vitrine ilumina. E expõe.",
         efeitos: {
-          soberania: 45,
+          sov: 45,
           relacao: { npc: "npc-dario", delta: 25 },
           segredo: { descricao: "Dário Fontoura tem um contrato informal com você.", cobraEmRodada: 6 },
         },
@@ -275,7 +275,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
         desfecho:
           "O árbitro começa o processo sem a sua versão. O veredito sai pior — " +
           "e o vestiário sente.",
-        efeitos: { soberania: -20, moral: -8 },
+        efeitos: { sov: -20, moral: -8 },
       },
     ],
   },
@@ -296,7 +296,7 @@ export const EVENTOS_RPG: EventoRpg[] = [
           "O recibo da multa é lavrado com condição aceita — a dívida some dos " +
           "livros.",
         efeitos: {
-          soberania: -30,
+          sov: -30,
           moral: 5,
           cartorio: { tipo: "multa", titulo: "Multa judicial do incidente" },
         },

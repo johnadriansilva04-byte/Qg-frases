@@ -34,7 +34,6 @@ import {
   loadTournament,
   deleteTournamentLocal,
   saveTournamentToSupabase,
-  atualizarPontosSoberania,
   adicionarPontosVideo,
   type Progress,
 } from "./storage";
@@ -211,7 +210,7 @@ interface BotaoGameProps {
 }
 
 /**
- * Bônus de Soberania do campeão: entre +100 e +200. A base é 100 e somamos até
+ * Bônus SOV do campeão: entre +100 e +200. A base é 100 e somamos até
  * 100 de bônus conforme a dificuldade (amador 0, profissional 50, lenda 100).
  */
 function bonusCampeao(dificuldade: Difficulty): number {
@@ -255,6 +254,38 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [loadingReady, setLoadingReady] = useState(true);
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
+
+  // Detecta se foi refresh direto (F5) vs navegação normal
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Marca que foi refresh direto (F5 ou recarregar página)
+      sessionStorage.setItem("botao:refresh", Date.now().toString());
+    };
+    
+    const handlePageShow = (e: PageTransitionEvent) => {
+      // Se o evento persisted é true, foi cache do navegador (back/forward)
+      // Se não, foi refresh direto ou nova navegação
+      if (e.persisted) {
+        console.log("[BotaoGame] Navegação via cache (back/forward)");
+      } else {
+        const refreshTime = sessionStorage.getItem("botao:refresh");
+        if (refreshTime && Date.now() - parseInt(refreshTime) < 2000) {
+          console.log("[BotaoGame] Refresh direto detectado (F5)");
+          sessionStorage.removeItem("botao:refresh");
+        }
+      }
+    };
+    
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pageshow", handlePageShow);
+    
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, []);
 
   // Inicializa AdManager para rota /botao (Adsterra)
   const { init: initAdManager, markFirstGamePlayed } = useAdManager("/botao");
@@ -321,8 +352,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (!atual) return;
       const { career: novo, resumo } = aplicarRitualNaCarreira(atual, pendente.resultado);
       persistCareer(novo);
-      // Ritual da Trilha move soberania: registra no Banco Central (module 'rpg').
-      const deltaRitual = (novo.coach?.soberania ?? 0) - (atual.coach?.soberania ?? 0);
+      // Ritual da Trilha move SOV: registra no Banco Central (module 'rpg').
+      const deltaRitual = (novo.coach?.sov ?? 0) - (atual.coach?.sov ?? 0);
       const uidRitual = perfilRef.current?.user_id;
       if (deltaRitual !== 0 && uidRitual) {
         void registrarTransacaoSov(
@@ -772,7 +803,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const novosPontos = await adicionarPontosVideo(perfil.user_id, 5);
 
     if (novosPontos !== null) {
-      setToast(`+5 pontos! Você agora tem ${novosPontos} pontos de soberania.`);
+      setToast(`+5 pontos! Você agora tem ${novosPontos} pontos de SOV.`);
       // Recarregar perfil para atualizar pontos
       const novoPerfil = await recarregar();
       if (novoPerfil) {
@@ -807,12 +838,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     persist(novoProgresso);
 
-    // Atualizar pontos de soberania se estiver logado (Banco Central SOV)
-    if (perfil?.user_id) {
-      const vitoria = gf > ga;
-      void atualizarPontosSoberania(perfil.user_id, gf, ga, vitoria);
-    }
-
     // Patrocinador: valida a meta da partida no modo carreira também.
     if (career?.desafioPatrocinador) {
       const rDesafio = aplicarDesafioPatrocinador(career, gf, ga, true);
@@ -844,7 +869,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       timeAdvNome: advTeam?.name ?? advId,
       competicao: "Amistoso",
       rodada: "Jogo único",
-      soberaniaDelta: 0,
+      sovDelta: 0,
       moralDelta: 0,
     });
     setMatchEndDestino("menu");
@@ -916,7 +941,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const finishCoachSetup = (coach: CareerState["coach"]) => {
     const base = career ?? EMPTY_CAREER;
-    const coachComSaldo = { ...coach, soberania: perfil?.pontos_soberania ?? coach.soberania };
+    const coachComSaldo = { ...coach, sov: perfil?.pontos_soberania ?? coach.sov };
     const nova: CareerState = { ...base, coach: coachComSaldo };
     persistCareer(nova);
     iniciarCampanha(nova);
@@ -924,7 +949,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   /**
    * Avalia o desafio de patrocinador pendente contra o resultado da partida.
-   * Se a meta for cumprida, soma a recompensa à soberania e gera um novo
+   * Se a meta for cumprida, soma a recompensa ao SOV e gera um novo
    * desafio (se houver próxima partida). Retorna o estado atualizado.
    */
   const aplicarDesafioPatrocinador = (
@@ -942,10 +967,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const novoDesafio = temProxima ? gerarDesafioPatrocinador(c.rodadaAtual) : null;
       const estado: CareerState = {
         ...c,
-        coach: { ...c.coach, soberania: c.coach.soberania + recompensa },
+        coach: { ...c.coach, sov: c.coach.sov + recompensa },
         desafioPatrocinador: novoDesafio,
       };
-      setToast(`Patrocinador satisfeito! +${recompensa} de soberania.`);
+      setToast(`Patrocinador satisfeito! +${recompensa} de SOV.`);
       return { estado, ganhou: recompensa };
     }
     // Não cumpriu: marca como concluído e propõe novo desafio se houver próxima.
@@ -1060,17 +1085,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
       coach: {
         ...career.coach,
-        soberania: Math.max(0, career.coach.soberania + (efeitos.soberania ?? 0)),
+        sov: Math.max(0, career.coach.sov + (efeitos.sov ?? 0)),
       },
     };
     persistCareer(novo);
     setCareer(novo);
-    // Narrativa move soberania: registra no Banco Central (module 'rpg').
-    if (efeitos.soberania && perfil?.user_id) {
+    // Narrativa move SOV: registra no Banco Central (module 'rpg').
+    if (efeitos.sov && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
-        efeitos.soberania,
-        efeitos.soberania >= 0 ? "reward" : "penalty",
+        efeitos.sov,
+        efeitos.sov >= 0 ? "reward" : "penalty",
         `Narrativa: ${career.narrativa?.cenaAtual ?? "cena"} — escolha narrativa`,
         "rpg",
         { cena: career.narrativa?.cenaAtual },
@@ -1111,11 +1136,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   // Inicia a próxima temporada (carreira infinita): deduz custo de manutenção,
-  // regenera Brasileirão + Copa do Brasil, mantém progresso e soberania.
+  // regenera Brasileirão + Copa do Brasil, mantém progresso e SOV.
   const startNextSeason = () => {
     if (!career) return;
     const divisao = career.divisao;
-    const novaSoberania = iniciarNovaTemporada(career.coach.soberania, divisao);
+    const novaSov = iniciarNovaTemporada(career.coach.sov, divisao);
     const composicoes = career.composicoes ?? composicoesIniciais(userTeam, divisao);
     const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
     const ativa = ligas[divisao];
@@ -1146,7 +1171,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       conversas: [],
       coach: {
         ...career.coach,
-        soberania: novaSoberania,
+        sov: novaSov,
         campanhasJogadas: career.coach.campanhasJogadas + 1,
       },
     };
@@ -1164,7 +1189,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...EMPTY_CAREER,
       coach: {
         ...career.coach,
-        soberania: 0,
+        sov: 0,
         titulos: 0,
         campanhasJogadas: career.coach.campanhasJogadas + 1,
       },
@@ -1190,18 +1215,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
       coach: {
         ...career.coach,
-        soberania: Math.max(0, career.coach.soberania + (efeitos.soberania ?? 0)),
+        sov: Math.max(0, career.coach.sov + (efeitos.sov ?? 0)),
       },
     };
     persistCareer(novo);
     setCareer(novo);
-    // Suborno move soberania: registra no Banco Central (module 'rpg').
-    if (efeitos.soberania && perfil?.user_id) {
+    // Suborno move SOV: registra no Banco Central (module 'rpg').
+    if (efeitos.sov && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
-        efeitos.soberania,
-        efeitos.soberania >= 0 ? "reward" : "penalty",
-        `Suborno: escolha "${escolha}" — efeito de soberania`,
+        efeitos.sov,
+        efeitos.sov >= 0 ? "reward" : "penalty",
+        `Suborno: escolha "${escolha}" — efeito de SOV`,
         "rpg",
         { subornoEscolha: escolha, node: novoSub.nodeAtual },
       );
@@ -1236,11 +1261,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!career) return;
     const bonusPoder = career.bonusProximaPartida + (choice.bonusPoder ?? 0);
     const moral = Math.max(0, Math.min(100, career.moralTime + (choice.bonusMoral ?? 0)));
-    let soberania = career.coach.soberania;
+    let sov = career.coach.sov;
     // Penalty imediata (não aplica bônus/penal condicional aqui — vai no finish)
-    if (choice.penaltyPontos && choice.penaltyPontos < 0) soberania += choice.penaltyPontos;
+    if (choice.penaltyPontos && choice.penaltyPontos < 0) sov += choice.penaltyPontos;
     // Impacto financeiro imediato (venda de botão, suborno aceito, multa…).
-    if (choice.impactoFinanceiro) soberania += choice.impactoFinanceiro;
+    if (choice.impactoFinanceiro) sov += choice.impactoFinanceiro;
 
     // Sanções pendentes para a próxima partida real (W.O. / desfalque / perda de pts).
     const woProximaPartida = choice.wo ? true : career.woProximaPartida;
@@ -1282,7 +1307,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...career,
       bonusProximaPartida: bonusPoder,
       moralTime: moral,
-      coach: { ...career.coach, soberania: Math.max(0, soberania) },
+      coach: { ...career.coach, sov: Math.max(0, sov) },
       ultimasEscolhas: [...career.ultimasEscolhas, choice.id].slice(-8),
       eventoPendenteId: null,
       woProximaPartida,
@@ -1382,12 +1407,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const efeitos = evento?.escolhas[indice]?.efeitos;
     const userId = perfil?.user_id;
 
-    if (evento && efeitos?.soberania && userId) {
+    if (evento && efeitos?.sov && userId) {
       void registrarTransacaoSov(
         userId,
-        efeitos.soberania,
-        efeitos.soberania >= 0 ? "reward" : "penalty",
-        `RPG: ${evento.titulo} — "${efeitos.soberania >= 0 ? "ganho" : "custo"} de soberania"`,
+        efeitos.sov,
+        efeitos.sov >= 0 ? "reward" : "penalty",
+        `RPG: ${evento.titulo} — "${efeitos.sov >= 0 ? "ganho" : "custo"} de SOV"`,
         "rpg",
         { eventoId: evento.id, escolha: indice, titulo: evento.titulo },
       );
@@ -1404,7 +1429,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             timeId: userTeam.id,
             timeNome: userTeam.name,
             coach: career.coach.nome,
-            soberania: career.coach.soberania,
+            sov: career.coach.sov,
           };
           const pedidoId = await criarPedidoCartorio(
             userId,
@@ -1491,7 +1516,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       let c = registrarEntrevista(
         {
           ...career,
-          coach: { ...career.coach, soberania: career.coach.soberania + ganho },
+          coach: { ...career.coach, sov: career.coach.sov + ganho },
         },
         registro,
       );
@@ -1593,7 +1618,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!career) return;
     const bolsaAtual = garantirBolsa(career.bolsa);
     const custo = custoCompra(bolsaAtual, ativoId, quantidade);
-    if (career.coach.soberania < custo) {
+    if (career.coach.sov < custo) {
       setToast("Saldo SOV insuficiente.");
       return;
     }
@@ -1606,7 +1631,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
     persistCareer({
       ...career,
-      coach: { ...career.coach, soberania: career.coach.soberania - custo },
+      coach: { ...career.coach, sov: career.coach.sov - custo },
       bolsa: comprarAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
     });
   };
@@ -1630,7 +1655,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
     persistCareer({
       ...career,
-      coach: { ...career.coach, soberania: career.coach.soberania + valor },
+      coach: { ...career.coach, sov: career.coach.sov + valor },
       bolsa: venderAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
     });
   };
@@ -1651,13 +1676,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     // Soberania/moral simples pelo resultado da copa (peso um pouco maior que
     // a liga por ser mata-mata).
-    let novaSoberania = career.coach.soberania;
+    let novaSov = career.coach.sov;
     let moral = career.moralTime;
     if (gf > ga) {
-      novaSoberania += 4;
+      novaSov += 4;
       moral = Math.min(100, moral + 5);
     } else if (gf < ga) {
-      novaSoberania = Math.max(0, novaSoberania - 2);
+      novaSov = Math.max(0, novaSov - 2);
       moral = Math.max(0, moral - 5);
     } else {
       // Empate no tempo normal, vencedor nos pênaltis:
@@ -1665,10 +1690,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const userPen = userHome ? (r.penHome ?? 0) : (r.penAway ?? 0);
       const advPen = userHome ? (r.penAway ?? 0) : (r.penHome ?? 0);
       if (userPen > advPen) {
-        novaSoberania += 2;
+        novaSov += 2;
         moral = Math.min(100, moral + 2);
       } else {
-        novaSoberania = Math.max(0, novaSoberania - 1);
+        novaSov = Math.max(0, novaSov - 1);
         moral = Math.max(0, moral - 3);
       }
     }
@@ -1676,7 +1701,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Campeão da copa: bônus de Soberania + manchete.
     let novas: Headline[] = [];
     if (copa.finished && copa.champion === userTeam.id) {
-      novaSoberania += bonusCampeao(tour?.difficulty ?? difficulty);
+      novaSov += bonusCampeao(tour?.difficulty ?? difficulty);
       novas = [
         {
           id: `copa-campeao-${Date.now()}`,
@@ -1700,12 +1725,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...career,
       copaBrasil: copa,
       moralTime: moral,
-      coach: { ...career.coach, soberania: Math.max(0, novaSoberania) },
+      coach: { ...career.coach, sov: Math.max(0, novaSov) },
     };
     if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
 
     // Resultado da copa no Banco Central SOV (module 'career').
-    const deltaCopa = Math.max(0, novaSoberania) - career.coach.soberania;
+    const deltaCopa = Math.max(0, novaSov) - career.coach.sov;
     if (deltaCopa !== 0 && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
@@ -1745,7 +1770,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Tela de fim de jogo com estatísticas da copa (estilo esportivo).
     const adversario = currentCopaFix.homeId === userTeam.id ? currentCopaFix.awayId : currentCopaFix.homeId;
     const advNome = resolveTeam(adversario, userTeam).name;
-    const sobAnterior = career.coach.soberania;
+    const sobAnterior = career.coach.sov;
     const moralAnterior = career.moralTime;
     setMatchEnd({
       partidaId: `copa-${Date.now()}`,
@@ -1756,7 +1781,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       timeAdvNome: advNome,
       competicao: "Copa do Brasil",
       rodada: currentCopaFix.stage,
-      soberaniaDelta: (novaCareer.coach.soberania ?? 0) - sobAnterior,
+      sovDelta: (novaCareer.coach.sov ?? 0) - sobAnterior,
       moralDelta: (novaCareer.moralTime ?? 0) - moralAnterior,
       extra:
         copa.finished && copa.champion === userTeam.id
@@ -1902,28 +1927,28 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     let posTabela: number | undefined;
     let extraMsg: string | undefined;
     if (career) {
-      let novaSoberania = career.coach.soberania;
+      let novaSov = career.coach.sov;
       let moral = career.moralTime;
 
       // Pontos escassos: V=+3 / E=+1 / D=0
       if (gf > ga) {
-        novaSoberania += POINTS.VITORIA;
+        novaSov += POINTS.VITORIA;
         moral = Math.min(100, moral + 4);
       } else if (gf < ga) {
-        novaSoberania = Math.max(0, novaSoberania + POINTS.DERROTA);
+        novaSov = Math.max(0, novaSov + POINTS.DERROTA);
         moral = Math.max(0, moral - 6);
       } else {
-        novaSoberania += POINTS.EMPATE;
+        novaSov += POINTS.EMPATE;
         moral = Math.max(0, moral - 1);
       }
 
       // Bônus condicionais da última escolha:
       const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1];
       if (lastChoice === "goleada") {
-        if (gf - ga >= 2) novaSoberania += 5;
-        else if (gf < ga) novaSoberania = Math.max(0, novaSoberania - 3);
+        if (gf - ga >= 2) novaSov += 5;
+        else if (gf < ga) novaSov = Math.max(0, novaSov - 3);
       }
-      if (lastChoice === "respeito" && gf > ga) novaSoberania += 2;
+      if (lastChoice === "respeito" && gf > ga) novaSov += 2;
       if (lastChoice === "titular" && gf > ga) moral = Math.min(100, moral + 4);
 
       let novoTitulos = career.coach.titulos;
@@ -1933,7 +1958,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         tour?.phase === "grupos" &&
         t.phase === "mata-mata" &&
         t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
-      if (classificouAgora) novaSoberania += POINTS.CLASSIFICOU_MATA;
+      if (classificouAgora) novaSov += POINTS.CLASSIFICOU_MATA;
 
       // Fim de campanha: bônus de posição final
       const manchetesFim: string[] = [];
@@ -1941,7 +1966,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // Determina posição do usuário
         if (t.champion === t.userTeamId) {
           const bonus = bonusCampeao(t.difficulty);
-          novaSoberania += bonus;
+          novaSov += bonus;
           novoTitulos += 1;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
           // Cerimônia de premiação!
@@ -1960,13 +1985,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             (f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId,
           );
           if (foiVice) {
-            novaSoberania += POINTS.VICE;
+            novaSov += POINTS.VICE;
             manchetesFim.push(`Vice-campeão: ${career.coach.apelido} chega perto do título`);
           } else if (foiSemi) {
-            novaSoberania += POINTS.TERCEIRO;
+            novaSov += POINTS.TERCEIRO;
             manchetesFim.push(`Semifinalista: ${career.coach.apelido} termina no Top 4`);
           } else {
-            novaSoberania += POINTS.QUARTO;
+            novaSov += POINTS.QUARTO;
           }
         }
       }
@@ -2029,7 +2054,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         composicoes: resultadoTemp?.composicoes ?? career.composicoes,
         coach: {
           ...career.coach,
-          soberania: Math.max(0, Math.round(novaSoberania)),
+          sov: Math.max(0, Math.round(novaSov)),
           titulos: novoTitulos,
         },
       };
@@ -2093,7 +2118,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             ...novaCareer,
             coach: {
               ...novaCareer.coach,
-              soberania: novaCareer.coach.soberania + div.total,
+              sov: novaCareer.coach.sov + div.total,
             },
             bolsa: div.bolsa,
           };
@@ -2132,7 +2157,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
 
       // Captura para a tela de fim de jogo (deltas reais pós-desafio).
-      patchSob = novaCareer.coach.soberania - career.coach.soberania;
+      patchSob = novaCareer.coach.sov - career.coach.sov;
       patchMoral = novaCareer.moralTime - career.moralTime;
       posTabela = posicaoUsuario > 0 ? posicaoUsuario : undefined;
       extraMsg = manchetesFim[0];
@@ -2140,7 +2165,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       // Fim de temporada (liga concluída): economia de Soberania decide se o
       // treinador segue (temporada infinita) ou é demitido (Game Over).
       if (t.phase === "fim") {
-        const v = avaliarFimTemporada(novaCareer.coach.soberania, novaCareer.divisao);
+        const v = avaliarFimTemporada(novaCareer.coach.sov, novaCareer.divisao);
         setVeredito(v);
       }
 
@@ -2242,7 +2267,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           temporada: career.temporada,
           posicaoTabela: linhaUsuario,
           moralTime: career.moralTime,
-          soberania: career.coach.soberania,
+          sov: career.coach.sov,
           rodadasRestantes: t.groupFixtures.filter((fx) => !fx.played).length,
         } as const;
         const [relMed, redes] = await Promise.all([
@@ -2305,7 +2330,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           ? `Brasileirão · ${(career.divisao ?? "serie-a").replace("-", " ").toUpperCase()}`
           : "Torneio",
         rodada: current.stage,
-        soberaniaDelta: patchSob,
+        sovDelta: patchSob,
         moralDelta: patchMoral,
         posicaoTabela: posTabela,
         extra: extraMsg,
@@ -2575,6 +2600,35 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           onQuit={() => setScreen(screen === "friendly-match" ? "menu" : "hub")}
           customTeam={userTeam}
           formation={formation}
+        />
+        {/* Celular também disponível durante partidas */}
+        <CelularFixo
+          userId={perfil?.user_id ?? null}
+          nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
+          onLogin={aoLogar}
+          conversas={career?.conversas ?? []}
+          desafioPatrocinador={career?.desafioPatrocinador ?? null}
+          feed={career?.feedCidadela ?? []}
+          trilhaMissoes={career ? missoesTrilha(career) : []}
+          npcDigitandoId={npcDigitando}
+          onEnviarMensagem={handleEnviarMensagem}
+          onExcluirConversa={handleExcluirConversa}
+          onEscolhaRpg={handleEscolhaRpg}
+          historia={career?.historia}
+          onRegistrarPosicao={handleRegistrarPosicao}
+          statsCarreira={
+            career
+              ? {
+                  decisoes:
+                    (career.historia?.ledger.length ?? 0) +
+                    (Array.isArray(career.ultimasEscolhas) ? career.ultimasEscolhas.length : 0),
+                  entrevistas: Array.isArray(career.entrevistas) ? career.entrevistas.length : 0,
+                }
+              : undefined
+          }
+          prioridade={prioridadeCelular}
+          naoLidas={naoLidasCelular}
+          perfilCidadela={perfilCidadela}
         />
       </Shell>
     );

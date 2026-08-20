@@ -127,10 +127,10 @@ export function SubornoStory({ state, onAvancar, onFechar }: Props) {
                     {c.descricao && <p className="mt-1 text-[10px] text-slate-400">{c.descricao}</p>}
                     {c.efeitos && (
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {typeof c.efeitos.soberania === "number" && (
+                        {typeof c.efeitos.sov === "number" && (
                           <Chip icon={<TrendingUp className="size-3" />}>
-                            Soberania {c.efeitos.soberania > 0 ? "+" : ""}
-                            {c.efeitos.soberania}
+                            SOV {c.efeitos.sov > 0 ? "+" : ""}
+                            {c.efeitos.sov}
                           </Chip>
                         )}
                         {typeof c.efeitos.moral === "number" && (

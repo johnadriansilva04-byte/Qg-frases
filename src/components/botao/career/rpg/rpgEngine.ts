@@ -42,14 +42,14 @@ function selecionarEvento(career: CareerState): EventoRpg | null {
   }
 
   // 2. Gatilhos de estado real
-  const soberania = career.coach.soberania;
+  const sov = career.coach.sov;
   const moral = career.moralTime;
 
   const candidatos: string[] = [];
-  if (soberania < 30) candidatos.push("divida-corretor");
+  if (sov < 30) candidatos.push("divida-corretor");
   if (mem.derrotasSeguidas >= 3) candidatos.push("seguidor", "demissao-sombra");
   if (moral < 30) candidatos.push("vestiario-mudo");
-  if (soberania >= 30 && soberania < 120) candidatos.push("proposta-dario");
+  if (sov >= 30 && sov < 120) candidatos.push("proposta-dario");
   if (mem.derrotasSeguidas === 0 && career.rodadaAtual >= 4) candidatos.push("festa-convite");
   if (mem.segredos.length > 0) candidatos.push("mae-preocupada");
   // Folda do Cartório: vínculo formal, defesa e quitação de multa via documento.
@@ -177,12 +177,12 @@ export function aplicarEscolhaRpg(
       : c,
   );
 
-  const soberania = Math.max(0, career.coach.soberania + (e.soberania ?? 0));
+  const sov = Math.max(0, career.coach.sov + (e.sov ?? 0));
   const moral = Math.max(0, Math.min(100, career.moralTime + (e.moral ?? 0)));
 
   const novo: CareerState = {
     ...career,
-    coach: { ...career.coach, soberania },
+    coach: { ...career.coach, sov },
     moralTime: moral,
     bonusProximaPartida: career.bonusProximaPartida + (e.bonusPoder ?? 0),
     woProximaPartida: career.woProximaPartida || e.wo === true,
@@ -227,7 +227,7 @@ export async function responderContatoNpc(
       npc.systemPrompt,
       `Você fala com ${career.coach.nome}, treinador. ` +
         `Situação: rodada ${career.rodadaAtual}, moral do elenco ${career.moralTime}/100, ` +
-        `soberania ${career.coach.soberania} SOV, relacionamento com você: ${score}/100.\n` +
+        `sov ${career.coach.sov} SOV, relacionamento com você: ${score}/100.\n` +
         `O treinador disse: "${textoJogador}"`,
     );
   } catch {

@@ -115,6 +115,12 @@ BEGIN
 
   SELECT w.balance INTO v_bal FROM user_wallets w WHERE w.user_id = p_user_id;
   RETURN QUERY SELECT v_tx_id, COALESCE(v_bal, 0::DECIMAL), FALSE;
+  RETURN;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Em caso de erro, retorna NULL para todos os campos para não quebrar o app
+    RETURN QUERY SELECT NULL::UUID, 0::DECIMAL, FALSE;
+    RETURN;
 END;
 $$;
 

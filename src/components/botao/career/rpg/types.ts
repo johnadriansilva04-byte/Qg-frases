@@ -100,7 +100,7 @@ export interface EscolhaRpg {
   /** Desfecho narrativo exibido após escolher. */
   desfecho: string;
   efeitos: {
-    soberania?: number;
+    sov?: number;
     moral?: number;
     bonusPoder?: number;
     wo?: boolean;

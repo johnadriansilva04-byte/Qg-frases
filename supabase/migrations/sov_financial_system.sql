@@ -115,15 +115,20 @@ BEGIN
   INSERT INTO user_wallets (user_id, balance)
   VALUES (p_user_id, 0.00)
   ON CONFLICT (user_id) DO NOTHING
-  RETURNING id;
+  RETURNING id INTO v_wallet_id;
 
   -- Se inseriu, retorna o novo ID
-  IF FOUND THEN
-    RETURN (SELECT id FROM user_wallets WHERE user_id = p_user_id);
+  IF v_wallet_id IS NOT NULL THEN
+    RETURN v_wallet_id;
   END IF;
 
   -- Se já existia, retorna o ID existente
-  RETURN (SELECT id FROM user_wallets WHERE user_id = p_user_id);
+  SELECT id INTO v_wallet_id FROM user_wallets WHERE user_id = p_user_id;
+  RETURN v_wallet_id;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Em caso de erro, retorna NULL para não quebrar o app
+    RETURN NULL;
 END;
 $$;
 

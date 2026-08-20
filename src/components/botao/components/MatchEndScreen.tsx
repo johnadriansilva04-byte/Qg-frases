@@ -11,8 +11,8 @@ export interface MatchEndData {
   timeAdvNome: string;
   competicao: string;
   rodada: string;
-  /** Variação de soberania na partida (0 quando não se aplica). */
-  soberaniaDelta: number;
+  /** Variação de SOV na partida (0 quando não se aplica). */
+  sovDelta: number;
   /** Variação de moral na partida (0 quando não se aplica). */
   moralDelta: number;
   /** Posição do usuário na tabela da liga (quando modo carreira). */
@@ -130,9 +130,9 @@ export function MatchEndScreen({
             <p className="mt-1 text-xl font-black">{dados.placarAdv}</p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Soberania</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">SOV</p>
             <p className="mt-1 text-xl font-black">
-              <DeltaBadge valor={dados.soberaniaDelta} />
+              <DeltaBadge valor={dados.sovDelta} />
             </p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-center">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BadgeDollarSign, Loader2, Mic, Newspaper, Send } from "lucide-react";
+import { BadgeDollarSign, Loader2, Mic, MicOff, Newspaper, Send } from "lucide-react";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { AIService } from "../ai/AIService";
 import { personagem } from "../career/rpg/personagens";
@@ -10,6 +10,14 @@ import {
   type DadosEntrevista,
 } from "../career/entrevistaEngine";
 import type { CareerState, DeclaracaoEntrevista } from "../career/types";
+
+// Tipos para Web Speech API
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
 type Msg = { autor: "jornalista" | "user"; texto: string };
 type Etapa = "intro" | "q1" | "q2" | "final";
@@ -48,7 +56,9 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
   const [input, setInput] = useState("");
   const [declaracoes, setDeclaracoes] = useState<DeclaracaoEntrevista[]>([]);
   const [pergunta2, setPergunta2] = useState<string | null>(null);
+  const [gravando, setGravando] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Intro + primeira pergunta do jornalista (com contexto real escopado).
   useEffect(() => {
@@ -86,6 +96,56 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs, carregando]);
+
+  // Configuração do reconhecimento de voz (Web Speech API)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const SpeechRecognitionClass = (window as unknown as { SpeechRecognition?: any }).SpeechRecognition 
+      || (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionClass) return;
+    
+    const recognition = new SpeechRecognitionClass();
+    recognition.lang = "pt-BR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(transcript);
+      setGravando(false);
+    };
+    
+    recognition.onerror = () => {
+      setGravando(false);
+    };
+    
+    recognition.onend = () => {
+      setGravando(false);
+    };
+    
+    recognitionRef.current = recognition;
+    
+    return () => {
+      recognition.abort();
+    };
+  }, []);
+
+  const toggleGravacao = () => {
+    if (!recognitionRef.current) {
+      alert("Seu navegador não suporta reconhecimento de voz.");
+      return;
+    }
+    
+    if (gravando) {
+      recognitionRef.current.abort();
+      setGravando(false);
+    } else {
+      recognitionRef.current.start();
+      setGravando(true);
+    }
+  };
 
   /** O jornalista IA reage à resposta livre do treinador (§7, §11). */
   const reacaoJornalista = async (decl: DeclaracaoEntrevista): Promise<string> => {
@@ -219,7 +279,7 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
                 onDisparado={() => onColetar(declaracoes)}
               >
                 <span className="flex w-full items-center justify-center gap-2">
-                  <BadgeDollarSign className="size-4" /> Coletar recompensa (+{ganho} SOV)
+                  <BadgeDollarSign className="size-4" /> Finalizar coletiva (+{ganho} SOV)
                 </span>
               </ControlledMonetagButton>
             </div>
@@ -240,6 +300,19 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
                   disabled={carregando}
                   className="flex-1 rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-500/60 disabled:opacity-40"
                 />
+                <button
+                  onClick={toggleGravacao}
+                  disabled={carregando || etapa === "final"}
+                  className={`rounded-xl px-3 transition ${
+                    gravando 
+                      ? "bg-red-600 hover:bg-red-500" 
+                      : "bg-slate-700 hover:bg-slate-600"
+                  } disabled:opacity-40`}
+                  aria-label={gravando ? "Parar gravação" : "Iniciar gravação"}
+                  title={gravando ? "Parar gravação" : "Falar com microfone"}
+                >
+                  {gravando ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                </button>
                 <button
                   onClick={() => responder(input)}
                   disabled={carregando || !input.trim()}

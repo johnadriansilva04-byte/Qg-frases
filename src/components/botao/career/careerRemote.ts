@@ -83,7 +83,7 @@ export async function loadCareerFromSupabase(
         cidade: coachSalvo.cidade?.trim() || coachFallback.cidade?.trim() || "",
         bio: coachSalvo.bio?.trim() || coachFallback.bio?.trim() || "",
         nome: nomeCoach,
-        soberania: saldoSov ?? u?.pontos_soberania ?? coachSalvo.soberania ?? 0,
+        sov: saldoSov ?? u?.pontos_soberania ?? coachSalvo.sov ?? 0,
       },
     };
   } catch (e) {
@@ -98,7 +98,7 @@ export async function saveCareerToSupabase(userId: string, c: CareerState): Prom
     await writeProgress(
       userId,
       { career: c },
-      { pontos_soberania: Math.max(0, c.coach.soberania) },
+      { pontos_soberania: Math.max(0, c.coach.sov) },
     );
   } catch (e) {
     console.error("[careerRemote] saveCareer error:", e);
@@ -202,7 +202,7 @@ export async function aplicarResultadoRemoto(
       moralTime: nextMoral,
       bonusProximaPartida: 0,
       penaltiesProximaPartida: 0,
-      coach: { ...career.coach, soberania: novaSob },
+      coach: { ...career.coach, sov: novaSob },
     };
 
     await writeProgress(
@@ -287,7 +287,7 @@ export async function aplicarFimCampanhaRemoto(
       moralTime: 65,
       ultimasEscolhas: [],
       ultimaRodadaProcessada: -1,
-      coach: { ...career.coach, soberania: novaSob, titulos: novoTit },
+      coach: { ...career.coach, sov: novaSob, titulos: novoTit },
     };
 
     await writeProgress(uid, { career: nextCareer }, { pontos_soberania: novaSob });

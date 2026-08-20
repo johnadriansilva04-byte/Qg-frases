@@ -327,7 +327,7 @@ export function patrimonioJogador(career: CareerState): {
   total: number;
 } {
   const bolsa = garantirBolsa(career.bolsa);
-  const sobCarteira = career.coach.soberania;
+  const sobCarteira = career.coach.sov;
   const investido = valorCarteira(bolsa);
   return { sobCarteira, investido, total: sobCarteira + investido };
 }

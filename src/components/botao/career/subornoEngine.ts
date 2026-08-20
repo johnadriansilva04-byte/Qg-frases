@@ -22,8 +22,8 @@ export type SubornoEscolha = {
 };
 
 export type SubornoEfeitos = {
-  /** Variação de soberania aplicada imediatamente. */
-  soberania?: number;
+  /** Variação de SOV aplicada imediatamente. */
+  sov?: number;
   /** Variação de moral do elenco (0-100). */
   moral?: number;
   /** Bônus/penalidade de poder para a próxima partida. */
@@ -113,7 +113,7 @@ export const SUBORNO_NODES: Record<string, SubornoNode> = {
         texto: "Aceitar, mas 'só pra pensar'",
         descricao: "Você embolsa. Agora você está comprometido.",
         proximoId: "aceitou1",
-        efeitos: { soberania: -5, moral: -5, bonusPoder: 2, flag: "aceitou_dinheiro" },
+        efeitos: { sov: -5, moral: -5, bonusPoder: 2, flag: "aceitou_dinheiro" },
       },
       {
         id: "gravar_conversa",
@@ -137,14 +137,14 @@ export const SUBORNO_NODES: Record<string, SubornoNode> = {
         texto: "Negar tudo e ir à diretoria",
         descricao: "Denúncia formal. Ele some, mas a diretoria desconfia de você.",
         proximoId: "denuncia1",
-        efeitos: { soberania: -3, flag: "denunciou" },
+        efeitos: { sov: -3, flag: "denunciou" },
       },
       {
         id: "embolsar",
         texto: "Embolsar o dinheiro",
-        descricao: "Você cede. -8 soberania, +2 poder (recursos pra contratos).",
+        descricao: "Você cede. -8 SOV, +2 poder (recursos pra contratos).",
         proximoId: "aceitou1",
-        efeitos: { soberania: -8, moral: -6, bonusPoder: 2, flag: "aceitou_dinheiro" },
+        efeitos: { sov: -8, moral: -6, bonusPoder: 2, flag: "aceitou_dinheiro" },
       },
     ],
   },
@@ -214,7 +214,7 @@ export const SUBORNO_NODES: Record<string, SubornoNode> = {
         texto: "Ceder na final",
         descricao: "Aceita a propina decisiva. Dinheiro grande, queda certa.",
         proximoId: "caiu2",
-        efeitos: { soberania: -15, moral: -10, bonusPoder: 3, flag: "aceitou_final" },
+        efeitos: { sov: -15, moral: -10, bonusPoder: 3, flag: "aceitou_final" },
       },
       {
         id: "armadilhar",

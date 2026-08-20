@@ -44,7 +44,7 @@ export function CareerMenu({
                 Temporada {career.temporada} · {(career.divisao ?? "serie-c").toUpperCase().replace("SERIE-", "SÉRIE ")}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Soberania: {career.coach.soberania} · Títulos: {career.coach.titulos}
+                SOV: {career.coach.sov} · Títulos: {career.coach.titulos}
               </p>
             </div>
 

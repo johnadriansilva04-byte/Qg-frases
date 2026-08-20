@@ -7,6 +7,7 @@ import {
   Dna,
   FlaskConical,
   GraduationCap,
+  Landmark,
   Lock,
   Sparkles,
   TrendingUp,
@@ -26,6 +27,7 @@ import {
 } from "./atividadesEngine";
 import type { Atividade, EstudanteState } from "./types";
 import { CURSOS } from "./types";
+import { SovBankApp } from "@/components/financial/SovBankApp";
 
 const TRACO_LABEL: Record<string, string> = {
   diligente: "Diligente",
@@ -55,6 +57,7 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
   const [atividadeAberta, setAtividadeAberta] = useState<Atividade | null>(null);
   const [ultimoDesfecho, setUltimoDesfecho] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [sovBankAberto, setSovBankAberto] = useState(false);
 
   const estudando = perfil?.profissao_atual === "estudante";
   const estado: EstudanteState = useMemo(() => {
@@ -232,6 +235,16 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
               <p className="text-sm text-muted-foreground">Acervo aberto para pesquisas.</p>
             </div>
           </Link>
+          <button
+            onClick={() => setSovBankAberto(true)}
+            className="flex items-center gap-3 rounded-xl border border-primary bg-primary/10 p-4 transition hover:bg-primary/20"
+          >
+            <Landmark className="h-5 w-5 text-primary" />
+            <div>
+              <p className="font-bold text-foreground">SOV BANK</p>
+              <p className="text-sm text-muted-foreground">Livro-caixa central da Cidadela.</p>
+            </div>
+          </button>
           <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-surface/30 p-4 opacity-60">
             <Lock className="h-5 w-5 text-muted-foreground" />
             <div>
@@ -271,6 +284,25 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
           onFechar={() => setAtividadeAberta(null)}
           salvando={salvando}
         />
+      )}
+
+      {sovBankAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-4xl rounded-2xl border border-border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <h2 className="text-lg font-black text-foreground">SOV BANK</h2>
+              <button
+                onClick={() => setSovBankAberto(false)}
+                className="rounded-lg border border-border/50 p-2 text-muted-foreground transition hover:bg-muted"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-4">
+              <SovBankApp userId={userId} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

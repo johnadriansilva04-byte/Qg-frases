@@ -11,7 +11,7 @@ export type Coach = {
   cidade: string;
   estilo: TacticalStyle;
   bio: string;
-  soberania: number;
+  sov: number;
   campanhasJogadas: number;
   titulos: number;
   criadoEm: string;
@@ -26,11 +26,11 @@ export const COACH_LEVELS: { nome: string; min: number; icon: string }[] = [
   { nome: "Lenda", min: 1000, icon: "👑" },
 ];
 
-export function nivelDoTreinador(soberania: number) {
+export function nivelDoTreinador(sov: number) {
   let atual = COACH_LEVELS[0]!;
   let proximo: (typeof COACH_LEVELS)[number] | null = null;
   for (let i = 0; i < COACH_LEVELS.length; i++) {
-    if (soberania >= COACH_LEVELS[i]!.min) {
+    if (sov >= COACH_LEVELS[i]!.min) {
       atual = COACH_LEVELS[i]!;
       proximo = COACH_LEVELS[i + 1] ?? null;
     }
@@ -43,8 +43,8 @@ export type Choice = {
   texto: string;
   descricao?: string;
   bonusPoder?: number; // afeta o power do time só na próxima partida (+/-)
-  bonusMoral?: number; // afeta soberania se ganhar
-  penaltyPontos?: number; // desconta soberania se resultado ruim
+  bonusMoral?: number; // afeta SOV se ganhar
+  penaltyPontos?: number; // desconta SOV se resultado ruim
   riscoAlto?: boolean;
   /** Derrota por W.O. na próxima partida (sanção grave — sem jogar). */
   wo?: boolean;
@@ -52,7 +52,7 @@ export type Choice = {
   desfalqueBotao?: number;
   /** Perde N pontos na tabela de classificação (punição da diretoria/CBJF). */
   perdaPontos?: number;
-  /** Impacto financeiro (Soberania) imediato, positivo ou negativo. */
+  /** Impacto financeiro (SOV) imediato, positivo ou negativo. */
   impactoFinanceiro?: number;
 };
 
@@ -74,7 +74,7 @@ export type Headline = {
 /**
  * Desafio de patrocinador: mensagem em primeira pessoa no celular do
  * treinador estipulando uma meta para a próxima partida. Ao atingir a meta,
- * o treinador ganha soberania (recompensa). Cada desafio tem um tipo de meta.
+ * o treinador ganha SOV (recompensa). Cada desafio tem um tipo de meta.
  */
 export type TipoMetaPatrocinador =
   | "vencer"
@@ -90,7 +90,7 @@ export type DesafioPatrocinador = {
   meta: TipoMetaPatrocinador;
   /** Parâmetro numérico da meta (ex.: margem mínima de gols, qtd de gols). */
   alvo?: number | undefined;
-  /** Soberania premiada ao concluir. */
+  /** SOV premiada ao concluir. */
   recompensa: number;
   /** Rodada em que o desafio foi proposto. */
   rodada: number;
@@ -138,7 +138,7 @@ export type EntrevistaRegistro = {
   rodada: number;
   temporada: number;
   declaracoes: DeclaracaoEntrevista[];
-  /** Recompensa em Soberania coletada ao final. */
+  /** Recompensa em SOV coletada ao final. */
   recompensa: number;
 };
 
@@ -281,7 +281,7 @@ export const POINTS = {
   VITORIA: 3,
   EMPATE: 1,
   DERROTA: 0,
-  // Campeão ganha entre +100 e +200 de Soberania (base + bônus por dificuldade).
+  // Campeão ganha entre +100 e +200 de SOV (base + bônus por dificuldade).
   CAMPEAO_BASE: 100,
   CAMPEAO_BONUS_MAX: 100, // somado ao base conforme dificuldade → 100..200
   VICE: 15,

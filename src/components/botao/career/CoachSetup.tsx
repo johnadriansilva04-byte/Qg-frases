@@ -45,7 +45,7 @@ export function CoachSetup({ timeName, onFinish, onBack }: Props) {
       cidade: cidade.trim() || "—",
       estilo,
       bio: bio.trim(),
-      soberania: 0,
+      sov: 0,
       campanhasJogadas: 0,
       titulos: 0,
       criadoEm: new Date().toISOString(),

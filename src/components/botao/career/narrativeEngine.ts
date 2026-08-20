@@ -18,10 +18,10 @@
 export type CategoriaNarrativa = "amoroso" | "bastidores" | "traicao" | "midia";
 
 export type NarrativaEfeitos = {
-  soberania?: number;
+  sov?: number;
   moral?: number;
   bonusPoder?: number;
-  /** Pressão da torcida (0-100): alto pune soberania em casa e amplifica crises. */
+  /** Pressão da torcida (0-100): alto pune SOV em casa e amplifica crises. */
   pressaoTorcida?: number;
   /** Marca narrativa persistente (ex.: "escandalo_estourou", "gravou_audio"). */
   flag?: string;
@@ -382,7 +382,7 @@ function construirArco(
             texto: "Ir à diretoria e denunciar",
             descricao: "Símbolo da integridade. +soberania, mas o alvo pode se vingar.",
             proximoId: `${estadoId}-denuncia`,
-            efeitos: { soberania: 8, moral: 4, pressaoTorcida: -4, flag: "denunciou" },
+            efeitos: { sov: 8, moral: 4, pressaoTorcida: -4, flag: "denunciou" },
           },
           {
             id: "gravar",
@@ -397,7 +397,7 @@ function construirArco(
             texto: "Aceitar a propina",
             descricao: "Lucro imediato. Soberania despenca, moral afunda.",
             proximoId: `${estadoId}-propina`,
-            efeitos: { soberania: -10, moral: -8, bonusPoder: 2, flag: "aceitou_dinheiro" },
+            efeitos: { sov: -10, moral: -8, bonusPoder: 2, flag: "aceitou_dinheiro" },
             riscoAlto: true,
           },
         ],
@@ -517,7 +517,7 @@ function construirArco(
           texto: "Negociar exclusiva (com vantagem)",
           descricao: "Dá a matéria a um veículo aliado. Cínico, mas eficaz.",
           proximoId: `${estadoId}-exclusiva`,
-          efeitos: { soberania: -3, pressaoTorcida: -8, flag: "comprou_voz" },
+          efeitos: { sov: -3, pressaoTorcida: -8, flag: "comprou_voz" },
         },
       ],
     },

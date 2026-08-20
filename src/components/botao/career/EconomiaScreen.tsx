@@ -33,7 +33,7 @@ export function EconomiaScreen({ career, onComprar, onVender, onBack }: Props) {
     if (!bolsaAtual) return;
     if (tipo === "compra") {
       const custo = custoCompra(bolsaAtual, info.ativoId, qtd);
-      if (career.coach.soberania < custo) {
+      if (career.coach.sov < custo) {
         setFeedback("Saldo SOV insuficiente para esta compra.");
         return;
       }
