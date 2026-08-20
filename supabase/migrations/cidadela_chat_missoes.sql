@@ -190,3 +190,112 @@ $$;
 GRANT EXECUTE ON FUNCTION cidadela_gerar_missoes_diarias() TO authenticated;
 GRANT EXECUTE ON FUNCTION cidadela_progresso_missao(TEXT, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION cidadela_resgatar_missao(UUID) TO authenticated;
+
+-- =========================================================
+-- 4. Lista de Jogadores da Cidadela
+-- =========================================================
+
+-- Tabela para rastrear jogadores online na Cidadela
+CREATE TABLE IF NOT EXISTS cidadela_jogadores_online (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  nome TEXT NOT NULL,
+  profissao_atual TEXT,
+  ultima_atividade TIMESTAMPTZ NOT NULL DEFAULT now(),
+  status TEXT NOT NULL DEFAULT 'online' CHECK (status IN ('online', 'offline', 'jogando'))
+);
+
+ALTER TABLE cidadela_jogadores_online ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Jogadores leitura publica" ON cidadela_jogadores_online;
+CREATE POLICY "Jogadores leitura publica"
+  ON cidadela_jogadores_online FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Jogadores escrita propria" ON cidadela_jogadores_online;
+CREATE POLICY "Jogadores escrita propria"
+  ON cidadela_jogadores_online FOR ALL
+  USING (auth.uid() = user_id);
+
+-- Atualiza ou cria registro de jogador online
+CREATE OR REPLACE FUNCTION cidadela_atualizar_status(p_status TEXT DEFAULT 'online')
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_nome TEXT;
+  v_profissao TEXT;
+  v_row cidadela_jogadores_online;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'usuario nao autenticado';
+  END IF;
+
+  -- Busca nome do perfil ou do auth
+  SELECT COALESCE(
+    (SELECT profissao_atual FROM cidadela_perfis WHERE user_id = v_uid),
+    'Recruta'
+  ) INTO v_profissao;
+
+  -- Usa nome do auth como fallback
+  v_nome := COALESCE(
+    (SELECT nome FROM cidadela_perfis WHERE user_id = v_uid),
+    (SELECT raw_user_meta_data->>'nome' FROM auth.users WHERE id = v_uid),
+    'Jogador'
+  );
+
+  INSERT INTO cidadela_jogadores_online (user_id, nome, profissao_atual, ultima_atividade, status)
+  VALUES (v_uid, v_nome, v_profissao, now(), p_status)
+  ON CONFLICT (user_id) DO UPDATE SET
+    nome = EXCLUDED.nome,
+    profissao_atual = EXCLUDED.profissao_atual,
+    ultima_atividade = EXCLUDED.ultima_atividade,
+    status = EXCLUDED.status
+  RETURNING * INTO v_row;
+
+  RETURN to_jsonb(v_row);
+END;
+$$;
+
+-- Lista todos os jogadores online
+CREATE OR REPLACE FUNCTION cidadela_listar_jogadores()
+RETURNS TABLE (
+  user_id UUID,
+  nome TEXT,
+  profissao_atual TEXT,
+  ultima_atividade TIMESTAMPTZ,
+  status TEXT
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT user_id, nome, profissao_atual, ultima_atividade, status
+  FROM cidadela_jogadores_online
+  WHERE ultima_atividade > now() - interval '30 minutes'
+  ORDER BY ultima_atividade DESC;
+$$;
+
+-- Limpa jogadores inativos (chamado periodicamente)
+CREATE OR REPLACE FUNCTION cidadela_limpar_inativos()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  DELETE FROM cidadela_jogadores_online
+  WHERE ultima_atividade < now() - interval '30 minutes';
+  
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION cidadela_atualizar_status(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION cidadela_listar_jogadores() TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION cidadela_limpar_inativos() TO service_role;

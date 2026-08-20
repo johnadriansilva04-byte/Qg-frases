@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { CelularFixo } from "@/components/CelularFixo";
 
 export const Route = createFileRoute("/campus")({
   head: () => ({
@@ -206,6 +207,9 @@ function Campus() {
           <p>© 2026 Cidadela do Pracinha — Campus Universitário</p>
         </footer>
       </div>
+
+      {/* Celular fixo no cantinho da tela */}
+      <CelularFixo />
     </div>
   );
 }

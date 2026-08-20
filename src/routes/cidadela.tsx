@@ -8,6 +8,7 @@ import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularConversas } from "@/components/botao/career/CelularConversas";
+import { CelularFixo } from "@/components/CelularFixo";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
 import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
 import { PainelMundo } from "@/components/cidadela/PainelMundo";
@@ -424,6 +425,12 @@ function Cidadela() {
         onClose={closeModal}
         title="Economia da Soberania"
         content={SEO_CONTENT.soberania}
+      />
+
+      {/* Celular fixo no cantinho da tela */}
+      <CelularFixo
+        userId={perfilCidadela?.user_id ?? null}
+        nomeJogador={perfilCidadela?.profissao_atual ? profissaoById(perfilCidadela.profissao_atual)?.nome ?? "Jogador" : null}
       />
     </>
   );

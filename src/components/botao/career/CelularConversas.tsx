@@ -13,6 +13,8 @@ import {
   Store,
   Trash2,
   Users,
+  Search,
+  UserPlus,
 } from "lucide-react";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +36,14 @@ import type { MissaoTrilhaLocal } from "./trilhaIntegracao";
 import type { Perfil } from "../online/auth";
 
 type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado";
+
+type JogadorOnline = {
+  user_id: string;
+  nome: string;
+  profissao_atual: string | null;
+  ultima_atividade: string;
+  status: string;
+};
 
 type Props = {
   conversas: ConversaCelular[];
@@ -85,6 +95,9 @@ export function CelularConversas({
   // ao abrir, evitando um ponto verde travado que nunca some.
   const [lidas, setLidas] = useState<Set<string>>(new Set());
   const [mostrarLogin, setMostrarLogin] = useState(false);
+  const [jogadoresOnline, setJogadoresOnline] = useState<JogadorOnline[]>([]);
+  const [carregandoJogadores, setCarregandoJogadores] = useState(false);
+  const [pesquisaJogador, setPesquisaJogador] = useState("");
 
   // Mostrar login se não tiver userId e onLogin estiver disponível
   useEffect(() => {
@@ -165,10 +178,30 @@ export function CelularConversas({
     setCarregandoChat(false);
   }, []);
 
+  const carregarJogadoresOnline = useCallback(async () => {
+    if (!userId) return;
+    setCarregandoJogadores(true);
+    try {
+      // Atualiza status do usuário atual
+      await supabase.rpc("cidadela_atualizar_status", { p_status: "online" });
+      
+      // Carrega lista de jogadores
+      const { data, error } = await supabase.rpc("cidadela_listar_jogadores");
+      if (!error && data) {
+        setJogadoresOnline(data as JogadorOnline[]);
+      }
+    } catch (err) {
+      console.warn("[Celular] Erro ao carregar jogadores online:", err);
+    } finally {
+      setCarregandoJogadores(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
     if (aba === "missoes") void carregarMissoes();
     if (aba === "mercado") void registrarEventoMissao("explorar_pergaminhos");
-  }, [aba, carregarMissoes]);
+    if (aba === "grupo") void carregarJogadoresOnline();
+  }, [aba, carregarMissoes, carregarJogadoresOnline]);
 
   useEffect(() => {
     if (aba !== "grupo") return;
@@ -185,11 +218,13 @@ export function CelularConversas({
       )
       .subscribe();
     const intervalo = window.setInterval(() => void carregarChat(), 20000);
+    const intervaloJogadores = window.setInterval(() => void carregarJogadoresOnline(), 30000);
     return () => {
       window.clearInterval(intervalo);
+      window.clearInterval(intervaloJogadores);
       void supabase.removeChannel(canal);
     };
-  }, [aba, carregarChat]);
+  }, [aba, carregarChat, carregarJogadoresOnline]);
 
   const resgatar = async (missao: MissaoDiaria) => {
     setResgatando(missao.id);
@@ -639,45 +674,119 @@ export function CelularConversas({
             )}
 
             {aba === "grupo" && (
-              <div className="flex h-full flex-col">
-                <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-3">
-                  <p className="text-sm font-bold text-white">Grupo universal da Cidadela</p>
-                  <p className="mt-1 text-xs text-cyan-100">Chame jogadores para o online e acompanhe avisos do Pracinha.</p>
-                </div>
-                <div className="flex-1 space-y-2 overflow-y-auto pb-3">
-                  {carregandoChat && chat.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-slate-400">Carregando grupo...</p>
-                  ) : chat.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-slate-400">Nenhuma mensagem ainda. Abra o front e convide um oponente.</p>
-                  ) : (
-                    chat.map((msg) => (
-                      <div key={msg.id} className="rounded-2xl bg-slate-800/80 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className={`text-xs font-bold ${msg.tipo === "sistema" ? "text-emerald-300" : "text-cyan-300"}`}>{msg.sender_nome}</p>
-                          <span className="text-[10px] text-slate-500">{new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-                        </div>
-                        <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-slate-200">{msg.texto}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="mt-2 flex gap-2">
+              <div className="space-y-3">
+                {/* Barra de pesquisa */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
                   <input
-                    value={chatInput}
-                    onChange={(event) => setChatInput(event.target.value)}
-                    onKeyDown={(event) => event.key === "Enter" && void enviarNoGrupo()}
-                    placeholder={userId ? "Convide alguém para jogar..." : "Entre para participar"}
-                    disabled={!userId}
-                    className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white outline-none disabled:opacity-50"
+                    type="text"
+                    placeholder="Buscar jogador..."
+                    value={pesquisaJogador}
+                    onChange={(e) => setPesquisaJogador(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900/80 pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
                   />
-                  <button
-                    onClick={() => void enviarNoGrupo()}
-                    disabled={!userId || !chatInput.trim()}
-                    className="rounded-xl bg-cyan-400 px-3 text-slate-950 disabled:opacity-40"
-                    aria-label="Enviar no grupo"
-                  >
-                    <Send className="size-4" />
-                  </button>
+                </div>
+
+                {carregandoJogadores ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block size-6 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400" />
+                    <p className="text-sm text-slate-400 mt-3">Carregando jogadores...</p>
+                  </div>
+                ) : jogadoresOnline.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="size-12 text-slate-600 mx-auto mb-3" />
+                    <p className="text-sm text-slate-400">Nenhum jogador online</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Seja o primeiro a entrar na Cidadela hoje!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                      {jogadoresOnline.length} jogadores online
+                    </p>
+                    {jogadoresOnline
+                      .filter((j) =>
+                        j.nome.toLowerCase().includes(pesquisaJogador.toLowerCase()) ||
+                        (j.profissao_atual && j.profissao_atual.toLowerCase().includes(pesquisaJogador.toLowerCase()))
+                      )
+                      .map((j) => (
+                        <div
+                          key={j.user_id}
+                          className="flex items-center gap-3 rounded-xl border border-slate-700/50 bg-slate-900/60 p-3"
+                        >
+                          <div className="relative">
+                            <div className="phone-avatar">{j.profissao_atual === 'tecnico' ? '⚽' : j.profissao_atual === 'estudante' ? '📚' : j.profissao_atual === 'empresario' ? '💼' : j.profissao_atual === 'bibliotecario' ? '📖' : j.profissao_atual === 'pesquisador' ? '🔬' : '👤'}</div>
+                            <div className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-slate-900 ${j.status === 'online' ? 'bg-emerald-400' : j.status === 'jogando' ? 'bg-amber-400' : 'bg-slate-500'}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-white truncate">{j.nome}</p>
+                            <p className="text-[10px] text-slate-400 capitalize">{j.profissao_atual || 'Recruta'}</p>
+                          </div>
+                          <button
+                            className="rounded-lg p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 transition"
+                            title="Adicionar amigo"
+                          >
+                            <UserPlus className="size-4" />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* Chat do grupo */}
+                <div className="mt-4 pt-4 border-t border-slate-700/50">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-3">
+                    Chat do grupo
+                  </p>
+                  {carregandoChat ? (
+                    <div className="text-center py-4">
+                      <div className="inline-block size-4 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400" />
+                    </div>
+                  ) : chat.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-slate-500">Nenhuma mensagem ainda</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {chat.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`rounded-lg px-3 py-2 text-xs ${
+                            msg.sender_id === userId
+                              ? 'bg-emerald-600/20 ml-8'
+                              : 'bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-bold text-white">{msg.sender_nome}</span>
+                            <span className="text-[9px] text-slate-500">
+                              {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-slate-200 mt-1">{msg.texto}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Mensagem para o grupo..."
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && void enviarNoGrupo()}
+                      className="flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={enviarNoGrupo}
+                      disabled={!chatInput.trim()}
+                      className="rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      <Send className="size-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

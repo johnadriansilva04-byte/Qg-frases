@@ -89,6 +89,7 @@ import {
 } from "./career/narrativeEngine";
 import { NarrativeModal } from "./career/NarrativeModal";
 import { CelularConversas } from "./career/CelularConversas";
+import { CelularFixo } from "@/components/CelularFixo";
 import {
   aplicarEscolhaRpg,
   atualizarSequenciaRpg,
@@ -2374,6 +2375,21 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       </div>
 
       {toast && <div className="toast font-display">{toast}</div>}
+      
+      {/* Celular fixo no cantinho da tela */}
+      <CelularFixo
+        userId={perfil?.user_id ?? null}
+        nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
+        onLogin={aoLogar}
+        conversas={career?.conversas ?? []}
+        desafioPatrocinador={career?.desafioPatrocinador ?? null}
+        feed={career?.feedCidadela ?? []}
+        trilhaMissoes={career ? missoesTrilha(career) : []}
+        npcDigitandoId={npcDigitando}
+        onEnviarMensagem={handleEnviarMensagem}
+        onExcluirConversa={handleExcluirConversa}
+        onEscolhaRpg={handleEscolhaRpg}
+      />
     </Shell>
   );
 }
