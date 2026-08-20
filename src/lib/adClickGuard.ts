@@ -94,5 +94,16 @@ export function initAdClickGuard(): void {
     true,
   );
 
+  // Retorno do anúncio NÃO é um clique novo: quando a página volta a ficar
+  // visível (o usuário retorna da aba/janela do patrocinador), qualquer janela
+  // de autorização ainda pendente é descartada. O primeiro clique após o
+  // retorno volta a ser uma interação comum e nunca reexecuta o fluxo anterior
+  // — só um novo clique no botão (com novo gate) inicia uma nova ação.
+  const invalidarAoVoltar = () => {
+    if (document.visibilityState === "visible") cancelarAutorizacao();
+  };
+  document.addEventListener("visibilitychange", invalidarAoVoltar);
+  window.addEventListener("pageshow", invalidarAoVoltar);
+
   console.log("[AdGuard] Portão de autorização única ativado");
 }

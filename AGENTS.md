@@ -1,25 +1,71 @@
+## Auditoria integral do Modo Carreira (2026-08-20, 2ª passada)
+
+- **Ritual da Trilha é notificação do celular, não card**: `CareerHub` NÃO tem
+  mais card da Trilha nem `PainelMundo` (o elemento azul "Crise Financeira na
+  Cidadela" — world state global — ficou exclusivo da rota /cidadela). O
+  convite chega via `convidarRitualTrilha(career)` (trilhaIntegracao.ts) como
+  `ConversaCelular` do NPC **Pracinha** (`npc-pracinha`, novo personagem em
+  rpg/personagens.ts + 4º contato-base em `garantirContatosRpg`), com
+  `ConversaCelular.linkExterno` {rotulo,to} renderizado no CelularConversas.
+  Idempotência por rodada: id determinístico `ritual-trilha-{temporada}-r{rodada}`.
+  Gatilhos: hidratação da campanha + fim de cada partida da liga.
+- **Navegação**: o Futebol de Botão NUNCA abre a Carreira automaticamente —
+  `hidratarCampanha` sempre restaura o estado e volta ao `menu` (antes: ia ao
+  `hub` quando a campanha estava ativa). CareerMenu → "Continuar Campanha" → hub.
+- **Persistência real**: `careerStorage.normalizarCareer(bruta)` saneia o JSONB
+  (conversas/headlines/ultimasEscolhas/feedCidadela arrays, divisao válida,
+  clamps de moral/soberania) — aplicado em `loadCareerFromSupabase`. Sem isso,
+  carreiras antigas quebravam o celular e o CareerMenu (divisao null).
+  Mensagens IA pós-jogo agora passam por `persistCareer` (antes: setCareer sem
+  persist → sumiam no refresh e corrompiam o snapshot). `garantirContatosRpg`
+  roda também na hidratação (contatos existiam só no cadastro do técnico, por
+  isso o celular de carreiras antigas abria vazio).
+- **Classificação Completa é tela própria**: screen `classificacao` +
+  `career/ClassificacaoScreen.tsx` (menu esquerdo: Classificação, Artilheiros,
+  Menos gols sofridos, Maiores goleadas, Copa do Brasil; painel direito com
+  tabs de divisão; dados reais via sortTable/groupFixtures). `ZoneLegend` passou
+  a morar nela. `ChampionshipModule.tsx` e `StatsModule.tsx` foram REMOVIDOS.
+- **Bug de reexecução pós-anúncio**: fluxo único — ControlledMonetagButton
+  (confirm modal) → Monetag (portão one-shot) → abre entrevista ONCE por
+  partida. `MatchEndData.partidaId` único por partida; BotaoGame guarda
+  `patrocinioPagoPartida` (estado) e `concluirPatrocinio` é idempotente
+  (recompensa paga 1x). `adClickGuard` agora chama `cancelarAutorizacao()` no
+  retorno (visibilitychange=visible + pageshow) — a volta do anúncio nunca
+  reexecuta a ação anterior. MatchEndScreen sem o passo "Liberar Entrevista".
+- **Contrato front↔back real**: RPC `registrar_transacao_soberania` retorna
+  `TABLE(balance)` — `registrarTransacaoSov` (sovApi) estava esperando number
+  plano e caía sempre em fallback; agora aceita array `[{balance}]`. Nenhuma
+  tabela/coluna/RPC nova foi necessária (schema já cobre o fluxo).
+- **Rótulos**: "Sovereign"/"sovereign" em UI virou "Soberania" (Portuguese UI) —
+  MatchEndScreen, CareerMenu, SovereigntyPanel, SeasonHub, SeasonTransition,
+  TitleCeremony, ProfileSetup, LeaderboardTreinadores, OnlineMatchV3, SeoContent,
+  CidadelaIntro, /cidadela. Campos do DB (`pontos_soberania`, `user_wallets`)
+  já estavam corretos. Nomes internos do Banco Central (`SovereignBank` em
+  src/lib/financial) permanecem (proper noun do módulo legado, fora de UI).
+- **Verificação**: engines testados runtime com jiti (convite idempotente por
+  rodada, 4 contatos-base, normalização com dados ruins). `tsc --noEmit` 0 erros,
+  `npm run build` OK.
+
 ## Modo Carreira integrado ao Campus — nomenclatura e audição (2026-08-20)
 
 - **Nomenclatura**: "Estádio do Campus" (header/menu principal do BotaoGame),
   "Carreira no Campus" (MenuCard principal, CareerMenu, CoachSetup) e
-  "Campeonato do Campus" (subtítulo/módulo/loading). "SOVEREIGN" em tela
-  (SovereigntyPanel eyebrow, SeasonHub, Leaderboard).
-- **CareerHub**: integra `PainelMundo` (world state da Cidadela via
-  `getProfissao(userId)`, recebe `userId` prop) + classificação em resumo
-  (top 5) com toggle "Módulo completo" que abre o `ChampionshipModule`
-  embutido (Copa do Brasil + Brasileirão + séries). Copa do Brasil tab
-  agora visível em todas as divisões (era gated em série-a — bug legado).
-  `showCalendar` é toggle sobre NewsPortal do lado da classificação.
+  "Campeonato do Campus" (subtítulo/módulo/loading). Rótulos visíveis usam
+  "Soberania" (pt-br); v. nota de 2026-08-20 (2ª passada).
+- **CareerHub**: NÃO integra mais `PainelMundo` (removido junto com o card do
+  Ritual — v. nota mais recente). Classificação resumida (top 5) abre a tela
+  dedicada `ClassificacaoScreen`. Copa do Brasil tab visível em todas as
+  divisões (era gated em série-a — bug legado do módulo antigo).
 - **Auditoria RPG/celular (jiti)**: engines puros testados runtime —
-  `garantirContatosRpg` (3 contatos iniciais por design, idempotente),
+  `garantirContatosRpg` (4 contatos iniciais: Valéria, Dona Cida, Zé, Pracinha),
   `processarEventosRpg` (gatilhos + espaçamento de 3 rodadas),
   `aplicarEscolhaRpg`, narrativa dinâmica (fecha em <=3 avanços), suborno,
   patrocinador (`cumpriuDesafio(desafio, golsPro, golsContra)`), choicesEngine
   (`sortearEvento(idsUsados: string[])`). Cadeia no BotaoGame:
   `atualizarSequenciaRpg` → `anexarPost` (Rede) → `processarEventosRpg` →
-  `preparaEscolha` → `aplicarDesafioPatrocinador` a cada partida;
-  `handleEnviarMensagem` → `responderContatoNpc`; `handleEscolhaRpg` →
-  SOV ledger + cartório link.
+  `convidarRitualTrilha` → `preparaEscolha` → `aplicarDesafioPatrocinador` a
+  cada partida; `handleEnviarMensagem` → `responderContatoNpc`;
+  `handleEscolhaRpg` → SOV ledger + cartório link.
 - **Aviso ambiental**: `vite dev` no proxy do work-host quebra a hidratação
   do entry `@tanstack/react-start` (SSR via curl funciona) — auditar UI por
   curl/jiti ou no dashboard Vercel. `tsc --noEmit` 0 erros, `npm run build` OK.

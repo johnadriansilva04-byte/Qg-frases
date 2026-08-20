@@ -340,7 +340,7 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         <div className="min-w-0">
           <p className="font-display text-xl truncate">{time || "Meu Time"}</p>
           <p className="text-sm text-muted-foreground truncate">
-            {nome || "Treinador"} · Nº {numero} · Sovereign {perfil?.pontos_soberania ?? 0}
+            {nome || "Treinador"} · Nº {numero} · Soberania {perfil?.pontos_soberania ?? 0}
           </p>
           <p className="text-xs text-muted-foreground">Treinador</p>
         </div>

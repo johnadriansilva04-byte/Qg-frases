@@ -13,7 +13,6 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { TEAMS, teamByIdSync, createCustomTeam, getAllTeams, type Team } from "./data/teams";
-import { AdsterraBanner } from "@/components/AdsterraBanner";
 import { useAdManager } from "@/lib/adManager";
 import { adManager } from "@/lib/adManager";
 import {
@@ -59,23 +58,17 @@ import { useBotaoAuth } from "./online/useBotaoAuth";
 import type { Perfil } from "./online/auth";
 import { CoachSetup } from "./career/CoachSetup";
 import { ProfileSetup } from "./career/ProfileSetup";
-import { NewsFeed } from "./career/NewsFeed";
-import { SovereigntyPanel } from "./career/SovereigntyPanel";
 import { ChoiceModal } from "./career/ChoiceModal";
 import { SubornoStory } from "./career/SubornoStory";
-import { CalendarView } from "./career/CalendarView";
-import { ChampionshipModule, ZoneLegend } from "./career/ChampionshipModule";
+import { ClassificacaoScreen } from "./career/ClassificacaoScreen";
 import {
   gerarCopaBrasil,
-  iniciarCopaBrasil,
   resolveTeam,
   proximoJogoCopa,
-  usuarioVivoNaCopa,
   copaDisponivelNaRodada,
   advanceCopaBrasil,
   avaliarFimTemporada,
   iniciarNovaTemporada,
-  CUSTO_MANUTENCAO,
   type VereditoTemporada,
 } from "./career/competitionApi";
 import {
@@ -103,17 +96,16 @@ import {
 } from "./career/rpg/cartorioApi";
 import { anexarPost, gerarPostPartida } from "./career/rpg/socialEngine";
 import { registrarTransacaoSov } from "@/lib/financial/sovApi";
-import { armarSponsor } from "@/lib/sponsorGate";
 import {
   aplicarRitualNaCarreira,
   consumirRitualPendente,
+  convidarRitualTrilha,
   missoesTrilha,
 } from "./career/trilhaIntegracao";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { SeasonTransition } from "./career/SeasonTransition";
 import { LoadingScreen } from "./career/LoadingScreen";
-import { NewsPortal } from "./career/NewsPortal";
 import { AIService } from "./ai/AIService";
 import { coletivaPosJogo, relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
 import {
@@ -179,6 +171,7 @@ type Screen =
   | "coach-setup"
   | "tournament-setup"
   | "hub"
+  | "classificacao"
   | "tournament-match"
   | "match-end"
   | "choice"
@@ -225,8 +218,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [matchEnd, setMatchEnd] = useState<MatchEndData | null>(null);
   // Tela de destino do botão "Continuar" da tela de fim de jogo.
   const [matchEndDestino, setMatchEndDestino] = useState<Screen>("menu");
-  // Entrevista de patrocínio pós-jogo (abre após o usuário liberar o anúncio).
+  // Entrevista de patrocínio pós-jogo (abre após o usuário confirmar o anúncio).
   const [entrevistaAberta, setEntrevistaAberta] = useState(false);
+  // Idempotência do patrocínio: guarda o partidaId cuja recompensa JÁ foi paga.
+  // Impede que o fluxo de anúncio pague 2x ao retornar ao jogo.
+  const [patrocinioPagoPartida, setPatrocinioPagoPartida] = useState<string | null>(null);
   // Tela de carregamento (splash) controlada por contexto: inicia de carreira,
   // entrada em campo, consultas ao Supabase e inicialização da IA.
   const [loading, setLoading] = useState(false);
@@ -469,15 +465,25 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           torneioAtivo = careerHidratada.ligas[careerHidratada.divisao] ?? torneioAtivo;
         }
 
+        // Celular restaurado com a carreira: garante os contatos-base (inclui o
+        // Pracinha) e, se a sombra estiver ativa, entrega o convite do Ritual
+        // da Trilha como notificação (idempotente por rodada).
+        if (careerHidratada) {
+          careerHidratada = garantirContatosRpg(careerHidratada);
+          careerHidratada = convidarRitualTrilha(careerHidratada);
+        }
+
         setTour(torneioAtivo);
         setCareer(careerHidratada);
-        if (remoteCareer) {
-          // Repara registros antigos que tinham coach vazio no JSONB.
-          void saveCareerToSupabase(userId, careerHidratada ?? remoteCareer);
+        if (remoteCareer && careerHidratada) {
+          // Repara registros antigos que tinham coach vazio no JSONB e
+          // persiste contatos/convite recém-gerados.
+          void saveCareerToSupabase(userId, careerHidratada);
         }
-        const campanhaAtiva =
-          remoteCareer && remoteProgress.tournament && remoteProgress.tournament.phase !== "fim";
-        setScreen(campanhaAtiva ? "hub" : "menu");
+        // Navegação: NUNCA abrir o Modo Carreira automaticamente. O Estádio do
+        // Campus abre no menu; a carreira é acessada pelo usuário em
+        // "Carreira no Campus" → "Continuar Campanha" (estado já persistido).
+        setScreen("menu");
       } catch (error) {
         hydratedUserRef.current = null;
         console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
@@ -703,6 +709,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const advId = userIsHome ? r.awayId : r.homeId;
     const advTeam = teamByIdSync(advId);
     setMatchEnd({
+      partidaId: `amistoso-${Date.now()}`,
       resultado: gf > ga ? "vitoria" : gf < ga ? "derrota" : "empate",
       placarUser: gf,
       placarAdv: ga,
@@ -762,7 +769,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       conversas: [],
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
-    persistCareer(novaCareer);
+    // Celular nasce com os contatos-base (Valéria, Dona Cida, Zé e Pracinha).
+    persistCareer(garantirContatosRpg(novaCareer));
 
     // Se estiver logado, sincronizar com Supabase
     if (perfil?.user_id) {
@@ -1415,6 +1423,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const sobAnterior = career.coach.soberania;
     const moralAnterior = career.moralTime;
     setMatchEnd({
+      partidaId: `copa-${Date.now()}`,
       resultado: gf > ga ? "vitoria" : gf < ga ? "derrota" : "empate",
       placarUser: gf,
       placarAdv: ga,
@@ -1725,6 +1734,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       );
       const comEvento = processarEventosRpg(novaCareer);
       if (comEvento) novaCareer = comEvento;
+      // Ritual da Trilha: se a sombra está ativa (SOV < 30 ou 3+ derrotas
+      // seguidas), o Pracinha envia o convite como notificação no celular.
+      novaCareer = convidarRitualTrilha(novaCareer);
       // === fim RPG ===
 
       // Se o torneio ainda não acabou e ainda tem próxima do usuário, prepara evento
@@ -1895,10 +1907,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           });
         }
         if (novasConv.length > 0) {
-          setCareer((prev) => {
-            if (!prev) return prev;
-            return { ...prev, conversas: [...novasConv, ...prev.conversas].slice(0, 30) };
-          });
+          // Persiste junto com o estado (não só na tela): as mensagens do
+          // celular sobrevivem ao refresh, vindas do snapshot no Supabase.
+          const prev = careerRef.current;
+          if (prev) {
+            const atuais = Array.isArray(prev.conversas) ? prev.conversas : [];
+            persistCareer({
+              ...prev,
+              conversas: [...novasConv, ...atuais].slice(0, 30),
+            });
+          }
         }
       } catch {
         // fallback silencioso: o jogo segue sem conteúdo IA
@@ -1911,6 +1929,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const advId2 = userIsHome ? r.awayId : r.homeId;
       const advNome2 = teamByIdSync(advId2)?.name ?? advId2;
       setMatchEnd({
+        partidaId: `liga-${Date.now()}`,
         resultado: gf > ga ? "vitoria" : gf < ga ? "derrota" : "empate",
         placarUser: gf,
         placarAdv: ga,
@@ -1939,8 +1958,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Ganho de patrocínio escala com o resultado (incentiva a entrevista).
     const ganhoPatrocinio =
       matchEnd.resultado === "vitoria" ? 30 : matchEnd.resultado === "empate" ? 20 : 10;
+    const partidaAtual = matchEnd.partidaId ?? "sem-id";
+    const patrocinioJaPago = patrocinioPagoPartida === partidaAtual;
     const concluirPatrocinio = () => {
       setEntrevistaAberta(false);
+      // Idempotente: a recompensa desta partida só pode ser paga UMA vez,
+      // não importa quantas vezes o fluxo de anúncio se repita.
+      if (patrocinioJaPago) {
+        setToast("Patrocínio desta partida já foi recebido.");
+        return;
+      }
+      setPatrocinioPagoPartida(partidaAtual);
       const uid = perfil?.user_id;
       if (uid) {
         void registrarTransacaoSov(
@@ -1958,13 +1986,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           coach: { ...career.coach, soberania: career.coach.soberania + ganhoPatrocinio },
         });
       }
-      setToast(`🎤 Entrevista concedida! +${ganhoPatrocinio} SOV de patrocínio`);
+      setToast(`🎤 Entrevista concedida! +${ganhoPatrocinio} Soberania de patrocínio`);
     };
     return (
       <>
         <MatchEndScreen
           dados={matchEnd}
-          onPatrocinio={() => setEntrevistaAberta(true)}
+          patrocinioPago={patrocinioJaPago}
+          entrevistaAberta={entrevistaAberta}
+          onPatrocinio={() => {
+            // Um clique novo só reabre a entrevista se ela não estiver aberta
+            // — o retorno do anúncio nunca ressuscita a ação anterior.
+            if (!entrevistaAberta && !patrocinioJaPago) setEntrevistaAberta(true);
+          }}
           onContinuar={() => {
             setMatchEnd(null);
             setEntrevistaAberta(false);
@@ -2140,7 +2174,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
                 <p className="font-display text-lg">{nomeTreinador ?? "Treinador"}</p>
                 <p className="text-xs text-muted-foreground">
                   {career
-                    ? `Temporada ${career.temporada} · ${career.divisao.toUpperCase().replace("SERIE-", "SÉRIE ")}`
+                    ? `Temporada ${career.temporada} · ${(career.divisao ?? "serie-c").toUpperCase().replace("SERIE-", "SÉRIE ")}`
                     : "Aguardando campanha"}
                 </p>
               </div>
@@ -2344,7 +2378,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         {screen === "tournament-setup" && (
           <Setup
             title="Carreira no Campus"
-            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver Sovereign."
+            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver Soberania."
             userTeam={userTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
@@ -2362,10 +2396,21 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             userTeam={userTeam}
             career={career}
             ligas={career?.ligas}
-            userId={perfil?.user_id ?? null}
             onPlay={playNext}
             onExit={() => setScreen("menu")}
             onOpenCelular={() => setScreen("celular")}
+            onOpenClassificacao={() => setScreen("classificacao")}
+          />
+        )}
+
+        {screen === "classificacao" && tour && (
+          <ClassificacaoScreen
+            tour={tour}
+            userTeam={userTeam}
+            currentDivisao={career?.divisao ?? "serie-c"}
+            ligas={career?.ligas}
+            copaBrasil={career?.copaBrasil ?? null}
+            onBack={() => setScreen("hub")}
           />
         )}
 

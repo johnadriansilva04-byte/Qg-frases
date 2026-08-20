@@ -135,7 +135,7 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
               </div>
               <div className="text-right">
                 <p className="font-display text-xl leading-none">{r.pontos_soberania ?? 0}</p>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">sovereign</p>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">soberania</p>
               </div>
             </li>
           );

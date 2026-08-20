@@ -82,7 +82,7 @@ export function CidadelaIntro({ onContinue }: CidadelaIntroProps) {
                 <p className="text-sm leading-relaxed text-slate-200">
                   Para descobrir a história completa, encontre ou adquira os
                   Pergaminhos espalhados pela comunidade. Eles podem ser negociados
-                  entre jogadores no Marketplace da Cidadela usando Sovereign (SOV).
+                  entre jogadores no Marketplace da Cidadela usando Soberania (SOV).
                 </p>
               </div>
             </aside>

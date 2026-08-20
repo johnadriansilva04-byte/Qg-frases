@@ -40,7 +40,7 @@ export function SovereigntyPanel({
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         <Stat
           icon={<Crown className="size-4" />}
-          label="Sovereign"
+          label="Soberania"
           value={coach.soberania}
           accent
         />

@@ -36,7 +36,7 @@ export function SeasonHub({ seasonState, onPlayBrasileirao, onPlayCopa, onPlayLi
           {seasonState.economia && (
             <div className="text-right">
               <p className="font-display text-xl">{seasonState.economia.soberania_atual}</p>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">Sovereign</p>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">Soberania</p>
             </div>
           )}
         </div>

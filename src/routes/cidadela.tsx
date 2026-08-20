@@ -422,7 +422,7 @@ function Cidadela() {
       <InfoModal
         isOpen={activeModal === "soberania"}
         onClose={closeModal}
-        title="Economia Sovereign"
+        title="Economia de Soberania"
         content={SEO_CONTENT.soberania}
       />
     </>
