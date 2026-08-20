@@ -229,6 +229,7 @@ function Cidadela() {
         userId={perfil?.user_id ?? null}
         nomeJogador={perfil?.nome ?? null}
         onLogin={handleLogin}
+        perfilCidadela={perfilCidadela}
       />
     );
   }
@@ -429,8 +430,9 @@ function Cidadela() {
 
       {/* Celular fixo no cantinho da tela */}
       <CelularFixo
-        userId={perfilCidadela?.user_id ?? null}
-        nomeJogador={perfilCidadela?.profissao_atual ? profissaoById(perfilCidadela.profissao_atual)?.nome ?? "Jogador" : null}
+        userId={perfil?.user_id ?? null}
+        nomeJogador={perfil?.nome ?? null}
+        perfilCidadela={perfilCidadela}
       />
     </>
   );

@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Smartphone, X, MessageSquare, Users, ClipboardList, Store, Bot } from "lucide-react";
 import { CelularConversas } from "./botao/career/CelularConversas";
 import type { Perfil } from "./botao/online/auth";
+import type { CidadelaPerfil } from "./lib/cidadela/profissoes";
 
 type Props = {
   userId?: string | null;
   nomeJogador?: string | null;
-  onLogin?: (perfil: Perfil) => void;
+  onLogin?: ((perfil: Perfil) => void) | undefined;
   conversas?: any[];
   desafioPatrocinador?: any;
   feed?: any[];
@@ -15,6 +16,7 @@ type Props = {
   onEnviarMensagem?: (conversaId: string, texto: string) => void;
   onExcluirConversa?: (conversaId: string) => void;
   onEscolhaRpg?: (conversaId: string, indice: number) => void;
+  perfilCidadela?: CidadelaPerfil | null;
 };
 
 export function CelularFixo({
@@ -29,6 +31,7 @@ export function CelularFixo({
   onEnviarMensagem = () => {},
   onExcluirConversa = () => {},
   onEscolhaRpg,
+  perfilCidadela = null,
 }: Props) {
   const [aberto, setAberto] = useState(false);
 
@@ -47,6 +50,7 @@ export function CelularFixo({
         userId={userId}
         nomeJogador={nomeJogador}
         onLogin={onLogin}
+        perfilCidadela={perfilCidadela}
       />
     );
   }

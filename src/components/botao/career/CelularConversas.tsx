@@ -15,6 +15,7 @@ import {
   Users,
   Search,
   UserPlus,
+  Bell,
 } from "lucide-react";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,8 +35,11 @@ import { eventoPorId } from "./rpg/eventos";
 import type { PostFeed } from "./rpg/types";
 import type { MissaoTrilhaLocal } from "./trilhaIntegracao";
 import type { Perfil } from "../online/auth";
+import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
+import { PainelReputacao } from "@/components/cidadela/PainelReputacao";
+import { PainelMundo } from "@/components/cidadela/PainelMundo";
 
-type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado";
+type AbaCelular = "mensagens" | "rede" | "missoes" | "grupo" | "mercado" | "notificacoes";
 
 type JogadorOnline = {
   user_id: string;
@@ -64,6 +68,8 @@ type Props = {
   nomeJogador?: string | null | undefined;
   /** Callback quando login é realizado no celular */
   onLogin?: (perfil: Perfil) => void;
+  /** Perfil da Cidadela para notificações */
+  perfilCidadela?: CidadelaPerfil | null;
 };
 
 export function CelularConversas({
@@ -79,6 +85,7 @@ export function CelularConversas({
   userId = null,
   nomeJogador = null,
   onLogin,
+  perfilCidadela,
 }: Props) {
   const [aba, setAba] = useState<AbaCelular>("mensagens");
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(null);
@@ -98,6 +105,16 @@ export function CelularConversas({
   const [jogadoresOnline, setJogadoresOnline] = useState<JogadorOnline[]>([]);
   const [carregandoJogadores, setCarregandoJogadores] = useState(false);
   const [pesquisaJogador, setPesquisaJogador] = useState("");
+
+  // Títulos das abas
+  const tituloAba: Record<AbaCelular, string> = {
+    mensagens: "Mensagens",
+    rede: "Rede Social",
+    missoes: "Missões Diárias",
+    grupo: "Grupo da Cidadela",
+    mercado: "Mercado SOV",
+    notificacoes: "Notificações",
+  };
 
   // Mostrar login se não tiver userId e onLogin estiver disponível
   useEffect(() => {
@@ -247,14 +264,6 @@ export function CelularConversas({
     } else {
       setFeedback("Mensagem não enviada. Verifique sua conexão.");
     }
-  };
-
-  const tituloAba: Record<AbaCelular, string> = {
-    mensagens: "Mensagens",
-    rede: "Rede da Cidadela",
-    missoes: "Missões do Pracinha",
-    grupo: "Grupo da Cidadela",
-    mercado: "Feira / Marketplace",
   };
 
   // Se estiver mostrando login, renderiza AuthScreen dentro do celular
@@ -462,7 +471,7 @@ export function CelularConversas({
             <Smartphone className="size-4 text-slate-400" />
           </div>
 
-          <div className="grid grid-cols-5 border-b border-slate-700/60 bg-slate-950/70 text-[10px] font-bold">
+          <div className="grid grid-cols-6 border-b border-slate-700/60 bg-slate-950/70 text-[10px] font-bold">
             {(
               [
                 ["mensagens", MessageSquare, "Msgs"],
@@ -470,6 +479,7 @@ export function CelularConversas({
                 ["missoes", ClipboardList, "Missões"],
                 ["grupo", Users, "Grupo"],
                 ["mercado", Store, "Feira"],
+                ["notificacoes", Bell, "Alertas"],
               ] as const
             ).map(([id, Icon, label]) => (
               <button
@@ -804,6 +814,22 @@ export function CelularConversas({
             )}
 
             {aba === "mercado" && <SovMarket userId={userId} compact />}
+
+            {aba === "notificacoes" && (
+              <div className="space-y-3 p-3">
+                {perfilCidadela ? (
+                  <>
+                    <PainelReputacao perfil={perfilCidadela} />
+                    <PainelMundo perfil={perfilCidadela} />
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <Bell className="size-12 text-slate-600 mx-auto mb-3" />
+                    <p className="text-sm text-slate-400">Faça login para ver notificações</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
