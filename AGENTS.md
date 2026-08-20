@@ -510,3 +510,32 @@ time/botões/tática no estilo PS2. Tudo persistido no Supabase (`futebol.sql`).
   divisão do usuário). Stats (`StatsModule`) rotuladas pela divisão selecionada.
 - `exactOptionalPropertyTypes`: props opcionais precisam de `| undefined`
   explícito (ex.: `botoesNomes?: string[] | undefined`).
+
+
+## Cidadela dos Clássicos — RPG unificado por profissões (2026-08-20)
+
+- **SQL**: `supabase/migrations/cidadela_rpg.sql` — `cidadela_perfis`,
+  `cidadela_world_state` + RPCs `obter_perfil_cidadela`, `escolher_profissao`,
+  `atualizar_estado_cidadela`, `obter_world_state`. Aplicação manual no SQL Editor.
+- **5 profissões** (`lib/cidadela/profissoes.ts`): tecnico/estudante/empresario/
+  bibliotecario/pesquisador com gating por reputação (100). A rota `/cidadela`
+  força escolha de identidade quando perfil existe sem profissão.
+- **Engine de decisões compartilhada** (`components/campus/`): `EstudanteState`
+  genérico reutilizado por todas as profissões (`atividadesEngine.aplicarOpcao`
+  registra SOV via source `'campus'`, reputação e traços emergentes).
+  `ProfissaoHub` é hub genérico (Empresário/Pesquisador); Estudante usa
+  `CampusHub` com tour (EstudanteTour).
+- **Pesquisador**: pipeline em cadeia coleta→análise→publicação via
+  `prerequisitos` de Atividade. **Empresário**: pauta própria
+  (NEGOCIOS_INICIAIS) em `comercial/empresarioEngine.ts`.
+- **Integração diária** (`campus/integracaoEngine.ts`): atividades rotativas
+  (hash do dia ISO) conectam Estudante às outras profissões; IDs com sufixo de
+  data permitem repetição diária.
+- **World state** (`lib/cidadela/eventosGlobais.ts`): evento global da semana
+  determinístico com efeito por profissão; `PainelMundo` lê RPC e cai em
+  fallback local. `PainelReputacao` mostra reputação/nível no hub.
+- **Testes runtime**: engines puros testáveis com
+  `JITI_TSCONFIG_PATHS=true ./node_modules/.bin/jiti <teste.mts>`. Engines de
+  decisão NÃO podem importar módulos com alias `@/` (use caminhos relativos).
+- **Ads**: `/brio` usa `AdSlot` Banner Rodapé (Adsense permitido por default
+  no adManager). `/cidadela` permanece Monetag (sem banner adsense).
