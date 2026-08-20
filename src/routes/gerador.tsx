@@ -153,10 +153,10 @@ function Gerador() {
             ✨ Gerador de Texto
           </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-            Frases prontas e correção de texto em um só lugar
+            Frases e correção
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {total.toLocaleString("pt-BR")} combinações de frases disponíveis
+            {total.toLocaleString("pt-BR")} combinações
           </p>
         </header>
 

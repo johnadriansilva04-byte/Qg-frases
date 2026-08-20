@@ -1,47 +1,63 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AdSlot } from "@/components/AdSlot";
 
-export const Route = createFileRoute("/brio")({
+export const Route = createFileRoute("/campus")({
   head: () => ({
     meta: [
-      { title: "Desenvolvimento do Brio | QG Frases" },
+      { title: "Campus Universitário | Cidadela do Pracinha" },
       {
         name: "description",
-        content: "Biblioteca, Cartório e Ferramentas de Texto em um só lugar.",
+        content: "Onde a vida acontece. Biblioteca, Laboratórios, Setor Comercial e Desenvolvimento do Brio.",
       },
-      { property: "og:title", content: "Desenvolvimento do Brio | QG Frases" },
+      { property: "og:title", content: "Campus Universitário | Cidadela do Pracinha" },
       {
         property: "og:description",
-        content: "Biblioteca, Cartório e Ferramentas de Texto em um só lugar.",
+        content: "Biblioteca, Laboratórios, Setor Comercial e Desenvolvimento do Brio.",
       },
-      { property: "og:url", content: "https://pracinha.online/brio" },
+      { property: "og:url", content: "https://pracinha.online/campus" },
       { property: "og:image", content: "https://pracinha.online/og-image.png" },
     ],
   }),
-  component: Brio,
+  component: Campus,
 });
 
 const SECTIONS = [
   {
+    icon: "scroll",
+    title: "Desenvolvimento do Brio",
+    description: "Conhecimento e ferramentas",
+    link: "/brio",
+    color: "from-amber-500 to-orange-500",
+    bgColor: "bg-amber-500/10",
+  },
+  {
     icon: "book",
     title: "Biblioteca",
-    description: "Livros selecionados de motivação, fé e desenvolvimento pessoal.",
+    description: "Livros selecionados",
     link: "/biblioteca",
     color: "from-blue-500 to-cyan-500",
     bgColor: "bg-blue-500/10",
   },
   {
-    icon: "scroll",
-    title: "Cartório",
-    description: "Petição, contrato do clube e documentos jurídicos. Em breve.",
+    icon: "flask",
+    title: "Laboratórios",
+    description: "Pesquisa e inovação",
     link: "#",
-    color: "from-amber-500 to-orange-500",
-    bgColor: "bg-amber-500/10",
+    color: "from-purple-500 to-pink-500",
+    bgColor: "bg-purple-500/10",
+    disabled: true,
+  },
+  {
+    icon: "store",
+    title: "Setor Comercial",
+    description: "Negócios e comércio",
+    link: "#",
+    color: "from-green-500 to-emerald-500",
+    bgColor: "bg-green-500/10",
     disabled: true,
   },
 ];
 
-function Brio() {
+function Campus() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
       {/* Efeito de grade cyberpunk */}
@@ -49,25 +65,25 @@ function Brio() {
 
       {/* Efeito de luz neon */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
 
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-4 md:p-8">
         {/* Header */}
         <header className="text-center mb-12 md:mb-16">
           <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center animate-spin-slow">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 flex items-center justify-center">
               <svg width="24" height="24" viewBox="0 0 64 64" fill="none" className="w-6 h-6">
-                <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="#fff" opacity="0.9" />
-                <path d="M32 16 L32 48" stroke="#fff" strokeWidth="2" opacity="0.5" />
+                <path d="M32 8 L56 24 L56 48 L32 56 L8 48 L8 24 L32 8Z" fill="#fff" opacity="0.9" />
+                <path d="M32 8 L32 56 M8 24 L56 24 M8 48 L56 48" stroke="#fff" strokeWidth="2" opacity="0.5" />
               </svg>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400 bg-clip-text text-transparent">
-              DESENVOLVIMENTO DO BRIO
+            <h1 className="text-4xl md:text-6xl font-black tracking-tight bg-gradient-to-r from-amber-400 via-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              CAMPUS UNIVERSITÁRIO
             </h1>
           </div>
-          <p className="text-lg md:text-xl text-slate-300 mb-2">Conhecimento e Ferramentas</p>
+          <p className="text-lg md:text-xl text-slate-300 mb-2">Onde a vida acontece</p>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            Acesse a Biblioteca e o Cartório. Desenvolva seu conhecimento.
+            Todos os integrantes da Cidadela fazem parte do Campus. Escolha sua função e participe.
           </p>
         </header>
 
@@ -83,18 +99,26 @@ function Brio() {
                   <div className={`absolute inset-0 bg-gradient-to-r ${section.color} opacity-0`} />
                   <div className="relative flex items-start gap-4 md:gap-6">
                     <div className={`p-3 md:p-4 rounded-xl ${section.bgColor}`}>
-                      {section.icon === "scroll" && (
+                      {section.icon === "flask" && (
                         <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
-                          <rect x="8" y="8" width="48" height="48" rx="4" fill="url(#scrollGrad)" />
-                          <rect x="12" y="12" width="40" height="40" rx="2" fill="#fff" opacity="0.2" />
-                          <path d="M16 20 L48 20" stroke="#fff" strokeWidth="2" opacity="0.4" />
-                          <path d="M16 28 L40 28" stroke="#fff" strokeWidth="2" opacity="0.4" />
-                          <path d="M16 36 L44 36" stroke="#fff" strokeWidth="2" opacity="0.4" />
-                          <path d="M16 44 L36 44" stroke="#fff" strokeWidth="2" opacity="0.4" />
+                          <path d="M24 8 L24 24 L16 48 L48 48 L40 24 L40 8 L24 8Z" fill="url(#flaskGrad)" />
+                          <circle cx="32" cy="36" r="8" fill="#fff" opacity="0.3" />
                           <defs>
-                            <linearGradient id="scrollGrad" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-                              <stop stopColor="#f59e0b" />
-                              <stop offset="1" stopColor="#ea580c" />
+                            <linearGradient id="flaskGrad" x1="16" y1="8" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                              <stop stopColor="#a855f7" />
+                              <stop offset="1" stopColor="#ec4899" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                      )}
+                      {section.icon === "store" && (
+                        <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                          <path d="M8 16 L56 16 L52 48 L12 48 L8 16Z" fill="url(#storeGrad)" />
+                          <path d="M16 16 L16 8 L24 8 L24 16 M40 16 L40 8 L48 8 L48 16" stroke="#fff" strokeWidth="2" opacity="0.5" />
+                          <defs>
+                            <linearGradient id="storeGrad" x1="8" y1="16" x2="56" y2="48" gradientUnits="userSpaceOnUse">
+                              <stop stopColor="#22c55e" />
+                              <stop offset="1" stopColor="#10b981" />
                             </linearGradient>
                           </defs>
                         </svg>
@@ -124,6 +148,18 @@ function Brio() {
                 <div className={`absolute inset-0 bg-gradient-to-r ${section.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
                 <div className="relative flex items-start gap-4 md:gap-6">
                   <div className={`p-3 md:p-4 rounded-xl ${section.bgColor} group-hover:scale-110 transition-transform`}>
+                    {section.icon === "scroll" && (
+                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#scrollGrad)" />
+                        <path d="M32 16 L32 48" stroke="#fff" strokeWidth="2" opacity="0.5" />
+                        <defs>
+                          <linearGradient id="scrollGrad" x1="8" y1="12" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#f59e0b" />
+                            <stop offset="1" stopColor="#ea580c" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
                     {section.icon === "book" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#bookGrad)" />
@@ -162,23 +198,31 @@ function Brio() {
           })}
         </div>
 
-        {/* Publicidade discreta no rodapé (mesmo padrão das demais páginas estáticas) */}
-        <div className="w-full max-w-5xl mb-8">
-          <AdSlot rotulo="Banner Rodapé" />
-        </div>
-
         {/* Voltar */}
-        <div className="text-center">
+        <div className="text-center mb-8">
           <Link
-            to="/campus"
+            to="/"
             className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-amber-400 transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 64 64" fill="none" className="w-4 h-4">
               <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Voltar para o Campus
+            Voltar para página inicial
           </Link>
         </div>
+
+        {/* Footer */}
+        <footer className="text-center text-xs text-slate-500">
+          <div className="mb-3 flex justify-center gap-4">
+            <Link to="/privacidade" className="hover:text-amber-400 transition">
+              Privacidade
+            </Link>
+            <Link to="/termos" className="hover:text-amber-400 transition">
+              Termos
+            </Link>
+          </div>
+          <p>© 2026 Cidadela do Pracinha — Campus Universitário</p>
+        </footer>
       </div>
     </div>
   );

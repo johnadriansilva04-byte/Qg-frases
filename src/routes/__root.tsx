@@ -173,7 +173,6 @@ function RootComponent() {
       <Outlet />
 
       <CookieBanner />
-      <PracinhaGuide />
       <SponsorNotice />
     </QueryClientProvider>
   );

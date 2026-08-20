@@ -25,18 +25,26 @@ const SECTIONS = [
   {
     icon: "gamepad",
     title: "Cidadela dos Clássicos",
-    description: "Trilha de botão e muito mais",
+    description: "Jogos clássicos",
     link: "/cidadela",
     color: "from-purple-500 to-pink-500",
     bgColor: "bg-purple-500/10",
   },
   {
-    icon: "pergaminho",
-    title: "Desenvolvimento do Brio",
-    description: "Biblioteca, Cartório e Ferramentas de Texto",
-    link: "/brio",
-    color: "from-amber-500 to-orange-500",
+    icon: "graduation",
+    title: "Campus Universitário",
+    description: "Onde a vida acontece",
+    link: "/campus",
+    color: "from-amber-500 to-emerald-500",
     bgColor: "bg-amber-500/10",
+  },
+  {
+    icon: "pen",
+    title: "Gerador de Texto",
+    description: "Frases e correção",
+    link: "/gerador",
+    color: "from-green-500 to-cyan-500",
+    bgColor: "bg-green-500/10",
   },
 ];
 
@@ -63,14 +71,9 @@ function Index() {
             CIDADELA DO PRACINHA
           </h1>
           <Amelas className="mt-4 text-purple-500/40" />
-          <p className="mt-5 text-lg md:text-xl text-slate-300 mb-2">Jogos clássicos com propósito</p>
+          <p className="mt-5 text-lg md:text-xl text-slate-300 mb-2">Jogos, Campus e Ferramentas</p>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            Nossa intenção é educar e ensinar economia, educação financeira e raciocínio lógico
-            para crianças e jovens através de jogos clássicos.
-          </p>
-          <p className="mt-4 text-xs md:text-sm text-purple-200/80 max-w-2xl mx-auto">
-            Fundada por John Adrian, a Cidadela guarda um segredo em seus Pergaminhos.
-            Encontre-os, negocie com a comunidade e descubra a história completa.
+            Todos os integrantes da Cidadela fazem parte do Campus. Escolha sua função e participe.
           </p>
         </header>
 
@@ -101,6 +104,19 @@ function Index() {
                       </svg>
                     )}
                     {section.icon === "pergaminho" && <PergaminhoIcon />}
+                    {section.icon === "graduation" && (
+                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <path d="M32 8 L56 16 L56 32 L32 40 L8 32 L8 16 L32 8Z" fill="url(#gradGrad)" />
+                        <path d="M32 40 L32 56 M24 56 L40 56" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+                        <path d="M32 8 L32 40" stroke="#fff" strokeWidth="2" opacity="0.5" />
+                        <defs>
+                          <linearGradient id="gradGrad" x1="8" y1="8" x2="56" y2="40" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#f59e0b" />
+                            <stop offset="1" stopColor="#10b981" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
                     {section.icon === "book" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#bookGrad)" />

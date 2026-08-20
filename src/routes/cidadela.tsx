@@ -65,80 +65,52 @@ type Game =
 
 const GAMES = [
   {
-    id: "trilha" as Game,
-    label: "Trilha",
-    description: "Jogo de estratégia tática",
-    icon: Target,
+    id: "botao" as Game,
+    label: "Futebol",
+    description: "Estádio do Campus",
+    icon: Trophy,
     status: "disponível",
   },
   {
-    id: "botao" as Game,
-    label: "Futebol de Botão",
-    description: "Campeonato com física realista",
-    icon: Trophy,
+    id: "trilha" as Game,
+    label: "Trilha",
+    description: "Estratégia",
+    icon: Target,
     status: "disponível",
   },
   {
     id: "campus" as Game,
     label: "Campus Universitário",
-    description: "Vida acadêmica do estudante",
+    description: "Vida acadêmica",
     icon: GraduationCap,
     status: "disponível",
   },
   {
     id: "comercial" as Game,
     label: "Setor Comercial",
-    description: "Escritório do empresário",
+    description: "Escritório",
     icon: Briefcase,
     status: "disponível",
   },
   {
     id: "laboratorio" as Game,
     label: "Laboratórios",
-    description: "Pesquisa científica do pesquisador",
+    description: "Pesquisa",
     icon: FlaskConical,
     status: "disponível",
   },
   {
-    id: "dama" as Game,
-    label: "Dama",
-    description: "Capturas e leitura de tabuleiro",
-    icon: Grid3X3,
-    status: "em breve",
-  },
-  {
     id: "xadrez" as Game,
     label: "Xadrez",
-    description: "Tática clássica e estratégia",
+    description: "Tática clássica",
     icon: Crown,
     status: "em breve",
   },
   {
-    id: "dado" as Game,
-    label: "Dado Virtual",
-    description: "Role o dado da sorte",
-    icon: Dice2,
-    status: "em breve",
-  },
-  {
-    id: "forca" as Game,
-    label: "Jogo da Forca",
-    description: "Adivinhe a palavra secreta",
-    icon: Skull,
-    status: "em breve",
-  },
-  {
-    id: "velha" as Game,
-    label: "Jogo da Velha",
-    description: "Clássico de estratégia",
-    icon: CircleDot,
-    status: "em breve",
-  },
-  {
-    id: "snake" as Game,
-    label: "Snake",
-    description: "Relíquia da Nokia",
-    icon: Gamepad2,
+    id: "dama" as Game,
+    label: "Dama",
+    description: "Capturas",
+    icon: Grid3X3,
     status: "em breve",
   },
 ];
@@ -362,24 +334,18 @@ function Cidadela() {
           <header className="mb-6 flex flex-col items-center text-center">
             <CidadelaEmblem className="mb-3 h-16 w-16 drop-shadow-lg md:h-20 md:w-20" />
             <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
-              Cidadela de Jogos
+              Cidadela dos Clássicos
             </h1>
             <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">
-              Uma cidade de jogos para se divertir e bater recorde
+              Jogos do Campus
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Jogue clássicos como Trilha, quebre seus recordes e desafie a IA
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-3">
-              <InfoButton onClick={() => openModal("sobre")} label="Sobre a Pracinha" />
-              <InfoButton onClick={() => openModal("como")} label="Como Jogar" />
-              <InfoButton onClick={() => openModal("soberania")} label="Soberania" />
+            <div className="mt-3 flex flex-wrap justify-center gap-3">
               <button
                 onClick={() => setPhoneOpen(true)}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/20"
               >
                 <Smartphone className="size-4" />
-                Celular da Cidadela
+                Celular
               </button>
               {perfilCidadela?.profissao_atual && (
                 <button
@@ -403,8 +369,7 @@ function Cidadela() {
           <PainelMundo perfil={perfilCidadela} />
 
           <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-4 text-foreground">Jogos da Cidadela</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               {GAMES.map((game) => {
                 const Icon = game.icon;
                 const isAvailable = game.status === "disponível";
@@ -413,44 +378,43 @@ function Cidadela() {
                     key={game.id}
                     onClick={() => isAvailable && handleGameSelect(game.id)}
                     disabled={!isAvailable}
-                    className={`flex items-start gap-4 p-4 rounded-xl border transition-all w-full text-left ${
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all w-full text-left ${
                       isAvailable
                         ? "border-border bg-surface/50 hover:bg-primary/10 hover:border-primary cursor-pointer active:scale-[0.98]"
                         : "border-border/50 bg-surface/30 opacity-60 cursor-not-allowed"
                     }`}
-                    style={{ minHeight: "88px" }}
                   >
                     <div
-                      className={`p-3 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                      className={`p-2 rounded-lg ${isAvailable ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
                     >
-                      <Icon className="h-6 w-6" />
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <div className="flex-1 text-left">
-                      <h3 className="font-semibold text-foreground">{game.label}</h3>
-                      <p className="text-sm text-muted-foreground">{game.description}</p>
-                      <span
-                        className={`inline-block mt-2 text-xs px-2 py-1 rounded-full ${
-                          isAvailable
-                            ? "bg-success/20 text-success"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {game.status === "disponível" ? "Disponível" : "Em breve"}
-                      </span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground text-sm">{game.label}</h3>
+                      <p className="text-xs text-muted-foreground">{game.description}</p>
                     </div>
                   </button>
                 );
               })}
             </div>
           </div>
-
-          <div className="mt-6 text-center text-xs text-muted-foreground">
-            <p>Mais jogos em breve! Fique ligado.</p>
-          </div>
         </main>
 
         {/* Footer com links obrigatórios */}
         <footer className="w-full max-w-3xl text-center">
+          <div className="mb-3 flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
+            <button onClick={() => openModal("sobre")} className="hover:text-primary transition-colors">
+              Sobre a Pracinha
+            </button>
+            <span>•</span>
+            <button onClick={() => openModal("como")} className="hover:text-primary transition-colors">
+              Como Jogar
+            </button>
+            <span>•</span>
+            <button onClick={() => openModal("soberania")} className="hover:text-primary transition-colors">
+              Soberania
+            </button>
+          </div>
           <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
             <Link to="/privacidade" className="hover:text-primary transition-colors">
               Política de Privacidade
