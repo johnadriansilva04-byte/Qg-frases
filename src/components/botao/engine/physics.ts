@@ -199,7 +199,7 @@ export const MAX_POWER = 26;
 
 export function clampImpulse(dx: number, dy: number) {
   const len = Math.hypot(dx, dy);
-  const max = 190;
+  const max = 250; // Aumentado de 190 para permitir mais força no chute
   const k = len > max ? max / len : 1;
   const power = (len * k) / max;
   return { ix: (dx * k * MAX_POWER) / max, iy: (dy * k * MAX_POWER) / max, power };

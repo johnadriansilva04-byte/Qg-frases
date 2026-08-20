@@ -2271,7 +2271,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   if (screen === "auth") {
     return (
       <Shell>
-        <AuthScreen onPronto={aoLogar} />
+        <AuthScreen onPronto={(p) => {
+          // Loading fixo de 2 segundos antes de processar login
+          setLoading(true);
+          setTimeout(() => {
+            setLoading(false);
+            aoLogar(p);
+          }, 2000);
+        }} />
       </Shell>
     );
   }
@@ -2303,8 +2310,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           <CareerMenu
             career={career}
             onLoadCareer={() => {
+              console.log("[BotaoGame] onLoadCareer chamado, career:", career);
               if (career) {
-                runWithLoading(() => setScreen("hub"), 1500);
+                setLoading(true);
+                setTimeout(() => {
+                  setScreen("hub");
+                  setLoading(false);
+                }, 1500);
+              } else {
+                setToast("Nenhuma campanha carregada. Tente novamente.");
               }
             }}
             onNewCareer={handleNewCareer}

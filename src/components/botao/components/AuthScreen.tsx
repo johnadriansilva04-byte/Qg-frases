@@ -2,6 +2,15 @@ import { useState, useEffect } from "react";
 import { LogIn, UserPlus } from "lucide-react";
 import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { cadastrar, cachePerfil, entrar, CORES_PADRAO, type Perfil } from "../online/auth";
+import {
+  BOTOES_NOMES_DEFAULT,
+  FORMACAO_DEFAULT,
+  FORMACOES,
+  formacaoById,
+  normalizarBotoesNomes,
+  type Tatica,
+} from "../career/formacoes";
+import { atualizarPerfilClube } from "@/lib/botao/api";
 
 type Props = {
   onPronto: (p?: Perfil) => void;
@@ -16,6 +25,8 @@ export function AuthScreen({ onPronto }: Props) {
   const [abreviacao, setAbreviacao] = useState("MTI");
   const [numero, setNumero] = useState(10);
   const [cores, setCores] = useState<string[]>(CORES_PADRAO);
+  const [tatica, setTatica] = useState<Tatica>(FORMACAO_DEFAULT);
+  const [botoes, setBotoes] = useState<[string, string, string, string, string]>(BOTOES_NOMES_DEFAULT);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -70,6 +81,23 @@ export function AuthScreen({ onPronto }: Props) {
       } else {
         console.log("Chamando função cadastrar com:", { email, nome, time });
         const p = await cadastrar({ email, senha, nome, time, abreviacao, numero, cores });
+        // Atualiza tática e botões após cadastro
+        if (p.user_id) {
+          const atualizado = await atualizarPerfilClube(p.user_id, {
+            tatica,
+            botoes: botoes,
+          });
+          if (atualizado) {
+            const perfilFinal: Perfil = {
+              ...p,
+              tatica: atualizado.tatica ?? tatica,
+              botoes_nomes: atualizado.botoes_nomes ?? botoes,
+            };
+            cachePerfil(perfilFinal);
+            onPronto(perfilFinal);
+            return;
+          }
+        }
         cachePerfil(p);
         onPronto(p);
       }
@@ -188,6 +216,61 @@ export function AuthScreen({ onPronto }: Props) {
                 ))}
               </div>
             </Campo>
+
+            {/* Seleção de formação */}
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+                  Formação (tática)
+                </span>
+              </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {FORMACOES.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => {
+                      setTatica(f.id);
+                      setBotoes([...f.nomesPadrao] as [string, string, string, string, string]);
+                    }}
+                    className={`rounded-lg border p-3 text-left transition ${
+                      tatica === f.id
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <p className="font-display text-sm leading-tight">{f.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{f.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Nomes dos botões */}
+            <div className="space-y-2">
+              <label className="block">
+                <span className="mb-1 block font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+                  Nomear botões de campo
+                </span>
+              </label>
+              {formacaoById(tatica).posicoes.map((pos, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="size-6 shrink-0 rounded-full bg-blue-600 text-center text-xs leading-6 font-bold text-white">
+                    {i + 1}
+                  </span>
+                  <input
+                    className="field-input flex-1 text-sm"
+                    maxLength={18}
+                    value={botoes[i]}
+                    onChange={(e) => {
+                      const next = [...botoes] as [string, string, string, string, string];
+                      next[i] = e.target.value;
+                      setBotoes(next);
+                    }}
+                    placeholder={`Botão ${i + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
           </>
         )}
 
