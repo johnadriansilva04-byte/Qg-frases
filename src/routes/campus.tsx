@@ -3,6 +3,7 @@ import { CelularFixo } from "@/components/CelularFixo";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { useCelularCarreira } from "@/hooks/useCelularCarreira";
 import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
+import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 
 export const Route = createFileRoute("/campus")({
   head: () => ({
@@ -51,7 +52,7 @@ const SECTIONS: {
   },
 ];
 
-function Campus() {
+function CampusView() {
   const { perfil, aplicarPerfil } = useBotaoAuth();
   // Mesmo celular central do Modo Carreira/Cidadela — mesma fiação, sem
   // sistema paralelo: conversas, missões e handlers reais com persistência.
@@ -246,5 +247,14 @@ function Campus() {
         saldoSov={saldoSov}
       />
     </div>
+  );
+}
+
+// OnboardingGate: tour obrigatório do iniciante antes do campus (§2).
+function Campus() {
+  return (
+    <OnboardingGate destinoInicial="campus">
+      <CampusView />
+    </OnboardingGate>
   );
 }

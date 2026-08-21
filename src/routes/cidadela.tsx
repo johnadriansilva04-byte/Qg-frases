@@ -5,7 +5,7 @@ import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
-import { CidadelaIntro, PracinhaIntro } from "@/components/CidadelaIntro";
+import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularFixo } from "@/components/CelularFixo";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
@@ -13,8 +13,7 @@ import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
-import { InfoModal, InfoButton } from "@/components/InfoModal";
-import { armarSponsor } from "@/lib/sponsorGate";
+import { InfoModal } from "@/components/InfoModal";
 import { SEO_CONTENT } from "@/data/seoContent";
 import {
   carregarPerfilCidadela,
@@ -23,7 +22,6 @@ import {
   type CidadelaPerfil,
   type ProfissaoId,
 } from "@/lib/cidadela/profissoes";
-import type { Perfil } from "@/components/botao/online/auth";
 import { useCelularCarreira } from "@/hooks/useCelularCarreira";
 import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
 
@@ -94,16 +92,14 @@ const GAMES = [
   },
 ];
 
-function Cidadela() {
+function CidadelaCompView() {
   const [hydrated, setHydrated] = useState(false);
   const [activeGame, setActiveGame] = useState<Game>(null);
   const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
-  const [showIntro, setShowIntro] = useState(false);
-  const [showPracinha, setShowPracinha] = useState(false);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
-  const { perfil, aplicarPerfil } = useBotaoAuth();
+  const { perfil } = useBotaoAuth();
   // Celular central: carreira + handlers vêm do hook único (mesma fiação do
   // Modo Carreira — responder/escolher/excluir persistem no Supabase).
   const {
@@ -142,8 +138,6 @@ function Cidadela() {
     } catch {
       /* storage indisponível */
     }
-    const seen = window.localStorage.getItem("cidadela_intro_seen");
-    setShowIntro(!seen);
   }, []);
 
   useEffect(() => {
@@ -155,18 +149,6 @@ function Cidadela() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGame]);
-
-  const handleContinueIntro = () => {
-    window.localStorage.setItem("cidadela_intro_seen", "true");
-    setShowIntro(false);
-    setShowPracinha(true);
-  };
-
-  const handleLogin = async (p: Perfil) => {
-    aplicarPerfil(p);
-    // O celular (CelularFixo, canto inferior direito) está sempre disponível
-    // para notificações — não há mais abertura automática de outra tela.
-  };
 
   const handleEscolherProfissao = async (profissao: ProfissaoId) => {
     const uid = perfil?.user_id;
@@ -206,19 +188,6 @@ function Cidadela() {
         categoria="COMUNIDADE"
         duracao={2600}
         onCompleto={() => setHydrated(true)}
-      />
-    );
-  }
-
-  if (showIntro) {
-    return <CidadelaIntro onContinue={handleContinueIntro} />;
-  }
-
-  if (showPracinha) {
-    return (
-      <PracinhaIntro
-        nomeJogador={perfil?.nome}
-        onComplete={() => setShowPracinha(false)}
       />
     );
   }
@@ -448,5 +417,14 @@ function Cidadela() {
         }
       />
     </>
+  );
+}
+
+// OnboardingGate: tour obrigatório do iniciante antes do hub (§2).
+function Cidadela() {
+  return (
+    <OnboardingGate destinoInicial="cidadela">
+      <CidadelaCompView />
+    </OnboardingGate>
   );
 }

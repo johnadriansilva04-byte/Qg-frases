@@ -89,7 +89,7 @@ const MISSOES_LOCAIS: Omit<MissaoDiaria, "id" | "progresso" | "status">[] = [
   {
     missao_key: "explorar_mercado",
     titulo: "Explore o mercado",
-    descricao: "Acesse a aba Feira do celular",
+    descricao: "Acesse o Marketplace do celular",
     alvo: 1,
     recompensa_sov: 2,
   },

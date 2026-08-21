@@ -280,6 +280,9 @@ export type CareerState = {
   // Torcida global do universo (Σ = 1.000.000, zero-sum): cada clube tem
   // fans + sequência. Persistida no JSONB da carreira — sobrevive a F5.
   torcida?: import("./torcidaEngine").TorcidaState | undefined;
+  /** Entrada da campanha: 'treinador' (trabalha para clube) ou
+   *  'proprietario' (compra de um clube no Marketplace). */
+  modoEntrada?: "treinador" | "proprietario" | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";
