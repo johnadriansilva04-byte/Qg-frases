@@ -269,3 +269,21 @@ export function sortearEvento(idsUsadosRecentes: string[]): ChoiceEvent {
   const pool = disponiveis.length > 0 ? disponiveis : CHOICE_EVENTS;
   return pool[Math.floor(Math.random() * pool.length)]!;
 }
+
+/** Remetente em primeira pessoa de cada decisão (identidade estável do
+ *  contato no celular: a decisão vira mensagem na conversa DESTE remetente). */
+export const REMETENTE_DECISAO: Record<string, { nome: string; cargo: string; avatar: string }> = {
+  "craque-dor": { nome: "Dr. Maurício", cargo: "Departamento Médico", avatar: "🩺" },
+  coletiva: { nome: "Carlos", cargo: "Assessoria de Imprensa", avatar: "🎙️" },
+  "escalar-jovem": { nome: "Sebastião", cargo: "Coordenador da Base", avatar: "🧢" },
+  torcida: { nome: "Beto", cargo: "Líder da Torcida", avatar: "📣" },
+  "treino-intensivo": { nome: "Professor Léo", cargo: "Preparador Físico", avatar: "🏃" },
+  "presidente-ultimato": { nome: "Presidente", cargo: "Dono do Clube", avatar: "🎩" },
+  "empresario-proposta": { nome: "Wagner", cargo: "Empresário", avatar: "💼" },
+  "namorada-cobranca": { nome: "Júlia", cargo: "Namorada", avatar: "💛" },
+  "subornador-abordagem": { nome: "Intermediário", cargo: "Subornador", avatar: "🕶️" },
+};
+
+export function remetenteDecisao(eventoId: string): { nome: string; cargo: string; avatar: string } {
+  return REMETENTE_DECISAO[eventoId] ?? { nome: "Diretoria", cargo: "Clube", avatar: "🏟️" };
+}

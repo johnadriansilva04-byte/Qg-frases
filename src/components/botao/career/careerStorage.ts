@@ -1,4 +1,5 @@
 import { type CareerState, type Coach, type Divisao, type Headline } from "./types";
+import { normalizarConversas } from "./conversasEngine";
 import { HISTORIA_INICIAL, type HistoriaState } from "./historia/types";
 
 const DIVISOES_VALIDAS: Divisao[] = ["serie-a", "serie-b", "serie-c"];
@@ -71,7 +72,9 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     moralTime: Number.isFinite(bruta.moralTime)
       ? Math.max(0, Math.min(100, bruta.moralTime!))
       : 65,
-    conversas: Array.isArray(bruta.conversas) ? bruta.conversas : [],
+    // Uma conversa por contato: funde duplicatas legadas (o modelo antigo
+    // criava uma conversa por evento), dedup de mensagens por id, ids estáveis.
+    conversas: normalizarConversas(bruta.conversas),
     headlines: Array.isArray(bruta.headlines) ? bruta.headlines : [],
     ultimasEscolhas: Array.isArray(bruta.ultimasEscolhas) ? bruta.ultimasEscolhas : [],
     feedCidadela: Array.isArray(bruta.feedCidadela) ? bruta.feedCidadela : [],

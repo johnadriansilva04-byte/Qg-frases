@@ -199,6 +199,10 @@ export type ConversaCelular = {
   naoLida: boolean;
   /** NPC do RPG que responde em tempo real nesta conversa. */
   npcId?: import("./rpg/types").NpcId | undefined;
+  /** Canal estável para conversas sem NPC (ex.: "medico", "redes",
+   *  "decisao:craque-dor"). Garante UMA conversa por canal — mensagens novas
+   *  entram na conversa existente, nunca criam outra. */
+  canal?: string | undefined;
   /** Evento RPG com escolhas (dilema) anexado à conversa. */
   eventoRpg?:
     | { eventoId: string; respondido: boolean; tom: "drama" | "suspense" | "terror" }

@@ -251,7 +251,9 @@ export function consequenciasEntrevista(
     const braganca = personagem("npc-braganca");
 
     reacoes.push({
-      id: `react-rival-${timestamp}`,
+      // Id estável por NPC + mensagem determinística por partida: a fila mescla
+      // na conversa única do Bragança e retry não duplica a mensagem.
+      id: "conv-npc-npc-braganca",
       tipo: "narrativa",
       nome: braganca.nome,
       avatar: braganca.avatar,
@@ -259,7 +261,7 @@ export function consequenciasEntrevista(
       npcId: "npc-braganca",
       mensagens: [
         {
-          id: `react-rival-m-${timestamp}`,
+          id: `react-rival-m-${ultima.partidaId}`,
           texto:
             `Li sua coletiva, professor. "${citada.texto.slice(0, 120)}" — anota. ` +
             `Na próxima você senta de novo comigo, mas sem os provociantes.`,
@@ -311,10 +313,12 @@ export function consequenciasEntrevista(
 
   // Humildade/outra reação do torcedor (apenas se nada de provocação).
   const humildade = ultima?.declaracoes.some((d) => d.tom === "humildade" || d.tom === "orgulho");
-  if (provocativas.length === 0 && humildade) {
+  if (provocativas.length === 0 && humildade && ultima) {
     const torcedor = personagem("npc-torcedor");
     reacoes.push({
-      id: `react-torcida-${timestamp}`,
+      // Id estável por NPC + mensagem determinística por partida (mesma regra
+      // da reação do rival): uma conversa só da torcida, sem duplicar em retry.
+      id: "conv-npc-npc-torcedor",
       tipo: "evento",
       nome: torcedor.nome,
       avatar: torcedor.avatar,
@@ -322,7 +326,7 @@ export function consequenciasEntrevista(
       npcId: "npc-torcedor" as NpcId,
       mensagens: [
         {
-          id: `react-torcida-m-${timestamp}`,
+          id: `react-torcida-m-${ultima.partidaId}`,
           texto:
             "É pra isso que a arquibancada tá aqui, professor! Coletiva bonita, " +
             "resposta bonita. VAMO!",

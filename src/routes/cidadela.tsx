@@ -24,9 +24,8 @@ import {
   type ProfissaoId,
 } from "@/lib/cidadela/profissoes";
 import type { Perfil } from "@/components/botao/online/auth";
-import { loadCareerFromSupabase } from "@/components/botao/career/careerRemote";
-import { garantirContatosRpg } from "@/components/botao/career/rpg/rpgEngine";
-import type { CareerState } from "@/components/botao/career/types";
+import { useCelularCarreira } from "@/hooks/useCelularCarreira";
+import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -104,40 +103,57 @@ function Cidadela() {
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
-  const [career, setCareer] = useState<CareerState | null>(null);
   const { perfil, aplicarPerfil } = useBotaoAuth();
+  // Celular central: carreira + handlers vêm do hook único (mesma fiação do
+  // Modo Carreira — responder/escolher/excluir persistem no Supabase).
+  const {
+    career,
+    onEnviarMensagem: handleEnviarMensagemCelular,
+    onEscolhaRpg: handleEscolhaRpgCelular,
+    onExcluirConversa: handleExcluirConversaCelular,
+  } = useCelularCarreira(perfil?.user_id ?? null);
 
   // Identidade na Cidadela: carrega a profissão do jogador autenticado.
   useEffect(() => {
     const uid = perfil?.user_id;
     if (!uid) {
       setPerfilCidadela(null);
-      setCareer(null);
       return;
     }
     let vivo = true;
     void carregarPerfilCidadela(uid).then((p) => {
       if (vivo) setPerfilCidadela(p);
     });
-    // Carrega também a carreira para ter as conversas do celular
-    void loadCareerFromSupabase(uid).then((c) => {
-      if (vivo && c) {
-        setCareer(garantirContatosRpg(c));
-      }
-    }).catch(() => {
-      // Sem carreira = celular vazio (normal para novos usuários)
-    });
     return () => {
       vivo = false;
     };
   }, [perfil?.user_id]);
 
-  // Sessão ativa não é persistida: cada login entra com estado limpo.
+  // Sessão ativa da ABA: o jogo aberto (Estádio/Trilha) sobrevive a F5 via
+  // sessionStorage (por aba) — uma aba/login novo sempre entra com estado
+  // limpo. Chave antiga em localStorage é removida de vez.
+  const JOGO_ATIVO_KEY = "cidadela:jogo-ativo:v1";
   useEffect(() => {
     window.localStorage.removeItem("cidadela_active_game");
+    try {
+      const salvo = window.sessionStorage.getItem(JOGO_ATIVO_KEY);
+      if (salvo === "botao" || salvo === "trilha") setActiveGame(salvo);
+    } catch {
+      /* storage indisponível */
+    }
     const seen = window.localStorage.getItem("cidadela_intro_seen");
     setShowIntro(!seen);
   }, []);
+
+  useEffect(() => {
+    try {
+      if (activeGame) window.sessionStorage.setItem(JOGO_ATIVO_KEY, activeGame);
+      else window.sessionStorage.removeItem(JOGO_ATIVO_KEY);
+    } catch {
+      /* storage indisponível */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGame]);
 
   const handleContinueIntro = () => {
     window.localStorage.setItem("cidadela_intro_seen", "true");
@@ -403,13 +419,31 @@ function Cidadela() {
         content={SEO_CONTENT.soberania}
       />
 
-      {/* Celular fixo no cantinho da tela */}
+      {/* Celular fixo no cantinho da tela — componente central, mesmos
+          handlers do Modo Carreira (responder/escolher/excluir persistem). */}
       <CelularFixo
         userId={perfil?.user_id ?? null}
-        nomeJogador={perfil?.nome ?? null}
+        nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
         perfilCidadela={perfilCidadela}
         conversas={career?.conversas ?? []}
+        desafioPatrocinador={career?.desafioPatrocinador ?? null}
         feed={career?.feedCidadela ?? []}
+        trilhaMissoes={career ? missoesTrilha(career) : []}
+        onEnviarMensagem={handleEnviarMensagemCelular}
+        onExcluirConversa={handleExcluirConversaCelular}
+        onEscolhaRpg={handleEscolhaRpgCelular}
+        historia={career?.historia}
+        naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
+        statsCarreira={
+          career
+            ? {
+                decisoes:
+                  (career.historia?.ledger.length ?? 0) +
+                  (Array.isArray(career.ultimasEscolhas) ? career.ultimasEscolhas.length : 0),
+                entrevistas: Array.isArray(career.entrevistas) ? career.entrevistas.length : 0,
+              }
+            : undefined
+        }
       />
     </>
   );

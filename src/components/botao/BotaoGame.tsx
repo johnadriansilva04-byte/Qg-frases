@@ -145,7 +145,8 @@ import {
   deleteCareer,
 } from "./career/careerStorage";
 import { gerarManchetesDaRodada, manchetesDeEstreia } from "./career/newsGenerator";
-import { sortearEvento, CHOICE_EVENTS } from "./career/choicesEngine";
+import { sortearEvento, CHOICE_EVENTS, remetenteDecisao } from "./career/choicesEngine";
+import { anexarConversa } from "./career/conversasEngine";
 import { gerarDesafioPatrocinador, cumpriuDesafio } from "./career/patrocinadorEngine";
 import {
   POINTS,
@@ -208,6 +209,19 @@ type Screen =
 interface BotaoGameProps {
   onBack?: () => void;
 }
+
+/** Chave do resume pós-F5 (sessionStorage, por aba e por usuário). */
+const RESUME_KEY = "botao:resume:v1";
+/** Telas seguras para restaurar após F5 (partidas em andamento não entram). */
+const TELAS_RESTAURAVEIS: Screen[] = [
+  "hub",
+  "career-menu",
+  "classificacao",
+  "calendario",
+  "economia",
+  "trophies",
+  "profile",
+];
 
 /**
  * Bônus SOV do campeão: entre +100 e +200. A base é 100 e somamos até
@@ -438,14 +452,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // ===== Restauração de estado após refresh (§20/§22) =====
-  // Fim de partida/entrevista vivem só em memória; um refresh os perderia.
-  // Persistimos o mínimo em sessionStorage (por aba, por usuário) e
-  // restauramos uma única vez após o login ser reconhecido — mesma sessão,
-  // mesma página. A entrevista em si reabre fechada (o jogador clica "Dar
-  // Entrevista" de novo — abertura idempotente).
-  const RESUME_KEY = "botao:resume:v1";
+  // ===== Restauração de estado após refresh (§20/§22 + F5 sem reset) =====
+  // Fim de partida/entrevista e a tela atual vivem só em memória; um refresh
+  // os perderia. Persistimos o mínimo em sessionStorage (por aba, por usuário)
+  // e restauramos uma única vez após o login ser reconhecido — mesma sessão,
+  // mesma página, MESMO contexto. Telas de partida online/em andamento não são
+  // restauradas (estado volátil); telas seguras do Modo Carreira, sim.
   const resumeRestauradoRef = useRef(false);
+  // Sinaliza à hidratação que uma tela foi restaurada — ela NÃO pode mandar o
+  // usuário de volta ao menu quando terminar de carregar a carreira.
+  const telaRestauradaRef = useRef(false);
   useEffect(() => {
     const uid = perfil?.user_id;
     if (!uid) return;
@@ -453,16 +469,29 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (screen === "match-end" && matchEnd) {
         sessionStorage.setItem(
           RESUME_KEY,
-          JSON.stringify({ uid, matchEnd, matchEndDestino, ts: Date.now() }),
+          JSON.stringify({
+            uid,
+            tela: "match-end",
+            matchEnd,
+            matchEndDestino,
+            patrocinioPagoPartida,
+            ts: Date.now(),
+          }),
+        );
+      } else if (TELAS_RESTAURAVEIS.includes(screen)) {
+        sessionStorage.setItem(
+          RESUME_KEY,
+          JSON.stringify({ uid, tela: screen, matchEnd: null, ts: Date.now() }),
         );
       } else {
-        // Saiu da tela de fim de partida: nada a restaurar depois.
+        // Tela volátil ou inicial: nada a restaurar depois.
         sessionStorage.removeItem(RESUME_KEY);
       }
     } catch {
       /* storage indisponível */
     }
-  }, [screen, matchEnd, matchEndDestino, perfil?.user_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, matchEnd, matchEndDestino, patrocinioPagoPartida, perfil?.user_id]);
   useEffect(() => {
     const uid = perfil?.user_id;
     if (!uid || resumeRestauradoRef.current) return;
@@ -473,18 +502,30 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       sessionStorage.removeItem(RESUME_KEY);
       const salvo = JSON.parse(bruto) as {
         uid: string;
+        tela?: Screen;
         matchEnd: MatchEndData | null;
-        matchEndDestino: Screen;
+        matchEndDestino?: Screen;
+        patrocinioPagoPartida?: string | null;
         ts: number;
       };
       // Só restaura para o MESMO usuário e por até 2h (sessão recente).
-      if (salvo.uid !== uid || !salvo.matchEnd || Date.now() - salvo.ts > 2 * 3600_000) return;
-      setMatchEnd(salvo.matchEnd);
-      setMatchEndDestino(salvo.matchEndDestino);
-      setScreen("match-end");
+      if (salvo.uid !== uid || Date.now() - salvo.ts > 2 * 3600_000) return;
+      if (salvo.patrocinioPagoPartida) setPatrocinioPagoPartida(salvo.patrocinioPagoPartida);
+      if (salvo.matchEnd) {
+        // Fim de partida: a entrevista reabre fechada (abertura idempotente).
+        setMatchEnd(salvo.matchEnd);
+        setMatchEndDestino(salvo.matchEndDestino ?? "menu");
+        setScreen("match-end");
+        telaRestauradaRef.current = true;
+      } else if (salvo.tela && salvo.tela !== "menu" && salvo.tela !== "match-end") {
+        // Mesma tela do Modo Carreira de antes do F5 (hub, calendário, etc.).
+        setScreen(salvo.tela);
+        telaRestauradaRef.current = true;
+      }
     } catch {
       /* blob corrompido: ignora */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfil?.user_id]);
 
   /**
@@ -561,8 +602,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       }
       const atual = careerRef.current;
       if (atual) {
-        const convs = Array.isArray(atual.conversas) ? atual.conversas : [];
-        persistCareer({ ...atual, conversas: [prox, ...convs].slice(0, 30) });
+        // UMA conversa por contato: a entrega mescla na conversa existente
+        // (npcId/canal/id estável) — nunca empilha "Pracinha, Pracinha...".
+        persistCareer(anexarConversa(atual, prox));
       }
       setToast(`📱 Nova mensagem: ${prox.nome}`);
       // Identidade sonora por categoria (§13): mensagem de NPC vs notícia do
@@ -639,7 +681,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // Navegação: NUNCA abrir o Modo Carreira automaticamente. O Estádio do
         // Campus abre no menu; a carreira é acessada pelo usuário em
         // "Carreira no Campus" → "Continuar Campanha" (estado já persistido).
-        setScreen("menu");
+        // EXCEÇÃO: se um refresh (F5) restaurou uma tela da sessão, ela manda —
+        // a hidratação só repõe os dados, não muda a tela.
+        if (!telaRestauradaRef.current) setScreen("menu");
       } catch (error) {
         hydratedUserRef.current = null;
         console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
@@ -1278,32 +1322,33 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       hour: "2-digit",
       minute: "2-digit",
     });
-    // Registra a decisão como conversa de celular (histórico em 1ª pessoa),
-    // sem poluir com mensagens automáticas — só decisões reais do treinador.
+    // Registra a decisão como mensagem na conversa do REMETENTE do evento
+    // (Dr. Maurício, Carlos, Beto...): um contato = uma conversa (histórico
+    // em 1ª pessoa), sem poluir com mensagens automáticas — só decisões reais.
     const msgTimestamp = Date.now();
-    const novaConversa = evento
-      ? [
-          {
-            id: `conv-${msgTimestamp}`,
-            tipo: "evento" as const,
-            nome: evento.titulo,
-            avatar: "💬",
-            cargo: "Decisão de carreira",
-            mensagens: [
-              {
-                id: `m-${msgTimestamp}`,
-                texto: evento.descricao,
-                remetente: "outro" as const,
-                timestamp,
-              },
-              { id: `r-${msgTimestamp + 1}`, texto: choice.texto, remetente: "eu" as const, timestamp },
-            ],
-            naoLida: false,
-          },
-        ]
-      : [];
+    const remetente = evento ? remetenteDecisao(evento.id) : null;
+    const conversaDecisao: ConversaCelular | null = evento && remetente
+      ? {
+          id: `conv-canal-decisao:${evento.id}`,
+          tipo: "evento" as const,
+          nome: remetente.nome,
+          avatar: remetente.avatar,
+          cargo: remetente.cargo,
+          canal: `decisao:${evento.id}`,
+          mensagens: [
+            {
+              id: `m-${msgTimestamp}`,
+              texto: evento.descricao,
+              remetente: "outro" as const,
+              timestamp,
+            },
+            { id: `r-${msgTimestamp + 1}`, texto: choice.texto, remetente: "eu" as const, timestamp },
+          ],
+          naoLida: false,
+        }
+      : null;
 
-    const nova: CareerState = {
+    const base: CareerState = {
       ...career,
       bonusProximaPartida: bonusPoder,
       moralTime: moral,
@@ -1313,8 +1358,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       woProximaPartida,
       desfalqueBotaoProxima,
       perdaPontosProxima,
-      conversas: [...novaConversa, ...career.conversas].slice(0, 30),
     };
+    const nova: CareerState = conversaDecisao ? anexarConversa(base, conversaDecisao) : base;
     persistCareer(nova);
     // RPC remota (autoritativa) para escolha
     if (perfil?.user_id) {
@@ -1477,7 +1522,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const ganho =
       matchEnd.resultado === "vitoria" ? 30 : matchEnd.resultado === "empate" ? 20 : 10;
     const partidaAtual = matchEnd.partidaId ?? "sem-id";
-    if (patrocinioPagoPartida === partidaAtual) {
+    // Idempotência em DUAS camadas: (1) guarda da sessão (patrocinioPagoPartida,
+    // também persistida no resume p/ sobreviver a F5) e (2) histórico persistido
+    // da carreira — se a entrevista desta partida já está no JSONB, o F5 não
+    // permite coletar de novo (SOV local, consequências e fila não repetem).
+    const jaRegistrada = (career?.entrevistas ?? []).some((e) => e.partidaId === partidaAtual);
+    if (patrocinioPagoPartida === partidaAtual || jaRegistrada) {
+      setPatrocinioPagoPartida(partidaAtual);
       setToast("Recompensa desta partida já foi coletada.");
       return;
     }
@@ -2278,17 +2329,21 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           hour: "2-digit",
           minute: "2-digit",
         });
-        const msgTimestamp = Date.now();
+        // Canais estáveis: médico e redes sociais têm UMA conversa cada; as
+        // mensagens da rodada entram na conversa existente (merge na fila).
+        // Ids de mensagem por partida: reprocessar a mesma partida não duplica.
+        const partidaRef = current.id;
         const novasConv: ConversaCelular[] = [];
         if (relMed) {
           novasConv.push({
-            id: `ia-med-${msgTimestamp}`,
+            id: "conv-canal-medico",
             tipo: "medico",
             nome: "Dr. Maurício",
             avatar: "🩺",
             cargo: "Departamento Médico",
+            canal: "medico",
             mensagens: [
-              { id: `m-med-${msgTimestamp}`, texto: relMed, remetente: "outro", timestamp: agora },
+              { id: `m-med-${partidaRef}`, texto: relMed, remetente: "outro", timestamp: agora },
             ],
             naoLida: true,
           });
@@ -2296,13 +2351,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         for (let i = 0; i < (redes?.length ?? 0); i++) {
           const t = redes[i]!;
           novasConv.push({
-            id: `ia-redes-${msgTimestamp}-${i}`,
+            id: "conv-canal-redes",
             tipo: "evento",
             nome: "Torcida (Redes Sociais)",
             avatar: "📱",
             cargo: "Menções da rodada",
+            canal: "redes",
             mensagens: [
-              { id: `m-red-${msgTimestamp}-${i}`, texto: t, remetente: "outro", timestamp: agora },
+              { id: `m-red-${partidaRef}-${i}`, texto: t, remetente: "outro", timestamp: agora },
             ],
             naoLida: true,
           });

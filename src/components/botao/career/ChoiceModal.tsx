@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Smartphone, Send, ChevronLeft } from "lucide-react";
 import type { Choice, ChoiceEvent } from "./types";
+import { remetenteDecisao } from "./choicesEngine";
 
 type Props = {
   evento: ChoiceEvent;
@@ -8,21 +9,11 @@ type Props = {
   onBack?: () => void;
 };
 
-/** Remetente e tom em primeira pessoa para cada tipo de decisão. */
-const SENDER: Record<string, { nome: string; cargo: string; initials: string }> = {
-  "craque-dor": { nome: "Dr. Maurício", cargo: "Departamento Médico", initials: "DM" },
-  coletiva: { nome: "Carlos", cargo: "Assessoria de Imprensa", initials: "AI" },
-  "escalar-jovem": { nome: "Sebastião", cargo: "Coordenador da Base", initials: "CB" },
-  torcida: { nome: "Beto", cargo: "Líder da Torcida", initials: "LT" },
-  "treino-intensivo": { nome: "Professor Léo", cargo: "Preparador Físico", initials: "PF" },
-  "presidente-ultimato": { nome: "Presidente", cargo: "Dono do Clube", initials: "PC" },
-  "empresario-proposta": { nome: "Wagner", cargo: "Empresário", initials: "WG" },
-  "namorada-cobranca": { nome: "Júlia", cargo: "Namorada", initials: "JU" },
-  "subornador-abordagem": { nome: "Intermediário", cargo: "Subornador", initials: "???" },
-};
-
+/** Remetente e tom em primeira pessoa para cada tipo de decisão (mapa
+ *  compartilhado com o registro da decisão no celular — mesma identidade). */
 function senderFor(evento: ChoiceEvent) {
-  return SENDER[evento.id] ?? { nome: "Diretoria", cargo: "Clube", initials: "CL" };
+  const r = remetenteDecisao(evento.id);
+  return { ...r, initials: r.avatar };
 }
 
 /**

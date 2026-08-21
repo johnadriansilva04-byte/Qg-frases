@@ -8,6 +8,7 @@
  */
 
 import type { CareerState, ConversaCelular } from "./types";
+import { anexarConversa } from "./conversasEngine";
 import { anexarPost, gerarPostManual } from "./rpg/socialEngine";
 import { memoriaRpg } from "./rpg/rpgEngine";
 import { personagem } from "./rpg/personagens";
@@ -147,11 +148,14 @@ export function conviteTrilha(career: CareerState): string {
 export function convidarRitualTrilha(career: CareerState): CareerState {
   if (!condicaoSombria(career)) return career;
 
-  // Idempotente por rodada: o id determinístico por temporada/rodada garante
-  // que o convite não se duplica mesmo após reload (estado vem do JSONB).
+  // Idempotente por rodada: a MENSAGEM tem id determinístico por
+  // temporada/rodada — mesmo após reload (estado vem do JSONB) o convite não
+  // se repete. E entra na conversa EXISTENTE do Pracinha (uma conversa por
+  // contato), nunca numa conversa nova.
   const conviteId = `ritual-trilha-${career.temporada ?? 1}-r${career.rodadaAtual ?? 0}`;
+  const mensagemId = `ritual-m-${conviteId}`;
   const conversas = Array.isArray(career.conversas) ? career.conversas : [];
-  if (conversas.some((c) => c.id === conviteId)) return career;
+  if (conversas.some((c) => c.mensagens.some((m) => m.id === mensagemId))) return career;
 
   const npc = personagem("npc-pracinha");
   const timestamp = new Date().toLocaleTimeString("pt-BR", {
@@ -163,17 +167,17 @@ export function convidarRitualTrilha(career: CareerState): CareerState {
     `☾ Quando quiser, é só tocar no link abaixo: a Trilha fica na Cidadela. ` +
     `Vencer o ritual alivia a sombra: +8 de soberania e a sequência negativa zera.`;
   const conversa: ConversaCelular = {
-    id: conviteId,
+    id: "conv-npc-npc-pracinha",
     tipo: "narrativa",
     nome: npc.nome,
     avatar: npc.avatar,
     cargo: `${npc.cargo} · Ritual da Trilha`,
     npcId: "npc-pracinha",
-    mensagens: [{ id: `ritual-m-${conviteId}`, texto: mensagem, remetente: "outro", timestamp }],
+    mensagens: [{ id: mensagemId, texto: mensagem, remetente: "outro", timestamp }],
     naoLida: true,
     linkExterno: { rotulo: "☾ Jogar o Ritual da Trilha", to: "/cidadela" },
   };
-  return { ...career, conversas: [conversa, ...conversas].slice(0, 30) };
+  return anexarConversa(career, conversa);
 }
 
 /** Missões locais da Trilha (mescladas com as missões diárias do Pracinha). */

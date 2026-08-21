@@ -79,9 +79,11 @@ function conversaDoNpc(
   partidaId: string,
 ): ConversaCelular {
   const npc = personagem(npcId);
-  const ts = Date.now();
   return {
-    id: `hist-${npcId}-${partidaId}`,
+    // Id estável por NPC: a entrega (fila do BotaoGame → anexarConversa) mescla
+    // na conversa existente do personagem — capítulos viram mensagens na MESMA
+    // conversa, nunca conversas separadas de "Helena"/"John Adrian".
+    id: `conv-npc-${npcId}`,
     tipo: "narrativa",
     nome: npc.nome,
     avatar: npc.avatar,
@@ -89,7 +91,9 @@ function conversaDoNpc(
     npcId,
     mensagens: [
       {
-        id: `hist-m-${ts}`,
+        // Id determinístico por partida: retry/rehidratação não duplica (dedupe
+        // por id no merge).
+        id: `hist-m-${npcId}-${partidaId}`,
         texto,
         remetente: "outro",
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -247,7 +251,9 @@ export function registrarPosicaoFinal(
         ? "Você pesou e discordou. Honesto. Guardar uma hipótese falsa é pior que descartá-la. Obrigado por ler até o fim."
         : "Não decidir ainda também é uma resposta de pesquisador. O arquivo fica aberto para quando as evidências mudarem.",
     "fim do primeiro arco",
-    `desfecho-${Date.now()}`,
+    // Determinístico: registrarPosicaoFinal é idempotente (guarda posicaoFinal),
+    // e o id fixo garante dedupe por mensagem no merge se for reprocessado.
+    "desfecho",
   );
 
   return {

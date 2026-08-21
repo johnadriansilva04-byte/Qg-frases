@@ -45,19 +45,22 @@ export function AdsterraBanner({ slotId = "native-banner", className = "", showB
       // Adiciona container ao DOM
       containerRef.current.appendChild(container);
 
-      // Carrega script Adsterra apenas se não existir (evita recarregar)
-      if (!document.getElementById("adsterra-script")) {
-        const newScript = document.createElement("script");
-        newScript.id = "adsterra-script";
-        newScript.src = adManager.getAdsterraSrc();
-        newScript.async = true;
-        newScript.setAttribute("data-cfasync", "false");
-        newScript.onerror = () => {
-          console.warn("[AdsterraBanner] Erro ao carregar script");
-          setHasError(true);
-        };
-        document.head.appendChild(newScript);
-      }
+      // O invoke script da Adsterra executa UMA vez ao carregar e preenche o
+      // container que existir naquele instante. Como o container é recriado a
+      // cada montagem (navegação/novo fim de partida), o script precisa ser
+      // REANEXADO para rodar de novo — antes, remount deixava o banner vazio
+      // ("carrega em alguns lugares e em outros não").
+      document.getElementById("adsterra-script")?.remove();
+      const newScript = document.createElement("script");
+      newScript.id = "adsterra-script";
+      newScript.src = adManager.getAdsterraSrc();
+      newScript.async = true;
+      newScript.setAttribute("data-cfasync", "false");
+      newScript.onerror = () => {
+        console.warn("[AdsterraBanner] Erro ao carregar script");
+        setHasError(true);
+      };
+      document.head.appendChild(newScript);
 
       setScriptLoaded(true);
       console.log("[AD] adsterra-script-loaded");

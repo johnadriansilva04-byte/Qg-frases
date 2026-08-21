@@ -1,5 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CelularFixo } from "@/components/CelularFixo";
+import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
+import { useCelularCarreira } from "@/hooks/useCelularCarreira";
+import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
 
 export const Route = createFileRoute("/campus")({
   head: () => ({
@@ -49,6 +52,15 @@ const SECTIONS: {
 ];
 
 function Campus() {
+  const { perfil, aplicarPerfil } = useBotaoAuth();
+  // Mesmo celular central do Modo Carreira/Cidadela — mesma fiação, sem
+  // sistema paralelo: conversas, missões e handlers reais com persistência.
+  const {
+    career,
+    onEnviarMensagem,
+    onEscolhaRpg,
+    onExcluirConversa,
+  } = useCelularCarreira(perfil?.user_id ?? null);
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
       {/* Efeito de grade cyberpunk */}
@@ -216,8 +228,21 @@ function Campus() {
         </footer>
       </div>
 
-      {/* Celular fixo no cantinho da tela */}
-      <CelularFixo />
+      {/* Celular fixo no cantinho da tela — componente central, fiação única */}
+      <CelularFixo
+        userId={perfil?.user_id ?? null}
+        nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
+        onLogin={aplicarPerfil}
+        conversas={career?.conversas ?? []}
+        desafioPatrocinador={career?.desafioPatrocinador ?? null}
+        feed={career?.feedCidadela ?? []}
+        trilhaMissoes={career ? missoesTrilha(career) : []}
+        onEnviarMensagem={onEnviarMensagem}
+        onExcluirConversa={onExcluirConversa}
+        onEscolhaRpg={onEscolhaRpg}
+        historia={career?.historia}
+        naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
+      />
     </div>
   );
 }

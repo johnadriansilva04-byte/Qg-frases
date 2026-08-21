@@ -7,6 +7,7 @@
  */
 
 import type { CareerState, ConversaCelular } from "../types";
+import { anexarConversa } from "../conversasEngine";
 import { eventoPorId, EVENTOS_RPG } from "./eventos";
 import { personagem, relacaoInicial, respostaProcedural } from "./personagens";
 import {
@@ -66,16 +67,20 @@ function selecionarEvento(career: CareerState): EventoRpg | null {
 /** Converte o evento em conversa de celular com escolhas clicáveis. */
 function eventoParaConversa(evento: EventoRpg): ConversaCelular {
   const npc = personagem(evento.remetente);
-  const timestamp = Date.now();
   return {
-    id: `rpg-${evento.id}-${timestamp}`,
+    // Id estável por NPC + npcId: o merge (anexarConversa) entrega o dilema na
+    // conversa EXISTENTE do personagem — nunca cria outra conversa dele.
+    id: `conv-npc-${evento.remetente}`,
     tipo: "narrativa",
     nome: npc.nome,
     avatar: npc.avatar,
     cargo: `${npc.cargo} · ${evento.titulo}`,
+    npcId: evento.remetente,
     mensagens: [
       {
-        id: `rpg-m-${timestamp}`,
+        // Id determinístico por evento: reprocessar o mesmo evento não duplica
+        // a mensagem (dedupe por id no merge).
+        id: `rpg-m-${evento.id}`,
         texto: evento.texto,
         remetente: "outro",
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -88,16 +93,16 @@ function eventoParaConversa(evento: EventoRpg): ConversaCelular {
 
 /**
  * Processa os gatilhos após uma partida/rodada. Retorna a career atualizada
- * (com a conversa do evento anexada) ou null se nada disparou.
+ * (com a mensagem do evento anexada à conversa do NPC) ou null se nada disparou.
  */
 export function processarEventosRpg(career: CareerState): CareerState | null {
   const evento = selecionarEvento(career);
   if (!evento) return null;
 
   const mem = memoriaRpg(career);
+  const comConversa = anexarConversa(career, eventoParaConversa(evento));
   return {
-    ...career,
-    conversas: [eventoParaConversa(evento), ...career.conversas].slice(0, 30),
+    ...comConversa,
     memoriaRpg: {
       ...mem,
       eventosVistos: [...mem.eventosVistos, evento.id],
@@ -251,11 +256,14 @@ export async function responderContatoNpc(
   return { ...career, conversas };
 }
 
-/** Garante os contatos-base do RPG na primeira vez que a carreira abre o celular. */
+/**
+ * Garante os contatos-base do RPG na primeira vez que a carreira abre o
+ * celular. Idempotente POR CONTATO: só cria a conversa de quem ainda não
+ * existe (id estável `conv-npc-{npc}`) — nunca duplica um contato, mesmo
+ * rodando a cada hidratação.
+ */
 export function garantirContatosRpg(career: CareerState): CareerState {
   const existentes = Array.isArray(career.conversas) ? career.conversas : [];
-  const temNpc = existentes.some((c) => c.npcId);
-  if (temNpc) return career;
 
   const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const iniciais: Array<{ npc: NpcId; msg: string }> = [
@@ -277,21 +285,25 @@ export function garantirContatosRpg(career: CareerState): CareerState {
     },
   ];
 
-  const conversas: ConversaCelular[] = iniciais.map(({ npc, msg }, idx) => {
+  let atual = career;
+  for (const { npc, msg } of iniciais) {
+    // Contato já existe (por npcId, mesmo em conversa legada)? Não recria.
+    if ((atual.conversas ?? []).some((c) => c.npcId === npc)) continue;
     const p = personagem(npc);
-    return {
-      id: `${npc}-${Date.now()}-${idx}`,
+    atual = anexarConversa(atual, {
+      id: `conv-npc-${npc}`,
       tipo: "narrativa" as const,
       nome: p.nome,
       avatar: p.avatar,
       cargo: p.cargo,
       npcId: npc,
-      mensagens: [{ id: `npc-i-${npc}-${idx}`, texto: msg, remetente: "outro" as const, timestamp }],
+      mensagens: [
+        { id: `npc-i-${npc}`, texto: msg, remetente: "outro" as const, timestamp },
+      ],
       naoLida: true,
-    };
-  });
-
-  return { ...career, conversas: [...conversas, ...existentes].slice(0, 30) };
+    });
+  }
+  return atual;
 }
 
 export { EVENTOS_RPG };

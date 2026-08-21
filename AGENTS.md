@@ -1,3 +1,48 @@
+## Celular: UMA conversa por contato + F5 sem reset (2026-08-21, 9ª passada)
+
+Auditoria completa sobre o commit 361f808 (revert do onboarding). Causas-raiz
+corrigidas no SISTEMA ORIGINAL (sem celulares paralelos):
+
+- **`career/conversasEngine.ts` (NOVO)**: `anexarConversa(career, conv)` —
+  identidade estável por `npcId` → `canal` → `nome` (fallback p/ legado).
+  Mensagens novas entram na conversa existente (dedupe por id de mensagem),
+  conversa sobe ao topo, dilema pendente (eventoRpg !respondido) nunca é
+  sobrescrito (vira entrada separada). Caps: 30 conversas / 100 msgs.
+  `normalizarConversas(lista)` funde duplicatas legadas na hidratação
+  (rodado por `careerStorage.normalizarCareer` — sana o JSONB do banco).
+- **Todos os produtores migrados**: rpgEngine (eventoParaConversa id estável
+  `conv-npc-{npc}`, msg `rpg-m-{eventoId}`), garantirContatosRpg (idempotente
+  POR CONTATO — antes um único npcId pulava TODOS os contatos), convite da
+  Trilha entra na conversa do Pracinha (msg `ritual-m-...-r{rodada}`),
+  historiaEngine (capítulos = mensagens na conversa de Helena/John Adrian),
+  entrevistaEngine (reações em `conv-npc-npc-braganca`/torcedor, msg por
+  partidaId), médico/redes pós-jogo (`conv-canal-medico`/`conv-canal-redes`),
+  decisões viram mensagem na conversa do remetente (`remetenteDecisao` em
+  choicesEngine, canal `decisao:{eventoId}` — ChoiceModal usa o mesmo mapa).
+- **Fila do BotaoGame** (`enfileirarConversas`) drena via anexarConversa
+  (uma msg por vez, 2.6s, toast+som — sem lote).
+- **F5**: resume `botao:resume:v1` (sessionStorage, por usuário, 2h) agora
+  guarda TAMBÉM telas seguras (hub/classificacao/calendario/economia/
+  trophies/profile/career-menu) + `patrocinioPagoPartida`; `telaRestauradaRef`
+  impede `hidratarCampanha` de devolver ao menu. `concluirColetiva` idempotente
+  em 2 camadas: guarda da sessão + `career.entrevistas` (F5 não repaga).
+  Rota /cidadela: jogo ativo (Estádio/Trilha) persiste em sessionStorage
+  `cidadela:jogo-ativo:v1` (aba nova entra limpa).
+- **Celular fora do Modo Carreira**: hook único `src/hooks/useCelularCarreira.ts`
+  (carrega career, handlers responder/escolher/excluir com persistência) —
+  usado por /cidadela e /campus (antes /campus tinha `<CelularFixo/>` pelado).
+- **Adsterra**: `AdsterraBanner` REANEXA o invoke script a cada montagem
+  (ele executa 1x por carga e preenche o container do instante — remount
+  deixava banner vazio; era o "carrega em alguns lugares e não em outros").
+- **CSS**: `.phone-screen` com `height: min(74vh, 42rem)` — lista e chat
+  rolam internamente; o aparelho não estica a página.
+- **Limitações honestas**: fila em memória — F5 durante o drain perde as
+  mensagens de flavor ainda não entregues (estado crítico persiste); vite dev
+  atrás do proxy do work-host não hidrata (ambiental, confirmado no commit
+  limpo) — auditar UI via Vercel. Testes: `JITI_TSCONFIG_PATHS=true
+  ./node_modules/.bin/jiti test-conversas.mts` (38) + `test-entregas.mts` (9).
+  `tsc --noEmit` 0 erros; `npm run build` OK.
+
 ## Grupo Cidadela — fictício, 100% interno (2026-08-20, 8ª passada)
 
 - **Correção de interpretação**: o "Grupo Cidadela" NÃO é WhatsApp/Evolution/

@@ -803,6 +803,9 @@ button.celular-card:hover {
   border-radius: 1.5rem;
   background: oklch(0.16 0.01 150);
   min-height: 26rem;
+  /* Tamanho controlado: a lista de conversas e o chat rolam INTERNAMENTE
+     (.phone-chat-body tem overflow-y: auto) — o aparelho nunca estica a página. */
+  height: min(74vh, 42rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
