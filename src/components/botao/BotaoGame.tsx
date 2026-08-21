@@ -2372,6 +2372,24 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
       persistCareer(novaCareer);
 
+      // Delta de SOV da partida (vitória/derrota/empate + bônus + títulos): registra
+      // no Banco Central SOV (module 'career') para persistência após F5.
+      patchSob = novaCareer.coach.sov - career.coach.sov;
+      if (patchSob !== 0 && perfil?.user_id) {
+        void registrarTransacaoSov(
+          perfil.user_id,
+          patchSob,
+          patchSob >= 0 ? "reward" : "penalty",
+          `Partida de carreira (${gf > ga ? "vitória" : gf < ga ? "derrota" : "empate"})`,
+          "career",
+          { rodada: career.rodadaAtual, golsPro: gf, golsContra: ga, competicao: "brasileirao" },
+          {
+            sourceEvent: "partida_carreira",
+            idempotencyKey: `partida:${current.id}`,
+          },
+        );
+      }
+
       // Recompensa do patrocinador no Banco Central SOV (module 'career').
       if (rDesafio.ganhou > 0 && perfil?.user_id) {
         void registrarTransacaoSov(
@@ -2383,9 +2401,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           { rodada: career.rodadaAtual, golsPro: gf, golsContra: ga },
         );
       }
-
-      // Captura para a tela de fim de jogo (deltas reais pós-desafio).
-      patchSob = novaCareer.coach.sov - career.coach.sov;
       patchMoral = novaCareer.moralTime - career.moralTime;
       posTabela = posicaoUsuario > 0 ? posicaoUsuario : undefined;
       extraMsg = manchetesFim[0];

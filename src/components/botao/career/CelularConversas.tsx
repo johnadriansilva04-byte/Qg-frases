@@ -189,11 +189,12 @@ export function CelularConversas({
   // a partir do estado real — nunca gera mensagem automática sem evento.
   const convPatrocinador: ConversaCelular | null = desafioPatrocinador && !desafioPatrocinador.concluido
     ? {
-        id: "conv-patrocinador",
+        id: "conv-canal-patrocinador",
         tipo: "patrocinador",
         nome: desafioPatrocinador.patrocinador,
         avatar: "💰",
         cargo: "Patrocinador",
+        canal: "patrocinador",
         mensagens: [
           {
             id: "pat-msg",
@@ -244,7 +245,7 @@ export function CelularConversas({
   };
 
   const handleEnviar = () => {
-    if (!textoInput.trim() || !conversaSelecionada || conversaSelecionada === "conv-patrocinador")
+    if (!textoInput.trim() || !conversaSelecionada || conversaSelecionada === "conv-canal-patrocinador")
       return;
     onEnviarMensagem(conversaSelecionada, textoInput);
     setTextoInput("");

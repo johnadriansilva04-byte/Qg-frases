@@ -22,6 +22,13 @@ CREATE TABLE IF NOT EXISTS public.botao_usuarios (
   vitorias INTEGER NOT NULL DEFAULT 0,
   derrotas INTEGER NOT NULL DEFAULT 0,
   empates INTEGER NOT NULL DEFAULT 0,
+  -- Colunas da Cidadela (unificadas)
+  profissao_atual TEXT,
+  profissoes_desbloqueadas TEXT[] NOT NULL DEFAULT '{}',
+  reputacao_global INTEGER NOT NULL DEFAULT 0,
+  nivel_cidadela INTEGER NOT NULL DEFAULT 1,
+  estado_cidadela JSONB NOT NULL DEFAULT '{}',
+  bio TEXT,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
 

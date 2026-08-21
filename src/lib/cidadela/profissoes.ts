@@ -81,7 +81,7 @@ export function profissaoById(id: ProfissaoId | null | undefined): ProfissaoInfo
   return PROFISSOES.find((p) => p.id === id) ?? null;
 }
 
-/** Linha de cidadela_perfis (fonte de verdade da identidade do jogador). */
+/** Linha de botao_usuarios (fonte de verdade da identidade do jogador). */
 export interface CidadelaPerfil {
   id: string;
   user_id: string;
@@ -90,7 +90,8 @@ export interface CidadelaPerfil {
   reputacao_global: number;
   nivel_cidadela: number;
   /** Estado individual da profissão ativa (EstudanteState, etc.). */
-  estado: Record<string, unknown>;
+  estado_cidadela: Record<string, unknown>;
+  bio?: string | null;
   created_at: string;
   updated_at: string;
 }
