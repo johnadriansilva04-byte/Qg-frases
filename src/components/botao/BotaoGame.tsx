@@ -50,7 +50,8 @@ import { MatchView } from "./components/MatchView";
 import { MatchEndScreen, type MatchEndData } from "./components/MatchEndScreen";
 import { EntrevistaColetiva } from "./components/EntrevistaColetiva";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
-import { AuthScreen } from "./components/AuthScreen";
+// Tela de auth separada REMOVIDA: login mora só em módulos (celular do
+// OnboardingTour, CelularConversas) e no hub ("Meu Clube / Conta").
 import { OnlineMatchV3 } from "./components/OnlineMatchV3";
 import { OnlineChampionship } from "./components/OnlineChampionship";
 import { useBotaoAuth } from "./online/useBotaoAuth";
@@ -200,7 +201,6 @@ import { carregarPerfilCidadela } from "@/lib/cidadela/profissoes";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 
 type Screen =
-  | "auth"
   | "menu"
   | "profile"
   | "career-menu"
@@ -773,16 +773,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
     await logout();
     zerarEstadoDaConta();
-    setScreen("auth");
+    setScreen("menu");
     setToast("Você saiu da conta.");
   };
 
   const aoLogar = async (p?: Perfil) => {
     console.log("[BotaoGame] aoLogar chamado:", { perfil: p });
-    // Sem perfil = logout ou exclusão de conta → volta à tela de login.
+    // Sem perfil = logout ou exclusão de conta → volta ao hub (login é o
+    // módulo "Meu Clube / Conta", junto de Amistoso e Modo Carreira).
     if (!p) {
       zerarEstadoDaConta();
-      setScreen("auth");
+      setScreen("menu");
       setToast("Você saiu da conta.");
       return;
     }
@@ -2595,7 +2596,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               <p className="mt-1 text-sm text-muted-foreground">
                 Faça login para desafiar outros jogadores em tempo real.
               </p>
-              <button onClick={() => setScreen("auth")} className="btn-primary mt-4">
+              <button onClick={() => setScreen("profile")} className="btn-primary mt-4">
                 Entrar / Cadastrar
               </button>
             </div>
@@ -2623,7 +2624,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               <p className="mt-1 text-sm text-muted-foreground">
                 Faça login para participar de campeonatos contra outros jogadores.
               </p>
-              <button onClick={() => setScreen("auth")} className="btn-primary mt-4">
+              <button onClick={() => setScreen("profile")} className="btn-primary mt-4">
                 Entrar / Cadastrar
               </button>
             </div>
@@ -2634,21 +2635,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             />
           )}
         </div>
-      </Shell>
-    );
-  }
-
-  if (screen === "auth") {
-    return (
-      <Shell>
-        <AuthScreen onPronto={(p) => {
-          // Loading fixo de 2 segundos antes de processar login
-          setLoading(true);
-          setTimeout(() => {
-            setLoading(false);
-            aoLogar(p);
-          }, 2000);
-        }} />
       </Shell>
     );
   }
