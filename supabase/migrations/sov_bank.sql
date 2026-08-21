@@ -1,6 +1,12 @@
 -- SOV BANK — Livro-caixa central da Cidadela
 -- Depende de: sov_financial_system.sql (user_wallets, bank_ledger,
 -- record_transaction, create_or_update_wallet) e sov_integracao_cartorio.sql.
+-- NOTA (2026-08-21): sov_bank_registrar NÃO engole mais EXCEPTION — erro real
+-- (saldo insuficiente, teto de emissão, auth violado) sobe como 400 visível
+-- no PostgREST, em vez de devolver {transaction_id NULL, balance 0}. A versão
+-- antiga que engolia obrigava o frontend a tratar transaction_id NULL como
+-- falha (fallback); remova esse guarda no frontend só depois de re-aplicar
+-- esta migração no banco.
 -- Idempotente: seguro rodar mais de uma vez no SQL Editor.
 
 -- =========================================================
@@ -116,11 +122,6 @@ BEGIN
   SELECT w.balance INTO v_bal FROM user_wallets w WHERE w.user_id = p_user_id;
   RETURN QUERY SELECT v_tx_id, COALESCE(v_bal, 0::DECIMAL), FALSE;
   RETURN;
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Em caso de erro, retorna NULL para todos os campos para não quebrar o app
-    RETURN QUERY SELECT NULL::UUID, 0::DECIMAL, FALSE;
-    RETURN;
 END;
 $$;
 

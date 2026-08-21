@@ -903,7 +903,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (modo === "proprietario" && clube && perfil?.user_id) {
       const preco = precoClube(clube);
       // Débito no SOV Bank idempotente por compra (§21/§22: 1 clique = 1 execução).
-      await registrarTransacaoSov(
+      const saldoLedger = await registrarTransacaoSov(
         perfil.user_id,
         -preco,
         "transfer",
@@ -912,6 +912,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         { clubeId: clube.id, power: clube.power },
         { sourceEvent: "compra_clube", idempotencyKey: `clube:compra:${clube.id}:${perfil.user_id}` },
       );
+      // Recompensa NÃO aparece como concluída quando o banco recusou (§14):
+      // sem o débito confirmado, o clube não é concedido.
+      if (saldoLedger === null) {
+        setToast("Compra não concluída — o banco recusou o débito. Saldo insuficiente ou indisponível.");
+        setScreen("menu");
+        return;
+      }
       // A identidade do clube adquirido passa a orientar o time do usuário.
       await atualizarPerfilClube(perfil.user_id, {
         time: clube.name,
@@ -2721,7 +2728,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           <CareerMenu
             career={career}
             onLoadCareer={() => {
-              console.log("[BotaoGame] onLoadCareer chamado, career:", career);
               if (career) {
                 setLoading(true);
                 setTimeout(() => {
@@ -3149,6 +3155,7 @@ function Menu({
           desc="Login, personalizar time, tática, nomear botões e cores. Acesso à conta."
           onClick={onProfile}
           accent="sky"
+          dataTour="perfil"
         />
         <MenuCard
           icon={<Swords className="size-5" />}
@@ -3177,6 +3184,7 @@ function Menu({
           desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos no Campeonato do Campus."
           onClick={onCareerMenu}
           accent="fuchsia"
+          dataTour="carreira"
         />
         <MenuCard
           icon={<Trophy className="size-5" />}
@@ -3184,6 +3192,7 @@ function Menu({
           desc={`${progress.trophies.length} título(s) · amistosos ${progress.friendlies.w}V ${progress.friendlies.d}E ${progress.friendlies.l}D`}
           onClick={onTrophies}
           accent="gold"
+          dataTour="trofeus"
         />
       </div>
       <LeaderboardTreinadores compact />
@@ -3198,6 +3207,7 @@ function MenuCard({
   onClick,
   destructive,
   accent = "gold",
+  dataTour,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -3205,6 +3215,8 @@ function MenuCard({
   onClick: () => void;
   destructive?: boolean;
   accent?: "gold" | "sky" | "emerald" | "fuchsia" | "amber";
+  /** Âncora do tour contextual (bolhas apontam para elementos reais). */
+  dataTour?: string;
 }) {
   const accentMap = {
     gold: "menu-accent-gold",
@@ -3216,6 +3228,7 @@ function MenuCard({
   return (
     <button
       onClick={onClick}
+      {...(dataTour ? { "data-tour": dataTour } : {})}
       className={`menu-card group ${destructive ? "menu-card-destructive" : accentMap[accent]}`}
     >
       <span

@@ -1,44 +1,17 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
-import { OnboardingTour } from "@/components/cidadela/OnboardingTour";
-import { useOnboarding } from "@/lib/onboarding/useOnboarding";
-import type { OnboardingDestinoKey } from "@/lib/onboarding/onboardingEngine";
-
 type Props = {
   children: React.ReactNode;
-  /** Destino atual (§32: tour contextual respeita a rota clicada). */
-  destinoInicial?: OnboardingDestinoKey | undefined;
+  /** Mantido por compatibilidade com as rotas que passavam destino. */
+  destinoInicial?: string | undefined;
 };
 
 /**
- * PORTÃO DO ONBOARDING (§2/§33): reconhece usuário novo e só libera a rota
- * depois do tour concluído. Sessão é recuperada pela autenticação única
- * (§5); se onboarding COMPLETED → destino direto, nunca re-apaga (§7/§30).
+ * O tour NÃO é mais um portão full-screen (era um celular gigante que
+ * bloqueava a rota). O usuário entra direto na Cidadela, escolhe TRILHA ou
+ * FUTEBOL, e o TOUR CONTEXTUAL (TourContextual — bolhas ancoradas em
+ * elementos reais) acontece DEPOIS da escolha do módulo. Este componente
+ * virou pass-through transparente; o estado de conclusão persiste no
+ * onboarding engine (useOnboarding) consumido pelo TourContextual.
  */
-export function OnboardingGate({ children, destinoInicial }: Props) {
-  const navigate = useNavigate();
-  const { perfil } = useBotaoAuth();
-  const userId = perfil?.user_id ?? null;
-  const onboarding = useOnboarding(userId);
-
-  if (onboarding.carregando) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
-      </div>
-    );
-  }
-
-  if (!onboarding.concluido) {
-    return (
-      <OnboardingTour
-        perfil={perfil}
-        destinoInicial={destinoInicial}
-        onboarding={onboarding}
-        onConcluir={(link) => navigate({ to: link })}
-      />
-    );
-  }
-
+export function OnboardingGate({ children }: Props) {
   return <>{children}</>;
 }

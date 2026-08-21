@@ -5,10 +5,10 @@ import {
   carregarOfertasMarketplace,
   comprarOfertaMarketplace,
   criarOfertaMarketplace,
-  obterSaldoSov,
   type InventarioCidadela,
   type OfertaCidadela,
 } from "@/lib/cidadela/pracinhaCore";
+import { obterSaldoSov } from "@/lib/financial/sovApi";
 
 interface SovMarketProps {
   userId: string | null;
@@ -38,7 +38,9 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
     ]);
     setInventario(inv);
     setOfertas(ofs);
-    setSaldo(saldoAtual);
+    // Leitura honesta: só atualiza quando a RPC devolve número — nunca
+    // sobrescreve o saldo com 0 numa falha (estado falso).
+    if (saldoAtual !== null) setSaldo(saldoAtual);
     setItemSelecionado((prev) => prev || inv[0]?.item_slug || "");
     setCarregando(false);
   }, [userId]);

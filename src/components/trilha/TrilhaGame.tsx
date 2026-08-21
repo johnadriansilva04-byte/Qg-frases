@@ -664,6 +664,7 @@ function TrilhaGameBoard({
             {phases.progress.consecutiveWins} / {currentPhaseConfig?.requiredWins || 7}
           </div>
           <button
+            data-tour="trilha-trofeus"
             onClick={onShowTrophies}
             className="flex items-center gap-2 bg-secondary/70 text-foreground hover:bg-secondary px-4 py-2 rounded-lg font-medium transition-colors"
           >

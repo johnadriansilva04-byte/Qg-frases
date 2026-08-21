@@ -20,6 +20,26 @@ export type SovOpcoes = {
   idempotencyKey?: string;
 };
 
+/** Linha retornada por sov_bank_registrar (TABLE transaction_id/balance/duplicated). */
+type LinhaRegistrar = { transaction_id?: string | null; balance?: number; duplicated?: boolean };
+
+/**
+ * Log completo do erro PostgREST (código/mensagem/detalhes/hint) + payload.
+ * "Failed to load resource: 400" no console do navegador é só o sintoma de
+ * rede; o corpo da resposta explica a causa real (uuid inválido, RAISE
+ * EXCEPTION, RLS, função ausente). Nunca engolir sem logar.
+ */
+function logErroRpc(nome: string, payload: Record<string, unknown>, erro: unknown) {
+  const e = erro as { code?: string; message?: string; details?: string; hint?: string };
+  console.warn(`[SovAPI] RPC ${nome} falhou`, {
+    code: e?.code ?? null,
+    message: e?.message ?? String(erro),
+    details: e?.details ?? null,
+    hint: e?.hint ?? null,
+    payload,
+  });
+}
+
 /**
  * Registra uma transação de soberania no bank_ledger (e ajusta o saldo).
  * Porta de entrada central: `sov_bank_registrar` (idempotência + teto de
@@ -56,10 +76,26 @@ export async function registrarTransacaoSov(
       if (codigo !== "PGRST202" && codigo !== "42883") throw error;
       return await registrarLegado(userId, amount, tipo, descricao, modulo, metadata);
     }
-    const linha = (data as { balance?: number; duplicated?: boolean }[] | null)?.[0];
-    return typeof linha?.balance === "number" ? linha.balance : null;
+    const linha = (data as LinhaRegistrar[] | null)?.[0];
+    /* A versão antiga de sov_bank_registrar ENGOLIA qualquer EXCEPTION
+       ("WHEN OTHERS ... RETURN NULL, 0, FALSE") — inclusive "saldo
+       insuficiente", teto de emissão e violação de auth — devolvendo uma
+       linha com transaction_id NULL. Tratar como falha: o chamador cai no
+       fallback local em vez de gravar saldo 0 no cache (estado falso).
+       A migração sov_bank.sql foi corrigida para propagar o erro; depois
+       de re-aplicada no banco, este guarda vira redundante e permanece
+       como defesa em profundidade. */
+    if (!linha || linha.transaction_id == null) {
+      logErroRpc("sov_bank_registrar (transação não gravada)", { p_user_id: userId, p_amount: amount, p_type: tipo, retorno: linha ?? null }, {});
+      return null;
+    }
+    return typeof linha.balance === "number" ? linha.balance : null;
   } catch (e) {
-    console.warn("[SovAPI] transação de soberania falhou:", e);
+    logErroRpc(
+      "sov_bank_registrar",
+      { p_user_id: userId, p_amount: amount, p_type: tipo, p_source_module: modulo },
+      e,
+    );
     return null;
   }
 }
@@ -103,7 +139,7 @@ export async function obterSaldoSov(userId: string): Promise<number | null> {
     if (error) throw error;
     return typeof data === "number" ? data : null;
   } catch (e) {
-    console.warn("[SovAPI] saldo indisponível:", e);
+    logErroRpc("obter_saldo_soberania", { p_user_id: userId }, e);
     return null;
   }
 }
@@ -139,9 +175,7 @@ export async function historicoTransacoes(
 
 /** Garante que a carteira exista (criada com saldo 0). Fire-and-forget. */
 export async function garantirCarteira(userId: string): Promise<void> {
-  try {
-    await supabase.rpc("create_or_update_wallet", { p_user_id: userId });
-  } catch (e) {
-    console.warn("[SovAPI] create_or_update_wallet falhou:", e);
-  }
+  if (!userId) return;
+  const { error } = await supabase.rpc("create_or_update_wallet", { p_user_id: userId });
+  if (error) logErroRpc("create_or_update_wallet", { p_user_id: userId }, error);
 }

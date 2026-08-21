@@ -1,3 +1,66 @@
+
+## Consistência SOV — banco engolindo erro → "saldo 0" no cache (2026-08-21, 13ª passada)
+
+Vistoria cirúrgica da fonte de verdade SOV (ledger + cache). TODAS as
+recompensas gravam em `bank_ledger`/`user_wallets` via `sov_bank_registrar`;
+
+o bug era de confiabilidade da confirmação:
+
+- **CAUSA RAIZ (SQL)**: `sov_bank_registrar` tinha `EXCEPTION WHEN OTHERS`
+  que devolvia `{transaction_id NULL, balance 0, duplicated FALSE}` QUALQUER
+  erro (saldo insuficiente, teto de emissão, auth violado) — a UI lia só
+  `balance` e cacheava **0** (pontos_soberania/coach.sov zerados mesmo sem
+  escrita no ledger). Migração `sov_bank.sql` corrigida: sem EXCEPTION, o
+  erro sobe como 400 legível. Para produção: re-aplicar no SQL Editor.
+- **Defesa no frontend (redundante após migration)**: `sovApi.registrarTransacaoSov`
+  detecta `transaction_id NULL` → log completo + retorna null → fallback
+  local (nunca saldo 0). Guard permanece como defesa em profundidade.
+- **Aposta online sync**: careerRemote usa o saldo do ledger para gravar o
+  cache (antes computava local e gravava mesmo com ledger falho).
+- **Compra de clube**: se o banco recusa o débito, o grant era entregue
+  mesmo assim; agora aborta com toast de erro (§14 do prompt mestre).
+- **Teste estrutural**: `node testes/sov-consistencia.test.mjs` 6/6.
+
+## AUDITORIA TOTAL — React #130 + carteira 400 + tour contextual (2026-08-21, 12ª passada)
+
+- **React #130 CAUSA RAIZ (fixada)**: `SubornoStory.Chip` recebia um ELEMENTO
+  React (`icon={<TrendingUp/>}`) e renderizava como componente (`<Icon/>`) →
+  "Element type is invalid: got object". Carreira com `suborno.nodeAtual`
+  ativo → `prioridadeCelular` renderiza SubornoStory → crash ao entrar no
+  Futebol. Agora Chip renderiza o elemento direto (`{icon}`), tipo
+  `ReactNode`. Provar/validar: `node run-ssr.cjs test-ssr-flow.mts` +
+  `node test-ssr-flow.bundle.mjs` (harness rolldown com alias "@" → src).
+- **400 do Supabase (probes em produção pracinha.online)**: PostgREST 400 =
+  uuid inválido no payload OU RAISE EXCEPTION no corpo da função (ambos
+  verificados via curl com sb_publishable extraída do bundle). RPCs SOV
+  existem com assinaturas batendo; `tempo_cidadao_heartbeat` existe e RAISE
+  "usuario nao autenticado" quando a sessão expira mas userId (perfil
+  cacheado) ainda existe — era o loop de 400. Agora `useTempoCidadao` checa
+  `supabase.auth.getSession()` antes de bater. `sovApi.logErroRpc` loga
+  code/message/details/hint+payload (nunca engolir o 400).
+- **Leitura de saldo SOV consolidada**: `pracinhaCore.obterSaldoSov`
+  (direto user_wallets + create_or_update_wallet a cada leitura) REMOVIDA;
+  todos leem `sovApi.obterSaldoSov` (RPC obter_saldo_soberania).
+  SovMarket não grava mais 0 falsificado quando a leitura falha.
+- **Tour contextual substitui portão full-screen**: `OnboardingGate` =
+  pass-through; `TourContextual.tsx` (bolhas ancoradas em `data-tour`
+  reais, overlay pointer-events-none) monta DEPOIS da escolha do módulo em
+  /cidadela (botao: perfil/carreira/trofeus/celular; trilha:
+  trilha-trofeus/celular). Conclusão persiste via `useOnboarding`
+  (onboarding engine) — botão "?" re-executa. `OnboardingTour.tsx` +
+  `ChatAuthCard.tsx` REMOVIDOS (só existiam por causa do portão).
+  Âncoras: MenuCard ganhou `dataTour` prop; CelularFixo button
+  `data-tour="celular"`; TrilhaGame "Troféus" `data-tour="trilha-trofeus"`.
+- **Ads**: `adManager` não injeta mais `data-cfasync` na tag do AdSense
+  (era o warning "AdSense head tag doesn't support data-cfasync").
+- **Sistema de recompensa é O sistema**: `registrarTransacaoSov` →
+  `sov_bank_registrar` (ledger) — todos os 15 call sites em BotaoGame +
+  careerRemote + storage + useCelularCarreira + campus. Docs de inventário
+  no AGENTS §"Sistema de IA" — recompensas nunca duplicadas por UI.
+- **Log de debug removido**: "[BotaoGame] onLoadCareer chamado" saiu de
+  produção.
+- **Verificação**: tsc 0 erros, build OK, 38 render checks SSR (suites
+  test-ssr-flow/futebol/celular/botaogame, 0 falhas), 283+ testes jiti OK.
 ## Regras de fim de temporada + marco de liderança + celular/Bolsa (2026-08-21, 11.5ª passada)
 
 - **Regra das 3 temporadas (§9 recuperação de dívida)**: `CareerState.temporadasInadimplente`

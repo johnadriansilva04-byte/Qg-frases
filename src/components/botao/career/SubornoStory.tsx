@@ -13,12 +13,15 @@ type Props = {
   onFechar?: () => void;
 };
 
-function Chip({ icon: Icon, children, variant = "default" }: { icon?: any; children: React.ReactNode; variant?: "default" | "warning" }) {
+// icon chega como ELEMENTO pronto (ex.: <TrendingUp className="size-3" />) —
+// renderiza-se direto. Renderizar como componente (<Icon/>) gera React #130,
+// pois o tipo do elemento seria um objeto.
+function Chip({ icon, children, variant = "default" }: { icon?: React.ReactNode; children: React.ReactNode; variant?: "default" | "warning" }) {
   return (
     <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
       variant === "warning" ? "bg-yellow-500/20 text-yellow-300" : "bg-primary/20 text-primary"
     }`}>
-      {Icon && <Icon className="size-3" />}
+      {icon}
       {children}
     </div>
   );

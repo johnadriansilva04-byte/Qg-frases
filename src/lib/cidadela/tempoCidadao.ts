@@ -90,6 +90,11 @@ export function useTempoCidadao(
       const decorrido = (agora - ultimoTickRef.current) / 1000;
       ultimoTickRef.current = agora;
       if (decorrido < 10) return; // tick duplo (ex.: dois timers) — ignora
+      // Sessão expirada (userId vem do perfil cacheado) → o RPC responde
+      // RAISE EXCEPTION ("usuario nao autenticado") = HTTP 400 em loop.
+      // Sem sessão ativa, não há o que registrar: para de bater.
+      const { data: sessao } = await supabase.auth.getSession();
+      if (!sessao.session) return;
       const { data, error } = await supabase.rpc("tempo_cidadao_heartbeat", {
         p_segundos: Math.min(Math.round(decorrido), 120),
       });

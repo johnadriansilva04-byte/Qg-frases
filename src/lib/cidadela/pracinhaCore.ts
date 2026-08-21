@@ -394,17 +394,6 @@ export async function concederItemFeira(
   return true;
 }
 
-export async function obterSaldoSov(userId: string): Promise<number> {
-  try {
-    await supabase.rpc("create_or_update_wallet", { p_user_id: userId });
-  } catch {
-    // O saldo cai para zero quando a migração financeira ainda não foi aplicada.
-  }
-  const { data, error } = await supabase
-    .from("user_wallets")
-    .select("balance")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) return 0;
-  return Number(data?.balance ?? 0);
-}
+// Saldo SOV: leitura canônica em src/lib/financial/sovApi.ts (RPC
+// obter_saldo_soberania). A leitura NUNCA cria carteira (create_or_update_wallet
+// era chamado aqui a cada leitura — escrita redundante no caminho de leitura).

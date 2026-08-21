@@ -103,6 +103,7 @@ export function CelularFixo({
           </button>
         )}
       <button
+        data-tour="celular"
         onClick={() => setAberto(true)}
         className="fixed bottom-4 right-4 z-50 flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-2xl shadow-emerald-900/50 hover:scale-110 transition-transform active:scale-95 border-2 border-emerald-400/30"
         title="Celular da Cidadela"

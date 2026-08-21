@@ -432,9 +432,11 @@ export async function aplicarApostaSoberania(
       delta = risco; // ganha o equivalente à aposta (dobro)
     else delta = -risco;
 
+    // Saldo devolvido pelo ledger (autoritativo) ou null em falha.
+    let saldoLedger: number | null = null;
     if (delta !== 0) {
       // Registra no ledger: bet_win (crédito) ou bet_loss (débito).
-      await registrarTransacaoSov(
+      saldoLedger = await registrarTransacaoSov(
         uid,
         delta,
         delta > 0 ? "bet_win" : "bet_loss",
@@ -444,7 +446,9 @@ export async function aplicarApostaSoberania(
       );
     }
 
-    const novoSaldo = Math.max(0, atual + delta);
+    // Cache pontos_soberania: prefere o saldo do ledger; falha → fallback local.
+    const novoSaldo =
+      saldoLedger ?? Math.max(0, atual + delta);
     await (supabase as any)
       .from("botao_usuarios")
       .update({ pontos_soberania: novoSaldo })

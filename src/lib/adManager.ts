@@ -186,7 +186,9 @@ class AdManager {
     script.id = config.id;
     script.src = config.src;
     script.async = true;
-    script.setAttribute("data-cfasync", "false");
+    // data-cfasync (Cloudflare Rocket Loader) NÃO é aceito na tag head do
+    // AdSense ("AdSense head tag doesn't support data-cfasync attribute").
+    if (network !== "adsense") script.setAttribute("data-cfasync", "false");
     if (network === "monetag" && config.zone) {
       // Zona exigida pela tag script do Monetag
       script.dataset["zone"] = config.zone;

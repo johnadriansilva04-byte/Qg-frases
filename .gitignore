@@ -33,3 +33,4 @@ dist-ssr
 *.sln
 *.sw?
 .env
+test-ssr-*.bundle.mjs

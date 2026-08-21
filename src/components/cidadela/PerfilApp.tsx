@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Clock3, Loader2, Pencil, Swords, Target, Trophy, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatarTempoCidadao } from "@/lib/cidadela/tempoCidadao";
-import { obterSaldoSov } from "@/lib/cidadela/pracinhaCore";
+import { obterSaldoSov } from "@/lib/financial/sovApi";
 
 export type PerfilPublico = {
   user_id: string;

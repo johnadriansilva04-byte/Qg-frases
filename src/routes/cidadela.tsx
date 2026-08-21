@@ -6,6 +6,7 @@ import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
+import { TourContextual, type PassoTour } from "@/components/cidadela/TourContextual";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
 import { CelularFixo } from "@/components/CelularFixo";
 import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
@@ -96,6 +97,8 @@ const GAMES = [
 function CidadelaCompView() {
   const [hydrated, setHydrated] = useState(false);
   const [activeGame, setActiveGame] = useState<Game>(null);
+  const passosTour: PassoTour[] =
+    activeGame === "botao" ? PASSOS_TOUR_FUTEBOL : activeGame === "trilha" ? PASSOS_TOUR_TRILHA : [];
   const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
@@ -421,9 +424,25 @@ function CidadelaCompView() {
             : undefined
         }
       />
+
+      {/* Tour contextual: bolhas ancoradas nos elementos reais do módulo
+          escolhido (TRILHA/FUTEBOL). O hub NÃO tem tour — o usuário escolhe
+          o módulo antes (§4-§7 do prompt mestre). */}
+      <TourContextual userId={perfil?.user_id ?? null} passos={passosTour} />
     </>
   );
 }
+
+const PASSOS_TOUR_FUTEBOL: PassoTour[] = [
+  { alvo: "perfil", titulo: "Meu Clube / Conta", texto: "Aqui você entra na sua conta e personaliza seu time: cores, tática e nomes dos botões." },
+  { alvo: "carreira", titulo: "Carreira no Campus", texto: "Aqui fica a sua carreira: partidas do Brasileirão, Copa do Brasil, classificação e economia." },
+  { alvo: "trofeus", titulo: "Sala de troféus", texto: "Seus títulos e conquistas ficam guardados aqui." },
+  { alvo: "celular", titulo: "Seu celular", texto: "Mensagens do clube, recompensas em SOV, missões e notícias chegam aqui." },
+];
+const PASSOS_TOUR_TRILHA: PassoTour[] = [
+  { alvo: "trilha-trofeus", titulo: "Troféus da Trilha", texto: "Suas conquistas na Trilha e o progresso do capítulo ficam aqui." },
+  { alvo: "celular", titulo: "Seu celular", texto: "Mensagens, recompensas em SOV e missões chegam aqui — o mesmo celular de todo o jogo." },
+];
 
 // OnboardingGate: tour obrigatório do iniciante antes do hub (§2).
 function Cidadela() {
