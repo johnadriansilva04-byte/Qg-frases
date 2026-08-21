@@ -8,7 +8,7 @@ import {
 
 /**
  * Persistência do onboarding (§6/§7):
- *  - Fonte de verdade: `botao_usuarios.estado_cidadela.onboarding` (JSONB) via RPC.
+ *  - Fonte de verdade: `cidadela_perfis.estado.onboarding` (JSONB) via RPC.
  *  - Espelho local: localStorage `cidadela:onboarding:{userId}` (not signed in
  *    yet? guardamos igual, e quando fizer login sincroniza).
  *
@@ -37,10 +37,10 @@ export function salvarOnboardingLocal(userId: string | null, estado: OnboardingE
   }
 }
 
-/** Extrai o onboarding do perfil Supabase (coluna `estado_cidadela` JSONB). */
+/** Extrai o onboarding do perfil Supabase (coluna `estado` JSONB). */
 export function extrairOnboardingDoPerfil(perfil: CidadelaPerfil | null): OnboardingEstado | null {
   if (!perfil) return null;
-  const raw = (perfil.estado_cidadela as Record<string, unknown> | null)?.["onboarding"];
+  const raw = (perfil.estado as Record<string, unknown> | null)?.["onboarding"];
   if (!raw) return null;
   return normalizarEstadoOnboarding(raw);
 }
@@ -88,16 +88,19 @@ export async function carregarOnboarding(userId: string | null): Promise<Onboard
   return local ?? estadoInicialOnboarding();
 }
 
-/** Salva em local sempre; botao_usuarios quando autenticado. */
+/** Salva em local sempre; no perfil da Cidadela (RPC) quando autenticado. */
 export async function salvarOnboarding(userId: string | null, estado: OnboardingEstado): Promise<void> {
   salvarOnboardingLocal(userId ?? ID_ANONIMO, estado);
   if (!userId) return;
   try {
-    await supabase
-      .from("botao_usuarios")
-      .update({ estado_cidadela: { onboarding: estado } })
-      .eq("user_id", userId);
-  } catch {
-    /* local espelhado continua válido */
+    // Fonte de verdade: cidadela_perfis.estado.onboarding via RPC (a RPC faz o
+    // merge no JSONB do perfil). Um UPDATE direto em botao_usuarios.estado_cidadela
+    // — coluna inexistente — falhava em silêncio e o tour nunca persistia.
+    const { error } = await supabase.rpc("atualizar_estado_cidadela", {
+      p_estado: { onboarding: estado } as unknown as import("@/integrations/supabase/types").Json,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn("[Onboarding] RPC atualizar_estado_cidadela falhou:", e);
   }
 }

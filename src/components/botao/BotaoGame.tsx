@@ -171,11 +171,8 @@ import { formacaoById } from "./career/formacoes";
 import {
   loadCareerFromSupabase,
   saveCareerToSupabase,
-  inserirManchetesRemotas,
   aplicarResultadoRemoto,
   aplicarFimCampanhaRemoto,
-  aplicarEscolhaRemoto,
-  iniciarCampanhaRemota,
   registrarTemporadaRemota,
   registrarPartidaRemota,
   finalizarTemporadaRemota,
@@ -871,9 +868,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
 
     try {
-      // Zera a campanha no Supabase (novo registro limpo no JSONB) e reinicia
-      // localmente o estado de carreira (mantém o coach para reaproveitar).
-      await iniciarCampanhaRemota(difficulty).catch(() => {});
+      // Zera a campanha (o persistCareer abaixo já grava o snapshot limpo no
+      // JSONB — nenhum reset remoto paralelo é necessário).
       const zerada: CareerState = {
         ...(career ?? EMPTY_CAREER),
         ...EMPTY_CAREER,
@@ -998,7 +994,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (career?.desafioPatrocinador) {
       const rDesafio = aplicarDesafioPatrocinador(career, gf, ga, true);
       persistCareer(rDesafio.estado);
-      // Recompensa do patrocinador no Banco Central SOV.
+      // Recompensa do patrocinador no Banco Central SOV (idempotente por desafio).
       if (rDesafio.ganhou > 0 && perfil?.user_id) {
         void registrarTransacaoSov(
           perfil.user_id,
@@ -1007,6 +1003,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           "Desafio de patrocinador cumprido (amistoso)",
           "career",
           { golsPro: gf, golsContra: ga, tipo: "amistoso" },
+          career.desafioPatrocinador?.id
+            ? {
+                sourceEvent: "desafio_patrocinador",
+                idempotencyKey: `desafio:${perfil.user_id}:${career.desafioPatrocinador.id}`,
+              }
+            : undefined,
         );
       }
     }
@@ -1081,16 +1083,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // e o universo de torcida (1M distribuído por força, zero-sum).
     persistCareer(garantirTorcidaUniverso(garantirContatosRpg(novaCareer), userTeam));
 
-    // Se estiver logado, sincronizar com Supabase
+    // Se estiver logado, registra a temporada no histórico relacional. O
+    // snapshot da campanha (estado + manchetes de estreia) já foi persistido
+    // pelo persistCareer acima — regravá-lo aqui duplicava manchetes e
+    // re-incrementava campanhasJogadas após F5.
     if (perfil?.user_id) {
-      try {
-        await iniciarCampanhaRemota(difficulty);
-        void registrarTemporadaRemota(perfil.user_id, novaCareer);
-        const semId = novaCareer.headlines.map(({ id: _id, ...rest }) => rest);
-        await inserirManchetesRemotas(perfil.user_id, semId);
-      } catch (error) {
-        console.error("Erro ao sincronizar campanha com Supabase:", error);
-      }
+      void registrarTemporadaRemota(perfil.user_id, novaCareer);
     }
 
     setScreen("hub");
@@ -1480,13 +1478,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
     const nova: CareerState = conversaDecisao ? anexarConversa(base, conversaDecisao) : base;
     persistCareer(nova);
-    // RPC remota (autoritativa) para escolha
     if (perfil?.user_id) {
-      aplicarEscolhaRemoto(choice.id, choice.bonusPoder ?? 0, choice.bonusMoral ?? 0).catch(
-        () => {},
-      );
       void registrarEventoMissao("celular_decisao");
       // Impacto financeiro/penalty imediato no Banco Central SOV (module 'rpg').
+      // Idempotente por decisão — F5/retry não credita nem debita duas vezes.
+      // Os efeitos de poder/moral já foram persistidos no snapshot acima.
       const deltaEscolha =
         (choice.penaltyPontos && choice.penaltyPontos < 0 ? choice.penaltyPontos : 0) +
         (choice.impactoFinanceiro ?? 0);
@@ -1498,6 +1494,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           `Decisão de carreira: ${evento?.titulo ?? choice.id}`,
           "rpg",
           { choiceId: choice.id, eventoId: career.eventoPendenteId },
+          { sourceEvent: "decisao_carreira", idempotencyKey: `decisao:${perfil.user_id}:${choice.id}` },
         );
       }
     }
@@ -2372,25 +2369,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
       persistCareer(novaCareer);
 
-      // Delta de SOV da partida (vitória/derrota/empate + bônus + títulos): registra
-      // no Banco Central SOV (module 'career') para persistência após F5.
+      // Delta exibido na tela de fim de partida. O LEDGER recebe cada componente
+      // UMA vez por escritor próprio: delta da partida → aplicarResultadoRemoto
+      // (chave `partida:{uid}:{fixture}`), dividendos → bloco da Bolsa acima
+      // (chave `dividendo:{t}:r{n}`), desafio → abaixo, bônus de fim de
+      // temporada → aplicarFimCampanhaRemoto. Registrar o patchSob inteiro aqui
+      // CREDITAVA TUDO DUAS VEZES (saldo do ledger divergia da UI).
       patchSob = novaCareer.coach.sov - career.coach.sov;
-      if (patchSob !== 0 && perfil?.user_id) {
-        void registrarTransacaoSov(
-          perfil.user_id,
-          patchSob,
-          patchSob >= 0 ? "reward" : "penalty",
-          `Partida de carreira (${gf > ga ? "vitória" : gf < ga ? "derrota" : "empate"})`,
-          "career",
-          { rodada: career.rodadaAtual, golsPro: gf, golsContra: ga, competicao: "brasileirao" },
-          {
-            sourceEvent: "partida_carreira",
-            idempotencyKey: `partida:${current.id}`,
-          },
-        );
-      }
 
-      // Recompensa do patrocinador no Banco Central SOV (module 'career').
+      // Recompensa do patrocinador no Banco Central SOV (module 'career'),
+      // idempotente por desafio (o id do desafio é único por proposta).
       if (rDesafio.ganhou > 0 && perfil?.user_id) {
         void registrarTransacaoSov(
           perfil.user_id,
@@ -2399,6 +2387,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           "Desafio de patrocinador cumprido (carreira)",
           "career",
           { rodada: career.rodadaAtual, golsPro: gf, golsContra: ga },
+          career.desafioPatrocinador?.id
+            ? {
+                sourceEvent: "desafio_patrocinador",
+                idempotencyKey: `desafio:${perfil.user_id}:${career.desafioPatrocinador.id}`,
+              }
+            : undefined,
         );
       }
       patchMoral = novaCareer.moralTime - career.moralTime;
@@ -2469,11 +2463,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             divisao: novaCareer.divisao,
           }).catch(() => {});
         }
-        // Persistir manchetes novas
-        if (novas.length > 0) {
-          const semId = novas.map(({ id: _id, ...rest }) => rest);
-          inserirManchetesRemotas(perfil.user_id, semId).catch(() => {});
-        }
+        // As manchetes da rodada já foram persistidas no snapshot da carreira
+        // (persistCareer acima) — não regravar aqui (duplicava headlines).
       }
     }
     // ============ FIM CARREIRA ============
@@ -2780,6 +2771,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       <Shell>
         <CoachSetup
           timeName={userTeam.name}
+          nomeInicial={perfil?.nome}
           onFinish={finishCoachSetup}
           onBack={() => setScreen("menu")}
         />

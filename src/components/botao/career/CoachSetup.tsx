@@ -4,6 +4,8 @@ import type { Coach, TacticalStyle } from "./types";
 
 type Props = {
   timeName: string;
+  /** Identidade já conhecida do login (§13) — o nome vem preenchido, editável. */
+  nomeInicial?: string | undefined;
   onFinish: (coach: Coach) => void;
   onBack: () => void;
 };
@@ -20,9 +22,10 @@ const NARRATIVA = [
   "Antes da primeira coletiva, você precisa se apresentar. Quem é o novo comandante?",
 ];
 
-export function CoachSetup({ timeName, onFinish, onBack }: Props) {
+export function CoachSetup({ timeName, nomeInicial, onFinish, onBack }: Props) {
   const [step, setStep] = useState(0);
-  const [nome, setNome] = useState("");
+  // §13: usuário logado já tem identidade — nunca pedir nome do zero.
+  const [nome, setNome] = useState(nomeInicial ?? "");
   const [apelido, setApelido] = useState("");
   const [cidade, setCidade] = useState("");
   const [estilo, setEstilo] = useState<TacticalStyle>("equilibrado");

@@ -1,4 +1,110 @@
 
+## Arqueologia git + verdade do banco em produção (2026-08-21, 15ª passada)
+
+Investigação com `git fetch --unshallow` (330 commits) + probes REST na
+produção (chave publishable extraída do bundle pracinha.online):
+
+- **`cidadela_rpg.sql`**: criado na Fase 1 (`2e20bb4`) e **deletado no HEAD**
+  (`1044aa5` "Unificar tabelas SQL"). A unificação movia colunas do perfil
+  (profissao/estado/reputacao/bio) para `botao_usuarios.estado_cidadela`.
+  **Produção prova que a unificação NUNCA foi deployada**: REST mostra
+  `column botao_usuarios.estado_cidadela does not exist` (42703), enquanto
+  `cidadela_perfis` EXISTE e os RPCs `obter_perfil_cidadela`/
+  `atualizar_estado_cidadela` FUNCIONAM (P0001 = auth, não 404). Veredito:
+  a fonte única do perfil da Cidadela É `cidadela_perfis`; o commit HEAD
+  era uma meia-migração (frontend duplicava, backend não). Resolução:
+  arquivo restaurado do histórico (fresh deploys precisam dele —
+  `tempo_cidadao.sql`/`cidadela_chat_missoes.sql`/`feira.sql` dependem da
+  tabela) e bloco-fantasma removido do `futebol.sql` (com guarda no teste
+  estrutural).
+- **Origens das regressões de persistência** (pickaxe -S): queue
+  `writeQueues` nasceu em `d4f6b24` mas `aplicarResultadoRemoto`
+  (nascido em `686cbc1`) e o padrão `writeProgress({career: nextCareer})`
+  (solidificado em `d4f6b24`/`4d8608c`) ficavam FORA dela — leitura velha
+  regravada por cima (rollback F5). Corrigido na 14ª passada.
+- **patchSob duplicado**: introduzido no HEAD (`1044aa5`) — delta da partida
+  ia ao ledger no `finishTournamentMatch` E em `aplicarResultadoRemoto`.
+  Removido na 14ª passada.
+- **Rotas/F5**: pickaxe de `navigate`/`redirect` em `src/routes/*.tsx` = 0
+  ocorrências em TODO o histórico. Não existe redirect para /cidadela; os
+  jogos são telas internas (Screen) da rota /cidadela e a tela ativa restaura
+  via sessionStorage. Problema inexistente — confirmado.
+- **§13 nome pedido de novo**: `CoachSetup` nunca recebeu a identidade do
+  login; agora `nomeInicial={perfil?.nome}` preenche o campo (editável).
+  Fluxo permanece: login → coach (prefill) → CareerIntro (Treinador/
+  Proprietário) → ofertas.
+- **Tour mapa do usuário** (rota → tela → escrita): / → hub BRIO; /cidadela →
+  BotaoGame (screens internos: menu/hub/tournament-match/economia/...);
+  /campus → ProfissaoHub/CampusHub; /biblioteca → cartório/livro; /brio →
+  Notícia/comentarista. Escritas: perfil→botao_usuarios; Cidadela-perfil→
+  cidadela_perfis via RPCs; carreira/bolsa/torneio→JSONB
+  `botao_usuarios.progresso_caminpanha` (fila serializada); dinheiro→
+  `user_wallets`/`bank_ledger` via sov_bank_registrar; onboarding→
+  `cidadela_perfis.estado.onboarding` via RPC; missões→`cidadela_missoes`
+  via RPC; feira→`cidadela_inventory/market_listings` via RPCs feira_*;
+  grupo→`cidadela_chat_messages`.
+- **Verificação**: tsc 0 erros; build OK; estruturais + suites jiti OK.
+
+## Persistência total — corrida no JSONB + double-count no ledger (2026-08-21, 14ª passada)
+
+Auditoria integral (prompt "Bolsa não persiste após F5"). Nada de tabela/hook/
+serviço novo — a arquitetura existente foi fechada em volta das fontes únicas.
+
+- **CAUSA RAIZ (rollback F5 da Bolsa e da carreira)**: `aplicarResultadoRemoto`,
+  `inserirManchetesRemotas`, `aplicarEscolhaRemoto` e `iniciarCampanhaRemota`
+  faziam SELECT **fora** da fila de escrita (`writeQueues`) e depois regravam
+  a carreira INTEIRA (`writeProgress({career: nextCareer})`). A leitura solta
+  podia ser anterior a escritas recentes (compra na Bolsa, dividendos,
+  conversas) → a última escrita sobrescrevia com snapshot VELHO → a sessão
+  mostrava o estado novo e o F5 revelava o antigo.
+- **Fix**: `storage.mutateProgressInSupabase(userId, mutator)` — leitura e
+  mutação DENTRO da fila (enqueueProgressWrite compartilhado com o merge).
+  `aplicarResultadoRemoto` agora só sincroniza contadores (partidas/gols) +
+  `coach.sov` autoritativo do ledger — NÃO reconstrói moral/bônus (o snapshot
+  local do persistCareer é o dono). `inserirManchetesRemotas` anexa na carreira
+  fresca da fila. `aplicarEscolhaRemoto`/`iniciarCampanhaRemota` REMOVIDAS
+  (re-aplicavam poder/moral/campanhasJogadas — double-apply após F5).
+- **Double-count no ledger eliminado**: o `patchSob` do finishTournamentMatch
+  somava TUDO (delta da partida + dividendos + desafio + bônus de título) e
+  registrava no ledger, enquanto cada componente TAMBÉM tinha escritor próprio
+  (aplicarResultadoRemoto, bloco de dividendos, desafio, aplicarFimCampanhaRemoto)
+  → saldo do banco divergia ~2× da UI. Agora: delta da partida =
+  `aplicarResultadoRemoto` (chave `partida:{uid}:{fixture}`, módulo
+  parametrizado — MesaOnlineMatch passa `"online"`); dividendos =
+  `dividendo:{t}:r{n}`; desafio = `desafio:{uid}:{desafioId}` (chave NOVA);
+  decisão RPG = `decisao:{uid}:{choiceId}` (chave NOVA); fim de temporada =
+  `fim-campanha:{uid}:t{n}:{div}` (e não re-incrementa títulos quando
+  careerAtual já os somou — bug do contador dobrado).
+- **Manchetes**: BotaoGame não chama mais inserirManchetesRemotas (o snapshot
+  já carrega as headlines; a chamada extra duplicava/rolava back). A função
+  segue para o fluxo ONLINE (MesaOnlineMatch), agora mutate-safe.
+- **Onboarding/estado de profissão**: campo unificado `CidadelaPerfil.estado`
+  (o tipo dizia `estado_cidadela`, o código lia `estado` — um dos dois sempre
+  undefined em runtime). `salvarOnboarding` fazia UPDATE direto em
+  `botao_usuarios.estado_cidadela` (coluna INEXISTENTE → PostgREST 400 engolido
+  → tour nunca persistia no servidor e repetia); agora usa a RPC
+  `atualizar_estado_cidadela` (merge no JSONB do perfil), mesma da migração
+  anônimo→conta. `normalizarPerfil` aceita `estado`/`estado_cidadela` (defesa).
+- **salvarResultado (legado OnlineMatchV2, morto)**: não sobrescreve mais o
+  JSONB inteiro — mescla só `friendlies` via fila (trophies/titles desse fluxo
+  usam formato string[] incompatível com a carreira).
+- **Rotas/F5**: NÃO existe redirect fixo p/ /cidadela — jogos são estado interno
+  da rota /cidadela e a tela ativa restaura via sessionStorage
+  (`botao:resume:v1` inclui "economia"; `cidadela:jogo-ativo:v1` por aba).
+  Nada a corrigir — o problema descrito não existe no código atual.
+- **Gap reportado (não inventado)**: `supabase/migrations/cidadela_rpg.sql`
+  consta no README (passo 4) mas o arquivo NÃO está no repo — a tabela
+  `cidadela_perfis` e as RPCs `obter/escolher/atualizar_estado/obter_world_state`
+  só existem aplicadas em produção. Sem o arquivo, deploy novo quebra.
+- **Testes**: `test-bolsa-persistencia.mts` NOVO (29 invariantes jiti: compra→
+  JSONB→normalizarCareer pós-F5 = cotas/saldo/patrimônio idênticos; venda
+  parcial/total; dividendos idempotentes; saneamento de JSONB corrompido) +
+  `testes/persistencia-unica.test.mjs` NOVO (25 checagens estruturais das
+  invariantes acima). `onclick-guard` atualizado (OnboardingTour→TourContextual).
+  Suites: 38+9+57+52+19+42+14+20 jiti OK, 25+19+6+22+11 estruturais OK,
+  `tsc --noEmit` 0 erros (HEAD tinha 5 pré-existentes — corrigidos),
+  `npm run build` OK.
+
 ## Consistência SOV — banco engolindo erro → "saldo 0" no cache (2026-08-21, 13ª passada)
 
 Vistoria cirúrgica da fonte de verdade SOV (ledger + cache). TODAS as

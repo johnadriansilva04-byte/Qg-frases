@@ -81,7 +81,7 @@ export function profissaoById(id: ProfissaoId | null | undefined): ProfissaoInfo
   return PROFISSOES.find((p) => p.id === id) ?? null;
 }
 
-/** Linha de botao_usuarios (fonte de verdade da identidade do jogador). */
+/** Linha de cidadela_perfis (fonte de verdade da identidade do jogador). */
 export interface CidadelaPerfil {
   id: string;
   user_id: string;
@@ -89,8 +89,8 @@ export interface CidadelaPerfil {
   profissoes_desbloqueadas: ProfissaoId[];
   reputacao_global: number;
   nivel_cidadela: number;
-  /** Estado individual da profissão ativa (EstudanteState, etc.). */
-  estado_cidadela: Record<string, unknown>;
+  /** Estado individual da profissão ativa (EstudanteState, onboarding, etc.). */
+  estado: Record<string, unknown>;
   bio?: string | null;
   created_at: string;
   updated_at: string;
@@ -156,6 +156,7 @@ function perfilLocalInicial(userId: string): CidadelaPerfil {
 
 function normalizarPerfil(raw: Record<string, unknown>, userId: string): CidadelaPerfil {
   const base = perfilLocalInicial(userId);
+  const estadoBruto = raw["estado"] ?? raw["estado_cidadela"];
   return {
     ...base,
     ...(raw as Partial<CidadelaPerfil>),
@@ -167,8 +168,8 @@ function normalizarPerfil(raw: Record<string, unknown>, userId: string): Cidadel
     reputacao_global: Number(raw["reputacao_global"] ?? 0),
     nivel_cidadela: Number(raw["nivel_cidadela"] ?? 1),
     estado:
-      raw["estado"] && typeof raw["estado"] === "object"
-        ? (raw["estado"] as Record<string, unknown>)
+      estadoBruto && typeof estadoBruto === "object"
+        ? (estadoBruto as Record<string, unknown>)
         : {},
   };
 }

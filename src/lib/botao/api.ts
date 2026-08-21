@@ -6,6 +6,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { bonusCadastro } from "@/lib/financial/sovBankApi";
 import { registrarTransacaoSov } from "@/lib/financial/sovApi";
+import { mergeProgressInSupabase } from "@/components/botao/storage";
 
 export type TimeBotao = {
   id: string;
@@ -216,13 +217,20 @@ export async function salvarResultado(params: {
       partidas_vencidas: params.usuario.partidas_vencidas + (params.resultado === "v" ? 1 : 0),
       pontos_soberania:
         saldoSov ?? Math.max(0, params.usuario.pontos_soberania + params.pontos),
-      progresso_caminpanha: progresso as unknown as never,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", params.usuario.user_id)
     .select("*")
     .single();
   if (error) throw error;
+  // O JSONB de campanha é mesclado (nunca sobrescrito): regravar o objeto
+  // inteiro a partir da cópia em memória apagaria chaves salvas por outras
+  // telas (carreira, bolsa, torneio). Só `friendlies` é mesclado — trophies/
+  // titles deste fluxo legado usam formato string[], incompatível com o modo
+  // carreira, e não devem tocar na chave compartilhada.
+  await mergeProgressInSupabase(params.usuario.user_id, {
+    friendlies: progresso.friendlies,
+  });
   return data;
 }
 

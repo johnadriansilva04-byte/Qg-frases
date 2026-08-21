@@ -272,7 +272,7 @@ export function MesaOnlineMatch({
       }
 
       try {
-        await aplicarResultadoRemoto(gf, ga, null);
+        await aplicarResultadoRemoto(gf, ga, null, undefined, "online");
         let manchete: string;
         if (gf > ga)
           manchete = `Vitória online! ${meuNomeCurto} bate ${nomeOponenteCurto} por ${gf} a ${ga}`;

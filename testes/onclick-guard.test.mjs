@@ -60,10 +60,9 @@ expect(useOb.includes("mutar"), "useOnboarding: mutar() centraliza persistence")
 expect(obApi.includes("localStorage"), "onboardingApi: espelha em localStorage");
 expect(obApi.includes("salvarOnboardingLocal"), "onboardingApi: salvarOnboardingLocal definido");
 
-// === OnboardingTour: fase nunca-concluída sem "Pular" (§31) ===
-const tour = ler("src/components/cidadela/OnboardingTour.tsx");
-expect(!/Pular/i.test(tour) || /não.*pular|sem pular/i.test(tour), "OnboardingTour: não exibe 'Pular'");
-expect(tour.includes("overflow-y-auto") || tour.includes("deslize"), "OnboardingTour: scroll descrito/ativo");
+// === Tour contextual: nunca oferece "Pular" (§31) ===
+const tour = ler("src/components/cidadela/TourContextual.tsx");
+expect(!/Pular/i.test(tour) || /não.*pular|sem pular/i.test(tour), "TourContextual: não exibe 'Pular'");
 
 // === §13: Feira renomeada para Marketplace em UI ===
 const celular = ler("src/components/botao/career/CelularConversas.tsx");

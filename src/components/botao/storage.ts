@@ -36,38 +36,78 @@ export type ProgressPatch = Omit<Partial<Progress>, "tournament"> & {
 
 const writeQueues = new Map<string, Promise<void>>();
 
+function enqueueProgressWrite(userId: string, operacao: () => Promise<void>): Promise<void> {
+  const anterior = writeQueues.get(userId) ?? Promise.resolve();
+  const atual = anterior.catch(() => {}).then(operacao);
+  writeQueues.set(userId, atual);
+  try {
+    return atual;
+  } finally {
+    void atual.finally(() => {
+      if (writeQueues.get(userId) === atual) writeQueues.delete(userId);
+    });
+  }
+}
+
 /** Atualiza o JSONB de campanha sem apagar chaves que outras telas acabaram de salvar. */
 export async function mergeProgressInSupabase(
   userId: string,
   patch: ProgressPatch,
   extraColumns?: Record<string, unknown>,
 ): Promise<void> {
-  const anterior = writeQueues.get(userId) ?? Promise.resolve();
-  const atual = anterior
-    .catch(() => {})
-    .then(async () => {
-      const { data, error } = await supabase
-        .from("botao_usuarios")
-        .select("progresso_caminpanha")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (error) throw error;
+  await enqueueProgressWrite(userId, async () => {
+    const { data, error } = await supabase
+      .from("botao_usuarios")
+      .select("progresso_caminpanha")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
 
-      const current = (data?.progresso_caminpanha ?? {}) as Record<string, unknown>;
-      const merged = { ...current, ...patch };
-      const { error: updateError } = await supabase
-        .from("botao_usuarios")
-        .update({ progresso_caminpanha: merged as never, ...(extraColumns ?? {}) })
-        .eq("user_id", userId);
-      if (updateError) throw updateError;
-    });
+    const current = (data?.progresso_caminpanha ?? {}) as Record<string, unknown>;
+    const merged = { ...current, ...patch };
+    const { error: updateError } = await supabase
+      .from("botao_usuarios")
+      .update({ progresso_caminpanha: merged as never, ...(extraColumns ?? {}) })
+      .eq("user_id", userId);
+    if (updateError) throw updateError;
+  });
+}
 
-  writeQueues.set(userId, atual);
-  try {
-    await atual;
-  } finally {
-    if (writeQueues.get(userId) === atual) writeQueues.delete(userId);
-  }
+export type ProgressMutation = {
+  patch: ProgressPatch;
+  extraColumns?: Record<string, unknown>;
+};
+
+/**
+ * Read-modify-write serializado: a leitura acontece DENTRO da fila de escrita,
+ * ou seja, depois que todas as gravações anteriores aterrissaram. Sem isso,
+ * qualquer mutação baseada numa leitura solta (fora da fila) podia regravar um
+ * snapshot VELHO da carreira por cima de dados novos — a interface mostrava o
+ * estado novo na sessão e o F5 revelava o estado antigo (ex.: cotas da Bolsa).
+ */
+export async function mutateProgressInSupabase(
+  userId: string,
+  mutator: (prog: Record<string, unknown>, row: Record<string, unknown>) => ProgressMutation | null,
+): Promise<void> {
+  await enqueueProgressWrite(userId, async () => {
+    const { data, error } = await supabase
+      .from("botao_usuarios")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+
+    const row = (data ?? {}) as Record<string, unknown>;
+    const current = (row["progresso_caminpanha"] ?? {}) as Record<string, unknown>;
+    const mutacao = mutator(current, row);
+    if (!mutacao) return;
+    const merged = { ...current, ...mutacao.patch };
+    const { error: updateError } = await supabase
+      .from("botao_usuarios")
+      .update({ progresso_caminpanha: merged as never, ...(mutacao.extraColumns ?? {}) })
+      .eq("user_id", userId);
+    if (updateError) throw updateError;
+  });
 }
 
 export async function saveProgressToSupabase(userId: string, p: Progress) {

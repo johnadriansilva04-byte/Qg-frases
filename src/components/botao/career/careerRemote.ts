@@ -3,12 +3,17 @@ import type { Json } from "@/integrations/supabase/types";
 import {
   obterSaldoSov,
   registrarTransacaoSov,
+  type SovModule,
 } from "@/lib/financial/sovApi";
 import type { CareerState, Headline } from "./types";
 import type { Fixture, MatchResult } from "../types";
 import { teamByIdSync } from "../data/teams";
 import { EMPTY_CAREER, normalizarCareer } from "./careerStorage";
-import { mergeProgressInSupabase, type Progress } from "../storage";
+import {
+  mergeProgressInSupabase,
+  mutateProgressInSupabase,
+  type Progress,
+} from "../storage";
 import { sortTable } from "../tournament";
 
 /**
@@ -111,18 +116,25 @@ export async function inserirManchetesRemotas(
 ): Promise<Headline[]> {
   if (novas.length === 0) return [];
   try {
-    const prog = await readProgress(userId);
-    const existing = prog.career?.headlines ?? [];
     const withIds: Headline[] = novas.map((h) => ({
       ...h,
       id: `hl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     }));
-    const nextCareer: CareerState = {
-      ...EMPTY_CAREER,
-      ...(prog.career ?? {}),
-      headlines: [...withIds, ...existing].slice(0, 60),
-    };
-    await writeProgress(userId, { career: nextCareer });
+    // Anexa as manchetes à carreira FRESCA (lida dentro da fila serializada) —
+    // nunca regrava um snapshot velho por cima do estado atual.
+    await mutateProgressInSupabase(userId, (prog) => {
+      const career = (prog["career"] ?? {}) as Partial<CareerState>;
+      const existing = Array.isArray(career.headlines) ? career.headlines : [];
+      return {
+        patch: {
+          career: {
+            ...EMPTY_CAREER,
+            ...career,
+            headlines: [...withIds, ...existing].slice(0, 60),
+          },
+        },
+      };
+    });
     return withIds;
   } catch (e) {
     console.error("[careerRemote] inserirManchetes error:", e);
@@ -164,68 +176,63 @@ export async function aplicarResultadoRemoto(
   ultimaEscolha: string | null,
   /** Id do fixture — torna o crédito/débito da partida idempotente no ledger. */
   partidaId?: string,
+  /** Módulo de origem no ledger: 'career' (liga) ou 'online' (mesa). */
+  modulo: SovModule = "career",
 ): Promise<{ soberania: number; moralTime: number; titulos: number } | null> {
   try {
     const { data: sess } = await supabase.auth.getUser();
     const uid = sess?.user?.id;
     if (!uid) return null;
 
-    const { delta, moralDelta } = computeSovereigntyDelta(golsPro, golsContra, ultimaEscolha);
+    const { delta } = computeSovereigntyDelta(golsPro, golsContra, ultimaEscolha);
 
-    const { data: current } = await (supabase as any)
-      .from("botao_usuarios")
-      .select("pontos_soberania, partidas_jogadas, partidas_vencidas, progresso_caminpanha")
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (!current) return null;
-
-    // Fonte de verdade: Banco Central SOV (module 'career'). A chave por
-    // partida impede crédito duplicado em reprocessamento/F5/retry.
+    // Fonte de verdade: Banco Central SOV. A chave por partida impede crédito
+    // duplicado em reprocessamento/F5/retry. Este é o ÚNICO escritor do delta
+    // da partida no ledger (o restante — dividendos, desafio, bônus de fim de
+    // temporada — tem escritor próprio com chave própria).
     const saldoSov = await registrarTransacaoSov(
       uid,
       delta,
       delta >= 0 ? "reward" : "penalty",
-      `Resultado de carreira: ${golsPro}x${golsContra}`,
-      "career",
+      `Resultado de partida (${modulo}): ${golsPro}x${golsContra}`,
+      modulo,
       { golsPro, golsContra, ultimaEscolha },
       partidaId
-        ? { sourceEvent: "partida_carreira", idempotencyKey: `partida:${uid}:${partidaId}` }
+        ? { sourceEvent: "partida", idempotencyKey: `partida:${uid}:${partidaId}` }
         : undefined,
     );
 
-    // Cache legado + fallback local quando o ledger não responde.
-    const novaSob =
-      saldoSov ?? Math.max(0, (current.pontos_soberania ?? 0) + delta);
-    const partidasJog = (current.partidas_jogadas ?? 0) + 1;
-    const partidasVen = (current.partidas_vencidas ?? 0) + (golsPro > golsContra ? 1 : 0);
+    // Sincroniza contadores + saldo autoritativo na carreira FRESCA (leitura
+    // dentro da fila serializada — o snapshot local da partida já foi
+    // persistido pelo chamador e NÃO é reconstruído aqui: moral/bônus/bolsa/
+    // conversas ficam intactos).
+    let resultado: { soberania: number; moralTime: number; titulos: number } | null = null;
+    await mutateProgressInSupabase(uid, (prog, row) => {
+      const career = (prog["career"] ?? EMPTY_CAREER) as CareerState;
+      const novaSob =
+        saldoSov ??
+        Math.max(0, ((row["pontos_soberania"] as number | undefined) ?? career.coach.sov ?? 0) + delta);
+      resultado = {
+        soberania: novaSob,
+        moralTime: career.moralTime ?? 65,
+        titulos: career.coach.titulos ?? 0,
+      };
+      return {
+        patch: {
+          gols_feitos: ((prog["gols_feitos"] as number | undefined) ?? 0) + golsPro,
+          gols_sofridos: ((prog["gols_sofridos"] as number | undefined) ?? 0) + golsContra,
+          career: { ...career, coach: { ...career.coach, sov: novaSob } },
+        },
+        extraColumns: {
+          pontos_soberania: novaSob,
+          partidas_jogadas: ((row["partidas_jogadas"] as number | undefined) ?? 0) + 1,
+          partidas_vencidas:
+            ((row["partidas_vencidas"] as number | undefined) ?? 0) + (golsPro > golsContra ? 1 : 0),
+        },
+      };
+    });
 
-    const prog: ExtendedProgress = (current.progresso_caminpanha ?? {}) as ExtendedProgress;
-    const career = prog.career ?? EMPTY_CAREER;
-    const nextMoral = Math.max(0, Math.min(100, (career.moralTime ?? 65) + moralDelta));
-
-    const nextCareer: CareerState = {
-      ...career,
-      moralTime: nextMoral,
-      bonusProximaPartida: 0,
-      penaltiesProximaPartida: 0,
-      coach: { ...career.coach, sov: novaSob },
-    };
-
-    await writeProgress(
-      uid,
-      {
-        gols_feitos: (prog.gols_feitos ?? 0) + golsPro,
-        gols_sofridos: (prog.gols_sofridos ?? 0) + golsContra,
-        career: nextCareer,
-      },
-      {
-        pontos_soberania: novaSob,
-        partidas_jogadas: partidasJog,
-        partidas_vencidas: partidasVen,
-      },
-    );
-
-    return { soberania: novaSob, moralTime: nextMoral, titulos: career.coach.titulos ?? 0 };
+    return resultado;
   } catch (e) {
     console.error("[careerRemote] aplicarResultado error:", e);
     return null;
@@ -303,7 +310,11 @@ export async function aplicarFimCampanhaRemoto(
     // divisão já atualizadas). O read do banco só é usado como fallback.
     const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
     const career = opcoes?.careerAtual ?? prog.career ?? EMPTY_CAREER;
-    const novoTit = (career.coach.titulos ?? 0) + (posicao === "campeao" ? 1 : 0);
+    // Com careerAtual (fluxo atual) o título JÁ foi somado localmente no fim da
+    // liga — somar de novo dobrava o contador de títulos após F5.
+    const novoTit = opcoes?.careerAtual
+      ? (career.coach.titulos ?? 0)
+      : (career.coach.titulos ?? 0) + (posicao === "campeao" ? 1 : 0);
 
     const nextCareer: CareerState = {
       ...career,
@@ -321,77 +332,6 @@ export async function aplicarFimCampanhaRemoto(
   } catch (e) {
     console.error("[careerRemote] aplicarFimCampanha error:", e);
     return null;
-  }
-}
-
-/** Aplica escolha do treinador (delta poder + moral). */
-export async function aplicarEscolhaRemoto(
-  choiceId: string,
-  deltaPoder: number,
-  deltaMoral: number,
-): Promise<void> {
-  try {
-    const { data: sess } = await supabase.auth.getUser();
-    const uid = sess?.user?.id;
-    if (!uid) return;
-
-    const { data: cur } = await (supabase as any)
-      .from("botao_usuarios")
-      .select("progresso_caminpanha")
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (!cur) return;
-
-    const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
-    const career = prog.career ?? EMPTY_CAREER;
-    const nextCareer: CareerState = {
-      ...career,
-      bonusProximaPartida: (career.bonusProximaPartida ?? 0) + deltaPoder,
-      moralTime: Math.max(0, Math.min(100, (career.moralTime ?? 65) + deltaMoral)),
-      ultimasEscolhas: [...(career.ultimasEscolhas ?? []), choiceId].slice(-8),
-      eventoPendenteId: null,
-    };
-
-    await writeProgress(uid, { career: nextCareer });
-  } catch (e) {
-    console.error("[careerRemote] aplicarEscolha error:", e);
-  }
-}
-
-/** Inicia nova campanha (limpa manchetes e reseta estado). */
-export async function iniciarCampanhaRemota(
-  dificuldade: "amador" | "profissional" | "lenda",
-): Promise<void> {
-  try {
-    const { data: sess } = await supabase.auth.getUser();
-    const uid = sess?.user?.id;
-    if (!uid) return;
-
-    const { data: cur } = await (supabase as any)
-      .from("botao_usuarios")
-      .select("progresso_caminpanha")
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (!cur) return;
-
-    const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
-    const career = prog.career ?? EMPTY_CAREER;
-    const nextCareer: CareerState = {
-      ...career,
-      dificuldadeAtual: dificuldade,
-      moralTime: 65,
-      bonusProximaPartida: 0,
-      penaltiesProximaPartida: 0,
-      eventoPendenteId: null,
-      ultimasEscolhas: [],
-      ultimaRodadaProcessada: -1,
-      headlines: [],
-      coach: { ...career.coach, campanhasJogadas: (career.coach.campanhasJogadas ?? 0) + 1 },
-    };
-
-    await writeProgress(uid, { career: nextCareer });
-  } catch (e) {
-    console.error("[careerRemote] iniciarCampanha error:", e);
   }
 }
 
