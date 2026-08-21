@@ -1,3 +1,40 @@
+## Onboarding re-aplicado + login fora do futebol + auditoria celular/env (2026-08-21, 11ª passada)
+
+- **Re-aplicado o onboarding** (onboardingEngine + OnboardingGate + OnboardingTour
+  + ChatAuthCard + CareerIntro/Marketplace) sem tocar nas variáveis do Supabase
+  — os reverts 361f808/4c58cc1 foram desfeitos (git revert dos reverts +
+  cherry-pick ddf0079); conflitos resolvidos preservando a fiação da 10ª passada.
+- **Login NÃO é tela separada no Futebol**: screen "auth"/AuthScreen removida
+  do BotaoGame; o módulo "Meu Clube / Conta" (ProfileSetup) no hub principal
+  (junto de Amistoso, Amistoso Online, Campeonato Online, Carreira no Campus,
+  Sala de troféus) cuida de login/cadastro. Gates online apontam para
+  "profile"; logout volta ao "menu". AuthScreen segue existindo SÓ dentro do
+  celular (CelularConversas) e no OnboardingTour (ChatAuthCard).
+- **Auditoria do Celular**: `useCelularCarreira` (hook único de /cidadela e
+  /campus) agora espelha TODAS as integrações das escolhas RPG do BotaoGame —
+  SOV no ledger (`efeitos?.sov`), pedido no Cartório (`efeitos?.cartorio`
+  → linkCartorio) e desfecho da História (`onRegistrarPosicao` com a MESMA
+  chave `historia:desfecho:{uid}` — clicar nos dois lugares não duplica).
+  Rotas recebem `perfil` como 2º argumento do hook. Onde ele aparece (tudo
+  enrolado): BotaoGame (Shell/durante partida), /cidadela (dentro do
+  OnboardingGate), /campus (dentro do OnboardingGate), OnboardingTour (exclusivo).
+  Apps → o que carrega: Contatos (career.conversas), Rede (feedCidadela),
+  Missões (pracinhaCore RPC), Grupo (cidadela_chat_messages+membros RPC),
+  Marketplace (feira_* RPC), Banco (sovBankApi), Arquivo (historia.pergaminhos),
+  Perfil (cidadela_perfil_publico RPC). Salva: responder/escolher/excluir
+  (saveCareerToSupabase), bio (cidadela_atualizar_perfil), ofertas
+  (feira_* no ledger), mídia de conversa, Tempo de Cidadão (heartbeat RPC),
+  Grupo leitura (localStorage `cidadela:grupo:visto`).
+- **Variáveis de ambiente** (.env.example atualizado): Supabase
+  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`/`VITE_SUPABASE_PUBLISHABLE_KEY`
+  /`SUPABASE_SERVICE_ROLE_KEY`; Ads `VITE_ADSENSE_CLIENT`/`VITE_ADSTERRA_INVOKE_URL`
+  /`VITE_MONETAG_SRC`/`VITE_MONETAG_ZONE` (defaults em src/lib/adManager.ts).
+  Leu bem com `readEnv(name)`; chaves legadas n8n/Cloudflare são legadas de
+  infra do repo (não usadas em src).
+- **Verificação**: `tsc --noEmit` 0 erros, `npm run build` OK; testes: 38+9
+  (conversas/entregas) + 42+14 (torcida) + 57 (temporada) + 52 (IA) + 19 (F5)
+  + 22 (onboarding) + 11 (marketplace) + 19 (onclick-guard) = 283 OK.
+
 ## Torcida global + IA estratégica + fim de temporada (2026-08-21, 10ª passada)
 
 Implementação definitiva do Modo Carreira sobre a 9ª passada (66bec00):
