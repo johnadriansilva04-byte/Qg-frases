@@ -108,7 +108,8 @@ function CidadelaCompView() {
     onEnviarMensagem: handleEnviarMensagemCelular,
     onEscolhaRpg: handleEscolhaRpgCelular,
     onExcluirConversa: handleExcluirConversaCelular,
-  } = useCelularCarreira(perfil?.user_id ?? null);
+    onRegistrarPosicao: handleRegistrarPosicaoCelular,
+  } = useCelularCarreira(perfil?.user_id ?? null, perfil);
 
   // Identidade na Cidadela: carrega a profissão do jogador autenticado.
   useEffect(() => {
@@ -402,6 +403,7 @@ function CidadelaCompView() {
         onEnviarMensagem={handleEnviarMensagemCelular}
         onExcluirConversa={handleExcluirConversaCelular}
         onEscolhaRpg={handleEscolhaRpgCelular}
+        onRegistrarPosicao={handleRegistrarPosicaoCelular}
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
         saldoSov={saldoSov}

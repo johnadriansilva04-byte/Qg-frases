@@ -62,7 +62,8 @@ function CampusView() {
     onEnviarMensagem,
     onEscolhaRpg,
     onExcluirConversa,
-  } = useCelularCarreira(perfil?.user_id ?? null);
+    onRegistrarPosicao,
+  } = useCelularCarreira(perfil?.user_id ?? null, perfil);
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
       {/* Efeito de grade cyberpunk */}
@@ -242,6 +243,7 @@ function CampusView() {
         onEnviarMensagem={onEnviarMensagem}
         onExcluirConversa={onExcluirConversa}
         onEscolhaRpg={onEscolhaRpg}
+        onRegistrarPosicao={onRegistrarPosicao}
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
         saldoSov={saldoSov}
