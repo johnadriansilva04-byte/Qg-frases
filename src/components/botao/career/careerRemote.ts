@@ -162,6 +162,8 @@ export async function aplicarResultadoRemoto(
   golsPro: number,
   golsContra: number,
   ultimaEscolha: string | null,
+  /** Id do fixture — torna o crédito/débito da partida idempotente no ledger. */
+  partidaId?: string,
 ): Promise<{ soberania: number; moralTime: number; titulos: number } | null> {
   try {
     const { data: sess } = await supabase.auth.getUser();
@@ -177,7 +179,8 @@ export async function aplicarResultadoRemoto(
       .maybeSingle();
     if (!current) return null;
 
-    // Fonte de verdade: Banco Central SOV (module 'career').
+    // Fonte de verdade: Banco Central SOV (module 'career'). A chave por
+    // partida impede crédito duplicado em reprocessamento/F5/retry.
     const saldoSov = await registrarTransacaoSov(
       uid,
       delta,
@@ -185,6 +188,9 @@ export async function aplicarResultadoRemoto(
       `Resultado de carreira: ${golsPro}x${golsContra}`,
       "career",
       { golsPro, golsContra, ultimaEscolha },
+      partidaId
+        ? { sourceEvent: "partida_carreira", idempotencyKey: `partida:${uid}:${partidaId}` }
+        : undefined,
     );
 
     // Cache legado + fallback local quando o ledger não responde.
@@ -230,6 +236,16 @@ export async function aplicarResultadoRemoto(
 export async function aplicarFimCampanhaRemoto(
   posicao: "campeao" | "vice" | "terceiro" | "quarto" | "fora",
   dificuldade: "amador" | "profissional" | "lenda",
+  opcoes?: {
+    /** Carreira LOCAL autoritativa (pós-partida). Sem ela, a função lia o
+     * JSONB do banco FORA da fila de escrita serializada — podia regravar o
+     * estado PRÉ-promoção por cima das novas ligas/composições (race que
+     * desfazia a promoção após F5). */
+    careerAtual?: CareerState;
+    /** Chaves da temporada encerrada — tornam o bônus idempotente no ledger. */
+    temporada?: number;
+    divisao?: string;
+  },
 ): Promise<{ soberania: number; titulos: number } | null> {
   try {
     const { data: sess } = await supabase.auth.getUser();
@@ -258,6 +274,7 @@ export async function aplicarFimCampanhaRemoto(
     const totalBonus = bonusPos + bonusDif;
 
     // Fonte de verdade: Banco Central SOV — bônus de posição final ('career').
+    // Chave por temporada+divisão: o encerramento NÃO paga duas vezes (§19).
     const saldoSov = await registrarTransacaoSov(
       uid,
       totalBonus,
@@ -265,6 +282,12 @@ export async function aplicarFimCampanhaRemoto(
       `Fim de campanha: posição ${posicao} (${dificuldade})`,
       "career",
       { posicao, dificuldade, totalBonus },
+      opcoes?.temporada != null
+        ? {
+            sourceEvent: "fim_campanha",
+            idempotencyKey: `fim-campanha:${uid}:t${opcoes.temporada}:${opcoes.divisao ?? "div"}`,
+          }
+        : undefined,
     );
 
     const { data: cur } = await (supabase as any)
@@ -276,8 +299,10 @@ export async function aplicarFimCampanhaRemoto(
 
     const novaSob =
       saldoSov ?? Math.max(0, (cur.pontos_soberania ?? 0) + totalBonus);
+    // Base autoritativa: a carreira local pós-partida (com ligas/composições/
+    // divisão já atualizadas). O read do banco só é usado como fallback.
     const prog: ExtendedProgress = (cur.progresso_caminpanha ?? {}) as ExtendedProgress;
-    const career = prog.career ?? EMPTY_CAREER;
+    const career = opcoes?.careerAtual ?? prog.career ?? EMPTY_CAREER;
     const novoTit = (career.coach.titulos ?? 0) + (posicao === "campeao" ? 1 : 0);
 
     const nextCareer: CareerState = {

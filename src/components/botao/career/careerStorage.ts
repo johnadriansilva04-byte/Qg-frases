@@ -82,7 +82,29 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     entrevistas: Array.isArray(bruta.entrevistas) ? bruta.entrevistas : [],
     eventoPendenteId: typeof bruta.eventoPendenteId === "string" ? bruta.eventoPendenteId : null,
     historia: normalizarHistoria(bruta.historia),
+    // Torcida global: saneia valores corrompidos (fans negativos/NaN, seq
+    // quebrada) sem recriar o estado — a soma global é mantida pelo engine.
+    torcida: normalizarTorcida(bruta.torcida),
   };
+}
+
+/** Saneia o mapa de torcida vindo do JSONB (dados antigos/corrompidos). */
+function normalizarTorcida(
+  bruta: CareerState["torcida"],
+): CareerState["torcida"] {
+  if (!bruta || typeof bruta !== "object") return undefined;
+  const limpa: NonNullable<CareerState["torcida"]> = {};
+  for (const [id, t] of Object.entries(bruta)) {
+    if (!t || typeof t !== "object") continue;
+    const fans = Number((t as { fans?: unknown }).fans);
+    const seq = Number((t as { seq?: unknown }).seq);
+    if (!Number.isFinite(fans) || fans < 0) continue;
+    limpa[id] = {
+      fans: Math.round(fans),
+      seq: Number.isFinite(seq) ? Math.max(-38, Math.min(38, Math.round(seq))) : 0,
+    };
+  }
+  return Object.keys(limpa).length > 0 ? limpa : undefined;
 }
 
 const EMPTY_COACH: Coach = {

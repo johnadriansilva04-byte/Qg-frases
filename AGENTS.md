@@ -1,3 +1,49 @@
+## Torcida global + IA estratégica + fim de temporada (2026-08-21, 10ª passada)
+
+Implementação definitiva do Modo Carreira sobre a 9ª passada (66bec00):
+
+- **`career/torcidaEngine.ts` (NOVO, PURO)**: 1.000.000 de torcedores globais,
+  soma EXATA e invariante (zero-sum) em TODA operação. `distribuirTorcidaInicial`
+  (peso = power², maior resto), `aplicarResultadoTorcida` (vitória 0,6-2,2% +
+  bônus sequência; empate migra 0,1% p/ quem VINHA de sequência — comparar
+  ANTES de zerar seqs), `aplicarTituloTorcida` (campeão suga 0,3% de todos),
+  `garantirTorcida` (clubes novos entram com fatia ≤5% e o mapa é
+  RENORMALIZADO a 1M — também cura estados degradados pós-sanitização),
+  `forcaEfetiva` = qualidade + bônus torcida (≤+6) + forma (±3), clamp 28-99.
+- **`career/torcidaIntegracao.ts` (NOVO)**: ponte carreira↔engine (cópia
+  profunda por clube — o engine muta; NUNCA passar estado React direto).
+  `garantirTorcidaUniverso` idempotente, `aplicarRodadaTorcida` (todos os
+  jogos da rodada nas 3 divisões), `aplicarTitulosDaTemporada`,
+  `forcasDaTemporada`, `formaDoJogador` (derivada da seq real).
+- **Simulação usa força efetiva**: `tournament.simulateMatch` aceita
+  `powerOverrides`; `seasonEngine.simularRodadaDivisoes` consome o mapa.
+  Torcida é UMA variável — nunca decide sozinha (testado: time 40 com 100%
+  da torcida não passa de 49).
+- **`engine/estrategia.ts` (NOVO, PURO)**: cérebro da CPU. `decidirIntencao`
+  PURO (escore/tempo → atacar/contra_atacar/reter/defender/bloquear) +
+  `analisarPadroes` (janela de 16 tiros do jogador — lado/força/zona; só
+  reage com amostra ≥6) + `perfilDoClube` (força→precisão/leitura) +
+  `balancearPerfil` (jogador invicto → CPU mais disciplinada, teto 0,97;
+  má fase → alívio com piso 0,25). LLM opcional (`gerarIntencaoLlm` via
+  AIService.generateText) SEMPRE validado por `validarIntencaoLlm` com
+  fallback determinístico. `executarIntencao` traduz intenção → impulso
+  físico (defesa do goleiro preservada).
+- **MatchView**: prop `aiContext` (BotaoGame passa força/torcida/forma);
+  tiros do jogador registrados em `onPointerUp` (handlePlayerShoot) —
+  memória POR PARTIDA, reseta a cada jogo.
+- **Fim de temporada DEFINITIVO**: `SeasonEndScreen.tsx` (NOVO) com dados
+  REAIS via `seasonEngine.resumoTemporada` (determinístico — re-derivável
+  pós-F5). Renderiza DEPOIS da MatchEndScreen (`screen !== "match-end"`).
+  `careerRemote.aplicarFimCampanhaRemoto` race-safe (lê dentro da fila
+  serializada). Hidratação DERIVA o veredito de `ligasConcluidas` — F5 no
+  fim da temporada não trava mais a carreira (dead-end eliminado).
+- **Saldo SOV no celular**: barra de status (Coins) no CelularConversas via
+  prop `saldoSov`; BotaoGame e `useCelularCarreira` buscam `obterSaldoSov`
+  (user_wallets autoritativo) com re-busca 1,8s após mudança do cache local.
+- **Testes**: test-torcida.mts (42), test-torcida-integracao.mts (14),
+  test-temporada.mts (57), test-ia.mts (52), test-f5.mts (19) — jiti.
+  Legados: test-conversas (38) + test-entregas (9). tsc 0 erros, build OK.
+
 ## Celular: UMA conversa por contato + F5 sem reset (2026-08-21, 9ª passada)
 
 Auditoria completa sobre o commit 361f808 (revert do onboarding). Causas-raiz

@@ -131,12 +131,15 @@ export function criarLigasDaTemporada(
 /**
  * Simula a mesma rodada nas três divisões. O jogo real do usuário já foi aplicado
  * na liga ativa pelo chamador, então a função só resolve fixtures ainda abertos.
+ * `powerOverrides` (força efetiva = qualidade + torcida + forma) alimenta a
+ * simulação — sem ele, cai no power base de cada clube.
  */
 export function simularRodadaDivisoes(
   ligas: LigasTemporada,
   userTeamId: string,
   stage: string,
   difficulty: Difficulty,
+  powerOverrides?: Record<string, number>,
 ): LigasTemporada {
   const next = structuredClone(ligas);
   for (const divisao of DIVISOES) {
@@ -145,7 +148,7 @@ export function simularRodadaDivisoes(
     for (const fixture of liga.groupFixtures) {
       if (fixture.played || fixture.stage !== stage) continue;
       if (fixture.homeId === userTeamId || fixture.awayId === userTeamId) continue;
-      const result = simulateMatch(fixture.homeId, fixture.awayId, difficulty);
+      const result = simulateMatch(fixture.homeId, fixture.awayId, difficulty, false, powerOverrides);
       applyFixtureResult(liga, fixture, result);
     }
     if (liga.groupFixtures.every((fixture) => fixture.played)) {
@@ -258,6 +261,81 @@ export function divisaoComTime(userTeamId: string, ligas: LigasTemporada): Divis
     if (ligas[divisao].groups.some((g) => g.teamIds.includes(userTeamId))) return divisao;
   }
   return "serie-c";
+}
+
+/* ------------------------------------------------------------------------ */
+/* Resumo da temporada (determinístico — re-derivável a qualquer momento)    */
+/* ------------------------------------------------------------------------ */
+
+export interface ResumoDivisao {
+  divisao: Divisao;
+  campeaoId: string | null;
+  /** 2 clubes que sobem (A não tem; C/B têm). */
+  promovidosIds: string[];
+  /** 2 clubes que caem (C não tem; A/B têm). */
+  rebaixadosIds: string[];
+  tabela: string[];
+}
+
+export interface ResumoTemporada {
+  divisoes: ResumoDivisao[];
+  /** Divisão em que o usuário jogou a temporada encerrada. */
+  divisaoUsuario: Divisao;
+  posicaoUsuario: number;
+  usuarioCampeao: boolean;
+  usuarioPromovido: boolean;
+  usuarioRebaixado: boolean;
+}
+
+/**
+ * Deriva campeões, promovidos (2) e rebaixados (2) de cada divisão a partir
+ * das tabelas FINAIS persistidas. Como é puro e determinístico, pode ser
+ * recalculado após F5 sem risco de duplicar efeitos — é a mesma regra de
+ * `processarResultadoTemporada`, exposta para a tela de encerramento.
+ */
+export function resumoTemporada(ligas: LigasTemporada, userTeamId: string): ResumoTemporada {
+  const montar = (divisao: Divisao): ResumoDivisao => {
+    const tabela = sortTable(ligas[divisao].groups[0]?.table ?? []).map((r) => r.teamId);
+    return {
+      divisao,
+      campeaoId: tabela[0] ?? null,
+      promovidosIds: divisao === "serie-a" ? [] : tabela.slice(0, 2),
+      rebaixadosIds: divisao === "serie-c" ? [] : tabela.slice(-2),
+      tabela,
+    };
+  };
+  const divisoes: ResumoDivisao[] = [montar("serie-a"), montar("serie-b"), montar("serie-c")];
+  const divisaoUsuario = divisaoComTime(userTeamId, ligas);
+  const resumoUser = divisoes.find((d) => d.divisao === divisaoUsuario)!;
+  const posicaoUsuario = Math.max(1, resumoUser.tabela.indexOf(userTeamId) + 1);
+  return {
+    divisoes,
+    divisaoUsuario,
+    posicaoUsuario,
+    usuarioCampeao: resumoUser.campeaoId === userTeamId,
+    usuarioPromovido: resumoUser.promovidosIds.includes(userTeamId),
+    usuarioRebaixado: resumoUser.rebaixadosIds.includes(userTeamId),
+  };
+}
+
+/** Resultados de UMA rodada em todas as divisões (para dinâmica de torcida). */
+export function resultadosDaRodada(
+  ligas: LigasTemporada,
+  stage: string,
+): Array<{ homeId: string; awayId: string; homeGoals: number; awayGoals: number }> {
+  const resultados: Array<{ homeId: string; awayId: string; homeGoals: number; awayGoals: number }> = [];
+  for (const divisao of DIVISOES) {
+    for (const f of ligas[divisao]?.groupFixtures ?? []) {
+      if (f.stage !== stage || !f.played || !f.result) continue;
+      resultados.push({
+        homeId: f.homeId,
+        awayId: f.awayId,
+        homeGoals: f.result.homeGoals,
+        awayGoals: f.result.awayGoals,
+      });
+    }
+  }
+  return resultados;
 }
 
 export function ativoDoUsuario(ligas: LigasTemporada, userTeamId: string): Tournament | null {

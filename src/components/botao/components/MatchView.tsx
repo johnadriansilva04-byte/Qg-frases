@@ -9,6 +9,23 @@ import {
   type Side,
 } from "../engine/physics";
 import { planAiShot } from "../engine/ai";
+import {
+  analisarPadroes,
+  balancearPerfil,
+  decidirIntencao,
+  executarIntencao,
+  extrairJson,
+  novaMemoriaPartida,
+  perfilDoClube,
+  promptEstrategia,
+  registrarTiroJogador,
+  validarIntencaoLlm,
+  type EstadoPartida,
+  type FormaJogador,
+  type IntencaoEstrategica,
+  type MemoriaPartida,
+} from "../engine/estrategia";
+import { AIService } from "../ai/AIService";
 import { teamByIdSync, type Team } from "../data/teams";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
@@ -48,6 +65,13 @@ type Props = {
   onGolAdversario?: (resetHandler: () => void) => void; // Registra handler para reset de bola quando o adversário marca gol
   score?: { home: number; away: number }; // Placar sincronizado do servidor (para modo online)
   formation?: Array<[number, number]>; // Formação personalizada PS2 (5 posições)
+  /** Contexto estratégico da CPU (força efetiva com torcida + forma do
+   *  jogador para o balanceamento dinâmico). Sem ele, usa o power base. */
+  aiContext?: {
+    forcaCpu: number;
+    forcaJogador: number;
+    formaJogador: FormaJogador;
+  };
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -71,6 +95,7 @@ export function MatchView({
   onGolAdversario,
   score: serverScore,
   formation,
+  aiContext,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -527,21 +552,65 @@ export function MatchView({
     }
   }, [isOnline, onGolAdversario]);
 
+  // === Cérebro estratégico da CPU (§9-§17) ===
+  // Memória temporária da partida: observa os tiros do jogador e alimenta a
+  // leitura de padrões. Vive só durante a partida (estado temporário, §18).
+  const memoriaPartidaRef = useRef<MemoriaPartida>(novaMemoriaPartida());
+  // Intenção refinada pelo LLM para o PRÓXIMO turno (prefetch assíncrono —
+  // nunca bloqueia a jogada; validação estrita antes de usar).
+  const intencaoLlmRef = useRef<IntencaoEstrategica | null>(null);
+
   // jogada da CPU (desabilitado no modo online)
   useEffect(() => {
     if (!hasCpu || ended || turn !== cpuSide || simRef.current) return;
     const cpuTeam = cpuSide === "home" ? home : away;
+    const jogadorTeam = cpuSide === "home" ? away : home;
     const t = setTimeout(() => {
-      const shot = planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
+      // Estado REAL da partida (§17): placar, jogadas restantes, forças.
+      const estado: EstadoPartida = {
+        golsCpu: cpuSide === "home" ? score.home : score.away,
+        golsJogador: cpuSide === "home" ? score.away : score.home,
+        turnosRestantes: turnsLeft,
+        dificuldade: difficulty,
+        forcaCpu: aiContext?.forcaCpu ?? cpuTeam.power,
+        forcaJogador: aiContext?.forcaJogador ?? jogadorTeam.power,
+      };
+      // Perfil do clube + balanceamento dinâmico pela forma do jogador (§13-15).
+      const perfil = balancearPerfil(
+        perfilDoClube(estado.forcaCpu),
+        aiContext?.formaJogador ?? { sequenciaVitorias: 0, sequenciaDerrotas: 0, invicto: false },
+      );
+      // Intenção: refinamento LLM validado do turno anterior OU heurística
+      // determinística (sempre disponível — o jogo nunca trava sem LLM).
+      const intencao = intencaoLlmRef.current ?? decidirIntencao(estado, memoriaPartidaRef.current, perfil);
+      intencaoLlmRef.current = null;
+      // O motor físico executa O COMO: intenção → impulso válido (§16).
+      const shot =
+        executarIntencao(discsRef.current, cpuSide, intencao, difficulty, cpuTeam.power) ??
+        planAiShot(discsRef.current, cpuSide, difficulty, cpuTeam.power);
       if (!shot) return;
       const d = discsRef.current.find((x) => x.id === shot.discId);
       if (!d) return;
       d.vx = shot.ix;
       d.vy = shot.iy;
       runSimulation();
+
+      // Prefetch: pede ao LLM (se disponível) o refinamento da PRÓXIMA
+      // intenção, já com os padrões observados. Saída inválida → descartada.
+      const padroes = analisarPadroes(memoriaPartidaRef.current);
+      const sugestao = decidirIntencao(estado, memoriaPartidaRef.current, perfil);
+      void AIService.generatePersona(
+        "Treinador tático de futebol de botão. Responda apenas JSON válido.",
+        promptEstrategia(estado, padroes, sugestao),
+      ).then((texto) => {
+        if (!texto) return;
+        const bruta = extrairJson(texto);
+        const valida = validarIntencaoLlm(bruta);
+        if (valida) intencaoLlmRef.current = valida;
+      });
     }, 750);
     return () => clearTimeout(t);
-  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation]);
+  }, [hasCpu, turn, cpuSide, difficulty, ended, home, away, runSimulation, score, turnsLeft, aiContext]);
 
   // Timer de 10 segundos para jogar (apenas no modo offline)
   useEffect(() => {
@@ -624,6 +693,17 @@ export function MatchView({
 
     d.vx = ix;
     d.vy = iy;
+
+    // Memória da partida (§11): a CPU observa direção/força/zona do tiro do
+    // jogador para detectar padrões e adaptar a estratégia.
+    if (!isOnline) {
+      const mag = Math.hypot(ix, iy) || 1;
+      memoriaPartidaRef.current = registrarTiroJogador(memoriaPartidaRef.current, {
+        dirX: ix / mag,
+        power,
+        zonaY: d.y / FIELD.h,
+      });
+    }
 
     // Marcar jogada como em andamento e marcar que já jogou neste turno
     jogadaEmAndamentoRef.current = true;

@@ -277,6 +277,9 @@ export type CareerState = {
   // História principal (John Adrian): capítulos, pergaminhos, Narrative Ledger.
   // OPCIONAL — só avança quando o jogador conclui entrevistas pós-partida.
   historia?: import("./historia/types").HistoriaState | undefined;
+  // Torcida global do universo (Σ = 1.000.000, zero-sum): cada clube tem
+  // fans + sequência. Persistida no JSONB da carreira — sobrevive a F5.
+  torcida?: import("./torcidaEngine").TorcidaState | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

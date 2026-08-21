@@ -17,9 +17,13 @@ import {
   responderContatoNpc,
 } from "@/components/botao/career/rpg/rpgEngine";
 import type { CareerState } from "@/components/botao/career/types";
+import { obterSaldoSov } from "@/lib/financial/sovApi";
 
 export function useCelularCarreira(userId: string | null) {
   const [career, setCareer] = useState<CareerState | null>(null);
+  // Saldo REAL de SOV (user_wallets via bank_ledger) — barra de status do
+  // celular também fora do Modo Carreira (/cidadela, /campus).
+  const [saldoSovRemoto, setSaldoSovRemoto] = useState<number | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -37,6 +41,23 @@ export function useCelularCarreira(userId: string | null) {
       vivo = false;
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setSaldoSovRemoto(null);
+      return;
+    }
+    let vivo = true;
+    void obterSaldoSov(userId).then((s) => {
+      if (vivo && s != null) setSaldoSovRemoto(s);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [userId, career?.coach.sov]);
+
+  // Remoto autoritativo quando disponível; cache da carreira como espelho.
+  const saldoSov = saldoSovRemoto ?? career?.coach.sov ?? null;
 
   const persist = (c: CareerState) => {
     setCareer(c);
@@ -81,5 +102,5 @@ export function useCelularCarreira(userId: string | null) {
     persist({ ...career, conversas: career.conversas.filter((c) => c.id !== conversaId) });
   };
 
-  return { career, onEnviarMensagem, onEscolhaRpg, onExcluirConversa };
+  return { career, saldoSov, onEnviarMensagem, onEscolhaRpg, onExcluirConversa };
 }

@@ -108,6 +108,7 @@ function Cidadela() {
   // Modo Carreira — responder/escolher/excluir persistem no Supabase).
   const {
     career,
+    saldoSov,
     onEnviarMensagem: handleEnviarMensagemCelular,
     onEscolhaRpg: handleEscolhaRpgCelular,
     onExcluirConversa: handleExcluirConversaCelular,
@@ -434,6 +435,7 @@ function Cidadela() {
         onEscolhaRpg={handleEscolhaRpgCelular}
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
+        saldoSov={saldoSov}
         statsCarreira={
           career
             ? {

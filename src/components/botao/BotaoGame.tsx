@@ -97,7 +97,7 @@ import {
   type CartorioTipo,
 } from "./career/rpg/cartorioApi";
 import { anexarPost, gerarPostManual, gerarPostPartida } from "./career/rpg/socialEngine";
-import { registrarTransacaoSov } from "@/lib/financial/sovApi";
+import { obterSaldoSov, registrarTransacaoSov } from "@/lib/financial/sovApi";
 import {
   aplicarRitualNaCarreira,
   consumirRitualPendente,
@@ -106,7 +106,6 @@ import {
 } from "./career/trilhaIntegracao";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
-import { SeasonTransition } from "./career/SeasonTransition";
 import { LoadingScreen } from "./career/LoadingScreen";
 import { AIService } from "./ai/AIService";
 import { relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
@@ -180,9 +179,18 @@ import {
   criarLigasDaTemporada,
   ligasConcluidas,
   processarResultadoTemporada,
+  resumoTemporada,
   simularRodadaDivisoes,
   type LigasTemporada,
 } from "./career/seasonEngine";
+import {
+  aplicarRodadaTorcida,
+  aplicarTitulosDaTemporada,
+  formaDoJogador,
+  forcasDaTemporada,
+  garantirTorcidaUniverso,
+} from "./career/torcidaIntegracao";
+import { SeasonEndScreen } from "./career/SeasonEndScreen";
 import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 import { carregarPerfilCidadela } from "@/lib/cidadela/profissoes";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
@@ -249,8 +257,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
   // Veredito de fim de temporada (continua/Game Over). Quando presente, exibe
-  // a tela SeasonTransition por cima de tudo.
+  // a SeasonEndScreen animada por cima de tudo. Também é DERIVADO das ligas
+  // concluídas na hidratação — F5 no fim da temporada não trava a carreira.
   const [veredito, setVeredito] = useState<VereditoTemporada | null>(null);
+  // Saldo REAL de SOV (user_wallets via bank_ledger) — barra de status do
+  // celular. O remoto é autoritativo; o cache da carreira cobre o instante
+  // entre a partida e a confirmação do ledger.
+  const [saldoSovRemoto, setSaldoSovRemoto] = useState<number | null>(null);
   // Fixture de copa ativa (para distinguir do fixture de liga no finishTournament).
   const [currentCopaFix, setCurrentCopaFix] = useState<Fixture | null>(null);
   // Dados da tela de fim de jogo (estatísticas + monetização discreta).
@@ -669,10 +682,22 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         if (careerHidratada) {
           careerHidratada = garantirContatosRpg(careerHidratada);
           careerHidratada = convidarRitualTrilha(careerHidratada);
+          // Universo de torcida: cria a distribuição inicial (1M) ou cobre
+          // clubes faltantes — sempre zero-sum, persistido no JSONB.
+          careerHidratada = garantirTorcidaUniverso(careerHidratada, userTeam);
         }
 
         setTour(torneioAtivo);
         setCareer(careerHidratada);
+        // F5 no fim da temporada: o veredito é DERIVADO das ligas concluídas
+        // (idempotente — após iniciar a nova temporada as ligas nascem zeradas
+        // e a condição fica falsa). Sem isso, o refresh deixava a carreira
+        // travada em "Campanha encerrada" sem caminho para a próxima temporada.
+        if (careerHidratada?.ligas && ligasConcluidas(careerHidratada.ligas)) {
+          setVeredito(
+            avaliarFimTemporada(careerHidratada.coach.sov, careerHidratada.divisao),
+          );
+        }
         if (remoteCareer && careerHidratada) {
           // Repara registros antigos que tinham coach vazio no JSONB e
           // persiste contatos/convite recém-gerados.
@@ -707,6 +732,34 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     void hidratarCampanha(userId);
     void carregarPerfilCidadela(userId).then(setPerfilCidadela).catch(() => {});
   }, [perfil?.user_id, hidratarCampanha, zerarEstadoDaConta]);
+
+  // Saldo REAL de SOV: busca autoritativa no ledger. Refaz a leitura quando o
+  // cache da carreira muda (pós-partida) com pequeno atraso para a escrita do
+  // ledger já ter aterrissado — o celular nunca exibe valor defasado por muito
+  // tempo nem precisa confiar no cache local.
+  useEffect(() => {
+    const uid = perfil?.user_id;
+    if (!uid) {
+      setSaldoSovRemoto(null);
+      return;
+    }
+    let vivo = true;
+    const buscar = () => {
+      void obterSaldoSov(uid).then((s) => {
+        if (vivo && s != null) setSaldoSovRemoto(s);
+      });
+    };
+    buscar();
+    const t = window.setTimeout(buscar, 1800);
+    return () => {
+      vivo = false;
+      window.clearTimeout(t);
+    };
+  }, [perfil?.user_id, career?.coach.sov]);
+
+  // Saldo exibido: remoto (autoritativo) quando disponível; senão o cache da
+  // carreira (atualizado localmente no instante da partida).
+  const saldoSov = saldoSovRemoto ?? career?.coach.sov ?? null;
 
   const handleLogout = async () => {
     if (emPartidaOnline) {
@@ -965,8 +1018,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       conversas: [],
       coach: { ...c.coach, campanhasJogadas: c.coach.campanhasJogadas + 1 },
     };
-    // Celular nasce com os contatos-base (Valéria, Dona Cida, Zé e Pracinha).
-    persistCareer(garantirContatosRpg(novaCareer));
+    // Celular nasce com os contatos-base (Valéria, Dona Cida, Zé e Pracinha)
+    // e o universo de torcida (1M distribuído por força, zero-sum).
+    persistCareer(garantirTorcidaUniverso(garantirContatosRpg(novaCareer), userTeam));
 
     // Se estiver logado, sincronizar com Supabase
     if (perfil?.user_id) {
@@ -1219,7 +1273,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         campanhasJogadas: career.coach.campanhasJogadas + 1,
       },
     };
-    persistCareer(novaCareer);
+    // A torcida atravessa temporadas (clubes promovidos/rebaixados levam seus
+    // torcedores); garante cobertura se o universo mudou.
+    persistCareer(garantirTorcidaUniverso(novaCareer, userTeam));
     if (perfil?.user_id) void registrarTemporadaRemota(perfil.user_id, novaCareer);
     setVeredito(null);
     setCurrentCopaFix(null);
@@ -1870,6 +1926,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const fx = t.groupFixtures.find((x) => x.id === current.id)!;
       applyResult(t, fx, r);
 
+      // Força efetiva (qualidade + torcida + forma) alimenta a simulação
+      // de TODOS os clubes — a torcida pesa no universo inteiro (§7-§8).
+      const forcas = career ? forcasDaTemporada(career, userTeam) : {};
+      const overrides = Object.keys(forcas).length > 0 ? forcas : undefined;
+
       // Simula apenas os jogos da mesma rodada que NÃO envolvem o usuário
       const currentRound = fx.stage;
       t.groupFixtures
@@ -1880,7 +1941,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             x.homeId !== t.userTeamId &&
             x.awayId !== t.userTeamId,
         )
-        .forEach((x) => applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty)));
+        .forEach((x) =>
+          applyResult(t, x, simulateMatch(x.homeId, x.awayId, t.difficulty, false, overrides)),
+        );
 
       if (career?.ligas) {
         const ligasParciais: LigasTemporada = {
@@ -1892,6 +1955,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           userTeam.id,
           currentRound,
           t.difficulty,
+          overrides,
         );
         t = ligasAtualizadas[career.divisao];
       }
@@ -2193,6 +2257,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           novaCareer = { ...novaCareer, bolsa: div.bolsa };
         }
       }
+      // === Torcida global (§5-§8): a rodada INTEIRA migra torcedores — o
+      // jogo real do usuário e todos os simulados das 3 divisões. No fim da
+      // temporada, cada campeão atrai torcedores do resto do universo.
+      // Tudo zero-sum (Σ = 1.000.000) e persistido no JSONB da carreira.
+      if (ligasAtualizadas) {
+        novaCareer = aplicarRodadaTorcida(novaCareer, ligasAtualizadas, current.stage);
+        if (t.phase === "fim" && ligasConcluidas(ligasAtualizadas)) {
+          novaCareer = aplicarTitulosDaTemporada(novaCareer, ligasAtualizadas);
+        }
+      }
+
       persistCareer(novaCareer);
 
       // Recompensa do patrocinador no Banco Central SOV (module 'career').
@@ -2233,7 +2308,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         const isUserFixture = current.homeId === t.userTeamId || current.awayId === t.userTeamId;
         if (isUserFixture) {
           const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1] ?? null;
-          aplicarResultadoRemoto(gf, ga, lastChoice).catch(() => {});
+          // partidaId → crédito/débito da partida idempotente no ledger (§19).
+          aplicarResultadoRemoto(gf, ga, lastChoice, current.id).catch(() => {});
           void registrarEventoMissao("botao_partida_carreira");
           if (gf > ga) void registrarEventoMissao("botao_vitoria_carreira");
           // GRUPO CIDADELA (§6): NPCs comentam o resultado — o grupo parece vivo.
@@ -2264,7 +2340,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             else if (foiSemi) posicao = "terceiro";
             else posicao = "quarto";
           }
-          aplicarFimCampanhaRemoto(posicao, t.difficulty).catch(() => {});
+          // careerAtual autoritativa (evita race que apagava a promoção no
+          // JSONB) + chave por temporada/divisão (bônus nunca paga 2×, §19).
+          aplicarFimCampanhaRemoto(posicao, t.difficulty, {
+            careerAtual: novaCareer,
+            temporada: novaCareer.temporada,
+            divisao: novaCareer.divisao,
+          }).catch(() => {});
         }
         // Persistir manchetes novas
         if (novas.length > 0) {
@@ -2641,6 +2723,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         : current!;
     const userSide = f.homeId === userTeam.id ? "home" : "away";
     const knockout = screen === "tournament-match" && (tour?.phase ?? "") === "mata-mata";
+    // Contexto estratégico da CPU: força EFETIVA do adversário (qualidade +
+    // torcida + forma) e a forma recente do jogador (balanceamento dinâmico).
+    const advId = f.homeId === userTeam.id ? f.awayId : f.homeId;
+    const forcas = career ? forcasDaTemporada(career, userTeam) : {};
+    const aiContext = {
+      forcaCpu: forcas[advId] ?? resolveTeam(advId, userTeam).power,
+      forcaJogador: userTeam.power,
+      formaJogador: career
+        ? formaDoJogador(career, userTeam.id)
+        : { sequenciaVitorias: 0, sequenciaDerrotas: 0, invicto: false },
+    };
     return (
       <Shell>
         <MatchView
@@ -2656,6 +2749,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           onQuit={() => setScreen(screen === "friendly-match" ? "menu" : "hub")}
           customTeam={userTeam}
           formation={formation}
+          aiContext={aiContext}
         />
         {/* Celular também disponível durante partidas */}
         <CelularFixo
@@ -2685,6 +2779,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           prioridade={prioridadeCelular}
           naoLidas={naoLidasCelular}
           perfilCidadela={perfilCidadela}
+          saldoSov={saldoSov}
         />
       </Shell>
     );
@@ -2695,11 +2790,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       {/* REMOVIDO: AdsterraSocialBar - causava disparos indevidos em cliques globais */}
       {carregando && !loading && <LoadingScreen pronto={false} onCompleto={() => {}} />}
       {loading && <LoadingScreen pronto={loadingReady} onCompleto={loadingOnComplete} />}
-      {veredito && career && (
-        <SeasonTransition
+      {/* A tela de fim de temporada só aparece DEPOIS que o usuário sair da
+          tela de fim de partida (sequência: partida → estatísticas → hub →
+          celebração da temporada). Nunca duas overlays empilhadas. */}
+      {veredito && career?.ligas && screen !== "match-end" && (
+        <SeasonEndScreen
+          resumo={resumoTemporada(career.ligas, userTeam.id)}
           veredito={veredito}
-          divisao={career.divisao}
           temporada={career.temporada ?? 1}
+          userTeam={userTeam}
           onContinuar={startNextSeason}
           onReiniciar={gameOverReset}
         />
@@ -2858,6 +2957,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         prioridade={prioridadeCelular}
         naoLidas={naoLidasCelular}
         perfilCidadela={perfilCidadela}
+        saldoSov={saldoSov}
       />
     </Shell>
   );

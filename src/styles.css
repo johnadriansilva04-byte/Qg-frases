@@ -1380,3 +1380,15 @@ button.celular-card:hover {
 
 
 
+
+/* Encerramento de temporada: promovidos sobem, rebaixados caem (dados reais). */
+@keyframes season-end-rise-kf {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes season-end-fall-kf {
+  from { transform: translateY(-14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.season-end-rise { animation: season-end-rise-kf 0.6s ease-out both; }
+.season-end-fall { animation: season-end-fall-kf 0.6s ease-out both; }

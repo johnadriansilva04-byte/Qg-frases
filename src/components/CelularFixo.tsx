@@ -33,6 +33,8 @@ type Props = {
   naoLidas?: number | undefined;
   /** Stats da carreira exibidos no Perfil (decisões/entrevistas reais). */
   statsCarreira?: { decisoes: number; entrevistas: number } | undefined;
+  /** Saldo REAL de SOV (user_wallets via bank_ledger) — barra de status. */
+  saldoSov?: number | null | undefined;
 };
 
 export function CelularFixo({
@@ -53,6 +55,7 @@ export function CelularFixo({
   prioridade,
   naoLidas = 0,
   statsCarreira,
+  saldoSov = null,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [recompensaTempo, setRecompensaTempo] = useState<number | null>(null);
@@ -179,6 +182,7 @@ export function CelularFixo({
             onRegistrarPosicao={onRegistrarPosicao}
             statsCarreira={statsCarreira}
             abaInicial={irAoGrupo}
+            saldoSov={saldoSov}
           />
         )}
       </div>

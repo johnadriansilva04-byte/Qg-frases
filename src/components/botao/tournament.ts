@@ -172,15 +172,20 @@ export function sortTable(table: GroupRow[]): GroupRow[] {
   );
 }
 
-/** Simula uma partida CPU x CPU com base na força dos times e na dificuldade. */
+/** Simula uma partida CPU x CPU com base na força dos times e na dificuldade.
+ * `powerOverrides` permite injetar a força EFETIVA (qualidade + torcida +
+ * forma) calculada pelo universo da carreira — sem ele, usa o power base. */
 export function simulateMatch(
   homeId: string,
   awayId: string,
   difficulty: Difficulty,
   knockout = false,
+  powerOverrides?: Record<string, number>,
 ): MatchResult {
-  const h = teamByIdSync(homeId);
-  const a = teamByIdSync(awayId);
+  const hBase = teamByIdSync(homeId);
+  const aBase = teamByIdSync(awayId);
+  const h = powerOverrides?.[homeId] != null ? { ...hBase, power: powerOverrides[homeId]! } : hBase;
+  const a = powerOverrides?.[awayId] != null ? { ...aBase, power: powerOverrides[awayId]! } : aBase;
   // Em dificuldades altas, o time do usuário precisa realmente ser mais forte
   // pra domínio: o bônus do mandante cai e o ataque do visitante fica mais letal.
   // Aumentado lambda base e awayScale para IA não errar gols

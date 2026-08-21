@@ -57,6 +57,7 @@ function Campus() {
   // sistema paralelo: conversas, missões e handlers reais com persistência.
   const {
     career,
+    saldoSov,
     onEnviarMensagem,
     onEscolhaRpg,
     onExcluirConversa,
@@ -242,6 +243,7 @@ function Campus() {
         onEscolhaRpg={onEscolhaRpg}
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
+        saldoSov={saldoSov}
       />
     </div>
   );

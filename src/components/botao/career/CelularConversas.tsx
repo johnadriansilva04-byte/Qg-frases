@@ -4,6 +4,7 @@ import {
   Bot,
   ClipboardList,
   ChevronLeft,
+  Coins,
   FileSignature,
   Heart,
   Landmark,
@@ -96,6 +97,9 @@ type Props = {
   statsCarreira?: { decisoes: number; entrevistas: number } | undefined;
   /** Abre o celular já numa aba específica (ex.: notificação → grupo). */
   abaInicial?: AbaCelular | null;
+  /** Saldo REAL de SOV (user_wallets via bank_ledger) — exibido na barra de
+   *  status do aparelho. null = carteira ainda não carregada. */
+  saldoSov?: number | null | undefined;
 };
 
 export function CelularConversas({
@@ -116,6 +120,7 @@ export function CelularConversas({
   onRegistrarPosicao,
   statsCarreira,
   abaInicial = null,
+  saldoSov = null,
 }: Props) {
   const [aba, setAba] = useState<AbaCelular>("menu");
   // Notificação externa pede uma aba específica (§7: clique → abre o grupo).
@@ -532,6 +537,23 @@ export function CelularConversas({
                 {aba === "menu" ? "Celular do Pracinha" : "Voltar ao menu"}
               </p>
             </div>
+            {/* Saldo REAL de SOV (user_wallets via bank_ledger) — barra de
+                status do aparelho, visível em todas as abas (§4). */}
+            {saldoSov != null && (
+              <button
+                onClick={() => {
+                  setAba("banco");
+                  setConversaSelecionada(null);
+                }}
+                className="flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-1 transition hover:bg-amber-400/20"
+                title="Saldo de Soberania — abrir o Banco"
+              >
+                <Coins className="size-3.5 text-amber-300" />
+                <span className="text-[11px] font-black tabular-nums text-amber-200">
+                  {saldoSov.toLocaleString("pt-BR")}
+                </span>
+              </button>
+            )}
             <Smartphone className="size-4 text-slate-400" />
           </div>
 
