@@ -1,152 +1,110 @@
-import { useEffect, useState } from "react";
-import { Building2, Sparkles, Trophy, Briefcase, Star } from "lucide-react";
-import { obterSaldoSov } from "@/lib/financial/sovApi";
-import { TEAMS, type Team } from "@/components/botao/data/teams";
+import { Sparkles, Trophy, TrendingUp, Building2, Crown } from "lucide-react";
 import type { CareerState } from "./types";
-import {
-  precoClube,
-  estrelasClube,
-  prestigioClube,
-  podeComprar,
-  type ClubeDados,
-} from "./marketplaceClubes";
-
-export type ModoEntrada = "treinador" | "proprietario";
 
 type Props = {
-  userId: string | null;
-  /** Modo escolhido passa para o CoachSetup/TournamentSetup. */
-  onEscolher: (modo: ModoEntrada, clube: Team | null) => void;
+  /** Nome do jogador do perfil existente. */
+  nomeJogador?: string | undefined;
+  /** Callback para iniciar carreira como técnico. */
+  onIniciar: () => void;
   onBack?: (() => void) | undefined;
 };
 
 /**
- * ENTRADA TRIUNFAL DA CARREIRA (§11) — "agora sua carreira começa".
- * Duas trilhas reais (§12): comprar um clube no Marketplace (§13) com
- * preço determinístico (§15) ou trabalhar como Treinador (§17).
+ * ENTRADA TRIUNFAL DA PRIMEIRA CARREIRA
+ * 
+ * Você começa como técnico. Com desempenho, patrimônio e conquistas,
+ * você pode comprar participações em clubes e, posteriormente, adquirir
+ * clubes inteiros. Chegue a ser proprietário de vários clubes.
  */
-export function CareerIntro({ userId, onEscolher, onBack }: Props) {
-  const [saldo, setSaldo] = useState<number | null>(null);
-  const [modo, setModo] = useState<ModoEntrada | null>(null);
-
-  useEffect(() => {
-    if (!userId) return;
-    void obterSaldoSov(userId).then(setSaldo).catch(() => setSaldo(null));
-  }, [userId]);
-
-  const comprar = (clube: ClubeDados) => {
-    onEscolher("proprietario", clube as Team);
-  };
+export function CareerIntro({ nomeJogador, onIniciar, onBack }: Props) {
+  const NOME = nomeJogador || "Treinador";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 text-white">
-      <div className="relative z-10 w-full max-w-2xl">
-        <p className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-300">
-          Modo Carreira · Entrada Triunfal
+      <div className="relative z-10 w-full max-w-3xl">
+        <p className="mb-4 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-300">
+          Modo Carreira · Primeira Entrada
         </p>
-        <h1 className="text-center bg-gradient-to-r from-emerald-300 via-amber-300 to-cyan-300 bg-clip-text text-4xl font-black text-transparent md:text-5xl">
-          Sua carreira começa agora
+        
+        <h1 className="text-center bg-gradient-to-r from-emerald-300 via-amber-300 to-cyan-300 bg-clip-text text-5xl font-black text-transparent md:text-6xl">
+          {NOME}
         </h1>
-        <p className="mt-3 text-center text-sm text-slate-300">
-          Escolha como você entra no mundo dos clubes da Cidadela.
+        
+        <p className="mt-4 text-center text-lg text-slate-300">
+          Sua carreira começa agora.
         </p>
 
         {onBack && (
           <button
             onClick={onBack}
-            className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-1.5 text-xs font-bold text-slate-300 transition hover:border-slate-500"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-1.5 text-xs font-bold text-slate-300 transition hover:border-slate-500"
           >
             ← Voltar
           </button>
         )}
-        {!modo ? (
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <button
-              onClick={() => setModo("treinador")}
-              className="group rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-left transition hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-[0.99]"
-            >
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
-                <Briefcase className="size-4" /> Caminho do Treinador
-              </span>
-              <p className="mt-3 font-display text-2xl">Trabalhar como Treinador</p>
-              <p className="mt-2 text-sm text-slate-300">
-                Contrato com um clube existente. Diretor envia metas no celular, salário
-                e reputação crescem com resultado. Depois: compra o clube.
-              </p>
-            </button>
 
-            <button
-              onClick={() => setModo("proprietario")}
-              className="group rounded-3xl border border-amber-500/30 bg-amber-500/10 p-5 text-left transition hover:border-amber-400 hover:bg-amber-500/20 active:scale-[0.99]"
-            >
-              <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-300">
-                <Building2 className="size-4" /> Marketplace
-              </span>
-              <p className="mt-3 font-display text-2xl">Comprar um Clube</p>
-              <p className="mt-2 text-sm text-slate-300">
-                Usa seu SOV para adquirir um clube real da Cidadela. Dono decide
-                nome, cores e o futuro da trajetória.
+        {/* Progressão da carreira */}
+        <div className="mt-8 space-y-6">
+          <div className="flex items-start gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+            <div className="rounded-full bg-emerald-500/20 p-3">
+              <Trophy className="size-6 text-emerald-300" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-display text-xl font-bold text-emerald-200">Comece como Técnico</h3>
+              <p className="mt-1 text-sm text-slate-300">
+                Você não começa como dono. Você começa construindo seu nome.
+                Assine com um clube, vença partidas e construa reputação.
               </p>
-              <p className="mt-2 text-xs text-amber-300/80">
-                Saldo atual: {saldo == null ? "—" : `${saldo.toFixed(0)} SOV`}
+            </div>
+          </div>
+
+          <div className="flex items-start gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
+            <div className="rounded-full bg-amber-500/20 p-3">
+              <TrendingUp className="size-6 text-amber-300" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-display text-xl font-bold text-amber-200">Acumule Patrimônio</h3>
+              <p className="mt-1 text-sm text-slate-300">
+                Com desempenho e conquistas, você acumula SOV. Use seu patrimônio
+                para comprar participações em clubes da Cidadela.
               </p>
-            </button>
+            </div>
           </div>
-        ) : modo === "treinador" ? (
-          <button
-            onClick={() => onEscolher("treinador", null)}
-            className="mt-8 w-full rounded-3xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4 text-lg font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/40 transition hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.99]"
-          >
-            Assinar como Treinador
-          </button>
-        ) : (
-          <div className="mt-8 max-h-[420px] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/60 p-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-amber-300">
-              MARKETPLACE · Clubes à venda
-            </p>
-            {TEAMS.map((c) => {
-              const preco = precoClube(c);
-              const estrelas = estrelasClube(c);
-              const posso = userId && saldo != null && podeComprar(c, saldo);
-              return (
-                <div
-                  key={c.id}
-                  className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/80 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold">{c.name}</p>
-                    <p className="text-[10px] text-slate-400">{prestigioClube(c)}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-0.5">
-                      {Array.from({ length: estrelas }).map((_, i) => (
-                        <Star key={i} className="size-3 fill-amber-400 text-amber-400" />
-                      ))}
-                    </span>
-                    <span className="text-xs font-bold text-amber-300 tabular-nums">
-                      {preco} SOV
-                    </span>
-                    <button
-                      onClick={() => comprar(c)}
-                      disabled={!posso}
-                      className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-900 transition hover:bg-amber-400 disabled:opacity-40"
-                    >
-                      Comprar
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+
+          <div className="flex items-start gap-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-5">
+            <div className="rounded-full bg-cyan-500/20 p-3">
+              <Building2 className="size-6 text-cyan-300" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-display text-xl font-bold text-cyan-200">Torne-se Proprietário</h3>
+              <p className="mt-1 text-sm text-slate-300">
+                Quando estiver preparado, compre um clube inteiro. Decida nome,
+                cores e o futuro da trajetória. E se quiser ir além, construa
+                seu próprio império — proprietário de múltiplos clubes.
+              </p>
+            </div>
           </div>
-        )}
+        </div>
+
+        <button
+          onClick={onIniciar}
+          className="mt-10 w-full rounded-3xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-5 text-xl font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/40 transition hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.99]"
+        >
+          Entrar como Técnico
+        </button>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Teto econômico: 200.000 SOV · Uma carreira, um personagem, um destino
+        </p>
       </div>
 
-      {/* Glow cyberpunk. */}
+      {/* Glow cinematográfico */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/3 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/3 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
-        <Sparkles className="absolute right-8 top-8 size-6 text-amber-300/40 animate-pulse" />
-        <Trophy className="absolute left-8 bottom-8 size-6 text-emerald-300/30" />
+        <div className="absolute top-1/4 left-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
+        <Sparkles className="absolute right-12 top-12 size-8 text-amber-300/40 animate-pulse" />
+        <Trophy className="absolute left-12 bottom-12 size-8 text-emerald-300/30" />
+        <Crown className="absolute right-1/2 top-1/3 size-6 text-cyan-300/20" />
       </div>
     </div>
   );

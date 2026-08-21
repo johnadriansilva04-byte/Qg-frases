@@ -146,6 +146,51 @@ export type EntrevistaRegistro = {
 
 export type AtivoId = "clube" | "ciencia" | "biblioteca" | "trilha";
 
+/* ----------------------- Propriedade de Clubes ----------------------- */
+
+/**
+ * Participação (cota) em um clube da Cidadela. O técnico pode comprar
+ * participações à medida que acumula patrimônio, evoluindo para proprietário.
+ */
+export type CotaClube = {
+  /** ID do clube (TEAMS). */
+  clubeId: string;
+  /** Porcentagem de propriedade (0-100). 100% = clube inteiro. */
+  participacao: number;
+  /** Preço médio de compra por cota (SOV). */
+  custoMedio: number;
+  /** Timestamp da aquisição. */
+  adquiridoEm: string;
+};
+
+/**
+ * Estado de propriedade de clubes do treinador. Permite múltiplos clubes
+ * simultaneamente — o jogador pode construir um império de clubes.
+ */
+export type PropriedadeClubes = {
+  /** Mapa de clubeId → CotaClube. Clubes sem entrada = não possui participação. */
+  participacoes: Record<string, CotaClube>;
+  /** Total de dividendos recebidos (SOV). */
+  totalDividendos: number;
+  /** Última rodada em que dividendos foram pagos. */
+  ultimaRodadaDividendos: number;
+};
+
+/**
+ * Registro de dividendos recebidos como proprietário de clube.
+ */
+export type DividendoProprietario = {
+  id: string;
+  clubeId: string;
+  /** Valor recebido em SOV. */
+  valor: number;
+  rodada: number;
+  temporada: number;
+  /** Participação no momento do pagamento (%). */
+  participacao: number;
+  timestamp: string;
+};
+
 export type PosicaoBolsa = {
   ativoId: AtivoId;
   quantidade: number;
@@ -265,6 +310,8 @@ export type CareerState = {
   bolsa?: BolsaState | undefined;
   // Feed da Rede da Cidadela (posts reativos a eventos do jogo).
   feedCidadela?: import("./rpg/types").PostFeed[] | undefined;
+  // Propriedade de clubes (sistema de cotas → proprietário → múltiplos clubes).
+  propriedadeClubes?: PropriedadeClubes | undefined;
   // Ritual da Trilha: válvula narrativa do Modo Carreira (progresso diário).
   trilhaRitual?:
     | {

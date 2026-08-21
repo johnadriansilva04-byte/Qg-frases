@@ -58,11 +58,12 @@ export function consumirRitualPendente(): RitualPendente | null {
 /**
  * Aplica o efeito do ritual na carreira. Vitória limpa a sombra e rende SOV;
  * derrota não pune (a Trilha é válvula de escape, nunca armadilha).
+ * Retorna deltaSov para registro no Banco Central SOV (nunca modifica coach.sov diretamente).
  */
 export function aplicarRitualNaCarreira(
   career: CareerState,
   resultado: ResultadoTrilha,
-): { career: CareerState; resumo: string } {
+): { career: CareerState; resumo: string; deltaSov: number } {
   const mem = memoriaRpg(career);
   const hoje = new Date().toISOString().slice(0, 10);
   const ritual = career.trilhaRitual?.ultimoDia === hoje ? career.trilhaRitual : { jogosHoje: 0, vitoriasHoje: 0, ultimoDia: hoje, pagasHoje: [] };
@@ -85,26 +86,11 @@ export function aplicarRitualNaCarreira(
     novoRitual.pagasHoje.push(m.id);
   }
 
-  if (resultado !== "vitoria") {
-    const comBonus: CareerState =
-      bonusMissoes > 0
-        ? { ...base, coach: { ...base.coach, sov: base.coach.sov + bonusMissoes } }
-        : base;
-    return {
-      career: comBonus,
-      resumo:
-        bonusMissoes > 0
-          ? `Ritual jogado: missão da Trilha completa (+${bonusMissoes} SOV).`
-          : "O ritual não aliviou a sombra desta vez. A Trilha aguarda sua volta.",
-    };
-  }
-
-  const eraSombra = condicaoSombria(career);
+  const eraSombria = condicaoSombria(career);
   const novo: CareerState = {
     ...base,
-    coach: { ...base.coach, sov: base.coach.sov + 8 + bonusMissoes },
-    moralTime: Math.min(100, (career.moralTime ?? 50) + 4),
-    memoriaRpg: { ...mem, derrotasSeguidas: 0 },
+    moralTime: Math.min(100, (career.moralTime ?? 50) + (resultado === "vitoria" ? 4 : 0)),
+    memoriaRpg: { ...mem, derrotasSeguidas: resultado === "vitoria" ? 0 : mem.derrotasSeguidas },
   };
 
   const comPost = anexarPost(
@@ -113,18 +99,24 @@ export function aplicarRitualNaCarreira(
       autor: "Zé do Arquibanco",
       avatar: "📣",
       selo: "torcedor",
-      texto: eraSombra
+      texto: eraSombria
         ? `O TÉCNICO FOI À TRILHA E VOLTOU OUTRO. O clube respira. 90 minutos de tabuleiro valeram mais que mil reuniões. SOMBRAS, PODEM RECUAR.`
         : `Ritual da Trilha cumprido com vitória. O treinador sabe buscar paz onde o futebol não dá.`,
     }),
   );
 
-  const sovGanho = 8 + bonusMissoes;
+  const deltaSov = resultado === "vitoria" ? 8 + bonusMissoes : bonusMissoes;
   return {
     career: comPost,
-    resumo: eraSombra
-      ? `Vitória no ritual: a sombra recuou (+${sovGanho} SOV, sequência negativa zerada).`
-      : `Vitória no ritual da Trilha (+${sovGanho} SOV).`,
+    resumo:
+      resultado === "vitoria"
+        ? eraSombria
+          ? `Vitória no ritual: a sombra recuou (+${deltaSov} SOV, sequência negativa zerada).`
+          : `Vitória no ritual da Trilha (+${deltaSov} SOV).`
+        : bonusMissoes > 0
+          ? `Ritual jogado: missão da Trilha completa (+${deltaSov} SOV).`
+          : "O ritual não aliviou a sombra desta vez. A Trilha aguarda sua volta.",
+    deltaSov,
   };
 }
 

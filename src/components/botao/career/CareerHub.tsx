@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Calendar, ChevronRight, Coins, Trophy } from "lucide-react";
+import { Calendar, ChevronRight, Coins, Trophy, Building2 } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
 import { nextUserFixture, sortTable } from "../tournament";
@@ -32,6 +32,8 @@ interface CareerHubProps {
   onOpenCalendario: () => void;
   /** Abre a Bolsa de Valores da Cidadela (módulo em tela própria, §17). */
   onOpenEconomia: () => void;
+  /** Abre a tela de Propriedade de Clubes (sistema de cotas → proprietário). */
+  onOpenPropriedade: () => void;
 }
 
 /**
@@ -49,6 +51,7 @@ export function CareerHub({
   onOpenClassificacao,
   onOpenCalendario,
   onOpenEconomia,
+  onOpenPropriedade,
 }: CareerHubProps) {
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
@@ -135,13 +138,13 @@ export function CareerHub({
               <span className="menu-card-icon menu-accent-emerald !size-9">
                 <Coins className="size-4" />
               </span>
-              <span className="mt-1 block font-display text-xs">Bolsa</span>
+              <span className="mt-1 block font-display text-xs">Economia</span>
             </button>
-            <button onClick={onOpenClassificacao} className="menu-card menu-accent-amber !p-3">
+            <button onClick={onOpenPropriedade} className="menu-card menu-accent-amber !p-3">
               <span className="menu-card-icon menu-accent-amber !size-9">
-                <Trophy className="size-4" />
+                <Building2 className="size-4" />
               </span>
-              <span className="mt-1 block font-display text-xs">Tabela</span>
+              <span className="mt-1 block font-display text-xs">Propriedade</span>
             </button>
           </div>
 

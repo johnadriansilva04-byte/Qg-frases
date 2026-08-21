@@ -109,10 +109,18 @@ import {
   missoesTrilha,
 } from "./career/trilhaIntegracao";
 import { CareerIntro } from "./career/CareerIntro";
-import type { ModoEntrada } from "./career/CareerIntro";
 import { precoClube } from "./career/marketplaceClubes";
+import {
+  comprarCota,
+  venderCota,
+  processarDividendosProprietario,
+  listarClubesProprietario,
+  patrimonioParticipacoes,
+  podeComprarCota,
+} from "./career/propriedadeEngine";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
+import { PropriedadeScreen } from "./career/PropriedadeScreen";
 import { LoadingScreen } from "./career/LoadingScreen";
 import { AIService } from "./ai/AIService";
 import { relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
@@ -214,6 +222,7 @@ type Screen =
   | "classificacao"
   | "calendario"
   | "economia"
+  | "propriedade"
   | "tournament-match"
   | "match-end"
   | "trophies";
@@ -383,21 +392,20 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       if (!pendente) return;
       const atual = careerRef.current;
       if (!atual) return;
-      const { career: novo, resumo } = aplicarRitualNaCarreira(atual, pendente.resultado);
-      persistCareer(novo);
-      // Ritual da Trilha move SOV: registra no Banco Central (module 'rpg').
-      const deltaRitual = (novo.coach?.sov ?? 0) - (atual.coach?.sov ?? 0);
+      const { career: novo, resumo, deltaSov } = aplicarRitualNaCarreira(atual, pendente.resultado);
+      // Ritual da Trilha move SOV: registra no Banco Central (module 'rpg') ANTES de persistir.
       const uidRitual = perfilRef.current?.user_id;
-      if (deltaRitual !== 0 && uidRitual) {
+      if (deltaSov !== 0 && uidRitual) {
         void registrarTransacaoSov(
           uidRitual,
-          deltaRitual,
-          deltaRitual > 0 ? "reward" : "penalty",
+          deltaSov,
+          deltaSov > 0 ? "reward" : "penalty",
           "Ritual da Trilha — integração de carreira",
           "rpg",
           { ritual: pendente.resultado },
         );
       }
+      persistCareer(novo);
       setToast(resumo);
     };
     consumir();
@@ -890,58 +898,109 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     }
   };
 
-  /**
-   * ESCOLHA DA ENTRADA (§11/§12): 'treinador' vai ao settlement velho; 
-   * 'proprietario' compra o clube via SOV Bank (débito no ledger, §15),
-   * atualiza a identidade do clube no perfil (§16) e segue.
-   */
-  const handleEscolherEntrada = async (modo: ModoEntrada, clube: Team | null) => {
-    if (modo === "proprietario" && clube && perfil?.user_id) {
-      const preco = precoClube(clube);
-      // Débito no SOV Bank idempotente por compra (§21/§22: 1 clique = 1 execução).
-      const saldoLedger = await registrarTransacaoSov(
-        perfil.user_id,
-        -preco,
-        "transfer",
-        `Compra do clube ${clube.name}`,
-        "market",
-        { clubeId: clube.id, power: clube.power },
-        { sourceEvent: "compra_clube", idempotencyKey: `clube:compra:${clube.id}:${perfil.user_id}` },
-      );
-      // Recompensa NÃO aparece como concluída quando o banco recusou (§14):
-      // sem o débito confirmado, o clube não é concedido.
-      if (saldoLedger === null) {
-        setToast("Compra não concluída — o banco recusou o débito. Saldo insuficiente ou indisponível.");
-        setScreen("menu");
-        return;
-      }
-      // A identidade do clube adquirido passa a orientar o time do usuário.
-      await atualizarPerfilClube(perfil.user_id, {
-        time: clube.name,
-        abreviacao: clube.short,
-        cores: [clube.primary, clube.secondary, clube.primary],
-      });
-      if (perfil) {
-        aplicarPerfil({
-          ...perfil,
-          time_personalizado: clube.name,
-          abreviacao_time: clube.short,
-          cores: [clube.primary, clube.secondary, clube.primary],
-        });
-      }
-      setToast(`Clube ${clube.name} adquirido por ${preco} SOV! 🏟️`);
+  const handleComprarCota = async (clube: Team, porcentagem: number) => {
+    if (!career || !perfil?.user_id) return;
+
+    const { career: novaCareer, deltaSov, custo } = comprarCota(career, clube, porcentagem);
+
+    // Registra no Banco Central SOV ANTES de persistir
+    const saldoLedger = await registrarTransacaoSov(
+      perfil.user_id,
+      deltaSov,
+      "fee",
+      `Compra de ${porcentagem}% de ${clube.name}`,
+      "market",
+      { clubeId: clube.id, porcentagem },
+      {
+        sourceEvent: "compra-cota",
+        idempotencyKey: `cota-compra:${clube.id}:${perfil.user_id}:${Date.now()}`,
+      },
+    );
+
+    if (saldoLedger === null) {
+      setToast("Compra não concluída — saldo insuficiente.");
+      return;
     }
 
-    const nova: CareerState = {
-      ...(career ?? EMPTY_CAREER),
-      modoEntrada: modo,
-    };
-    persistCareer(nova);
-    setCareer(nova);
+    persistCareer(novaCareer);
+    setCareer(novaCareer);
+    setToast(`Comprou ${porcentagem}% de ${clube.name} por ${custo.toFixed(0)} SOV!`);
 
-    // A entrada segue: sem coach, cria; com coach, vai direto à dificuldade.
-    if (!nova.coach.nome) setScreen("coach-setup");
-    else setScreen("tournament-setup");
+    // Notificação no celular
+    if (porcentagem >= 100) {
+      enfileirarConversas([
+        {
+          id: `proprietario-${clube.id}-${Date.now()}`,
+          tipo: "evento",
+          nome: "Diretoria",
+          avatar: "🏢",
+          cargo: "Clube",
+          naoLida: true,
+          mensagens: [
+            {
+              id: `prop-msg-${Date.now()}`,
+              texto: `Parabéns! Você agora é o PROPRIETÁRIO do ${clube.name}. O clube é seu — decida o futuro da trajetória.`,
+              remetente: "outro",
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+    } else {
+      enfileirarConversas([
+        {
+          id: `cota-${clube.id}-${Date.now()}`,
+          tipo: "evento",
+          nome: "Diretoria",
+          avatar: "🏢",
+          cargo: "Clube",
+          naoLida: true,
+          mensagens: [
+            {
+              id: `cota-msg-${Date.now()}`,
+              texto: `Você adquiriu ${porcentagem}% de participação no ${clube.name}. Continue construindo seu patrimônio.`,
+              remetente: "outro",
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+    }
+  };
+
+  const handleVenderCota = async (clube: Team, porcentagem: number) => {
+    if (!career || !perfil?.user_id) return;
+
+    const resultado = venderCota(career, clube, porcentagem);
+    if (!resultado) {
+      setToast("Não possui participação suficiente para vender.");
+      return;
+    }
+
+    const { career: novaCareer, deltaSov, valor } = resultado;
+
+    // Registra no Banco Central SOV ANTES de persistir
+    const saldoLedger = await registrarTransacaoSov(
+      perfil.user_id,
+      deltaSov,
+      "reward",
+      `Venda de ${porcentagem}% de ${clube.name}`,
+      "market",
+      { clubeId: clube.id, porcentagem },
+      {
+        sourceEvent: "venda-cota",
+        idempotencyKey: `cota-venda:${clube.id}:${perfil.user_id}:${Date.now()}`,
+      },
+    );
+
+    if (saldoLedger === null) {
+      setToast("Venda não concluída.");
+      return;
+    }
+
+    persistCareer(novaCareer);
+    setCareer(novaCareer);
+    setToast(`Vendeu ${porcentagem}% de ${clube.name} por ${valor.toFixed(0)} SOV!`);
   };
 
   const handleAssistirVideo = async (): Promise<boolean> => {
@@ -1122,7 +1181,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const novoDesafio = temProxima ? gerarDesafioPatrocinador(c.rodadaAtual) : null;
       const estado: CareerState = {
         ...c,
-        coach: { ...c.coach, sov: c.coach.sov + recompensa },
         desafioPatrocinador: novoDesafio,
       };
       setToast(`Patrocinador satisfeito! +${recompensa} de SOV.`);
@@ -1238,14 +1296,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       narrativa: novoState,
       bonusProximaPartida: Math.max(0, career.bonusProximaPartida + (efeitos.bonusPoder ?? 0)),
       moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
-      coach: {
-        ...career.coach,
-        sov: Math.max(0, career.coach.sov + (efeitos.sov ?? 0)),
-      },
     };
-    persistCareer(novo);
-    setCareer(novo);
-    // Narrativa move SOV: registra no Banco Central (module 'rpg').
+    // Narrativa move SOV: registra no Banco Central (module 'rpg') ANTES de persistir.
     if (efeitos.sov && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
@@ -1256,6 +1308,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         { cena: career.narrativa?.cenaAtual },
       );
     }
+    persistCareer(novo);
+    setCareer(novo);
     // No desfecho, registra manchete narrativa e zera a história.
     if (finalizado && novoState.desfecho) {
       const tag =
@@ -1374,14 +1428,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       suborno: novoSub,
       bonusProximaPartida: career.bonusProximaPartida + (efeitos.bonusPoder ?? 0),
       moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
-      coach: {
-        ...career.coach,
-        sov: Math.max(0, career.coach.sov + (efeitos.sov ?? 0)),
-      },
     };
-    persistCareer(novo);
-    setCareer(novo);
-    // Suborno move SOV: registra no Banco Central (module 'rpg').
+    // Suborno move SOV: registra no Banco Central (module 'rpg') ANTES de persistir.
     if (efeitos.sov && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
@@ -1392,6 +1440,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         { subornoEscolha: escolha, node: novoSub.nodeAtual },
       );
     }
+    persistCareer(novo);
+    setCareer(novo);
     // Se a cena resolveu o capítulo, gera manchete narrativa do desfecho.
     if (finalizado && novoSub.desfecho) {
       const manchete =
@@ -1683,7 +1733,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       let c = registrarEntrevista(
         {
           ...career,
-          coach: { ...career.coach, sov: career.coach.sov + ganho },
         },
         registro,
       );
@@ -1794,11 +1843,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       void registrarTransacaoSov(uid, -custo, "fee", `Bolsa: compra de ${quantidade} cota(s) de ${ativoId}`, "market", {
         ativoId,
         quantidade,
+      }, {
+        sourceEvent: "bolsa-compra",
+        idempotencyKey: `bolsa-compra:${uid}:${ativoId}:${Date.now()}`,
       });
     }
     persistCareer({
       ...career,
-      coach: { ...career.coach, sov: career.coach.sov - custo },
       bolsa: comprarAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
     });
   };
@@ -1818,11 +1869,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       void registrarTransacaoSov(uid, valor, "reward", `Bolsa: venda de ${quantidade} cota(s) de ${ativoId}`, "market", {
         ativoId,
         quantidade,
+      }, {
+        sourceEvent: "bolsa-venda",
+        idempotencyKey: `bolsa-venda:${uid}:${ativoId}:${Date.now()}`,
       });
     }
     persistCareer({
       ...career,
-      coach: { ...career.coach, sov: career.coach.sov + valor },
       bolsa: venderAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
     });
   };
@@ -1892,7 +1945,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...career,
       copaBrasil: copa,
       moralTime: moral,
-      coach: { ...career.coach, sov: Math.max(0, novaSov) },
     };
     if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
 
@@ -2291,10 +2343,6 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         if (div.total > 0) {
           novaCareer = {
             ...novaCareer,
-            coach: {
-              ...novaCareer.coach,
-              sov: novaCareer.coach.sov + div.total,
-            },
             bolsa: div.bolsa,
           };
           if (perfil?.user_id) {
@@ -2317,6 +2365,54 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           novaCareer = { ...novaCareer, bolsa: div.bolsa };
         }
       }
+
+      // === Dividendos de Proprietário de Clubes (sistema de cotas) ===
+      const propDividendos = processarDividendosProprietario(
+        novaCareer,
+        novaCareer.rodadaAtual,
+        novaCareer.temporada ?? 1,
+      );
+      if (propDividendos.deltaSov > 0 && perfil?.user_id) {
+        novaCareer = propDividendos.career;
+        void registrarTransacaoSov(
+          perfil.user_id,
+          propDividendos.deltaSov,
+          "reward",
+          "Dividendos de Proprietário de Clubes",
+          "market",
+          { rodada: novaCareer.rodadaAtual, tipo: "dividendo-proprietario" },
+          {
+            sourceEvent: "dividendo-proprietario",
+            idempotencyKey: `dividendo-prop:${novaCareer.temporada}:r${novaCareer.rodadaAtual}`,
+          },
+        );
+
+        // Notificação no celular sobre dividendos
+        const clubesComDividendos = propDividendos.detalhes.map((d) => {
+          const clube = TEAMS.find((t: Team) => t.id === d.clubeId);
+          return clube ? `${clube.name} (${d.participacao.toFixed(0)}%)` : d.clubeId;
+        }).join(", ");
+
+        enfileirarConversas([
+          {
+            id: `dividendos-${novaCareer.temporada}-r${novaCareer.rodadaAtual}`,
+            tipo: "evento",
+            nome: "Banco",
+            avatar: "🏦",
+            cargo: "Financeiro",
+            naoLida: true,
+            mensagens: [
+              {
+                id: `div-msg-${Date.now()}`,
+                texto: `Dividendos recebidos: ${propDividendos.deltaSov.toFixed(0)} SOV. Clubes: ${clubesComDividendos}.`,
+                remetente: "outro",
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+        ]);
+      }
+
       // === Torcida global (§5-§8): a rodada INTEIRA migra torcedores — o
       // jogo real do usuário e todos os simulados das 3 divisões. No fim da
       // temporada, cada campeão atrai torcedores do resto do universo.
@@ -2758,8 +2854,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     return (
       <Shell>
         <CareerIntro
-          userId={perfil?.user_id ?? null}
-          onEscolher={handleEscolherEntrada}
+          nomeJogador={perfil?.nome}
+          onIniciar={() => setScreen("coach-setup")}
           onBack={() => setScreen("career-menu")}
         />
       </Shell>
@@ -2774,6 +2870,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           nomeInicial={perfil?.nome}
           onFinish={finishCoachSetup}
           onBack={() => setScreen("menu")}
+        />
+      </Shell>
+    );
+  }
+
+  if (screen === "propriedade") {
+    return (
+      <Shell>
+        <PropriedadeScreen
+          career={career ?? EMPTY_CAREER}
+          onBack={() => setScreen("hub")}
+          onComprarCota={handleComprarCota}
+          onVenderCota={handleVenderCota}
         />
       </Shell>
     );
@@ -2995,6 +3104,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onOpenClassificacao={() => setScreen("classificacao")}
             onOpenCalendario={() => setScreen("calendario")}
             onOpenEconomia={() => setScreen("economia")}
+            onOpenPropriedade={() => setScreen("propriedade")}
           />
         )}
 

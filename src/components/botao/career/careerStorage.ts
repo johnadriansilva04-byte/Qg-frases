@@ -88,9 +88,45 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     entrevistas: Array.isArray(bruta.entrevistas) ? bruta.entrevistas : [],
     eventoPendenteId: typeof bruta.eventoPendenteId === "string" ? bruta.eventoPendenteId : null,
     historia: normalizarHistoria(bruta.historia),
-    // Torcida global: saneia valores corrompidos (fans negativos/NaN, seq
+    // Propriedade de clubes: sanea participações corrompidas (participação negativa/NaN).
+    propriedadeClubes: normalizarPropriedadeClubes(bruta.propriedadeClubes),
+    // Torcida global: sanea valores corrompidos (fans negativos/NaN, seq
     // quebrada) sem recriar o estado — a soma global é mantida pelo engine.
     torcida: normalizarTorcida(bruta.torcida),
+  };
+}
+
+function normalizarPropriedadeClubes(
+  bruta: CareerState["propriedadeClubes"],
+): CareerState["propriedadeClubes"] {
+  if (!bruta || typeof bruta !== "object") return undefined;
+  const participacoes = (bruta as { participacoes?: unknown }).participacoes;
+  if (!participacoes || typeof participacoes !== "object") return undefined;
+  
+  const limpa: Record<string, any> = {};
+  for (const [id, cota] of Object.entries(participacoes)) {
+    if (!cota || typeof cota !== "object") continue;
+    const participacao = Number((cota as { participacao?: unknown }).participacao);
+    const custoMedio = Number((cota as { custoMedio?: unknown }).custoMedio);
+    if (!Number.isFinite(participacao) || participacao < 0) continue;
+    limpa[id] = {
+      clubeId: id,
+      participacao: Math.round(participacao),
+      custoMedio: Number.isFinite(custoMedio) ? Math.max(0, custoMedio) : 0,
+      adquiridoEm: (cota as { adquiridoEm?: string }).adquiridoEm ?? new Date().toISOString(),
+    };
+  }
+  
+  if (Object.keys(limpa).length === 0) return undefined;
+  
+  return {
+    participacoes: limpa,
+    totalDividendos: Number.isFinite((bruta as { totalDividendos?: unknown }).totalDividendos)
+      ? Math.max(0, Number((bruta as { totalDividendos?: unknown }).totalDividendos))
+      : 0,
+    ultimaRodadaDividendos: Number.isFinite((bruta as { ultimaRodadaDividendos?: unknown }).ultimaRodadaDividendos)
+      ? Number((bruta as { ultimaRodadaDividendos?: unknown }).ultimaRodadaDividendos)
+      : 0,
   };
 }
 
