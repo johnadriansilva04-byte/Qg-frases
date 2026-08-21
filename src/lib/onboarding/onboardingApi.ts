@@ -50,7 +50,8 @@ export const ID_ANONIMO = "anon";
 
 /**
  * Carrega: preferência do RPC (autenticado); fallback local; estado inicial.
- * Antes do login persiste em `anon` (localStorage); depois migra pro userId.
+ * Migração anônimo→conta: sem estado remoto mas com espelho de `anon` → o
+ * tour feito ANTES do login segue feito (persiste no Supabase e no userId).
  */
 export async function carregarOnboarding(userId: string | null): Promise<OnboardingEstado> {
   const chave = userId ?? ID_ANONIMO;
@@ -67,6 +68,22 @@ export async function carregarOnboarding(userId: string | null): Promise<Onboard
     } catch {
       /* offline → local */
     }
+    // Sem estado remoto: migra o espelho anônimo (tour feito pré-login) e
+    // todo o continuo de sessão local do próprio userId.
+    const anon = lerOnboardingLocal(ID_ANONIMO);
+    const migrado = local ?? anon;
+    if (migrado) {
+      salvarOnboardingLocal(userId, migrado);
+      try {
+        await supabase.rpc("atualizar_estado_cidadela", {
+          p_estado: { onboarding: migrado } as unknown as import("@/integrations/supabase/types").Json,
+        });
+      } catch {
+        /* offline: local do userId já cobre */
+      }
+      return migrado;
+    }
+    return estadoInicialOnboarding();
   }
   return local ?? estadoInicialOnboarding();
 }

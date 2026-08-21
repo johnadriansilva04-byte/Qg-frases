@@ -35,6 +35,8 @@ type Props = {
   statsCarreira?: { decisoes: number; entrevistas: number } | undefined;
   /** Saldo REAL de SOV (user_wallets via bank_ledger) — barra de status. */
   saldoSov?: number | null | undefined;
+  /** Bolsa (carreira) — resumo apenas-leitura na aba Banco do celular. */
+  bolsa?: import("./botao/career/types").BolsaState | undefined;
 };
 
 export function CelularFixo({
@@ -56,6 +58,7 @@ export function CelularFixo({
   naoLidas = 0,
   statsCarreira,
   saldoSov = null,
+  bolsa,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [recompensaTempo, setRecompensaTempo] = useState<number | null>(null);
@@ -183,6 +186,7 @@ export function CelularFixo({
             statsCarreira={statsCarreira}
             abaInicial={irAoGrupo}
             saldoSov={saldoSov}
+            bolsa={bolsa}
           />
         )}
       </div>

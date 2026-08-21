@@ -24,6 +24,7 @@ import {
 } from "@/lib/cidadela/profissoes";
 import { useCelularCarreira } from "@/hooks/useCelularCarreira";
 import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
+import { BolsaResumoCard } from "@/components/financial/BolsaResumoCard";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -264,6 +265,7 @@ function CidadelaCompView() {
         perfil={perfilCidadela}
         onPerfilAtualizado={setPerfilCidadela}
         onVoltar={() => setActiveGame(null)}
+        extras={<BolsaResumoCard bolsa={career?.bolsa} />}
       />
     );
   }
@@ -407,6 +409,7 @@ function CidadelaCompView() {
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
         saldoSov={saldoSov}
+        bolsa={career?.bolsa}
         statsCarreira={
           career
             ? {

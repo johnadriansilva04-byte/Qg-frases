@@ -60,6 +60,12 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
       ? bruta.rodadasDesdeEventoNarrativo!
       : 0,
     temporada: Number.isFinite(bruta.temporada) ? Math.max(1, bruta.temporada!) : 1,
+    temporadasInadimplente: Number.isFinite(bruta.temporadasInadimplente)
+      ? Math.max(0, Math.min(3, Math.round(bruta.temporadasInadimplente!)))
+      : 0,
+    marcoLiderTemporada: Number.isFinite(bruta.marcoLiderTemporada)
+      ? Math.max(0, Math.round(bruta.marcoLiderTemporada!))
+      : 0,
     ultimaRodadaProcessada: Number.isFinite(bruta.ultimaRodadaProcessada)
       ? bruta.ultimaRodadaProcessada!
       : -1,
@@ -133,6 +139,8 @@ export const EMPTY_CAREER: CareerState = {
   rodadaAtual: 0,
   rodadasDesdeEventoNarrativo: 0,
   temporada: 1,
+  temporadasInadimplente: 0,
+  marcoLiderTemporada: 0,
   conversas: [],
 };
 

@@ -71,6 +71,7 @@ import {
   advanceCopaBrasil,
   avaliarFimTemporada,
   iniciarNovaTemporada,
+  chegouAoPrimeiroLugar,
   type VereditoTemporada,
 } from "./career/competitionApi";
 import {
@@ -92,6 +93,7 @@ import {
   processarEventosRpg,
   responderContatoNpc,
 } from "./career/rpg/rpgEngine";
+import { PERSONAGENS } from "./career/rpg/personagens";
 import { eventoPorId } from "./career/rpg/eventos";
 import {
   criarPedidoCartorio,
@@ -225,6 +227,8 @@ interface BotaoGameProps {
 
 /** Chave do resume pós-F5 (sessionStorage, por aba e por usuário). */
 const RESUME_KEY = "botao:resume:v1";
+/** Noop estável (identidade congelada) para o onCompleto do splash de auth. */
+const noop = () => {};
 /** Telas seguras para restaurar após F5 (partidas em andamento não entram). */
 const TELAS_RESTAURAVEIS: Screen[] = [
   "hub",
@@ -700,7 +704,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // travada em "Campanha encerrada" sem caminho para a próxima temporada.
         if (careerHidratada?.ligas && ligasConcluidas(careerHidratada.ligas)) {
           setVeredito(
-            avaliarFimTemporada(careerHidratada.coach.sov, careerHidratada.divisao),
+            avaliarFimTemporada(
+              careerHidratada.coach.sov,
+              careerHidratada.divisao,
+              careerHidratada.temporadasInadimplente ?? 0,
+            ),
           );
         }
         if (remoteCareer && careerHidratada) {
@@ -1283,6 +1291,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!career) return;
     const divisao = career.divisao;
     const novaSov = iniciarNovaTemporada(career.coach.sov, divisao);
+    // Regra da dívida (§9): pagou → zera; falhou → registra a temporada
+    // na sequência; atinge o teto → o botão de continuar não era exibido.
+    const novaInad = veredito?.temporadasInadimplente ?? 0;
     const composicoes = career.composicoes ?? composicoesIniciais(userTeam, divisao);
     const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
     const ativa = ligas[divisao];
@@ -1303,6 +1314,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       rodadaAtual: 0,
       rodadasDesdeEventoNarrativo: 0,
       temporada: (career.temporada ?? 1) + 1,
+      temporadasInadimplente: novaInad,
       divisao,
       ligas,
       composicoes,
@@ -2312,6 +2324,45 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         }
       }
 
+      // === Marco de 1º lugar (§10): chegou ao topo pela 1ª vez na temporada →
+      // comemoração REAL (celular + toast), UMA vez por temporada. O marco é
+      // persistido — F5/hidratação não repete a celebração.
+      if (
+        posicaoUsuario === 1 &&
+        chegouAoPrimeiroLugar(
+          posicaoUsuario,
+          novaCareer.temporada ?? 1,
+          career.marcoLiderTemporada,
+        )
+      ) {
+        const temp = novaCareer.temporada ?? 1;
+        novaCareer = { ...novaCareer, marcoLiderTemporada: temp };
+        setTimeout(
+          () => setToast("🏆 PARABÉNS! VOCÊ CHEGOU AO PRIMEIRO LUGAR!"),
+          1200,
+        );
+        enfileirarConversas([
+          {
+            id: `marco-lider-t${temp}`,
+            tipo: "evento",
+            nome: PERSONAGENS["npc-dirigente"].nome,
+            avatar: "🏢",
+            cargo: "Dirigente",
+            npcId: "npc-dirigente",
+            naoLida: true,
+            mensagens: [
+              {
+                id: `marco-lider-m-${temp}`,
+                texto:
+                  "Treinador, o estágio NUNCA cantou seu nome assim. O clube está no TOPO da tabela — segura o rojão: o vestiário agora é seu. Mantenha o foco: o topo se segura com pés no chão.",
+                remetente: "outro",
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+        ]);
+      }
+
       persistCareer(novaCareer);
 
       // Recompensa do patrocinador no Banco Central SOV (module 'career').
@@ -2335,7 +2386,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       // Fim de temporada (liga concluída): economia de Soberania decide se o
       // treinador segue (temporada infinita) ou é demitido (Game Over).
       if (t.phase === "fim") {
-        const v = avaliarFimTemporada(novaCareer.coach.sov, novaCareer.divisao);
+        const v = avaliarFimTemporada(
+          novaCareer.coach.sov,
+          novaCareer.divisao,
+          career.temporadasInadimplente ?? 0,
+        );
         setVeredito(v);
       }
 
@@ -2829,8 +2884,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   return (
     <Shell>
       {/* REMOVIDO: AdsterraSocialBar - causava disparos indevidos em cliques globais */}
-      {carregando && !loading && <LoadingScreen pronto={false} onCompleto={() => {}} />}
-      {loading && <LoadingScreen pronto={loadingReady} onCompleto={loadingOnComplete} />}
+      {/* Loading ÚNICO com identidade estável: cobre a fase de auth
+          (carregando) e a de hidratação/ações (loading) sem montar novamente
+          (o que reiniciava a barra a cada re-render). O callback congela com
+          useCallback para não re-disparar o efeito do rAF. */}
+      {(carregando || loading) && (
+        <LoadingScreen
+          pronto={loading ? loadingReady : !carregando}
+          onCompleto={loading ? loadingOnComplete : noop}
+        />
+      )}
       {/* A tela de fim de temporada só aparece DEPOIS que o usuário sair da
           tela de fim de partida (sequência: partida → estatísticas → hub →
           celebração da temporada). Nunca duas overlays empilhadas. */}
@@ -2999,6 +3062,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         naoLidas={naoLidasCelular}
         perfilCidadela={perfilCidadela}
         saldoSov={saldoSov}
+        bolsa={career?.bolsa}
       />
     </Shell>
   );

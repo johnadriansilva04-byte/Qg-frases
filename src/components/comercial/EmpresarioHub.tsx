@@ -8,6 +8,8 @@ type Props = {
   perfil: CidadelaPerfil | null;
   onPerfilAtualizado: (p: CidadelaPerfil) => void;
   onVoltar: () => void;
+  /** Bloco extra anexado abaixo do hub (ex.: Bolsa da Cidadela somente-leitura). */
+  extras?: React.ReactNode | undefined;
 };
 
 /** Hub do Empresário no Setor Comercial. */

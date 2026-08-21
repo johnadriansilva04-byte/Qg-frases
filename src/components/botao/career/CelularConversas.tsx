@@ -24,6 +24,7 @@ import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { supabase } from "@/integrations/supabase/client";
 import { SovMarket } from "@/components/financial/SovMarket";
 import { SovBankApp } from "@/components/financial/SovBankApp";
+import { BolsaResumoCard } from "@/components/financial/BolsaResumoCard";
 import { AuthScreen } from "../components/AuthScreen";
 import {
   carregarChatCidadela,
@@ -100,6 +101,8 @@ type Props = {
   /** Saldo REAL de SOV (user_wallets via bank_ledger) — exibido na barra de
    *  status do aparelho. null = carteira ainda não carregada. */
   saldoSov?: number | null | undefined;
+  /** Bolsa (career.bolsa) — resumo SOMENTE LEITURA na aba Banco do celular. */
+  bolsa?: import("./types").BolsaState | undefined;
 };
 
 export function CelularConversas({
@@ -121,6 +124,7 @@ export function CelularConversas({
   statsCarreira,
   abaInicial = null,
   saldoSov = null,
+  bolsa,
 }: Props) {
   const [aba, setAba] = useState<AbaCelular>("menu");
   // Notificação externa pede uma aba específica (§7: clique → abre o grupo).
@@ -917,7 +921,14 @@ export function CelularConversas({
 
             {aba === "mercado" && <SovMarket userId={userId} compact />}
 
-            {aba === "banco" && <SovBankApp userId={userId} />}
+            {aba === "banco" && (
+              <>
+                <SovBankApp userId={userId} />
+                {/* A bolsa vive UMA vez no JSONB da carreira — resumo
+                    somente-leitura, escrever não é opção do Banco. */}
+                <BolsaResumoCard bolsa={bolsa} />
+              </>
+            )}
 
             {aba === "perfil" &&
               (userId ? (

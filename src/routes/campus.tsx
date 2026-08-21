@@ -247,6 +247,7 @@ function CampusView() {
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
         saldoSov={saldoSov}
+        bolsa={career?.bolsa}
       />
     </div>
   );

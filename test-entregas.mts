@@ -76,7 +76,11 @@ console.log("\n== consequências da entrevista: reação na conversa do NPC ==")
     competicao: "Brasileirão", rodada: "Rodada 5",
   });
   c = res.career;
-  ok(res.reacoes.length === 1 && res.reacoes[0]!.npcId === "npc-braganca", "provocação → reação do Bragança");
+  ok(
+    res.reacoes.some((r) => r.npcId === "npc-braganca") &&
+      res.reacoes.some((r) => r.npcId === "npc-dirigente"),
+    "provocação → reação do Bragança + dirigente",
+  );
   for (const entrega of res.reacoes) c = anexarConversa(c, entrega);
   const brag = c.conversas.filter((x) => x.npcId === "npc-braganca");
   ok(brag.length === 1, "Bragança = UMA conversa");

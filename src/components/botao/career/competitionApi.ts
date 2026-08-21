@@ -200,10 +200,24 @@ export interface VereditoTemporada {
   /** true = segue no comando (temporada infinita); false = Game Over. */
   continua: boolean;
   motivo: string;
+  /** Quantas temporadas consecutivas sem pagar a manutenção (0-3). */
+  temporadasInadimplente: number;
 }
 
-/** Avalia, ao fim da temporada, se o treinador continua ou é demitido. */
-export function avaliarFimTemporada(soberania: number, divisao: Divisao): VereditoTemporada {
+/** Teto da tolerância de dívida (§9): na 3ª falha consecutiva → falência. */
+export const MAX_TEMPORADAS_INADIMPLENTE = 3;
+
+/**
+ * Avalia, ao fim da temporada, se o treinador continua ou é demitido.
+ * Conseguiu pagar → zera a dívida. Falhou → registra a temporada. Na 3ª
+ * falha (i.e. prev+1 === MAX) → Game Over. O jogador sabe quantas chances
+ * restam — o aviso é explícito e persistido (não sume no reload).
+ */
+export function avaliarFimTemporada(
+  soberania: number,
+  divisao: Divisao,
+  temporadasInadimplente = 0,
+): VereditoTemporada {
   const custo = CUSTO_MANUTENCAO[divisao];
   const sobrou = soberania - custo;
   if (sobrou >= 0) {
@@ -212,15 +226,31 @@ export function avaliarFimTemporada(soberania: number, divisao: Divisao): Veredi
       custoManutencao: custo,
       sobrou,
       continua: true,
-      motivo: `Soberania suficiente para manter o clube na ${DIVISAO_LABEL[divisao]}.`,
+      motivo: `Custo de manutenção pago. Diretoria renova a confiança.`,
+      temporadasInadimplente: 0,
     };
   }
+  const novasInad = temporadasInadimplente + 1;
+  if (novasInad >= MAX_TEMPORADAS_INADIMPLENTE) {
+    return {
+      soberaniaFinal: soberania,
+      custoManutencao: custo,
+      sobrou,
+      continua: false,
+      motivo: `Terceira temporada seguida sem cobrir a manutenção. Falência decretada.`,
+      temporadasInadimplente: novasInad,
+    };
+  }
+  const restantes = MAX_TEMPORADAS_INADIMPLENTE - novasInad;
   return {
     soberaniaFinal: soberania,
     custoManutencao: custo,
     sobrou,
-    continua: false,
-    motivo: `Soberania insuficiente para manter o clube. Falência decretada.`,
+    continua: true,
+    motivo:
+      `Manutenção em débito (${novasInad}/${MAX_TEMPORADAS_INADIMPLENTE} temporadas). ` +
+      `A diretoria acredita em você: ${restantes === 1 ? "1 temporada" : `${restantes} temporadas`} restantes antes da falência.`,
+    temporadasInadimplente: novasInad,
   };
 }
 
@@ -230,6 +260,21 @@ export function avaliarFimTemporada(soberania: number, divisao: Divisao): Veredi
  */
 export function iniciarNovaTemporada(soberania: number, divisao: Divisao): number {
   return Math.max(0, soberania - CUSTO_MANUTENCAO[divisao]);
+}
+
+/* ---------- Marco de 1º lugar (§10) ---------- */
+
+/**
+ * Verdade quando a rodada recém-jogada levou o usuário ao topo pela primeira
+ * vez NA TEMPORADA ATUAL — 1x por temporada, nunca a cada jogo no topo nem
+ * após hidratação (o marco persiste no JSONB da carreira).
+ */
+export function chegouAoPrimeiroLugar(
+  posicaoAtual: number,
+  temporada: number,
+  marcoLiderTemporada: number | undefined,
+): boolean {
+  return posicaoAtual === 1 && (marcoLiderTemporada ?? 0) < temporada;
 }
 
 /* ---------- Copa do Brasil jogável ---------- */

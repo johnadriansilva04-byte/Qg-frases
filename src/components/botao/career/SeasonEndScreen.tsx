@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Crown, ArrowUp, ArrowDown, Check, X, Coins, AlertTriangle, Trophy } from "lucide-react";
 import type { VereditoTemporada } from "./competitionApi";
-import { DIVISAO_LABEL } from "./competitionApi";
+import { DIVISAO_LABEL, MAX_TEMPORADAS_INADIMPLENTE } from "./competitionApi";
 import type { ResumoTemporada } from "./seasonEngine";
 import { resolveTeam } from "./competitionApi";
 import type { Team } from "../data/teams";
@@ -183,6 +183,12 @@ export function SeasonEndScreen({
             />
           </div>
           <p className="mt-1.5 text-center text-[11px] text-slate-400">{veredito.motivo}</p>
+          {/* Controle visual de tolerância à dívida (§9) — sempre explícito. */}
+          {veredito.temporadasInadimplente > 0 && (
+            <p className="mt-1 text-center text-[10px] font-black uppercase tracking-widest text-rose-300">
+              Tentativa de recuperação {veredito.temporadasInadimplente} de {MAX_TEMPORADAS_INADIMPLENTE}
+            </p>
+          )}
 
           {continua ? (
             <button

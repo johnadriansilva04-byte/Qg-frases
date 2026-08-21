@@ -283,6 +283,13 @@ export type CareerState = {
   /** Entrada da campanha: 'treinador' (trabalha para clube) ou
    *  'proprietario' (compra de um clube no Marketplace). */
   modoEntrada?: "treinador" | "proprietario" | undefined;
+  /** Contagem de temporadas consecutivas sem custo de manutenção coberto.
+   *  Regra de recuperação de dívida (§9): 0-2 = carreira segue com aviso;
+   *  na 3ª falha consecutiva = falência. Um ciclo pago zera o contador. */
+  temporadasInadimplente?: number | undefined;
+  /** Última temporada em que a chegada ao 1º lugar foi celebrada (§10).
+   *  Impede que a comemoração volte depois de F5/hidratação. */
+  marcoLiderTemporada?: number | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

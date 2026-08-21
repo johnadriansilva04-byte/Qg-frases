@@ -311,6 +311,57 @@ export function consequenciasEntrevista(
     };
   }
 
+  // Conexão dirigente (§6): provocação alta = aviso real da diretoria;
+  // orgulho/humildade = registro de blindagem. O dirigente é seu cliente.
+  if (ultima) {
+    const dirigente = personagem("npc-dirigente");
+    if (provocativas.length > 0) {
+      const alta = provocativas.some((d) => d.importancia === "alta");
+      reacoes.push({
+        id: "conv-npc-npc-dirigente",
+        tipo: "narrativa",
+        nome: dirigente.nome,
+        avatar: dirigente.avatar,
+        cargo: dirigente.cargo,
+        npcId: "npc-dirigente",
+        mensagens: [
+          {
+            id: `react-dirigente-m-${ultima.partidaId}`,
+            texto: alta
+              ? `${coach}, aqui é a diretoria. A provocação que saiu na coletiva passou do ponto — eu gosto do seu fogo, mas o clube paga quando a imprensa pula. Ajusta a mira.`
+              : `${coach}, lembrete da diretoria: provocação vende jornal e contra-reve o time. Contenha as invectivas — o bastidor é seu.`,
+            remetente: "outro",
+            timestamp: time,
+          },
+        ],
+        naoLida: true,
+      });
+    } else if (
+      ultima.declaracoes.some((d) => d.tom === "humildade" || d.tom === "orgulho")
+    ) {
+      reacoes.push({
+        id: "conv-npc-npc-dirigente",
+        tipo: "narrativa",
+        nome: dirigente.nome,
+        avatar: dirigente.avatar,
+        cargo: dirigente.cargo,
+        npcId: "npc-dirigente",
+        mensagens: [
+          {
+            id: `react-dirigente-elogio-m-${ultima.partidaId}`,
+            texto:
+              `${coach}, paraboleei a coletiva na rádio da Cidadela. ` +
+              "Postura de quem leva o clube junto — a diretoria registrou: " +
+              "você está blindado por dentro.",
+            remetente: "outro",
+            timestamp: time,
+          },
+        ],
+        naoLida: true,
+      });
+    }
+  }
+
   // Humildade/outra reação do torcedor (apenas se nada de provocação).
   const humildade = ultima?.declaracoes.some((d) => d.tom === "humildade" || d.tom === "orgulho");
   if (provocativas.length === 0 && humildade && ultima) {

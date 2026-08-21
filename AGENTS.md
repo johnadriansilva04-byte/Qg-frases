@@ -1,3 +1,41 @@
+## Regras de fim de temporada + marco de liderança + celular/Bolsa (2026-08-21, 11.5ª passada)
+
+- **Regra das 3 temporadas (§9 recuperação de dívida)**: `CareerState.temporadasInadimplente`
+  (0-3, clamp no `normalizarCareer`) + `avaliarFimTemporada(sov, divisao, prev)` —
+  pagou → contador zera e motivo "renova"; falhou 1ª/2ª → CONTINUA com motivo
+  narrativo "(n)/3 temporadas ... restantes"; 3ª → falência. Chamadas em
+  hidratação (F5 seguro) e em `finishTournamentMatch`; `startNextSeason`
+  persiste o contador do veredito. `SeasonEndScreen` mostra "Tentativa de
+  recuperação X de 3". `MAX_TEMPORADAS_INADIMPLENTE = 3` exportado.
+- **Marco de 1º lugar (§10)**: `chegouAoPrimeiroLugar(pos, temp, marco)` PURO +
+  `career.marcoLiderTemporada` persiste a celebração — posição 1 real dispara
+  UMA vez por temporada: toast 🏆 + conversa do Dirigente no celular
+  (fila `enfileirarConversas`, id `marco-lider-t{temp}`). F5 não repete.
+- **LoadingScreen unificado (fix de UX)**: overlay único cobre duas fases —
+  auth inicial (`carregando`, snapshots intro) + hidratação da campanha
+  (`loading`, snapshots onboarding-college); `onCompleto` em React state
+  (identidade estável — texto e duracao no mesmo render do estado `loading`).
+  Nunca dois overlays concorrentes.
+- **Onboarding anônimo→conta**: `carregarOnboarding(uid)` migra o espelho
+  `ID_ANONIMO` para o userId (localStorage + RPC `atualizar_estado_cidadela`)
+  quando o remoto é vazio — tour feito antes do login não se perde.
+- **Bolsa visível**: `components/financial/BolsaResumoCard.tsx` somente-leitura
+  (índice/patrimônio investido/posições + seta de tendência vs preçosAnteriores)
+  montado (a) na aba "banco" do celular (`CelularConversas.bolsa` prop;
+  CelularFixo repassa; `useCelularCarreira` alimenta /cidadela+/campus) e
+  (b) nos `extras` do `EmpresarioHub` (rota /cidadela). Operações ainda SÓ
+  na tela Economia da carreira — o Banco nunca escreve.
+- **Conexão do dirigente (§6)**: `consequenciasEntrevista` agora emite, junto
+  com a reação do Bragança/torcedor, a voz do Dir. Aldemir — provocação
+  (importância alta → aviso da diretoria) ou postura de orgulho/humildade
+  (registro de blindagem). Funde na conversa única via `anexarConversa`.
+- **Testes**: `test-regras-fim-temporada.mts` NOVO (20 invariantes jiti das
+  chances de dívida/marco/dedução de manutenção), `test-entregas.mts`
+  atualizado (9/9 —
+  provocação espera dirigente+Bragança). Suites: temporada 57, conversas 38,
+  f5 19, torcida 42+14, ia 52, onboarding 22, marketplace 11, onclick-guard 19.
+  `tsc --noEmit` 0 erros, `npm run build` OK.
+
 ## Onboarding re-aplicado + login fora do futebol + auditoria celular/env (2026-08-21, 11ª passada)
 
 - **Re-aplicado o onboarding** (onboardingEngine + OnboardingGate + OnboardingTour
