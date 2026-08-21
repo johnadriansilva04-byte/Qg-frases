@@ -1,4 +1,62 @@
 
+## Coerência global do usuário + história testada (2026-08-21, 16ª passada)
+
+Verificação de "história principal + RPG" (§do prompt mestre) + resposta à
+questão arquitetural "por que botao_usuarios E cidadela_perfis":
+
+- **HISTÓRIA PRINCIPAL FUNCIONA** — fiação verdadeira no BotaoGame:
+  `concluirColetiva` → `processarGatilhoEntrevista` (PURO, idempotente por
+  partidaId via `historia.entrevistasProcessadas`) → avança
+  `historia.capitulo` (0→6) → entrega conversa do NPC (Helena caps 1-3,
+  John Adrian caps 4+, id `conv-npc-{npc}`) → post críptico na rede
+  (`anexarPost`) → SOV `historia:cap{n}:{partidaId}` idempotente →
+  `persistCareer`. `registrarPosicaoFinal` só abre no cap final (6) e é
+  uma vez só (`historia.posicaoFinal` guard). **Gap real**: a suite de
+  "36 testes da história" SÓ existia citada no AGENTS — nunca foi commitada.
+  Agora `testes/historia-engine.test.mts` cobre 53 invariantes (gatilho,
+  idempotência, troca de mensageiro, desfecho, perfil-varia-tom, dica vaga).
+  Engine PURO sem alias `@/` (import relativo) → jiti executável.
+- **POR QUE DUAS TABELAS**: `botao_usuarios` = identidade/domínio **futebol**
+  (nome do time, cores, tática, W/D/L, `pontos_soberania` cache, JSONB
+  `progresso_caminpanha` = carreira/bolsa/torneio) criado no cadastro/login
+  do Futebol. `cidadela_perfis` = perfil/domínio **cidadela** (profissão,
+  reputação, nível, `estado` JSONB = onboarding/profissão, `nome`/`bio`
+  públicos) criado via RPC `obter_perfil_cidadela` no primeiro acesso à
+  Cidadela. **Chave de ligação: UMA — `user_id = auth.uid()`** (mesma FK
+  `REFERENCES auth.users`, UNIQUE nas duas). Um usuário, dois perfis de
+  domínio: NÃO é duplicação de identidade — é separação por domínio com o
+  MESMO usuário dinossauro-de-vs. Não há campos repetidos de verdade:
+  dinheiro/SOV NUNCA em `cidadela_perfis`; pontuação de futebol NUNCA em
+  `cidadela_perfis.estado`; `cidadela_perfis.nome/.bio` são o rótulo público
+  opcional do RPG (separação válida por domínio — o "Perfil Público"
+  mistura-se com `botao_usuarios` para partidas/SOV).
+- **IDENTIDADE CANÔNICA**: `auth.users` (auth.uid()) → um perfil por domínio,
+  TODOS ligados por `user_id`. Prova: `cidadela_perfil_publico(user_id)`
+  reúne campos de AMBAS numa leitura (nome/bio/nível de `cidadela_perfis` +
+  partidas/vitórias de `botao_usuarios`). Nenhum módulo inventa seu próprio
+  "usuário" — todos resolvem `perfil.user_id` (futebol) ou `userId` (RPC).
+- **CELUΛR SEPARADO POR TIPO — JÁ EXISTIA, SEM DUPLICAR FONTE**:
+  mensagens privadas = `CareerState.conversas` (`ConversaCelular[]` —
+  uma conversa por contato/NPC via `anexarConversa` id por npcId) → aba
+  "contatos"; posts/notícias públicas = `CareerState.feedCidadela`
+  (`PostFeed[]` com `selo` noticia/torcedor/rival/oficial/rumor —
+  `anexarPost`) → aba "rede"; missões = RPC `cidadela_missoes_diarias` →
+  aba "missoes"; notícias também em `headlines[]` (manchetes da carreira).
+  Um evento (derrota) gera UMA consequência + representações (post do
+  jornalista na rede/reação do rival na conversa) TODAS apontando para o
+  mesmo `partidaId`. Não são 4 entidades — são leituras do mesmo
+  `career.historia/entrevistas/...`. Persistência F5: `normalizarCareer`
+  sana `conversas`/`headlines`/`feedCidadela`; missoes vêm do servidor RPC.
+- **SINCRONIZAÇÃO**: SOV ledger → `obterSaldoSov` é a ÚNICA leitura em todos
+  os módulos (celular `saldoSov` prop = saldoSovRemoto ?? coach.sov,
+  re-busca 1.8s; SovBank/SovMarket/PerfilApp/BolsaResumoCard mesmo RPC).
+  `pontos_soberania` é cache denormalizado (só escrito em storage.ts com
+  `saldoSov ?? local`). Carreira/bolsa/torneio/classificação → UM JSONB
+  serializado.
+- **Verificação**: tsc 0 erros; 53 (história) + 38 + 29 + 20 + 19 + 9 + 30
+  + 6 + onboarding + marketplace OK. Não arquiteturei nada novo — mapa e
+  testes do que existia.
+
 ## Arqueologia git + verdade do banco em produção (2026-08-21, 15ª passada)
 
 Investigação com `git fetch --unshallow` (330 commits) + probes REST na
