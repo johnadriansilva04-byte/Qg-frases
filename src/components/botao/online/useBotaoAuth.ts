@@ -6,6 +6,7 @@ import {
   supabase,
 } from "@/integrations/supabase/client";
 import { buscarPerfil, cachePerfil, limparCache, sair, type Perfil } from "./auth";
+import { decidirDestinoSessao } from "./sessaoRegras";
 import { alinharCacheSoberania, criarPerfilSeNaoExistir } from "@/lib/botao/api";
 import { bootstrapFinanceiro } from "@/lib/financial/sovBankApi";
 
@@ -14,6 +15,8 @@ export function useBotaoAuth() {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erroConfiguracao, setErroConfiguracao] = useState<string | null>(null);
+  /** Sessão Auth válida SEM conta de jogo (perfil removido) → recusa. */
+  const [contaSemCadastro, setContaSemCadastro] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -53,12 +56,33 @@ export function useBotaoAuth() {
 
         if (p) {
           cachePerfil(p);
-        } else if (u.email) {
-          p = await criarPerfilSeNaoExistir(u.id, u.email, u.user_metadata?.["nome"]);
-          if (p) cachePerfil(p);
-          else limparCache();
+          setContaSemCadastro(false);
         } else {
-          limparCache();
+          const destino = decidirDestinoSessao({ temPerfil: false, usuarioCriadoEm: u.created_at });
+          if (destino === "recuperar-cadastro-recente" && u.email) {
+            // Primeiro acesso imediatamente após o signUp: o trigger pode ter
+            // falhado — a recuperação do perfil é legítima (e o bônus é
+            // idempotente na chave signup:{user}).
+            p = await criarPerfilSeNaoExistir(u.id, u.email, u.user_metadata?.["nome"]);
+            if (p) cachePerfil(p);
+            else limparCache();
+            setContaSemCadastro(false);
+          } else {
+            // RECUSA-CONTA-SEM-PERFIL:inicio
+            // Sessão ANTIGA sem perfil = conta de jogo removida. AUTENTICAÇÃO
+            // ≠ CONTA: sem auto-provisionamento — nada de perfil novo, sem
+            // carteira, sem bônus, sem hidratação de carreira. Encerra a
+            // sessão (mata o refresh token) e sinaliza o cadastro.
+            setContaSemCadastro(true);
+            await sair();
+            if (!vivo) return;
+            limparCache();
+            setUser(null);
+            setPerfil(null);
+            setCarregando(false);
+            return;
+            // RECUSA-CONTA-SEM-PERFIL:fim
+          }
         }
 
         // Bootstrap financeiro em TODA sessão (não só no cadastro): carteira +
@@ -108,6 +132,7 @@ export function useBotaoAuth() {
 
   const logout = useCallback(async () => {
     limparCache();
+    setContaSemCadastro(false);
     if (isSupabaseConfigured()) await sair();
     setUser(null);
     setPerfil(null);
@@ -118,10 +143,12 @@ export function useBotaoAuth() {
     perfil,
     carregando,
     erroConfiguracao,
+    contaSemCadastro,
     recarregar,
     logout,
     aplicarPerfil: (p: Perfil) => {
       cachePerfil(p);
+      setContaSemCadastro(false);
       setPerfil(p);
     },
   };

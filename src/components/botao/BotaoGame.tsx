@@ -101,6 +101,11 @@ import {
 } from "./career/rpg/cartorioApi";
 import { anexarPost, gerarPostManual, gerarPostPartida } from "./career/rpg/socialEngine";
 import { obterSaldoSov, registrarTransacaoSov } from "@/lib/financial/sovApi";
+import {
+  comprarAtivoInvest,
+  venderAtivoInvest,
+  pagarDividendoInvest,
+} from "@/lib/financial/sovInvestApi";
 import { atualizarPerfilClube } from "@/lib/botao/api";
 import {
   aplicarRitualNaCarreira,
@@ -260,7 +265,7 @@ function bonusCampeao(dificuldade: Difficulty): number {
 }
 
 export function BotaoGame({ onBack }: BotaoGameProps = {}) {
-  const { perfil, carregando, logout, aplicarPerfil, recarregar } = useBotaoAuth();
+  const { perfil, carregando, logout, aplicarPerfil, recarregar, contaSemCadastro } = useBotaoAuth();
   const [screen, setScreen] = useState<Screen>("menu");
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
@@ -487,6 +492,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const t = setTimeout(() => setToast(null), 3200);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Sessão Auth válida sem conta de jogo (perfil removido): o hook recusou a
+  // entrada e encerrou a sessão — aqui só explicamos e mandamos ao cadastro.
+  useEffect(() => {
+    if (!contaSemCadastro) return;
+    setToast("Esta conta não possui cadastro no jogo. Crie sua conta para entrar na Cidadela.");
+    setScreen("profile");
+  }, [contaSemCadastro]);
 
   // ===== Restauração de estado após refresh (§20/§22 + F5 sem reset) =====
   // Fim de partida/entrevista, a tela atual e a PARTIDA EM ANDAMENTO vivem só
@@ -1178,6 +1191,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       return true; // Vídeo assistido com sucesso
     }
 
+    setToast("Não foi possível registrar a recompensa agora. Tente novamente.");
     return false; // Não foi possível assistir o vídeo
   };
 
@@ -1983,34 +1997,47 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setToast("📜 Sua posição foi registrada no arquivo. (+40 SOV)");
   };
 
-  /** Compra/venda na Bolsa (§23-25): débito/crédito SOV no ledger (module
-   *  'market'), com persistência no JSONB da carreira. */
-  const handleComprarAtivo = (ativoId: AtivoId, quantidade: number) => {
-    if (!career) return;
+  /** Compra/venda na Bolsa de Valores (§23-25, §16). ATÔMICA: o débito do SOV
+   *  Invest é confirmado pelo ledger ANTES de gravar a posição. Se o ledger
+   *  falhar, NENHUMA posição é criada (nunca "posição sem débito"). A trava
+   *  `operacaoBolsaRef` impede compra fantasma por clique duplo. */
+  const operacaoBolsaRef = useRef(false);
+  const handleComprarAtivo = async (ativoId: AtivoId, quantidade: number) => {
+    if (!career || operacaoBolsaRef.current) return;
     const bolsaAtual = garantirBolsa(career.bolsa);
     const custo = custoCompra(bolsaAtual, ativoId, quantidade);
-    if (career.coach.sov < custo) {
-      setToast("Saldo SOV insuficiente.");
+    const uid = perfil?.user_id;
+    if (!uid) {
+      setToast("Entre na sua conta para investir.");
       return;
     }
-    const uid = perfil?.user_id;
-    if (uid) {
-      void registrarTransacaoSov(uid, -custo, "fee", `Bolsa: compra de ${quantidade} cota(s) de ${ativoId}`, "market", {
-        ativoId,
-        quantidade,
-      }, {
-        sourceEvent: "bolsa-compra",
-        idempotencyKey: `bolsa-compra:${uid}:${ativoId}:${Date.now()}`,
+    operacaoBolsaRef.current = true;
+    try {
+      // 1) DÉBITO primeiro (atômico no ledger). Falhou → aborta sem posição.
+      const res = await comprarAtivoInvest(
+        uid,
+        custo,
+        `Bolsa: compra de ${quantidade} cota(s) de ${ativoId}`,
+        `bolsa-compra:${uid}:${ativoId}:${career.rodadaAtual}:${Date.now()}`,
+        { ativoId, quantidade, rodada: career.rodadaAtual, temporada: career.temporada },
+      );
+      if (!res) {
+        setToast("Compra não concluída — saldo insuficiente no SOV Invest.");
+        return;
+      }
+      // 2) Só então grava a posição (fonte da posição = JSONB da carreira).
+      persistCareer({
+        ...career,
+        bolsa: comprarAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
       });
+      setToast(`Comprou ${quantidade} cota(s) — ${custo.toFixed(0)} SOV debitado do SOV Invest.`);
+    } finally {
+      operacaoBolsaRef.current = false;
     }
-    persistCareer({
-      ...career,
-      bolsa: comprarAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
-    });
   };
 
-  const handleVenderAtivo = (ativoId: AtivoId, quantidade: number) => {
-    if (!career) return;
+  const handleVenderAtivo = async (ativoId: AtivoId, quantidade: number) => {
+    if (!career || operacaoBolsaRef.current) return;
     const bolsaAtual = garantirBolsa(career.bolsa);
     const preco = bolsaAtual.precos[ativoId];
     const valor = Math.round(preco * quantidade * 100) / 100;
@@ -2020,19 +2047,35 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       return;
     }
     const uid = perfil?.user_id;
-    if (uid) {
-      void registrarTransacaoSov(uid, valor, "reward", `Bolsa: venda de ${quantidade} cota(s) de ${ativoId}`, "market", {
-        ativoId,
-        quantidade,
-      }, {
-        sourceEvent: "bolsa-venda",
-        idempotencyKey: `bolsa-venda:${uid}:${ativoId}:${Date.now()}`,
-      });
+    if (!uid) {
+      setToast("Entre na sua conta para investir.");
+      return;
     }
-    persistCareer({
-      ...career,
-      bolsa: venderAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
-    });
+    operacaoBolsaRef.current = true;
+    try {
+      // 1) CRÉDITO primeiro (atômico no ledger) → volta ao SOV Invest (líq. IOF).
+      const res = await venderAtivoInvest(
+        uid,
+        valor,
+        `Bolsa: venda de ${quantidade} cota(s) de ${ativoId}`,
+        `bolsa-venda:${uid}:${ativoId}:${career.rodadaAtual}:${Date.now()}`,
+        { ativoId, quantidade, rodada: career.rodadaAtual, temporada: career.temporada },
+      );
+      if (!res) {
+        setToast("Venda não concluída.");
+        return;
+      }
+      // 2) Só então remove a posição.
+      persistCareer({
+        ...career,
+        bolsa: venderAtivo(bolsaAtual, ativoId, quantidade, career.rodadaAtual, career.temporada),
+      });
+      setToast(
+        `Vendeu ${quantidade} cota(s) — ${res.liquido?.toFixed(0) ?? valor.toFixed(0)} SOV no SOV Invest (IOF 10%).`,
+      );
+    } finally {
+      operacaoBolsaRef.current = false;
+    }
   };
 
   // Processa o resultado de um jogo da Copa do Brasil (paralela ao
@@ -2501,19 +2544,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             bolsa: div.bolsa,
           };
           if (perfil?.user_id) {
-            void registrarTransacaoSov(
+            // Dividendo cai no SOV INVEST (não no Bank), líquido de IOF 10%,
+            // idempotente por período (t:r) — a chave muda a cada rodada de
+            // dividendo, então NUNCA para depois do primeiro (§8, §9, §19).
+            void pagarDividendoInvest(
               perfil.user_id,
               Math.round(div.total * 100) / 100,
-              "reward",
               "Dividendos da Bolsa de Valores da Cidadela",
-              "market",
+              `dividendo:${novaCareer.temporada}:r${novaCareer.rodadaAtual}`,
               { rodada: novaCareer.rodadaAtual, tipo: "dividendo" },
-              // Dividendo por rodada: idempotente também no servidor
-              // (reforça o guarda local ultimaRodadaBolsa).
-              {
-                sourceEvent: "dividendo",
-                idempotencyKey: `dividendo:${novaCareer.temporada}:r${novaCareer.rodadaAtual}`,
-              },
             );
           }
         } else {
@@ -2521,7 +2560,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         }
       }
 
-      // === Dividendos de Proprietário de Clubes (sistema de cotas) ===
+      // === Dividendos de Proprietário de Clubes (Mercado de Clubes) ===
       const propDividendos = processarDividendosProprietario(
         novaCareer,
         novaCareer.rodadaAtual,
@@ -2529,17 +2568,14 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       );
       if (propDividendos.deltaSov > 0 && perfil?.user_id) {
         novaCareer = propDividendos.career;
-        void registrarTransacaoSov(
+        // Dividendo de ações de clube → SOV Invest, líquido de IOF 10%,
+        // idempotente por período (nunca duplica, nunca para).
+        void pagarDividendoInvest(
           perfil.user_id,
           propDividendos.deltaSov,
-          "reward",
-          "Dividendos de Proprietário de Clubes",
-          "market",
+          "Dividendos do Mercado de Clubes",
+          `dividendo-prop:${novaCareer.temporada}:r${novaCareer.rodadaAtual}`,
           { rodada: novaCareer.rodadaAtual, tipo: "dividendo-proprietario" },
-          {
-            sourceEvent: "dividendo-proprietario",
-            idempotencyKey: `dividendo-prop:${novaCareer.temporada}:r${novaCareer.rodadaAtual}`,
-          },
         );
 
         // Notificação no celular sobre dividendos
@@ -3316,8 +3352,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         {screen === "economia" && career && (
           <EconomiaScreen
             career={career}
+            userId={perfil?.user_id ?? null}
             onComprar={handleComprarAtivo}
             onVender={handleVenderAtivo}
+            onAbrirMercadoClubes={() => setScreen("propriedade")}
             onBack={() => setScreen("hub")}
           />
         )}

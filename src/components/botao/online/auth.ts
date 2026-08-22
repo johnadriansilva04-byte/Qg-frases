@@ -1,4 +1,5 @@
 import { assertSupabaseConfigured, supabase } from "@/integrations/supabase/client";
+import { criarPerfilSeNaoExistir } from "@/lib/botao/api";
 
 export type Perfil = {
   id: string;
@@ -141,11 +142,39 @@ export async function cadastrar(input: {
 
   if (error) {
     console.error("Erro detalhado do signup:", error);
-    throw new Error(
-      error.message.toLowerCase().includes("already")
-        ? "Já existe uma conta com esse email. Faça login."
-        : `Erro ao criar conta: ${error.message}`,
-    );
+    if (error.message.toLowerCase().includes("already")) {
+      // RE-CADASTRO legítimo: o e-mail existe em auth.users, mas o perfil de
+      // jogo pode ter sido removido. A prova de posse é a senha — sem ela
+      // NADA é criado (perfil/carteira/bônus). Com ela, o usuário recupera a
+      // conta de jogo com os dados informados no formulário de cadastro.
+      const { data: sessao, error: erroLogin } = await supabase.auth.signInWithPassword({
+        email: input.email,
+        password: input.senha,
+      });
+      if (erroLogin || !sessao.user) {
+        throw new Error(
+          "Já existe uma conta com esse email. Faça login com a senha correta.",
+        );
+      }
+      const existente = await buscarPerfil(sessao.user.id);
+      if (existente) return existente;
+      const recriado = await criarPerfilSeNaoExistir(
+        sessao.user.id,
+        sessao.user.email ?? input.email,
+        {
+          nome: input.nome.trim(),
+          time: input.time.trim(),
+          abreviacao: input.abreviacao.trim().toUpperCase(),
+          numero: input.numero,
+          cores: input.cores,
+        },
+      );
+      if (!recriado) {
+        throw new Error("Conta autenticada, mas o recadastramento falhou. Tente novamente.");
+      }
+      return recriado;
+    }
+    throw new Error(`Erro ao criar conta: ${error.message}`);
   }
   const user = data.user;
   if (!user) throw new Error("Não foi possível criar a conta.");

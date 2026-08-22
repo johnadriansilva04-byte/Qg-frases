@@ -175,6 +175,15 @@ class AdManager {
       return;
     }
 
+    // FREQUÊNCIA: cada script (monetag/adsterra/adsense) aparece no MÁXIMO 1x
+    // a cada 15h (persistido). Recarregar a página (F5) ou clicar no jogo não
+    // reexibe o anúncio antes do intervalo. Valor abaixo do piso grava o
+    // timestamp real, então o cooldown nunca é zerado por manipulação.
+    if (!this.scriptCooldownPassou(network)) {
+      console.log(`[AdManager] Script ${network} em cooldown (1x/15h), pulando`);
+      return;
+    }
+
     const config = AD_SCRIPTS[network];
     if (!config || !config.src) return;
 
@@ -196,9 +205,38 @@ class AdManager {
 
     document.head.appendChild(script);
     this.loadedScripts.add(network);
+    this.marcarScriptExibido(network);
 
     console.log(`[AdManager] Script ${network} carregado`);
   }
+
+  /**
+   * Frequência por script: 1 exibição a cada 15h (persistida). Retorna true
+   * quando já se passaram 15h desde a última exibição do script.
+   */
+  private scriptCooldownPassou(network: AdNetwork): boolean {
+    if (typeof window === "undefined") return true;
+    try {
+      const ultimo = Number(localStorage.getItem(`ad_script_ts:${network}`) ?? "0");
+      if (!Number.isFinite(ultimo) || ultimo <= 0) return true;
+      return Date.now() - ultimo >= AdManager.SCRIPT_COOLDOWN_MS;
+    } catch {
+      return true; // storage bloqueado → não bloqueia o app
+    }
+  }
+
+  /** Marca a exibição do script agora (inicia o cooldown de 15h). */
+  private marcarScriptExibido(network: AdNetwork): void {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(`ad_script_ts:${network}`, String(Date.now()));
+    } catch {
+      /* storage cheio/bloqueado — não quebra */
+    }
+  }
+
+  /** Intervalo mínimo entre exibições do MESMO script (15 horas). */
+  private static readonly SCRIPT_COOLDOWN_MS = 15 * 60 * 60 * 1000;
 
   /**
    * Remove scripts de outras redes (isolamento)

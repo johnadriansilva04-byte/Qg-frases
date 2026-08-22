@@ -201,9 +201,12 @@ export function processarDividendosProprietario(
     return { career, deltaSov: 0, detalhes: [] };
   }
 
-  // Evita pagar dividendos duas vezes na mesma rodada
-  if (propriedade.ultimaRodadaDividendos >= rodada) {
-    return { career, deltaSov: 0, detalhes: [] };
+  // Dividendos por PERÍODO (não por rodada absoluta): paga no máximo uma vez
+  // por rodada, mas NUNCA para se uma rodada for perdida/retroceder. O bug
+  // anterior (`ultimaRodadaDividendos >= rodada`) travava para sempre se o
+  // contador ficasse à frente da rodada atual (estado degradado/F5/replay).
+  if (propriedade.ultimaRodadaDividendos === rodada) {
+    return { career, deltaSov: 0, detalhes: [] }; // já pago NESTA rodada
   }
 
   let totalDividendos = 0;

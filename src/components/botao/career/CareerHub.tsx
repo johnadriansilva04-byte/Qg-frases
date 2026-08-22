@@ -138,13 +138,13 @@ export function CareerHub({
               <span className="menu-card-icon menu-accent-emerald !size-9">
                 <Coins className="size-4" />
               </span>
-              <span className="mt-1 block font-display text-xs">Economia</span>
+              <span className="mt-1 block font-display text-xs">Bolsa de Valores</span>
             </button>
             <button onClick={onOpenPropriedade} className="menu-card menu-accent-amber !p-3">
               <span className="menu-card-icon menu-accent-amber !size-9">
                 <Building2 className="size-4" />
               </span>
-              <span className="mt-1 block font-display text-xs">Propriedade</span>
+              <span className="mt-1 block font-display text-xs">Mercado de Clubes</span>
             </button>
           </div>
 

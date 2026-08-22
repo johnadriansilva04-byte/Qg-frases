@@ -27,6 +27,15 @@ migração é aplicada **manualmente** colando o conteúdo do arquivo no
     `tempo:{user}:{hora}`), `cidadela_perfil_publico` e
     `cidadela_atualizar_perfil` (depende de `sov_bank.sql` e
     `cidadela_chat_missoes.sql`).
+11. `sov_bank_invest.sql` — **SOV BANK + SOV INVEST** (duas carteiras do
+    MESMO jogador): `user_wallets.invest_balance` (SOV Invest) ao lado de
+    `balance` (SOV Bank). RPCs atômicas: `sov_bank_transferir_carteiras`
+    (Bank→Invest 0% / Invest→Bank IOF 10%), `sov_bank_pagar_dividendo`
+    (dividendo → Invest, líquido de IOF 10%, idempotente por período),
+    `sov_bank_comprar_ativo` / `sov_bank_vender_ativo` (Bolsa paga com/credita
+    o Invest, ledger-first) e `sov_bank_saldos`. Tipos novos no ledger:
+    `invest_transfer`, `invest_withdraw`, `dividend`, `fee` (IOF).
+    **Depende de `sov_bank.sql`** (colunas de rastreabilidade do ledger).
 
 ## Como verificar se o SOV BANK está operacional
 

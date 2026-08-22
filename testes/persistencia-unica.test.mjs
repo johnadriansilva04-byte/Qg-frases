@@ -107,14 +107,17 @@ expect(
   "api legada: salvarResultado mescla via fila",
 );
 
-// 7. Bolsa: compra e venda persistem snapshot + ledger (nunca só interface).
+// 7. Bolsa: compra/venda persistem snapshot + ledger ATÔMICO (nunca só interface).
 const handleCompra = bj.slice(bj.indexOf("const handleComprarAtivo"), bj.indexOf("const handleVenderAtivo"));
 expect(handleCompra.includes("persistCareer("), "Bolsa: compra persiste snapshot da carreira");
-expect(handleCompra.includes("registrarTransacaoSov("), "Bolsa: compra debita no ledger SOV");
+expect(handleCompra.includes("comprarAtivoInvest("), "Bolsa: compra debita o SOV Invest no ledger (atômico)");
+expect(handleCompra.includes("await comprarAtivoInvest") && handleCompra.indexOf("await comprarAtivoInvest") < handleCompra.indexOf("comprarAtivo(bolsaAtual"),
+  "Bolsa: compra é ledger-first (débito antes de gravar a posição)");
+expect(handleCompra.includes("operacaoBolsaRef"), "Bolsa: compra com trava anti duplo-clique");
 expect(handleCompra.includes("comprarAtivo("), "Bolsa: compra passa pelo engine (custos/cotas)");
 const handleVenda = bj.slice(bj.indexOf("const handleVenderAtivo"), bj.indexOf("const finishCopaMatch"));
-expect(handleVenda.includes("persistCareer(") && handleVenda.includes("venderAtivo("),
-  "Bolsa: venda persiste snapshot + engine");
+expect(handleVenda.includes("persistCareer(") && handleVenda.includes("venderAtivo(") && handleVenda.includes("venderAtivoInvest("),
+  "Bolsa: venda credita o SOV Invest no ledger + persiste snapshot + engine");
 
 // 8. EconomiaScreen NÃO mantém cópia local da bolsa (fonte = career hidratada).
 expect(!economia.includes("useState<BolsaState"), "EconomiaScreen: sem estado local de bolsa");

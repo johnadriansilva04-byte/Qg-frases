@@ -148,14 +148,32 @@ export async function getUsuarioAtual(userId: string): Promise<UsuarioBotao | nu
   return data;
 }
 
+export type DadosNovoPerfil = {
+  nome?: string | undefined;
+  time?: string | undefined;
+  abreviacao?: string | undefined;
+  numero?: number | undefined;
+  cores?: string[] | undefined;
+};
+
+/**
+ * Cria o perfil de jogo SOMENTE em contextos legítimos de cadastro:
+ *  1. recuperação do primeiro acesso imediatamente após o signUp (trigger
+ *     falhou — janela determinística de `decidirDestinoSessao`);
+ *  2. re-cadastro explícito com prova de posse (senha válida) no fluxo de
+ *     cadastro quando o e-mail já existe em auth.users sem perfil de jogo.
+ * NUNCA é chamada por uma sessão antiga sem perfil (essa é recusada).
+ */
 export async function criarPerfilSeNaoExistir(
   userId: string,
   email: string,
-  nome?: string,
+  dados?: string | DadosNovoPerfil,
 ): Promise<UsuarioBotao | null> {
   // Primeiro tenta buscar
   const existente = await getUsuarioAtual(userId);
   if (existente) return existente;
+
+  const d: DadosNovoPerfil = typeof dados === "string" ? { nome: dados } : (dados ?? {});
 
   // Se não existe, cria
   const { data, error } = await supabase
@@ -163,12 +181,12 @@ export async function criarPerfilSeNaoExistir(
     .insert({
       user_id: userId,
       email: email,
-      nome: nome || email.split("@")[0] || email,
-      time_personalizado: "Meu Time",
-      abreviacao_time: "MTI",
-      numero_jogador: 10,
+      nome: d.nome || email.split("@")[0] || email,
+      time_personalizado: d.time || "Meu Time",
+      abreviacao_time: d.abreviacao || "MTI",
+      numero_jogador: d.numero ?? 10,
       pontos_soberania: 50,
-      cores: ["#FF0000", "#00FF00", "#0000FF"],
+      cores: d.cores ?? ["#FF0000", "#00FF00", "#0000FF"],
     })
     .select("*")
     .single();
@@ -210,7 +228,9 @@ export async function salvarResultado(params: {
   if (params.titulo) progresso.titles[params.titulo] += 1;
 
   // Regra do SOV Bank: nenhum Sovereign entra/sai fora do ledger. O saldo
-  // autoritativo retornado pela RPC vira o cache pontos_soberania.
+  // autoritativo retornado pela RPC vira o cache pontos_soberania. Se o
+  // ledger não confirma, a operação econômica NÃO é concluída: o cache
+  // permanece como estava (nunca confirmado com cálculo local).
   let saldoSov: number | null = null;
   if (params.pontos !== 0) {
     saldoSov = await registrarTransacaoSov(
@@ -222,6 +242,11 @@ export async function salvarResultado(params: {
       { resultado: params.resultado },
       { sourceEvent: "salvar_resultado" },
     );
+    if (saldoSov === null) {
+      console.warn(
+        "[api] SOV da partida NÃO confirmado: ledger indisponível — cache preservado (nada criado localmente).",
+      );
+    }
   }
 
   const { data, error } = await supabase
@@ -229,8 +254,7 @@ export async function salvarResultado(params: {
     .update({
       partidas_jogadas: params.usuario.partidas_jogadas + 1,
       partidas_vencidas: params.usuario.partidas_vencidas + (params.resultado === "v" ? 1 : 0),
-      pontos_soberania:
-        saldoSov ?? Math.max(0, params.usuario.pontos_soberania + params.pontos),
+      pontos_soberania: saldoSov ?? params.usuario.pontos_soberania,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", params.usuario.user_id)

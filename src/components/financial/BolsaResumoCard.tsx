@@ -35,13 +35,14 @@ export function BolsaResumoCard({
       </header>
 
       <p className="text-[11px] text-emerald-100/90">
-        Investido: <strong>{investido.toFixed(1)} SOV</strong>
+        Em ativos: <strong>{investido.toFixed(1)} SOV</strong>
+        <span className="ml-1 text-emerald-200/60">(valor de mercado — não é saldo)</span>
       </p>
 
       {carteira.length === 0 ? (
         <p className="mt-1.5 rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-2 text-[11px] text-emerald-200/70">
-          Sem posições ainda — compras e vendas acontecem na tela Economia da
-          Carreira (ao final da rodada a cotação reage aos resultados reais).
+          Sem posições ainda — compras e vendas acontecem na Bolsa de Valores
+          da Carreira (ao final da rodada a cotação reage aos resultados reais).
         </p>
       ) : (
         <ul className="mt-1.5 space-y-1">

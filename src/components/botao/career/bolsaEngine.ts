@@ -284,6 +284,12 @@ export function pagarDividendos(
   if (bolsa.carteira.length === 0 || rodada % DIVIDENDOS_INTERVALO !== 0) {
     return { bolsa, total: 0 };
   }
+  // Idempotente por PERÍODO (§25): paga no máximo uma vez por rodada, mas
+  // NUNCA para se uma rodada for perdida/retroceder. O bug anterior
+  // (`ultimaRodadaBolsa === rodada` com guarda `>=` implícita no fluxo)
+  // travava se o contador ficasse à frente. Agora: igual = já pago; menor =
+  // rodada nova, paga; maior = estado à frente, ainda assim paga (a rodada
+  // atual nunca recebeu este período).
   if (bolsa.ultimaRodadaBolsa === rodada) return { bolsa, total: 0 };
 
   let total = 0;

@@ -222,10 +222,16 @@ export async function atualizarPontosSoberania(
 
     if (!currentData) return;
 
-    // Fallback: se o Banco Central não respondeu (migration pendente), usa o
-    // cálculo local — nunca deixa o jogo travar por causa do ledger.
-    const novosPontos =
-      saldoSov ?? Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
+    // Regra econômica: sem confirmação do ledger, NENHUM SOV é confirmado
+    // localmente — o cache permanece como estava (o bootstrap da próxima
+    // sessão realinha ao saldo autoritativo). Estatísticas da partida
+    // (não-econômicas) são gravadas normalmente.
+    if (pontosTotais !== 0 && saldoSov === null) {
+      console.warn(
+        "[Pontos] ledger indisponível — SOV da partida NÃO confirmado; cache preservado.",
+      );
+    }
+    const novosPontos = saldoSov ?? (currentData.pontos_soberania || 0);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias = vitoria
       ? (currentData.partidas_vencidas || 0) + 1
@@ -289,9 +295,14 @@ export async function atualizarEstatisticasOnline(
 
     if (!currentData) return;
 
-    // Fallback local quando o ledger não responde (cache ainda é atualizado).
-    const novosPontos =
-      saldoSov ?? Math.max(0, (currentData.pontos_soberania || 0) + pontosTotais);
+    // Sem confirmação do ledger, nenhum SOV é confirmado localmente (cache
+    // preservado). Estatísticas (não-econômicas) seguem gravadas.
+    if (pontosTotais !== 0 && saldoSov === null) {
+      console.warn(
+        "[Estatísticas Online] ledger indisponível — SOV da partida NÃO confirmado; cache preservado.",
+      );
+    }
+    const novosPontos = saldoSov ?? (currentData.pontos_soberania || 0);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias =
       resultado === "vitoria"
@@ -336,26 +347,22 @@ export async function adicionarPontosVideo(userId: string, pontos: number = 5) {
       { pontos },
     );
 
-    const { data: currentData } = await supabase
-      .from("botao_usuarios")
-      .select("pontos_soberania")
-      .eq("user_id", userId)
-      .single();
-
-    if (!currentData) return null;
-
-    // Fallback local quando o ledger não responde.
-    const novosPontos = saldoSov ?? (currentData.pontos_soberania || 0) + pontos;
+    // Regra econômica: recompensa sem confirmação do ledger NÃO é concluída.
+    // Nada de somar localmente — o chamador informa erro/retry.
+    if (saldoSov === null) {
+      console.warn("[Pontos] recompensa de vídeo NÃO confirmada: ledger indisponível.");
+      return null;
+    }
 
     const { error } = await supabase
       .from("botao_usuarios")
-      .update({ pontos_soberania: novosPontos })
+      .update({ pontos_soberania: saldoSov })
       .eq("user_id", userId);
 
     if (error) throw error;
 
-    console.log("[Pontos] Vídeo assistido:", { pontos, novosPontos });
-    return novosPontos;
+    console.log("[Pontos] Vídeo assistido:", { pontos, saldoSov });
+    return saldoSov;
   } catch (error) {
     console.error("Erro ao adicionar pontos por vídeo:", error);
     return null;

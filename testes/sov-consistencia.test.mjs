@@ -15,8 +15,8 @@ const from = sovBankSql.indexOf("CREATE OR REPLACE FUNCTION sov_bank_registrar")
 const to = sovBankSql.indexOf("$$;", from);
 const corpoRegistrar = sovBankSql.slice(from, to);
 check("SQL não engole mais EXCEPTION em sov_bank_registrar", !corpoRegistrar.includes("EXCEPTION WHEN OTHERS"));
-check("aposta sincroniza cache com saldo do ledger", careerRemote.includes("saldoLedger ?? Math.max(0, atual + delta)"));
+check("aposta aborta quando o ledger não confirma (sem cálculo local)", careerRemote.includes("aposta NÃO confirmada") && careerRemote.includes("return null;"));
 check("compra de clube aborta quando o banco recusa", botaoGame.includes("Compra não concluída"));
-check("fallback na aposta usa local só em falha", careerRemote.includes("let saldoLedger: number | null = null;"));
+check("aposta: cache nunca é soma local (saldoLedger ?? atual, não atual + delta)", !careerRemote.includes("saldoLedger ?? Math.max(0, atual + delta)"));
 console.log(`== ${ok} OK / ${bad} falhas ==`);
 process.exit(bad === 0 ? 0 : 1);

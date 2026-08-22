@@ -504,8 +504,15 @@ export function CelularConversas({
               </div>
             ) : (
               <div className="phone-chat-input">
-                <button onClick={onVoltar} className="btn-ghost w-full text-xs">
-                  Entendido — voltar
+                {/* Voltar à LISTA de conversas (app Contatos) — nunca fecha o celular. */}
+                <button
+                  onClick={() => {
+                    setConversaSelecionada(null);
+                    setAba("contatos");
+                  }}
+                  className="btn-ghost w-full text-xs"
+                >
+                  Entendido — voltar às mensagens
                 </button>
               </div>
             )}

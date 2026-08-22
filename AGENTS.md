@@ -1,3 +1,106 @@
+## SOV BANK + SOV INVEST (duas carteiras) + Bolsa atômica + dividendos recorrentes (2026-08-22, 21ª passada)
+
+Implementação definitiva do modelo "SOV Bank / SOV Invest / Bolsa de Valores".
+NENHUM SOV é criado: Bank + Invest são o dinheiro do MESMO jogador.
+
+- **Duas carteiras (mesma linha `user_wallets`)**: `balance` = SOV Bank
+  (líquido); `invest_balance` = SOV Invest (alocado em investimento). Migração
+  `supabase/migrations/sov_bank_invest.sql` (ordem 11, após `sov_bank.sql`).
+- **RPCs atômicas** (FOR UPDATE + idempotência + auth.uid):
+  `sov_bank_transferir_carteiras` (Bank→Invest **0%** / Invest→Bank **IOF 10%**,
+  a taxa sai de circulação como `fee` no ledger), `sov_bank_pagar_dividendo`
+  (dividendo → Invest, bruto→IOF 10%→líquido, idempotente por período `t:r`),
+  `sov_bank_comprar_ativo`/`sov_bank_vender_ativo` (Bolsa paga com/credita o
+  Invest, ledger-first) e `sov_bank_saldos`. Tipos novos no ledger:
+  `invest_transfer`, `invest_withdraw`, `dividend`, `market_purchase`, `fee`.
+- **Frontend**: `src/lib/financial/sovInvestApi.ts` (transferências, dividendo,
+  compra/venda, saldos). `EconomiaScreen` virou a **Bolsa de Valores**: cards
+  SOV Bank + SOV Invest + transferências (0% / IOF 10%), seção **Ações**
+  (Mercado de Clubes) e **Ativos de Renda** (renda recorrente). Rótulos:
+  CareerHub "Economia"→"Bolsa de Valores", "Propriedade"→"Mercado de Clubes";
+  PropriedadeScreen título "Mercado de Clubes"; SovBankApp mostra os 2 saldos
+  + tipos novos no extrato.
+- **Atomicidade (§16)**: `handleComprarAtivo`/`handleVenderAtivo` (Bolsa) são
+  ledger-first — o débito/crédito do Invest é confirmado pelo ledger ANTES de
+  gravar a posição; falhou → nenhuma posição criada; trava `operacaoBolsaRef`
+  impede compra fantasma por clique duplo. Mercado de Clubes (cotas) já era
+  ledger-first (mantido no Bank).
+- **Dividendos recorrentes (§8/§9 — bug "param depois do primeiro")**: causa
+  raiz era o guarda `ultimaRodada >= rodada` que travava para sempre se o
+  contador ficasse à frente (estado degradado/F5/replay). Corrigido para
+  `=== rodada` (só não repete a MESMA rodada) em `propriedadeEngine.
+  processarDividendosProprietario` e documentado em `bolsaEngine.pagarDividendos`.
+  Dividendos agora caem no SOV Invest via `pagarDividendoInvest` (idempotente
+  por período — nunca duplica, nunca para).
+- **Anúncios (§11–§15)**: `adManager` ganhou cooldown de **15h por script**
+  (`ad_script_ts:{monetag|adsterra|adsense}` em localStorage) verificado antes
+  de injetar — F5 ou clicar no jogo NÃO reexibe antes do intervalo; nunca em
+  loop; nunca abre várias páginas/janelas.
+- **Celular (§1–§2)**: mensagem de "Número desconhecido" (O Corretor) nunca
+  fica presa — o botão de leitura "Entendido — voltar às mensagens" retorna à
+  LISTA de Contatos (`setAba("contatos")`), NÃO fecha o celular (antes chamava
+  `onVoltar` = fechar o app). Suborno/narrativa têm saída (onFechar → hub).
+- **Verificação**: tsc 0 erros; build OK. Testes: sov-invest-integridade 46/46,
+  celular-anuncios 12/12, conta-sem-perfil 33/33, persistencia-unica 32/32,
+  sov-consistencia 6/6, fluxo-usuario-novo 14/14, f5-partida 27/27.
+- **PRODUÇÃO**: aplicar `supabase/migrations/sov_bank_invest.sql` no SQL Editor
+  (após `sov_bank.sql`). Sem ela, transferências/dividendos no Invest falham de
+  forma segura (null → toast de erro, nunca cria SOV).
+
+
+## AUTENTICAÇÃO ≠ CONTA + fim do fallback econômico local (2026-08-22, 20ª passada)
+
+Correção das pendências da auditoria de auth/persistência/economia. Cirúrgico:
+economia SOV (user_wallets/bank_ledger/sov_bank_registrar/teto 200k) intacta.
+
+- **LOGIN FANTASMA — CAUSA RAIZ**: limpar o schema `public` NÃO apaga
+  `auth.users` (a autenticação mora no GoTrue). Sessão válida + perfil público
+  inexistente → `useBotaoAuth.sync` fazia auto-provisionamento silencioso
+  (criava `botao_usuarios` + carteira + bônus) e o usuário entrava. Agravante:
+  `excluirContaUsuario` é soft-delete (auth.users permanece; hard-delete exige
+  Dashboard/Admin API).
+- **REGRA DETERMINÍSTICA** (`online/sessaoRegras.ts`, PURO, sem alias "@/"):
+  `decidirDestinoSessao({temPerfil, usuarioCriadoEm, agora})` →
+  `entrar` (perfil existe) | `recuperar-cadastro-recente` (sem perfil MAS
+  `auth.users.created_at` dentro de `JANELA_CADASTRO_RECENTE_MS` = 10 min —
+  primeiro acesso pós-signUp com trigger falho) | `recusar-conta-sem-cadastro`
+  (sessão antiga sem perfil). Recusa: `sair()` (mata refresh token) +
+  `limparCache()` + `contaSemCadastro=true` → BotaoGame mostra toast e abre a
+  tela de cadastro ("profile"). NUNCA cria perfil/carteira/bônus na recusa
+  (guarda estrutural com marcadores `RECUSA-CONTA-SEM-PERFIL:inicio/fim`).
+- **RE-CADASTRO SEM DEADLOCK** (`auth.ts cadastrar`): signUp "already
+  registered" → prova de posse via `signInWithPassword` (senha errada = nada
+  criado) → perfil existe? devolve; não existe? `criarPerfilSeNaoExistir` com
+  os dados do formulário (agora aceita `DadosNovoPerfil`: nome/time/sigla/
+  número/cores). Bônus continua idempotente por `signup:{user}` — re-cadastro
+  com ledger intacto NÃO dobra; com tudo apagado, é mundo novo.
+- **FIM DO FALLBACK ECONÔMICO LOCAL** (regra: "ledger indisponível ⇒ operação
+  econômica NÃO concluída; cache preservado, nunca confirmado localmente"):
+  `adicionarPontosVideo` retorna null sem gravar (BotaoGame mostra toast de
+  retry); `salvarResultado` (legado) mantém `pontos_soberania` sem soma local;
+  `atualizarPontosSoberania`/`atualizarEstatisticasOnline` gravam cache só com
+  saldo do ledger (estatísticas não-econômicas seguem gravando); aposta online
+  (`aplicarApostaSoberania`) ABORTA (return null) sem confirmação. O fluxo de
+  carreira (`aplicarResultadoRemoto`) mantém o cache coach.sov do snapshot
+  local por design (realinhado pelo ledger; F5 nunca zera) — documentado.
+- **BOLSA sem dupla contagem na UI**: EconomiaScreen — "Patrimônio = saldo +
+  valor de mercado das cotas. Ativos NÃO são saldo disponível"; patrimônio da
+  Cidadela rotulado "valor de mercado, não saldo de ninguém". BolsaResumoCard
+  — "Em ativos: X SOV (valor de mercado — não é saldo)".
+- **Testes**: `testes/sessao-antiga.test.mts` NOVO (11 invariantes runtime,
+  Node strip-types — node_modules ausente neste workspace; jiti também vale):
+  sessão antiga+sem perfil→RECUSA; signUp recente→recuperação; borda 10min;
+  skew de relógio; monotonicidade. `testes/conta-sem-perfil.test.mjs` NOVO
+  (30 estruturais: recusa sem provisionar, re-cadastro com prova, fim dos
+  fallbacks, separação saldo/patrimônio). `sov-consistencia` atualizado (6/6).
+- **Verificação**: tsc 0 erros; build OK; sov-consistencia 6/6;
+  persistencia-unica 30/30; fluxo-usuario-novo 14/14; f5-partida 27/27;
+  conta-sem-perfil 30/30; sessao-antiga 11/11; onclick-guard OK; jiti:
+  torcida 42+14, temporada 57, ia 52, f5 19, conversas 38, entregas 9,
+  regras-fim-temporada 20, bolsa-persistencia 29, história 53, marketplace OK,
+  onboarding OK. Produção (RPC anon sov_bank_stats): emitido 103, retirado
+  39,64, circulação 63,36 (= 103−39,64 ✓), disponível 199.897 ✓, 0 alertas.
+
 ## F5 na partida + lost update no ledger (2026-08-22, 19ª passada)
 
 Continuação do E2E do Robô Doidão (diretiva: consertar o processo, não o

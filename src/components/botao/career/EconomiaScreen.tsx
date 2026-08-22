@@ -1,27 +1,85 @@
-import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Minus, TrendingUp, Wallet } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowUpRight, ArrowDownRight, Minus, TrendingUp, Wallet, ArrowRightLeft, Building2 } from "lucide-react";
 import type { BolsaState, CareerState, PosicaoBolsa } from "./types";
 import { ATIVOS, custoCompra, patrimonioJogador, ativoInfo } from "./bolsaEngine";
 import type { AtivoId } from "./types";
+import {
+  obterSaldosInvest,
+  transferirBankParaInvest,
+  transferirInvestParaBank,
+} from "@/lib/financial/sovInvestApi";
 
 type Props = {
   career: CareerState;
+  /** Usuário autenticado (necessário para transferências Bank↔Invest). */
+  userId: string | null;
   onComprar: (ativoId: AtivoId, quantidade: number) => void;
   onVender: (ativoId: AtivoId, quantidade: number) => void;
+  /** Abre o Mercado de Clubes (AÇÕES) — subseção da Bolsa. */
+  onAbrirMercadoClubes?: (() => void) | undefined;
   onBack: () => void;
 };
 
+/** IOF de 10% sobre retirada Invest→Bank (e sobre dividendos/vendas). */
+const IOF_RETIRADA = 0.10;
+
 /**
- * Bolsa de Valores da Cidadela (tela própria, §17): patrimônio do jogador,
- * patrimônio total da Cidadela, ativos reais do universo (Clube, Ciência,
- * Biblioteca, Trilha), compra/venda e histórico de dividendos.
+ * BOLSA DE VALORES da Cidadela (tela própria, §17). Duas carteiras do MESMO
+ * jogador — SOV Bank (líquido) e SOV Invest (alocado em investimento) — com
+ * transferências contabilizadas (0% Bank→Invest, IOF 10% Invest→Bank).
+ * Estrutura: AÇÕES (Mercado de Clubes) + ATIVOS DE RENDA (renda recorrente).
  */
-export function EconomiaScreen({ career, onComprar, onVender, onBack }: Props) {
+export function EconomiaScreen({ career, userId, onComprar, onVender, onAbrirMercadoClubes, onBack }: Props) {
   const bolsa = useMemo(() => (career.bolsa ? career.bolsa : null), [career.bolsa]);
   const patrimonio = useMemo(() => patrimonioJogador(career), [career]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  // Saldos reais das duas carteiras (fonte autoritativa = user_wallets).
+  const [saldos, setSaldos] = useState<{ bank: number; invest: number } | null>(null);
+  const [valorTransfer, setValorTransfer] = useState("");
+  const [transferindo, setTransferindo] = useState(false);
 
   const patrimonioCidadela = bolsa?.patrimonioCidadela ?? 10_000_000;
+
+  // Carrega os saldos reais das carteiras (autoritativo). null = indisponível.
+  const recarregarSaldos = () => {
+    if (!userId) return;
+    void obterSaldosInvest(userId).then((s) => {
+      if (s) setSaldos({ bank: s.bank, invest: s.invest });
+    });
+  };
+  useEffect(recarregarSaldos, [userId]);
+
+  const transferir = async (direcao: "bank_para_invest" | "invest_para_bank") => {
+    if (!userId || transferindo) return;
+    const valor = Math.floor(Number(valorTransfer));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setFeedback("Informe um valor válido para transferir.");
+      return;
+    }
+    setTransferindo(true);
+    try {
+      const chave = `transfer:${userId}:${Date.now()}`;
+      const res =
+        direcao === "bank_para_invest"
+          ? await transferirBankParaInvest(userId, valor, chave)
+          : await transferirInvestParaBank(userId, valor, chave);
+      if (!res) {
+        setFeedback("Transferência não concluída — saldo insuficiente.");
+        return;
+      }
+      setSaldos({ bank: res.bank, invest: res.invest });
+      setValorTransfer("");
+      if (direcao === "bank_para_invest") {
+        setFeedback(`${fmtSOV(valor)} SOV: SOV Bank → SOV Invest (taxa 0%).`);
+      } else {
+        setFeedback(
+          `${fmtSOV(valor)} SOV solicitado · IOF 10% = ${fmtSOV(res.taxa)} · líquido ${fmtSOV(res.liquido)} no SOV Bank.`,
+        );
+      }
+    } finally {
+      setTransferindo(false);
+    }
+  };
 
   const acao = (
     tipo: "compra" | "venda",
@@ -33,8 +91,9 @@ export function EconomiaScreen({ career, onComprar, onVender, onBack }: Props) {
     if (!bolsaAtual) return;
     if (tipo === "compra") {
       const custo = custoCompra(bolsaAtual, info.ativoId, qtd);
-      if (career.coach.sov < custo) {
-        setFeedback("Saldo SOV insuficiente para esta compra.");
+      // A compra é paga com o SOV INVEST (carteira de investimento).
+      if (saldos && saldos.invest < custo) {
+        setFeedback("Saldo insuficiente no SOV Invest — transfira do SOV Bank.");
         return;
       }
       onComprar(info.ativoId, qtd);
@@ -45,6 +104,9 @@ export function EconomiaScreen({ career, onComprar, onVender, onBack }: Props) {
     setFeedback(`${qtd} cota${qtd > 1 ? "s" : ""} de ${info.nome} vendida${qtd > 1 ? "s" : ""}.`);
   };
 
+  const bankSaldo = saldos?.bank ?? patrimonio.sobCarteira;
+  const investSaldo = saldos?.invest ?? null;
+
   return (
     <div className="space-y-5">
       {/* Cabeçalho da tela própria: título + voltar (§17). */}
@@ -53,28 +115,108 @@ export function EconomiaScreen({ career, onComprar, onVender, onBack }: Props) {
           <ArrowLeft className="size-4" /> Voltar ao Hub
         </button>
         <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-muted-foreground">
-          Economicidade · Bolsa de Valores
+          Bolsa de Valores da Cidadela
         </span>
       </div>
 
-      {/* Patrimônios (§22). */}
+      {/* As DUAS carteiras do jogador (SOV Bank líquido + SOV Invest). */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sovereignty-panel p-4">
           <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-            <Wallet className="size-4" /> Patrimônio do Jogador
+            <Wallet className="size-4" /> SOV Bank
           </p>
-          <p className="mt-2 font-display text-2xl">{fmtSOV(patrimonio.total)} SOV</p>
-          <p className="text-xs text-muted-foreground">
-            {fmtSOV(patrimonio.sobCarteira)} em carteira · {fmtSOV(patrimonio.investido)} investido
-          </p>
+          <p className="mt-2 font-display text-2xl">{fmtSOV(bankSaldo)} SOV</p>
+          <p className="text-xs text-muted-foreground">Saldo líquido disponível</p>
         </div>
         <div className="sovereignty-panel p-4">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-amber-300">
-            <TrendingUp className="size-4" /> Patrimônio da Cidadela
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-sky-300">
+            <TrendingUp className="size-4" /> SOV Invest
           </p>
-          <p className="mt-2 font-display text-2xl">{fmtSOV(patrimonioCidadela)} SOV</p>
-          <p className="text-xs text-muted-foreground">Índice econômico total do ecossistema</p>
+          <p className="mt-2 font-display text-2xl">
+            {investSaldo === null ? "—" : `${fmtSOV(investSaldo)} SOV`}
+          </p>
+          <p className="text-xs text-muted-foreground">Disponível para investir</p>
+          <p className="mt-1 text-[10px] text-muted-foreground/70">
+            Patrimônio em ativos (valor de mercado): {fmtSOV(patrimonio.investido)} SOV — não é saldo.
+          </p>
         </div>
+      </div>
+
+      {/* Transferências entre as carteiras do MESMO jogador (nada nasce/some). */}
+      {userId && (
+        <div className="panel !p-4">
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <ArrowRightLeft className="size-4" /> Transferir entre carteiras
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              value={valorTransfer}
+              onChange={(e) => setValorTransfer(e.target.value)}
+              placeholder="Valor em SOV"
+              className="phone-input flex-1"
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => transferir("bank_para_invest")}
+              disabled={transferindo}
+              className="btn-primary rounded-lg py-2 text-xs disabled:opacity-40"
+            >
+              Bank → Invest · 0%
+            </button>
+            <button
+              onClick={() => transferir("invest_para_bank")}
+              disabled={transferindo}
+              className="rounded-lg border border-sky-900/50 bg-sky-950/30 py-2 text-xs font-bold text-sky-300 disabled:opacity-40"
+            >
+              Invest → Bank · IOF 10%
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground/70">
+            Transferência interna: o dinheiro não nasce nem some. Só a retirada
+            Invest → Bank cobra IOF de 10% (registrado no ledger).
+          </p>
+        </div>
+      )}
+
+      {/* AÇÕES — Mercado de Clubes (subseção da Bolsa). */}
+      <div className="panel !p-4">
+        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <Building2 className="size-4" /> Ações
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Participações em clubes: preço, quantidade, valorização e dividendos
+          por período. Compra e venda de cotas de clubes da Cidadela.
+        </p>
+        {onAbrirMercadoClubes && (
+          <button onClick={onAbrirMercadoClubes} className="btn-primary mt-3 w-full rounded-lg py-2 text-xs">
+            Abrir Mercado de Clubes
+          </button>
+        )}
+      </div>
+
+      {/* ATIVOS DE RENDA (renda recorrente por rodada). */}
+      <div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Ativos de Renda
+        </p>
+        <p className="mb-3 text-[11px] text-muted-foreground/80">
+          Geram renda recorrente (dividendos) a cada {3} rodadas, pagos no SOV
+          Invest (líquido de IOF 10%).
+        </p>
+      </div>
+
+      {/* Patrimônio da Cidadela (índice do ecossistema). */}
+      <div className="sovereignty-panel p-4">
+        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-amber-300">
+          <TrendingUp className="size-4" /> Patrimônio da Cidadela
+        </p>
+        <p className="mt-2 font-display text-2xl">{fmtSOV(patrimonioCidadela)} SOV</p>
+        <p className="text-xs text-muted-foreground">
+          Índice econômico do ecossistema — valor de mercado, não saldo de ninguém
+        </p>
       </div>
 
       {feedback && (

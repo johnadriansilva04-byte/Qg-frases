@@ -1181,6 +1181,49 @@ export type Database = {
         Args: Record<never, never>;
         Returns: Json;
       };
+      sov_bank_transferir_carteiras: {
+        Args: {
+          p_user_id: string;
+          p_valor: number;
+          p_direcao: string;
+          p_idempotency_key?: string | null;
+        };
+        Returns: Json;
+      };
+      sov_bank_pagar_dividendo: {
+        Args: {
+          p_user_id: string;
+          p_bruto: number;
+          p_descricao: string;
+          p_idempotency_key: string;
+          p_metadata?: Json;
+        };
+        Returns: Json;
+      };
+      sov_bank_comprar_ativo: {
+        Args: {
+          p_user_id: string;
+          p_custo: number;
+          p_descricao: string;
+          p_idempotency_key: string;
+          p_metadata?: Json;
+        };
+        Returns: Json;
+      };
+      sov_bank_vender_ativo: {
+        Args: {
+          p_user_id: string;
+          p_valor: number;
+          p_descricao: string;
+          p_idempotency_key: string;
+          p_metadata?: Json;
+        };
+        Returns: Json;
+      };
+      sov_bank_saldos: {
+        Args: { p_user_id: string };
+        Returns: Json;
+      };
       feira_conceder_item: {
         Args: { p_item_slug: string; p_evento: string; p_quantidade?: number };
         Returns: boolean;

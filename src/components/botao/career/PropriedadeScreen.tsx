@@ -210,7 +210,7 @@ export function PropriedadeScreen({
           </button>
           <div className="flex items-center gap-2">
             <Building2 className="size-6 text-amber-300" />
-            <h2 className="font-display text-2xl">Propriedade de Clubes</h2>
+            <h2 className="font-display text-2xl">Mercado de Clubes</h2>
           </div>
         </div>
         <div className="flex items-center gap-4 text-sm">

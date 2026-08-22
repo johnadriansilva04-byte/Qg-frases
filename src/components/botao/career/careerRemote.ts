@@ -372,7 +372,7 @@ export async function aplicarApostaSoberania(
       delta = risco; // ganha o equivalente à aposta (dobro)
     else delta = -risco;
 
-    // Saldo devolvido pelo ledger (autoritativo) ou null em falha.
+    // Saldo devolvido pelo ledger (autoritativo) — única confirmação válida.
     let saldoLedger: number | null = null;
     if (delta !== 0) {
       // Registra no ledger: bet_win (crédito) ou bet_loss (débito).
@@ -384,11 +384,16 @@ export async function aplicarApostaSoberania(
         "online",
         { aposta: risco, empate, venceu },
       );
+      // Regra econômica: sem confirmação do ledger a aposta NÃO é concluída
+      // — nada de somar/subtrair localmente como se tivesse acontecido.
+      if (saldoLedger === null) {
+        console.warn("[careerRemote] aposta NÃO confirmada: ledger indisponível — nada alterado.");
+        return null;
+      }
     }
 
-    // Cache pontos_soberania: prefere o saldo do ledger; falha → fallback local.
-    const novoSaldo =
-      saldoLedger ?? Math.max(0, atual + delta);
+    // Cache pontos_soberania: saldo do ledger; empate (delta 0) mantém o atual.
+    const novoSaldo = saldoLedger ?? atual;
     await (supabase as any)
       .from("botao_usuarios")
       .update({ pontos_soberania: novoSaldo })
