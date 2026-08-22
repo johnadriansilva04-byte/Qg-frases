@@ -139,6 +139,7 @@ export type Database = {
           divisao: "serie-a" | "serie-b" | "serie-c" | null;
           is_personalizado: boolean;
           usuario_id: string | null;
+          dono_user_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -152,6 +153,7 @@ export type Database = {
           divisao?: "serie-a" | "serie-b" | "serie-c" | null;
           is_personalizado?: boolean;
           usuario_id?: string | null;
+          dono_user_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -165,7 +167,37 @@ export type Database = {
           divisao?: "serie-a" | "serie-b" | "serie-c" | null;
           is_personalizado?: boolean;
           usuario_id?: string | null;
+          dono_user_id?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      cidadela_propostas_clubes: {
+        Row: {
+          id: string;
+          de_user_id: string;
+          para_user_id: string;
+          clube_id: string;
+          tipo: "compra" | "treinador";
+          valor_sov: number;
+          status: "pendente" | "aceita" | "recusada" | "cancelada";
+          created_at: string;
+          respondida_em: string | null;
+        };
+        Insert: {
+          id?: string;
+          de_user_id: string;
+          para_user_id: string;
+          clube_id: string;
+          tipo: "compra" | "treinador";
+          valor_sov?: number;
+          status?: "pendente" | "aceita" | "recusada" | "cancelada";
+          created_at?: string;
+          respondida_em?: string | null;
+        };
+        Update: {
+          status?: "pendente" | "aceita" | "recusada" | "cancelada";
+          respondida_em?: string | null;
         };
         Relationships: [];
       };
@@ -1304,6 +1336,47 @@ export type Database = {
           ultima_atividade: string;
           status: string;
           online: boolean;
+        }[];
+      };
+      cidadela_registrar_dono_clube: {
+        Args: { p_clube_id: string };
+        Returns: { clube_id: string; dono_user_id: string };
+      };
+      cidadela_liberar_dono_clube: {
+        Args: { p_clube_id: string };
+        Returns: { clube_id: string; dono_user_id: string | null };
+      };
+      cidadela_mapa_clubes: {
+        Args: Record<string, never>;
+        Returns: {
+          clube_id: string;
+          nome: string;
+          dono_user_id: string | null;
+          dono_nome: string | null;
+        }[];
+      };
+      cidadela_enviar_proposta_clube: {
+        Args: { p_para: string; p_clube_id: string; p_tipo: string; p_valor?: number };
+        Returns: string;
+      };
+      cidadela_responder_proposta_clube: {
+        Args: { p_id: string; p_aceitar: boolean };
+        Returns: { id: string; status: string; duplicated?: boolean };
+      };
+      cidadela_listar_propostas_clubes: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          de_user_id: string;
+          de_nome: string | null;
+          para_user_id: string;
+          para_nome: string | null;
+          clube_id: string;
+          clube_nome: string;
+          tipo: string;
+          valor_sov: number;
+          status: string;
+          created_at: string;
         }[];
       };
     };

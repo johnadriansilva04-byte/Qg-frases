@@ -72,9 +72,50 @@ type Props = {
     forcaJogador: number;
     formaJogador: FormaJogador;
   };
+  /** Chave de sessionStorage para sobreviver ao F5 (placar/jogadas/turno).
+   *  Só no modo offline — online sincroniza pelo servidor. */
+  resumeKey?: string | undefined;
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
+
+/** Estado mínimo da partida salvo a cada jogada para o F5 não perder o jogo. */
+type MatchResume = {
+  homeGoals: number;
+  awayGoals: number;
+  turnsLeft: number;
+  turn: Side;
+  ts: number;
+};
+
+function lerMatchResume(key: string | undefined, turns: number): MatchResume | null {
+  if (!key) return null;
+  try {
+    const bruto = sessionStorage.getItem(key);
+    if (!bruto) return null;
+    const r = JSON.parse(bruto) as MatchResume;
+    const valido =
+      Number.isInteger(r.homeGoals) &&
+      r.homeGoals >= 0 &&
+      r.homeGoals < 50 &&
+      Number.isInteger(r.awayGoals) &&
+      r.awayGoals >= 0 &&
+      r.awayGoals < 50 &&
+      Number.isInteger(r.turnsLeft) &&
+      r.turnsLeft > 0 &&
+      r.turnsLeft <= turns &&
+      (r.turn === "home" || r.turn === "away") &&
+      Number.isFinite(r.ts) &&
+      Date.now() - r.ts < 2 * 3600_000;
+    if (!valido) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return r;
+  } catch {
+    return null;
+  }
+}
 
 export function MatchView({
   homeId,
@@ -96,6 +137,7 @@ export function MatchView({
   score: serverScore,
   formation,
   aiContext,
+  resumeKey,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -114,14 +156,23 @@ export function MatchView({
   const discsRef = useRef<Disc[]>(initialDiscs(formation));
   const aimRef = useRef<Aim>(null);
   const simRef = useRef(false);
-  const turnRef = useRef<Side>(initialTurn || "home");
+  const turnRef = useRef<Side>(lerMatchResume(resumeKey, turns)?.turn ?? initialTurn ?? "home");
   const portraitRef = useRef(false);
   const scaleRef = useRef(1);
   const initializedRef = useRef(false); // Flag para evitar re-inicialização
 
-  const [score, setScore] = useState({ home: 0, away: 0 });
-  const [turnsLeft, setTurnsLeft] = useState(turns);
-  const [turn, setTurn] = useState<Side>(initialTurn || "home");
+  // F5 no meio da partida: restaura placar/jogadas/turno gravados a cada
+  // jogada (offline). Posições físicas voltam à formação inicial — o restante
+  // da partida segue de onde parou.
+  const [resumeInicial] = useState<MatchResume | null>(() =>
+    isOnline ? null : lerMatchResume(resumeKey, turns),
+  );
+  const [score, setScore] = useState({
+    home: resumeInicial?.homeGoals ?? 0,
+    away: resumeInicial?.awayGoals ?? 0,
+  });
+  const [turnsLeft, setTurnsLeft] = useState(resumeInicial?.turnsLeft ?? turns);
+  const [turn, setTurn] = useState<Side>(resumeInicial?.turn ?? initialTurn ?? "home");
   const [flash, setFlash] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
   const [pens, setPens] = useState<{ home: number[]; away: number[] } | null>(null);
@@ -129,12 +180,16 @@ export function MatchView({
   const [goalCooldown, setGoalCooldown] = useState<number | null>(null); // Cooldown de 5 segundos após gol
   // Intervalo da partida (halftime) removido - não funciona corretamente
   const [halftime, setHalftime] = useState(false);
-  const halftimeShownRef = useRef(false);
+  // Partida retomada já além da metade não mostra o intervalo de novo.
+  const halftimeShownRef = useRef(
+    !!resumeInicial && resumeInicial.turnsLeft <= Math.floor(turns / 2),
+  );
 
-  // Sincronizar turnsLeft com a prop turns (para modo online)
+  // Sincronizar turnsLeft com a prop turns (apenas no modo online — offline o
+  // valor vem do estado, inclusive o restaurado do F5).
   useEffect(() => {
-    setTurnsLeft(turns);
-  }, [turns]);
+    if (isOnline) setTurnsLeft(turns);
+  }, [turns, isOnline]);
 
   // Sincronizar placar com a prop score (para modo online)
   useEffect(() => {
@@ -147,6 +202,28 @@ export function MatchView({
   useEffect(() => {
     turnsRef.current = turnsLeft;
   }, [turnsLeft]);
+
+  // Persiste o estado mínimo a cada jogada (F5 volta para o MESMO jogo) e
+  // limpa quando a partida termina — partida encerrada nunca é "retomada".
+  useEffect(() => {
+    if (!resumeKey || isOnline) return;
+    try {
+      if (ended) {
+        sessionStorage.removeItem(resumeKey);
+        return;
+      }
+      const resume: MatchResume = {
+        homeGoals: score.home,
+        awayGoals: score.away,
+        turnsLeft,
+        turn,
+        ts: Date.now(),
+      };
+      sessionStorage.setItem(resumeKey, JSON.stringify(resume));
+    } catch {
+      /* storage indisponível */
+    }
+  }, [resumeKey, isOnline, ended, score, turnsLeft, turn]);
 
   // Dispara o intervalo (halftime) quando a partida cruza a metade das jogadas.
   // No modo online não interrompe (evita dessincronizar o oponente).
@@ -787,7 +864,20 @@ export function MatchView({
           >
             <RotateCcw className="w-4 h-4" />
           </button>
-          <button onClick={onQuit} className="btn-ghost shrink-0">
+          <button
+            onClick={() => {
+              // Abandono deliberado: a partida não é retomada no próximo F5.
+              if (resumeKey) {
+                try {
+                  sessionStorage.removeItem(resumeKey);
+                } catch {
+                  /* storage indisponível */
+                }
+              }
+              onQuit();
+            }}
+            className="btn-ghost shrink-0"
+          >
             Sair
           </button>
         </div>

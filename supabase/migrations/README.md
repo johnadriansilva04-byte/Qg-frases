@@ -59,7 +59,10 @@ está com versões ANTIGAS/quebradas do sistema financeiro:
 Para corrigir, re-aplique **nesta ordem** no SQL Editor (tudo idempotente):
 
 1. `sov_financial_system.sql` — corrige `create_or_update_wallet` (erro sobe,
-   não é engolido).
+   não é engolido) **e agora também** `record_transaction` com
+   `SELECT ... FOR UPDATE` na carteira (sem esse lock, dois créditos
+   paralelos — ex.: coletiva + investigação — liam o mesmo saldo e um deles
+   evaporava; ver entrada de 2026-08-22 no AGENTS.md).
 2. `sov_integracao_cartorio.sql` — `obter_saldo_soberania` agora cria a
    carteira na primeira leitura (wallet inexistente nunca vira "saldo 0").
 3. `sov_bank.sql` — `sov_bank_registrar` sem `EXCEPTION WHEN OTHERS`.

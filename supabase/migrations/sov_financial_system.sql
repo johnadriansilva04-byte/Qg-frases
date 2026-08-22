@@ -150,10 +150,15 @@ DECLARE
   v_new_balance DECIMAL;
   v_transaction_id UUID;
 BEGIN
-  -- Obter carteira do usuário
+  -- Obter carteira do usuário COM LOCK DE LINHA: duas recompensas gravadas em
+  -- paralelo (ex.: coletiva + investigação no mesmo clique) liam o MESMO saldo
+  -- e a segunda sobrescrevia a primeira (lost update — o ledger somava 25 e a
+  -- carteira guardava 10). FOR UPDATE serializa: a segunda transação espera o
+  -- commit da primeira e lê o saldo já atualizado.
   SELECT id, balance INTO v_wallet_id, v_current_balance
   FROM user_wallets
-  WHERE user_id = p_user_id;
+  WHERE user_id = p_user_id
+  FOR UPDATE;
 
   IF v_wallet_id IS NULL THEN
     -- Criar carteira se não existir

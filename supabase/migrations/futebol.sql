@@ -2396,3 +2396,315 @@ VALUES
   ('noticia','crise','Crise no {T}: {coach} tem {soberania} de soberania comentada com silêncio e {restantes} rodadas restantes.', true, 218),
   ('noticia','geral','Futebol de Botão, temporada {temporada}: {T} no comando da {divisao} com bastidores em 1ª pessoa.', true, 219)
 ON CONFLICT (prompt_type, categoria, ordem) DO NOTHING;
+
+-- =========================================================
+-- PROPRIEDADE DE CLUBES — dono visível para toda a Cidadela
+-- =========================================================
+-- Quando um jogador compra 100% de um clube na carreira, o dono é registrado
+-- aqui (botao_times é a tabela canônica de clubes — sem tabela paralela).
+-- Qualquer cidadão consegue ver de quem é cada clube.
+
+ALTER TABLE public.botao_times
+  ADD COLUMN IF NOT EXISTS dono_user_id UUID REFERENCES public.botao_usuarios(user_id) ON DELETE SET NULL;
+
+-- Registra o dono de um clube. Idempotente para o MESMO dono; falha se o
+-- clube já pertencer a outro jogador (nunca sobrescreve em silêncio).
+CREATE OR REPLACE FUNCTION public.cidadela_registrar_dono_clube(p_clube_id TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_dono UUID;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'usuario nao autenticado';
+  END IF;
+
+  SELECT dono_user_id INTO v_dono FROM public.botao_times WHERE id = p_clube_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'clube nao encontrado: %', p_clube_id;
+  END IF;
+
+  IF v_dono IS NOT NULL AND v_dono <> v_uid THEN
+    RAISE EXCEPTION 'clube ja tem outro dono';
+  END IF;
+
+  UPDATE public.botao_times SET dono_user_id = v_uid WHERE id = p_clube_id;
+  RETURN jsonb_build_object('clube_id', p_clube_id, 'dono_user_id', v_uid);
+END;
+$$;
+
+-- Mapa de proprietários: toda a Cidadela vê de quem é cada clube.
+CREATE OR REPLACE FUNCTION public.cidadela_mapa_clubes()
+RETURNS TABLE (clube_id TEXT, nome TEXT, dono_user_id UUID, dono_nome TEXT)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  -- botao_usuarios.nome (sempre existe desde a migration #1); o rótulo RPG
+  -- (cidadela_perfis.nome) é adicionado em migration posterior e não pode
+  -- ser referenciado aqui sem criar dependência de ordem.
+  SELECT t.id,
+         t.nome,
+         t.dono_user_id,
+         bu.nome AS dono_nome
+  FROM public.botao_times t
+  LEFT JOIN public.botao_usuarios bu ON bu.user_id = t.dono_user_id
+  ORDER BY t.forca DESC NULLS LAST, t.nome;
+$$;
+
+-- =========================================================
+-- PROPOSTAS ENTRE JOGADORES — compra de clube / contratação
+-- de treinador. Só quem é proprietário negocia como dono.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS public.cidadela_propostas_clubes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  de_user_id UUID NOT NULL REFERENCES public.botao_usuarios(user_id) ON DELETE CASCADE,
+  para_user_id UUID NOT NULL REFERENCES public.botao_usuarios(user_id) ON DELETE CASCADE,
+  clube_id TEXT NOT NULL REFERENCES public.botao_times(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('compra', 'treinador')),
+  valor_sov INTEGER NOT NULL DEFAULT 0 CHECK (valor_sov >= 0),
+  status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aceita', 'recusada', 'cancelada')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  respondida_em TIMESTAMPTZ
+);
+
+ALTER TABLE public.cidadela_propostas_clubes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "propostas_select_partes" ON public.cidadela_propostas_clubes;
+CREATE POLICY "propostas_select_partes" ON public.cidadela_propostas_clubes
+  FOR SELECT USING (auth.uid() = de_user_id OR auth.uid() = para_user_id);
+
+DROP POLICY IF EXISTS "propostas_insert_remetente" ON public.cidadela_propostas_clubes;
+CREATE POLICY "propostas_insert_remetente" ON public.cidadela_propostas_clubes
+  FOR INSERT WITH CHECK (auth.uid() = de_user_id);
+
+-- Resposta/cancelamento SÓ via RPC (validações + transferência no ledger).
+
+CREATE OR REPLACE FUNCTION public.cidadela_enviar_proposta_clube(
+  p_para UUID,
+  p_clube_id TEXT,
+  p_tipo TEXT,
+  p_valor INTEGER DEFAULT 0
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_dono UUID;
+  v_id UUID;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'usuario nao autenticado';
+  END IF;
+  IF p_para = v_uid THEN
+    RAISE EXCEPTION 'nao e possivel enviar proposta para si mesmo';
+  END IF;
+  IF p_tipo NOT IN ('compra', 'treinador') THEN
+    RAISE EXCEPTION 'tipo de proposta invalido';
+  END IF;
+
+  SELECT dono_user_id INTO v_dono FROM public.botao_times WHERE id = p_clube_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'clube nao encontrado: %', p_clube_id;
+  END IF;
+
+  -- Compra: só se compra de quem é dono. Treinador: só o dono contrata.
+  IF p_tipo = 'compra' AND v_dono IS DISTINCT FROM p_para THEN
+    RAISE EXCEPTION 'o clube nao pertence ao destinatario';
+  END IF;
+  IF p_tipo = 'treinador' AND v_dono IS DISTINCT FROM v_uid THEN
+    RAISE EXCEPTION 'somente o dono do clube pode contratar treinador';
+  END IF;
+
+  -- Idempotência: a mesma proposta pendente não duplica.
+  SELECT id INTO v_id FROM public.cidadela_propostas_clubes
+  WHERE de_user_id = v_uid AND para_user_id = p_para AND clube_id = p_clube_id
+    AND tipo = p_tipo AND status = 'pendente'
+  LIMIT 1;
+  IF v_id IS NOT NULL THEN
+    RETURN v_id;
+  END IF;
+
+  INSERT INTO public.cidadela_propostas_clubes (de_user_id, para_user_id, clube_id, tipo, valor_sov)
+  VALUES (v_uid, p_para, p_clube_id, p_tipo, GREATEST(p_valor, 0))
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cidadela_responder_proposta_clube(
+  p_id UUID,
+  p_aceitar BOOLEAN
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  p public.cidadela_propostas_clubes;
+  v_comprador UUID;
+  v_vendedor UUID;
+  v_saldo DECIMAL;
+  v_tx UUID;
+  v_nome TEXT;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'usuario nao autenticado';
+  END IF;
+
+  SELECT * INTO p FROM public.cidadela_propostas_clubes WHERE id = p_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposta nao encontrada';
+  END IF;
+  IF p.para_user_id <> v_uid THEN
+    RAISE EXCEPTION 'somente o destinatario responde a proposta';
+  END IF;
+  IF p.status <> 'pendente' THEN
+    RETURN jsonb_build_object('id', p.id, 'status', p.status, 'duplicated', TRUE);
+  END IF;
+
+  IF NOT p_aceitar THEN
+    UPDATE public.cidadela_propostas_clubes
+    SET status = 'recusada', respondida_em = now()
+    WHERE id = p.id;
+    RETURN jsonb_build_object('id', p.id, 'status', 'recusada');
+  END IF;
+
+  SELECT nome INTO v_nome FROM public.botao_times WHERE id = p.clube_id;
+
+  IF p.tipo = 'compra' THEN
+    v_comprador := p.de_user_id;
+    v_vendedor := p.para_user_id;
+    -- O vendedor ainda precisa ser o dono.
+    IF NOT EXISTS (SELECT 1 FROM public.botao_times WHERE id = p.clube_id AND dono_user_id = v_vendedor) THEN
+      RAISE EXCEPTION 'voce nao e mais o dono deste clube';
+    END IF;
+    -- Saldo do comprador precisa cobrir o valor (erro nunca vira zero).
+    SELECT balance INTO v_saldo FROM public.user_wallets WHERE user_id = v_comprador FOR UPDATE;
+    IF COALESCE(v_saldo, 0) < p.valor_sov THEN
+      RAISE EXCEPTION 'saldo insuficiente do comprador';
+    END IF;
+
+    -- Transferência: nasce no ledger dos DOIS lados (moeda existente, sem
+    -- emissão nova — por isso record_transaction direto, não o emissor).
+    IF NOT EXISTS (SELECT 1 FROM public.bank_ledger WHERE user_id = v_comprador AND idempotency_key = 'proposta:' || p.id || ':compra') THEN
+      v_tx := record_transaction(v_comprador, 'transfer', -p.valor_sov,
+        'Compra do clube ' || COALESCE(v_nome, p.clube_id) || ' (proposta)', 'market', jsonb_build_object('proposta_id', p.id));
+      UPDATE public.bank_ledger SET idempotency_key = 'proposta:' || p.id || ':compra',
+        source_event = 'proposta-compra-clube', balance_before = balance_after + p.valor_sov
+      WHERE id = v_tx;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.bank_ledger WHERE user_id = v_vendedor AND idempotency_key = 'proposta:' || p.id || ':venda') THEN
+      v_tx := record_transaction(v_vendedor, 'transfer', p.valor_sov,
+        'Venda do clube ' || COALESCE(v_nome, p.clube_id) || ' (proposta)', 'market', jsonb_build_object('proposta_id', p.id));
+      UPDATE public.bank_ledger SET idempotency_key = 'proposta:' || p.id || ':venda',
+        source_event = 'proposta-venda-clube', balance_before = balance_after - p.valor_sov
+      WHERE id = v_tx;
+    END IF;
+
+    UPDATE public.botao_times SET dono_user_id = v_comprador WHERE id = p.clube_id;
+  ELSE
+    -- Contratação de treinador: o dono (remetente) paga o valor ao treinador.
+    IF NOT EXISTS (SELECT 1 FROM public.botao_times WHERE id = p.clube_id AND dono_user_id = p.de_user_id) THEN
+      RAISE EXCEPTION 'o remetente nao e mais o dono deste clube';
+    END IF;
+    SELECT balance INTO v_saldo FROM public.user_wallets WHERE user_id = p.de_user_id FOR UPDATE;
+    IF COALESCE(v_saldo, 0) < p.valor_sov THEN
+      RAISE EXCEPTION 'saldo insuficiente do dono do clube';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM public.bank_ledger WHERE user_id = p.de_user_id AND idempotency_key = 'proposta:' || p.id || ':salario-dono') THEN
+      v_tx := record_transaction(p.de_user_id, 'transfer', -p.valor_sov,
+        'Contratacao de treinador para ' || COALESCE(v_nome, p.clube_id), 'market', jsonb_build_object('proposta_id', p.id));
+      UPDATE public.bank_ledger SET idempotency_key = 'proposta:' || p.id || ':salario-dono',
+        source_event = 'proposta-treinador-dono', balance_before = balance_after + p.valor_sov
+      WHERE id = v_tx;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.bank_ledger WHERE user_id = v_uid AND idempotency_key = 'proposta:' || p.id || ':salario-treinador') THEN
+      v_tx := record_transaction(v_uid, 'transfer', p.valor_sov,
+        'Contrato de treinador do ' || COALESCE(v_nome, p.clube_id), 'market', jsonb_build_object('proposta_id', p.id));
+      UPDATE public.bank_ledger SET idempotency_key = 'proposta:' || p.id || ':salario-treinador',
+        source_event = 'proposta-treinador-salario', balance_before = balance_after - p.valor_sov
+      WHERE id = v_tx;
+    END IF;
+  END IF;
+
+  UPDATE public.cidadela_propostas_clubes
+  SET status = 'aceita', respondida_em = now()
+  WHERE id = p.id;
+  RETURN jsonb_build_object('id', p.id, 'status', 'aceita');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cidadela_listar_propostas_clubes()
+RETURNS TABLE (
+  id UUID,
+  de_user_id UUID,
+  de_nome TEXT,
+  para_user_id UUID,
+  para_nome TEXT,
+  clube_id TEXT,
+  clube_nome TEXT,
+  tipo TEXT,
+  valor_sov INTEGER,
+  status TEXT,
+  created_at TIMESTAMPTZ
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.id, p.de_user_id, bd.nome AS de_nome,
+         p.para_user_id, bp.nome AS para_nome,
+         p.clube_id, t.nome AS clube_nome,
+         p.tipo, p.valor_sov, p.status, p.created_at
+  FROM public.cidadela_propostas_clubes p
+  JOIN public.botao_times t ON t.id = p.clube_id
+  LEFT JOIN public.botao_usuarios bd ON bd.user_id = p.de_user_id
+  LEFT JOIN public.botao_usuarios bp ON bp.user_id = p.para_user_id
+  WHERE p.de_user_id = auth.uid() OR p.para_user_id = auth.uid()
+  ORDER BY p.created_at DESC
+  LIMIT 50;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.cidadela_registrar_dono_clube(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cidadela_mapa_clubes() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cidadela_enviar_proposta_clube(UUID, TEXT, TEXT, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cidadela_responder_proposta_clube(UUID, BOOLEAN) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cidadela_listar_propostas_clubes() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- Libera o dono de um clube (venda de cotas abaixo de 100% na carreira ou
+-- venda local). Só o próprio dono pode liberar; idempotente.
+CREATE OR REPLACE FUNCTION public.cidadela_liberar_dono_clube(p_clube_id TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'usuario nao autenticado';
+  END IF;
+  UPDATE public.botao_times
+  SET dono_user_id = NULL
+  WHERE id = p_clube_id AND dono_user_id = v_uid;
+  RETURN jsonb_build_object('clube_id', p_clube_id, 'dono_user_id', NULL);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.cidadela_liberar_dono_clube(TEXT) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

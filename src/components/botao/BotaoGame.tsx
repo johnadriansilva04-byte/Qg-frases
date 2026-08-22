@@ -117,7 +117,9 @@ import {
   listarClubesProprietario,
   patrimonioParticipacoes,
   podeComprarCota,
+  eProprietario,
 } from "./career/propriedadeEngine";
+import { registrarDonoClube, liberarDonoClube } from "@/lib/cidadela/clubesPropriedade";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { PropriedadeScreen } from "./career/PropriedadeScreen";
@@ -235,7 +237,7 @@ interface BotaoGameProps {
 const RESUME_KEY = "botao:resume:v1";
 /** Noop estável (identidade congelada) para o onCompleto do splash de auth. */
 const noop = () => {};
-/** Telas seguras para restaurar após F5 (partidas em andamento não entram). */
+/** Telas seguras para restaurar após F5. */
 const TELAS_RESTAURAVEIS: Screen[] = [
   "hub",
   "career-menu",
@@ -244,6 +246,8 @@ const TELAS_RESTAURAVEIS: Screen[] = [
   "economia",
   "trophies",
   "profile",
+  "friendly-match",
+  "tournament-match",
 ];
 
 /**
@@ -269,6 +273,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // NPC respondendo no celular (conversaId) — exibe "digitando...".
   const [npcDigitando, setNpcDigitando] = useState<string | null>(null);
   const hydratedUserRef = useRef<string | null>(null);
+  // Uid cuja hidratação já foi DISPARADA (estado, não ref: o overlay do splash
+  // precisa re-renderizar na mesma hora para não desmontar entre auth e
+  // hidratação). Permanece setado mesmo em erro — a falha vira toast, não
+  // splash eterno.
+  const [hidratacaoIniciada, setHidratacaoIniciada] = useState<string | null>(null);
   const [showCeremony, setShowCeremony] = useState(false);
   const [ceremonyBonus, setCeremonyBonus] = useState(0);
   // Veredito de fim de temporada (continua/Game Over). Quando presente, exibe
@@ -480,15 +489,83 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   }, [toast]);
 
   // ===== Restauração de estado após refresh (§20/§22 + F5 sem reset) =====
-  // Fim de partida/entrevista e a tela atual vivem só em memória; um refresh
-  // os perderia. Persistimos o mínimo em sessionStorage (por aba, por usuário)
-  // e restauramos uma única vez após o login ser reconhecido — mesma sessão,
-  // mesma página, MESMO contexto. Telas de partida online/em andamento não são
-  // restauradas (estado volátil); telas seguras do Modo Carreira, sim.
+  // Fim de partida/entrevista, a tela atual e a PARTIDA EM ANDAMENTO vivem só
+  // em memória; um refresh os perderia. Persistimos o mínimo em sessionStorage
+  // (por aba, por usuário) e restauramos uma única vez após o login ser
+  // reconhecido — mesma sessão, mesma página, MESMO contexto. Placar/jogadas/
+  // disciplina da partida são gravados pelo MatchView a cada jogada (§match
+  // resume); as posições físicas resetam (posição inicial), o restante segue.
+  // Partidas online não são restauradas (estado volátil de dois jogadores).
   const resumeRestauradoRef = useRef(false);
   // Sinaliza à hidratação que uma tela foi restaurada — ela NÃO pode mandar o
   // usuário de volta ao menu quando terminar de carregar a carreira.
   const telaRestauradaRef = useRef(false);
+  // Confronto de liga/copa a reidratar após o F5 (resolvido pela hidratação,
+  // que tem o torneio/carreira frescos do Supabase).
+  const partidaPendenteRef = useRef<{
+    fixtureId: string;
+    copaFixtureId: string | null;
+  } | null>(null);
+  // ATENÇÃO À ORDEM: este efeito de RESTAURAÇÃO precisa vir ANTES do efeito
+  // de gravação (abaixo). Quando o perfil carrega, ambos disparam no mesmo
+  // commit; se a gravação rodar primeiro com screen="menu", ela apaga o
+  // RESUME_KEY antes da restauração ler — e o F5 cai sempre no menu.
+  useEffect(() => {
+    const uid = perfil?.user_id;
+    if (!uid || resumeRestauradoRef.current) return;
+    resumeRestauradoRef.current = true;
+    try {
+      const bruto = sessionStorage.getItem(RESUME_KEY);
+      if (!bruto) return;
+      sessionStorage.removeItem(RESUME_KEY);
+      const salvo = JSON.parse(bruto) as {
+        uid: string;
+        tela?: Screen;
+        matchEnd: MatchEndData | null;
+        matchEndDestino?: Screen;
+        patrocinioPagoPartida?: string | null;
+        partida?: {
+          fixtureId: string | null;
+          copaFixtureId: string | null;
+          rivalTeam: string | null;
+        } | null;
+        ts: number;
+      };
+      // Só restaura para o MESMO usuário e por até 2h (sessão recente).
+      if (salvo.uid !== uid || Date.now() - salvo.ts > 2 * 3600_000) return;
+      if (salvo.patrocinioPagoPartida) setPatrocinioPagoPartida(salvo.patrocinioPagoPartida);
+      if (salvo.matchEnd) {
+        // Fim de partida: a entrevista reabre fechada (abertura idempotente).
+        setMatchEnd(salvo.matchEnd);
+        setMatchEndDestino(salvo.matchEndDestino ?? "menu");
+        setScreen("match-end");
+        telaRestauradaRef.current = true;
+      } else if (salvo.tela && salvo.tela !== "menu" && salvo.tela !== "match-end") {
+        // Partida da liga/copa em andamento: o confronto só pode ser
+        // reidratado DEPOIS que a hidratação trouxer torneio/carreira do
+        // Supabase — registramos a intenção e a hidratação resolve (fallback:
+        // hub). Amistoso só precisa do rival, que restauramos já.
+        if (salvo.tela === "tournament-match" && salvo.partida?.fixtureId) {
+          partidaPendenteRef.current = {
+            fixtureId: salvo.partida.fixtureId,
+            copaFixtureId: salvo.partida.copaFixtureId,
+          };
+          telaRestauradaRef.current = true;
+          return;
+        }
+        if (salvo.tela === "friendly-match") {
+          if (!salvo.partida?.rivalTeam) return;
+          setRivalTeam(salvo.partida.rivalTeam);
+        }
+        // Mesma tela de antes do F5 (hub, calendário, amistoso, etc.).
+        setScreen(salvo.tela);
+        telaRestauradaRef.current = true;
+      }
+    } catch {
+      /* blob corrompido: ignora */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfil?.user_id]);
   useEffect(() => {
     const uid = perfil?.user_id;
     if (!uid) return;
@@ -508,7 +585,22 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       } else if (TELAS_RESTAURAVEIS.includes(screen)) {
         sessionStorage.setItem(
           RESUME_KEY,
-          JSON.stringify({ uid, tela: screen, matchEnd: null, ts: Date.now() }),
+          JSON.stringify({
+            uid,
+            tela: screen,
+            matchEnd: null,
+            // Contexto da partida em andamento: o MatchView lê e continua com
+            // placar/jogadas/disciplina salvos (sem recomeçar do zero).
+            partida:
+              screen === "friendly-match" || screen === "tournament-match"
+                ? {
+                    fixtureId: screen === "tournament-match" ? (current?.id ?? null) : null,
+                    copaFixtureId: currentCopaFix?.id ?? null,
+                    rivalTeam: screen === "friendly-match" ? rivalTeam : null,
+                  }
+                : null,
+            ts: Date.now(),
+          }),
         );
       } else {
         // Tela volátil ou inicial: nada a restaurar depois.
@@ -518,42 +610,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       /* storage indisponível */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, matchEnd, matchEndDestino, patrocinioPagoPartida, perfil?.user_id]);
-  useEffect(() => {
-    const uid = perfil?.user_id;
-    if (!uid || resumeRestauradoRef.current) return;
-    resumeRestauradoRef.current = true;
-    try {
-      const bruto = sessionStorage.getItem(RESUME_KEY);
-      if (!bruto) return;
-      sessionStorage.removeItem(RESUME_KEY);
-      const salvo = JSON.parse(bruto) as {
-        uid: string;
-        tela?: Screen;
-        matchEnd: MatchEndData | null;
-        matchEndDestino?: Screen;
-        patrocinioPagoPartida?: string | null;
-        ts: number;
-      };
-      // Só restaura para o MESMO usuário e por até 2h (sessão recente).
-      if (salvo.uid !== uid || Date.now() - salvo.ts > 2 * 3600_000) return;
-      if (salvo.patrocinioPagoPartida) setPatrocinioPagoPartida(salvo.patrocinioPagoPartida);
-      if (salvo.matchEnd) {
-        // Fim de partida: a entrevista reabre fechada (abertura idempotente).
-        setMatchEnd(salvo.matchEnd);
-        setMatchEndDestino(salvo.matchEndDestino ?? "menu");
-        setScreen("match-end");
-        telaRestauradaRef.current = true;
-      } else if (salvo.tela && salvo.tela !== "menu" && salvo.tela !== "match-end") {
-        // Mesma tela do Modo Carreira de antes do F5 (hub, calendário, etc.).
-        setScreen(salvo.tela);
-        telaRestauradaRef.current = true;
-      }
-    } catch {
-      /* blob corrompido: ignora */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perfil?.user_id]);
+  }, [
+    screen,
+    matchEnd,
+    matchEndDestino,
+    patrocinioPagoPartida,
+    perfil?.user_id,
+    current,
+    currentCopaFix,
+    rivalTeam,
+  ]);
 
   /**
    * Mostra a tela de carregamento (splash) e executa o callback ao completar.
@@ -655,6 +721,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     async (userId: string) => {
       if (hydratedUserRef.current === userId) return;
       hydratedUserRef.current = userId;
+      setHidratacaoIniciada(userId);
       zerarEstadoDaConta();
       setLoadingOnComplete(() => () => setLoading(false));
       setLoadingReady(false);
@@ -721,6 +788,27 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           // persiste contatos/convite recém-gerados.
           void saveCareerToSupabase(userId, careerHidratada);
         }
+        // Partida de liga/copa interrompida pelo F5: agora que o torneio e a
+        // carreira estão frescos, reidrata o confronto. Fixture já jogado ou
+        // inexistente (dado velho) → volta ao hub, nunca trava.
+        const pendente = partidaPendenteRef.current;
+        partidaPendenteRef.current = null;
+        if (pendente) {
+          const copa =
+            pendente.copaFixtureId && careerHidratada?.copaBrasil
+              ? proximoJogoCopa(careerHidratada.copaBrasil, userTeam.id)
+              : null;
+          const fix =
+            torneioAtivo?.groupFixtures.find((f) => f.id === pendente.fixtureId && !f.played) ??
+            (copa && copa.id === pendente.copaFixtureId && !copa.played ? copa : null);
+          if (fix) {
+            setCurrentCopaFix(copa && fix.id === copa.id ? fix : null);
+            setCurrent(fix);
+            setScreen("tournament-match");
+          } else {
+            setScreen("hub");
+          }
+        }
         // Navegação: NUNCA abrir o Modo Carreira automaticamente. O Estádio do
         // Campus abre no menu; a carreira é acessada pelo usuário em
         // "Carreira no Campus" → "Continuar Campanha" (estado já persistido).
@@ -731,6 +819,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         hydratedUserRef.current = null;
         console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
         zerarEstadoDaConta();
+        if (partidaPendenteRef.current) {
+          partidaPendenteRef.current = null;
+          setScreen("hub");
+        }
         setToast("Não foi possível carregar seus dados. Estado da conta limpo.");
       } finally {
         setLoadingReady(true);
@@ -743,6 +835,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     const userId = perfil?.user_id;
     if (!userId) {
       hydratedUserRef.current = null;
+      setHidratacaoIniciada(null);
       zerarEstadoDaConta();
       setPerfilCidadela(null);
       return;
@@ -926,8 +1019,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setCareer(novaCareer);
     setToast(`Comprou ${porcentagem}% de ${clube.name} por ${custo.toFixed(0)} SOV!`);
 
+    // 100% de participação = proprietário reconhecido por TODA a Cidadela
+    // (botao_times.dono_user_id — visível no mapa de clubes para qualquer
+    // jogador). Se outro jogador já é o dono registrado, informa sem quebrar.
+    if (eProprietario(novaCareer, clube.id)) {
+      void registrarDonoClube(clube.id).then((ok) => {
+        if (!ok) {
+          setToast(`O ${clube.name} já tem outro dono registrado na Cidadela.`);
+        }
+      });
+    }
+
     // Notificação no celular
-    if (porcentagem >= 100) {
+    if (eProprietario(novaCareer, clube.id)) {
       enfileirarConversas([
         {
           id: `proprietario-${clube.id}-${Date.now()}`,
@@ -1001,6 +1105,57 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     persistCareer(novaCareer);
     setCareer(novaCareer);
     setToast(`Vendeu ${porcentagem}% de ${clube.name} por ${valor.toFixed(0)} SOV!`);
+
+    // Deixou de ter 100%: o clube volta a ficar sem dono na Cidadela.
+    if (eProprietario(career, clube.id) && !eProprietario(novaCareer, clube.id)) {
+      void liberarDonoClube(clube.id);
+    }
+  };
+
+  /** A Cidadela (servidor) reconhece o usuário como dono do clube — ex.:
+   *  proposta de compra aceita pelo antigo dono. Sincroniza a carreira para
+   *  100% de participação SEM nova cobrança (o SOV já foi movido no ledger
+   *  pela RPC da proposta). Idempotente. */
+  const handleDonoServidor = (clubeId: string) => {
+    if (!career || eProprietario(career, clubeId)) return;
+    const base = career.propriedadeClubes ?? {
+      participacoes: {},
+      totalDividendos: 0,
+      ultimaRodadaDividendos: 0,
+    };
+    const atual = base.participacoes[clubeId];
+    const novaCareer: CareerState = {
+      ...career,
+      propriedadeClubes: {
+        ...base,
+        participacoes: {
+          ...base.participacoes,
+          [clubeId]: {
+            clubeId,
+            participacao: 100,
+            custoMedio: atual?.custoMedio ?? 0,
+            adquiridoEm: atual?.adquiridoEm ?? new Date().toISOString(),
+          },
+        },
+      },
+    };
+    persistCareer(novaCareer);
+    setCareer(novaCareer);
+    setToast("Você agora é o dono reconhecido de um clube da Cidadela!");
+  };
+
+  /** Clube vendido via proposta aceita: zera a participação local. O SOV já
+   *  foi movido no ledger pela RPC — aqui NUNCA entra nova transação. */
+  const handlePerdeuClube = (clubeId: string) => {
+    if (!career?.propriedadeClubes?.participacoes[clubeId]) return;
+    const participacoes = { ...career.propriedadeClubes.participacoes };
+    delete participacoes[clubeId];
+    const novaCareer: CareerState = {
+      ...career,
+      propriedadeClubes: { ...career.propriedadeClubes, participacoes },
+    };
+    persistCareer(novaCareer);
+    setCareer(novaCareer);
   };
 
   const handleAssistirVideo = async (): Promise<boolean> => {
@@ -2880,9 +3035,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       <Shell>
         <PropriedadeScreen
           career={career ?? EMPTY_CAREER}
+          userId={perfil?.user_id ?? null}
           onBack={() => setScreen("hub")}
           onComprarCota={handleComprarCota}
           onVenderCota={handleVenderCota}
+          onDonoServidor={handleDonoServidor}
+          onPerdeuClube={handlePerdeuClube}
         />
       </Shell>
     );
@@ -2968,6 +3126,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           customTeam={userTeam}
           formation={formation}
           aiContext={aiContext}
+          resumeKey={
+            perfil?.user_id
+              ? `botao:partida:v1:${perfil.user_id}:${
+                  screen === "friendly-match"
+                    ? `amistoso:${rivalTeam}`
+                    : (current?.id ?? "sem-fixture")
+                }`
+              : undefined
+          }
         />
         {/* Celular também disponível durante partidas */}
         <CelularFixo
@@ -3003,16 +3170,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
+  // Perfil reconhecido mas a hidratação ainda não começou (efeito roda após
+  // este render): sem esta ponte o splash de auth desmonta por um frame e o
+  // da hidratação remonta do zero — o "duplo loading" visto a cada F5.
+  const precisaHidratar = !!perfil?.user_id && hidratacaoIniciada !== perfil.user_id;
+
   return (
     <Shell>
       {/* REMOVIDO: AdsterraSocialBar - causava disparos indevidos em cliques globais */}
       {/* Loading ÚNICO com identidade estável: cobre a fase de auth
-          (carregando) e a de hidratação/ações (loading) sem montar novamente
-          (o que reiniciava a barra a cada re-render). O callback congela com
-          useCallback para não re-disparar o efeito do rAF. */}
-      {(carregando || loading) && (
+          (carregando), o intervalo até a hidratação começar
+          (precisaHidratar — perfil reconhecido mas dados ainda não pedidos)
+          e a de hidratação/ações (loading) sem montar novamente (o que
+          reiniciava a barra e exibia DOIS splashs seguidos a cada F5). O
+          callback congela com useCallback para não re-disparar o rAF. */}
+      {(carregando || loading || precisaHidratar) && (
         <LoadingScreen
-          pronto={loading ? loadingReady : !carregando}
+          pronto={loading ? loadingReady : !carregando && !precisaHidratar}
           onCompleto={loading ? loadingOnComplete : noop}
         />
       )}

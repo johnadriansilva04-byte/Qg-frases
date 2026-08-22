@@ -1,3 +1,50 @@
+## F5 na partida + lost update no ledger (2026-08-22, 19ª passada)
+
+Continuação do E2E do Robô Doidão (diretiva: consertar o processo, não o
+passado). Dois bugs reais encontrados pelo E2E e corrigidos:
+
+- **F5 no meio da partida caía no menu — ORDEM DOS EFEITOS**: no BotaoGame o
+  efeito de GRAVAÇÃO do resume (`botao:resume:v1`) era declarado ANTES do
+  efeito de restauração e ambos disparam quando `perfil?.user_id` carrega.
+  A gravação rodava primeiro com `screen="menu"` → `removeItem(RESUME_KEY)` →
+  a restauração lia nada. Fix: efeito de restauração movido para ANTES do de
+  gravação (comentário no código marca a invariante; guarda estrutural em
+  `testes/f5-partida.test.mjs`). E2E prova: F5 com 24 jogadas → mesma partida,
+  24 jogadas, rodada e placar preservados; "Sair" (abandono) NÃO restaura.
+- **LOST UPDATE NO LEDGER (dinheiro evaporando)**: `concluirColetiva` dispara
+  DUAS `registrarTransacaoSov` em paralelo (coletiva + recompensa de
+  investigação da história). O `record_transaction` lia
+  `user_wallets.balance` SEM lock → as duas liam o MESMO saldo (74) e a
+  última escrita ganhava: ledger somava +25, carteira guardava +10 (15 SOV
+  evaporados; extrato mostrava as duas linhas com `balance_before=74`).
+  Fix na migration EXISTENTE `sov_financial_system.sql`:
+  `SELECT ... FROM user_wallets WHERE user_id = p_user_id FOR UPDATE`.
+  Prova no pg local: +10 e +15 paralelos → 50→65→75 encadeado, carteira=75.
+  **PRODUÇÃO: re-aplicar `sov_financial_system.sql` no SQL Editor.**
+- **Ciclo econômico completo provado em produção** (extrato real do ledger
+  do Robô): desafio de patrocinador +7 → resultado de partida +1 (empate) →
+  coletiva +10 (`coletiva:{partidaId}`) → investigação +15
+  (`historia:cap1:{partidaId}`) — história avançou cap 0→1, entrevista
+  persistida no JSONB, `rodadaAtual` avança. F5 pós-coletiva NÃO repaga
+  (guarda de sessão + chave idempotente no servidor). Logout/login: saldo
+  idêntico (84=84).
+- **F5 na tela de fim de partida**: volta à MESMA tela de fim (resume blob
+  com matchEnd) — verificado com screenshot.
+- **Splash duplo no F5**: resolvido de fato — o efeito em ordem errada também
+  derrubava a sessão para o menu (que re-hidratava e abria loading de novo).
+  Timeline pós-fix: UM único intervalo de loading contínuo.
+- **Coletiva tem confirmação de patrocinador** (ControlledMonetagButton):
+  "Finalizar coletiva" abre modal "Uma página de patrocinador pode abrir" →
+  CONTINUAR → aí sim `concluirColetiva` roda. E2E precisa clicar os DOIS.
+- **Bug registrado (não corrigido, fora do foco)**: React error #418
+  (hydration mismatch de texto) aparece no console a cada carga — app
+  recupera client-side, sem impacto visível. Investigar depois (E2E-007).
+- **Verificação**: tsc 0 erros; build OK; f5-partida 27/27; fluxo-usuario-novo
+  14/14; sov-consistencia 6/6; persistencia-unica 30/30; onclick-guard OK;
+  historia 53/53; onboarding OK; marketplace OK; cadeia de 10 migrations
+  aplica limpa em banco fresco (stubs locais: auth.users, auth.role(),
+  publication supabase_realtime; pg_cron só existe no Supabase).
+
 ## E2E em produção com o Robô Doidão + blindagem obterSaldoSov (2026-08-22, 18ª passada)
 
 E2E real no navegador (build de produção servido localmente + Supabase de
