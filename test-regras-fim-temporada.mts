@@ -33,14 +33,14 @@ function ok(cond: boolean, msg: string) {
   ok(v.continua === true, "1ª falha: continua (o jogo não vira Game Over)");
   ok(v.temporadasInadimplente === 1, "1ª falha: contador = 1");
   ok(v.motivo.includes("1/3"), "1ª falha: motivo marca 1/3 temporadas");
-  ok(v.motivo.includes("2 temporadas restantes"), "1ª falha: 2 temporadas restantes narradas");
+  ok(v.motivo.includes("mais 2 temporadas"), "1ª falha: 2 temporadas restantes narradas");
 }
 
 /** §9 — 2ª falha → continua com 2/3 e singular corretamente na narrativa. */
 {
   const v = avaliarFimTemporada(10, "serie-b", 1);
   ok(v.continua === true && v.temporadasInadimplente === 2, "2ª falha: contador = 2");
-  ok(v.motivo.includes("1 temporada restante"), "2ª falha: singular na chance final");
+  ok(v.motivo.includes("mais uma temporada"), "2ª falha: singular na chance final");
 }
 
 /** §9 — 3ª falha (prev=2) → Game Over no limite de MAX. */
@@ -48,7 +48,7 @@ function ok(cond: boolean, msg: string) {
   const v = avaliarFimTemporada(0, "serie-b", MAX_TEMPORADAS_INADIMPLENTE - 1);
   ok(v.continua === false, "3ª falha: falência decretada");
   ok(v.temporadasInadimplente === MAX_TEMPORADAS_INADIMPLENTE, "3ª falha: contador = 3");
-  ok(v.motivo.includes("Terceira temporada"), "3ª falha: motivo de falência explícito");
+  ok(v.motivo.includes("Três temporadas"), "3ª falha: motivo de falência explícito");
 }
 
 /** §9 — Um sucesso após qualquer sequência de falhas zera o contador. */

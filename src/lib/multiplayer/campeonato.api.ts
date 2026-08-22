@@ -20,10 +20,15 @@ export type ConfrontoCampeonato = {
   mesa_id: string | null;
   j1_id: string | null;
   j2_id: string | null;
-  pl_j1: number;
-  pl_j2: number;
+  pl_j1: number | null;
+  pl_j2: number | null;
   status: "pendente" | "finalizado";
   bye: boolean;
+  /** Fase de grupos / mata-mata (formato "grupos"). */
+  grupo?: string | null;
+  fase?: "grupos" | "oitavas" | "quartas" | "semifinal" | "final" | null;
+  /** Rótulo da mesa ("A","B",... ou "Principal"). */
+  mesa?: string | null;
 };
 
 export type CampeonatoOnline = {
@@ -40,6 +45,13 @@ export type CampeonatoOnline = {
   vencedor_id: string | null;
   criado_em: string;
   atualizado_em: string;
+  /** Campos do evento ao vivo (aditivos). */
+  formato: "liga" | "grupos";
+  agendado_em: string | null;
+  duracao_partida_min: number;
+  intervalo_min: number;
+  tolerancia_min: number;
+  premio_sov: number;
 };
 
 /** Cria uma nova sala de campeonato (criador é o 1º participante). */
@@ -133,6 +145,28 @@ export async function registrarResultadoCampeonato(
     p_mesa_id: mesaId,
     p_gols_j1: golsJ1,
     p_gols_j2: golsJ2,
+  });
+  if (error) throw error;
+  return data as CampeonatoOnline;
+}
+
+/** Avança a fase do campeonato (grupos→mata-mata→campeão). Idempotente. */
+export async function avancarFaseCampeonato(campeonatoId: number): Promise<CampeonatoOnline> {
+  const { data, error } = await supabase.rpc("avancar_fase_campeonato", {
+    p_campeonato_id: campeonatoId,
+  });
+  if (error) throw error;
+  return data as CampeonatoOnline;
+}
+
+/** Aplica W.O. (dupla ausência) nos confrontos pendentes da rodada. Idempotente. */
+export async function aplicarWoCampeonato(
+  campeonatoId: number,
+  rodada: number,
+): Promise<CampeonatoOnline> {
+  const { data, error } = await supabase.rpc("aplicar_wo_campeonato", {
+    p_campeonato_id: campeonatoId,
+    p_rodada: rodada,
   });
   if (error) throw error;
   return data as CampeonatoOnline;

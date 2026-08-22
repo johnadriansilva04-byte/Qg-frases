@@ -77,14 +77,6 @@ export async function registrarTransacaoSov(
       return await registrarLegado(userId, amount, tipo, descricao, modulo, metadata);
     }
     const linha = (data as LinhaRegistrar[] | null)?.[0];
-    /* A versão antiga de sov_bank_registrar ENGOLIA qualquer EXCEPTION
-       ("WHEN OTHERS ... RETURN NULL, 0, FALSE") — inclusive "saldo
-       insuficiente", teto de emissão e violação de auth — devolvendo uma
-       linha com transaction_id NULL. Tratar como falha: o chamador cai no
-       fallback local em vez de gravar saldo 0 no cache (estado falso).
-       A migração sov_bank.sql foi corrigida para propagar o erro; depois
-       de re-aplicada no banco, este guarda vira redundante e permanece
-       como defesa em profundidade. */
     if (!linha || linha.transaction_id == null) {
       logErroRpc("sov_bank_registrar (transação não gravada)", { p_user_id: userId, p_amount: amount, p_type: tipo, retorno: linha ?? null }, {});
       return null;

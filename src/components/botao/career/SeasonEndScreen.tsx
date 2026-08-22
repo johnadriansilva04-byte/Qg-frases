@@ -150,12 +150,48 @@ export function SeasonEndScreen({
 
         {/* Posição do usuário */}
         <p className="mt-2 text-center text-xs text-slate-300">
-          Seu time terminou em{" "}
-          <strong className="text-white">{resumo.posicaoUsuario}º</strong>
-          {resumo.usuarioPromovido && " — PROMOVIDO! 🎉"}
-          {resumo.usuarioRebaixado && " — rebaixado."}
+          {userTeam.name} termina a temporada na{" "}
+          <strong className="text-white">{resumo.posicaoUsuario}ª posição</strong>
+          {resumo.usuarioCampeao && " — CAMPEÃO! A cidade inteira vai às ruas! 🏆"}
+          {resumo.usuarioPromovido && !resumo.usuarioCampeao && " — ACESSO CONQUISTADO! 🎉"}
+          {resumo.usuarioRebaixado && " — noite amarga: rebaixamento."}
           {!resumo.usuarioPromovido && !resumo.usuarioRebaixado && !resumo.usuarioCampeao && "."}
         </p>
+
+        {/* Movimentação das OUTRAS divisões (§2: a pirâmide inteira se move —
+            quem cai da A vai para a B, quem sobe da B vai para a A). Só as
+            divisões diferentes da do usuário aparecem aqui (a dele já tem o
+            bloco grande acima). */}
+        <div
+          className={`mt-2 w-full space-y-1 transition-all duration-700 ${
+            fase >= 3 ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
+          }`}
+        >
+          {resumo.divisoes
+            .filter((d) => d.divisao !== resumo.divisaoUsuario)
+            .map((d) => (
+              <div
+                key={d.divisao}
+                className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 rounded-lg border border-white/5 bg-white/[0.03] px-2 py-1 text-[10px]"
+              >
+                <span className="font-bold uppercase tracking-widest text-slate-400">
+                  {DIVISAO_LABEL[d.divisao]}
+                </span>
+                {d.promovidosIds.length > 0 && (
+                  <span className="flex items-center gap-1 text-emerald-300">
+                    <ArrowUp className="size-3" />
+                    {d.promovidosIds.map((id) => time(id).short).join(", ")}
+                  </span>
+                )}
+                {d.rebaixadosIds.length > 0 && (
+                  <span className="flex items-center gap-1 text-rose-300">
+                    <ArrowDown className="size-3" />
+                    {d.rebaixadosIds.map((id) => time(id).short).join(", ")}
+                  </span>
+                )}
+              </div>
+            ))}
+        </div>
 
         {/* VEREDITO (fase 3 — economia da temporada) */}
         <div
@@ -166,18 +202,18 @@ export function SeasonEndScreen({
           <div className="grid grid-cols-3 gap-2 border-y border-white/10 py-2">
             <Tile
               icon={<Coins className="size-3.5" />}
-              label="Soberania"
+              label="Caixa final"
               value={String(veredito.soberaniaFinal)}
               accent={continua ? "emerald" : "rose"}
             />
             <Tile
               icon={<AlertTriangle className="size-3.5" />}
-              label="Manutenção"
+              label="Estrutura"
               value={`-${veredito.custoManutencao}`}
             />
             <Tile
               icon={continua ? <Check className="size-3.5" /> : <X className="size-3.5" />}
-              label="Saldo"
+              label="Balanço"
               value={veredito.sobrou >= 0 ? `+${veredito.sobrou}` : String(veredito.sobrou)}
               accent={veredito.sobrou >= 0 ? "emerald" : "rose"}
             />
@@ -186,7 +222,7 @@ export function SeasonEndScreen({
           {/* Controle visual de tolerância à dívida (§9) — sempre explícito. */}
           {veredito.temporadasInadimplente > 0 && (
             <p className="mt-1 text-center text-[10px] font-black uppercase tracking-widest text-rose-300">
-              Tentativa de recuperação {veredito.temporadasInadimplente} de {MAX_TEMPORADAS_INADIMPLENTE}
+              Débito {veredito.temporadasInadimplente} de {MAX_TEMPORADAS_INADIMPLENTE} — a paciência do conselho tem limite
             </p>
           )}
 

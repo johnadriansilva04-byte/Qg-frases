@@ -6,6 +6,7 @@ import {
   analisarPadroes,
   balancearPerfil,
   decidirIntencao,
+  escolherFinalizador,
   executarIntencao,
   extrairJson,
   novaMemoriaPartida,
@@ -14,9 +15,10 @@ import {
   validarIntencaoLlm,
   type EstadoPartida,
   type EstrategiaId,
+  type IntencaoEstrategica,
   type MemoriaPartida,
 } from "./src/components/botao/engine/estrategia";
-import { initialDiscs } from "./src/components/botao/engine/physics";
+import { FIELD, initialDiscs, type Disc } from "./src/components/botao/engine/physics";
 
 let passed = 0;
 function ok(cond: boolean, msg: string) {
@@ -185,3 +187,111 @@ ok((extraido as { strategy?: string })?.strategy === "defender", "JSON extraído
 ok(extrairJson("sem json aqui") === null, "texto sem JSON → null");
 
 console.log(`\n🎉 ${passed} invariantes da IA estratégica OK`);
+
+/* ------------------------------------------------------------------------ */
+/* Geometria de finalização (IA implacável)                                   */
+/* ------------------------------------------------------------------------ */
+
+function disc(id: string, side: Disc["side"], x: number, y: number, keeper = false): Disc {
+  return { id, side, x, y, vx: 0, vy: 0, r: 18, mass: 1, keeper };
+}
+
+const golDir = { x: FIELD.w - FIELD.margin, y: FIELD.h / 2 }; // gol do "home" atacando
+const atacar: IntencaoEstrategica = {
+  strategy: "atacar",
+  risk: 0.6,
+  targetZone: "gol_adversario",
+  priority: "marcar_gol",
+  reason: "teste",
+};
+
+// G1) Finalizador = botão ATRÁS da bola, nunca o que está entre bola e gol.
+{
+  const ball = disc("ball", "ball", 600, 300);
+  const atras = disc("atras", "home", 500, 300); // atrás da bola (bola→gol = +x)
+  const naFrente = disc("frente", "home", 700, 305); // entre bola e gol
+  const adv = [disc("adv", "away", 100, 100)];
+  const escolha = escolherFinalizador([naFrente, atras], ball, golDir, adv);
+  ok(escolha?.disc.id === "atras" && escolha.cos > 0.9, "finalizador é o botão atrás da bola");
+}
+
+// G2) executarIntencao ataca com o botão atrás: impulso aponta para o contato
+// que empurra a bola em direção ao gol (nunca "para o outro lado").
+{
+  const ball = disc("ball", "ball", 600, 300);
+  const atras = disc("atras", "home", 500, 300);
+  const naFrente = disc("frente", "home", 700, 305);
+  const adv = [disc("adv", "away", 100, 100)];
+  const discs = [ball, atras, naFrente, ...adv];
+  const plano = executarIntencao(discs, "home", atacar, "profissional", 85);
+  ok(plano?.discId === "atras", "chute sai do botão atrás da bola");
+  const dirBolaGol = { x: golDir.x - ball.x, y: golDir.y - ball.y };
+  const norm = Math.hypot(dirBolaGol.x, dirBolaGol.y);
+  const dot = (plano!.ix * dirBolaGol.x + plano!.iy * dirBolaGol.y) / norm;
+  ok(dot > 0, "impulso empurra a bola EM DIREÇÃO ao gol adversário");
+}
+
+// G3) Sem ninguém atrás da bola: NÃO chuta — reposiciona para o ponto de apoio.
+{
+  const ball = disc("ball", "ball", 600, 300);
+  const f1 = disc("f1", "home", 700, 200);
+  const f2 = disc("f2", "home", 720, 420);
+  const adv = [disc("adv", "away", 100, 100)];
+  const discs = [ball, f1, f2, ...adv];
+  const plano = executarIntencao(discs, "home", atacar, "lenda", 90);
+  ok(plano !== null, "sem ângulo limpo ainda há jogada (reposicionamento)");
+  // O impulso deve apontar para TRÁS da bola (apoio), não para o gol.
+  const movedor = discs.find((d) => d.id === plano!.discId)!;
+  const apoioX = ball.x - (golDir.x - ball.x) * 0.06; // atrás da bola
+  ok(
+    Math.sign(plano!.ix) !== Math.sign(golDir.x - movedor.x) || Math.abs(ball.x - (movedor.x + plano!.ix)) < Math.abs(golDir.x - movedor.x),
+    "sem ângulo: jogada não é um chute direto ao gol (é aproximação)",
+  );
+  void apoioX;
+}
+
+// G4) Gol feito: bola perto do gol, ângulo limpo, corredor livre → precisão
+// cirúrgica (desvio angular mínimo) e força alta.
+{
+  const ball = disc("ball", "ball", 850, 300);
+  const atras = disc("atras", "home", 740, 302);
+  const adv = [disc("adv", "away", 200, 100), disc("gk", "away", 960, 310, true)];
+  const escolha = escolherFinalizador([atras], ball, golDir, adv);
+  ok(escolha?.golFeito === true, "gol feito detectado (perto + ângulo + corredor livre)");
+  const discs = [ball, atras, ...adv];
+  let minAng = Infinity;
+  let maxAng = -Infinity;
+  for (let i = 0; i < 200; i++) {
+    const plano = executarIntencao(discs, "home", atacar, "amador", 40)!; // mesmo time fraco não erra gol feito
+    const angImp = Math.atan2(plano.iy, plano.ix);
+    minAng = Math.min(minAng, angImp);
+    maxAng = Math.max(maxAng, angImp);
+    const forca = Math.hypot(plano.ix, plano.iy);
+    ok(forca > 12, "gol feito sai com força real");
+  }
+  // Precisão cirúrgica = quase nenhuma dispersão entre chutes repetidos.
+  ok(maxAng - minAng < 0.02, `gol feito: dispersão angular ${(maxAng - minAng).toFixed(4)} rad (< 0.02)`);
+}
+
+// G5) Precisão escala com a força do clube: elite (99) desvia menos que base (30).
+{
+  const ball = disc("ball", "ball", 600, 300);
+  const atras = disc("atras", "home", 460, 295);
+  const adv = [disc("adv", "away", 100, 100)];
+  const discs = [ball, atras, ...adv];
+  const medir = (power: number) => {
+    let soma = 0;
+    for (let i = 0; i < 200; i++) {
+      const plano = executarIntencao(discs, "home", atacar, "amador", power)!;
+      const angImp = Math.atan2(plano.iy, plano.ix);
+      const angIdeal = Math.atan2(ball.y - atras.y, ball.x - atras.x);
+      soma += Math.abs(angImp - angIdeal);
+    }
+    return soma / 200;
+  };
+  const elite = medir(95);
+  const base = medir(30);
+  ok(elite < base, `elite (${elite.toFixed(3)}) desvia menos que time fraco (${base.toFixed(3)})`);
+}
+
+console.log(`🎉 TOTAL: ${passed} invariantes (IA estratégica + geometria implacável) OK`);

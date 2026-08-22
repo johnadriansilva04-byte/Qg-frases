@@ -22,6 +22,7 @@ import {
   buscarCampeonato,
   buscarCampeonatosAbertos,
   registrarResultadoCampeonato,
+  avancarFaseCampeonato,
   type CampeonatoOnline,
   type ConfrontoCampeonato,
   type ParticipanteCampeonato,
@@ -79,6 +80,7 @@ export function OnlineChampionship({
   const [codigoEntrar, setCodigoEntrar] = useState("");
   const [nomeSala, setNomeSala] = useState("Campeonato Online");
   const [maxJogadores, setMaxJogadores] = useState(4);
+  const [formato, setFormato] = useState<"liga" | "grupos">("liga");
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [iniciando, setIniciando] = useState(false);
@@ -142,6 +144,13 @@ export function OnlineChampionship({
     setErro(null);
     try {
       const camp = await criarCampeonato(nomeSala || "Campeonato Online", maxJogadores);
+      // Define o formato (a RPC criar usa defaults; formato é aditivo).
+      if (formato !== "liga") {
+        await supabase
+          .from("botao_campeonatos_online")
+          .update({ formato })
+          .eq("id", camp.id);
+      }
       setCodigo(camp.codigo);
       recarregarAbertos();
     } catch (e: unknown) {
@@ -149,7 +158,7 @@ export function OnlineChampionship({
     } finally {
       setCriando(false);
     }
-  }, [perfil, nomeSala, maxJogadores, recarregarAbertos]);
+  }, [perfil, nomeSala, maxJogadores, formato, recarregarAbertos]);
 
   const handleEntrar = useCallback(async () => {
     if (!perfil) {
@@ -239,6 +248,11 @@ export function OnlineChampionship({
         const golsJ1 = j1 === mesaAtiva.jogador_1_id ? r.golsJ1 : r.golsJ2;
         const golsJ2 = j2 === mesaAtiva.jogador_1_id ? r.golsJ1 : r.golsJ2;
         await registrarResultadoCampeonato(campeonato.id, mesaAtiva.mesa_id, golsJ1, golsJ2);
+        // Formato grupos: tenta avançar de fase (idempotente — no-op se a fase
+        // não estiver completa). Roda após cada resultado.
+        if (campeonato.formato === "grupos") {
+          await avancarFaseCampeonato(campeonato.id).catch(() => {});
+        }
         // Recarrega perfil (soberania atualizada pelas RPCs)
         const novoPerfil = await recarregar();
         if (novoPerfil) aplicarPerfil(novoPerfil);
@@ -321,11 +335,22 @@ export function OnlineChampionship({
               value={maxJogadores}
               onChange={(e) => setMaxJogadores(Number(e.target.value))}
             >
-              {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+              {(formato === "grupos" ? [8, 16, 32] : [2, 3, 4, 5, 6, 7, 8, 16, 32]).map((n) => (
                 <option key={n} value={n}>
                   {n} jogadores
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Formato</label>
+            <select
+              className="input w-full"
+              value={formato}
+              onChange={(e) => setFormato(e.target.value as "liga" | "grupos")}
+            >
+              <option value="liga">Liga (pontos corridos)</option>
+              <option value="grupos">Grupos + Mata-mata</option>
             </select>
           </div>
           <button onClick={handleCriar} disabled={criando || !perfil} className="btn-primary">
@@ -419,28 +444,18 @@ function SalaCampeonato({
   onJogar: () => void;
   meuConfrontoPendente: ConfrontoCampeonato | null;
 }) {
-  const participantes = useMemo(
-    () => (camp.participantes as ParticipanteCampeonato[]) ?? [],
-    [camp.participantes],
-  );
+  const souCamp = camp.vencedor_id === userId;
   const confrontos = useMemo(
     () => (camp.confrontos as ConfrontoCampeonato[]) ?? [],
     [camp.confrontos],
   );
-  const classificacao = useMemo(
-    () =>
-      [...participantes].sort(
-        (a, b) =>
-          (b.pontos ?? 0) - (a.pontos ?? 0) ||
-          (b.gols_pro ?? 0) - (b.gols_contra ?? 0) - ((a.gols_pro ?? 0) - (a.gols_contra ?? 0)),
-      ),
-    [participantes],
-  );
-
-  const souCamp = camp.vencedor_id === userId;
   const totalRodadas = useMemo(
     () => confrontos.reduce((m, c) => Math.max(m, c.rodada), 0),
     [confrontos],
+  );
+  const participantes = useMemo(
+    () => (camp.participantes as ParticipanteCampeonato[]) ?? [],
+    [camp.participantes],
   );
 
   return (
@@ -498,107 +513,19 @@ function SalaCampeonato({
 
       {camp.status === "em_andamento" && (
         <>
-          <section className="surface mb-6 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-display text-lg">Sua próxima partida</p>
-                {meuConfrontoPendente ? (
-                  <p className="text-sm text-muted-foreground">
-                    Rodada {meuConfrontoPendente.rodada} ·{" "}
-                    {abrevDoParticipante(camp, meuConfrontoPendente.j1_id!)} x{" "}
-                    {abrevDoParticipante(camp, meuConfrontoPendente.j2_id!)}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Sem confronto pendente nesta rodada (bye ou já jogou). Aguarde a próxima rodada.
-                  </p>
-                )}
-              </div>
-              {meuConfrontoPendente && (
-                <button onClick={onJogar} className="btn-primary">
-                  <Play className="mr-1 h-4 w-4" /> Jogar
-                </button>
-              )}
-            </div>
-          </section>
+          {/* Painel do evento ao vivo: fase, mesa, próxima partida com nomes. */}
+          <PainelAoVivo camp={camp} userId={userId} meuConfronto={meuConfrontoPendente} onJogar={onJogar} />
 
           <section className="surface mb-6 p-5">
-            <h3 className="mb-3 font-display text-lg">Classificação</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[11px] tracking-wider text-muted-foreground uppercase">
-                  <th className="text-left font-normal">#</th>
-                  <th className="text-left font-normal">Jogador</th>
-                  <th className="w-8 font-normal">Pts</th>
-                  <th className="w-8 font-normal">J</th>
-                  <th className="w-10 font-normal">SG</th>
-                </tr>
-              </thead>
-              <tbody>
-                {classificacao.map((r, i) => (
-                  <tr
-                    key={r.user_id}
-                    className={r.user_id === userId ? "text-accent-foreground" : ""}
-                  >
-                    <td className="py-1">{i + 1}</td>
-                    <td className="py-1">
-                      <span className="font-mono">{r.abreviacao ?? "MTI"}</span>{" "}
-                      <span className="text-muted-foreground">{r.nome}</span>
-                    </td>
-                    <td className="text-center">{r.pontos ?? 0}</td>
-                    <td className="text-center">
-                      {
-                        confrontos.filter(
-                          (c) =>
-                            c.status === "finalizado" &&
-                            (c.j1_id === r.user_id || c.j2_id === r.user_id),
-                        ).length
-                      }
-                    </td>
-                    <td className="text-center">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <h3 className="mb-3 font-display text-lg">
+              {camp.formato === "grupos" ? "Classificação por grupo" : "Classificação"}
+            </h3>
+            <ClassificacaoCampeonato camp={camp} userId={userId} />
           </section>
 
           <section className="surface p-5">
             <h3 className="mb-3 font-display text-lg">Confrontos</h3>
-            <div className="space-y-3">
-              {Array.from({ length: totalRodadas }, (_, i) => i + 1).map((rod) => {
-                const lista = confrontos.filter((c) => c.rodada === rod);
-                return (
-                  <div key={rod}>
-                    <p className="mb-1 text-xs tracking-wider text-muted-foreground uppercase">
-                      Rodada {rod}
-                    </p>
-                    <ul className="space-y-1 text-sm">
-                      {lista.map((c, idx) => {
-                        const envolvido = c.j1_id === userId || c.j2_id === userId;
-                        // Confronto inválido (mesmo jogador dos dois lados):
-                        // evita exibir "FB x FB" — pula a linha.
-                        if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
-                        return (
-                          <li
-                            key={idx}
-                            className={`flex items-center justify-between gap-2 ${envolvido ? "text-accent-foreground" : ""}`}
-                          >
-                            <span>
-                              {abrevDoParticipante(camp, c.j1_id ?? "")} x{" "}
-                              {abrevDoParticipante(camp, c.j2_id ?? "")}
-                              {c.bye && <span className="text-muted-foreground"> (bye)</span>}
-                            </span>
-                            <span className="font-mono text-muted-foreground">
-                              {c.status === "finalizado" ? `${c.pl_j1} - ${c.pl_j2}` : "—"}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
+            <ConfrontosCampeonato camp={camp} userId={userId} totalRodadas={totalRodadas} />
           </section>
         </>
       )}
@@ -622,6 +549,299 @@ function SalaCampeonato({
 
       {erro && <p className="mt-4 text-sm text-red-500">{erro}</p>}
     </main>
+  );
+}
+
+/** Rótulo legível da fase (grupos/mata-mata). */
+function rotuloFase(fase: ConfrontoCampeonato["fase"] | null | undefined): string {
+  switch (fase) {
+    case "grupos":
+      return "Fase de Grupos";
+    case "oitavas":
+      return "Oitavas de Final";
+    case "quartas":
+      return "Quartas de Final";
+    case "semifinal":
+      return "Semifinal";
+    case "final":
+      return "Final";
+    default:
+      return "Liga";
+  }
+}
+
+/** Fase atual do campeonato (a mais avançada com confrontos). */
+function faseAtual(camp: CampeonatoOnline): ConfrontoCampeonato["fase"] | null {
+  const ordem: Array<NonNullable<ConfrontoCampeonato["fase"]>> = [
+    "grupos",
+    "oitavas",
+    "quartas",
+    "semifinal",
+    "final",
+  ];
+  let atual: ConfrontoCampeonato["fase"] | null = null;
+  for (const f of ordem) {
+    if ((camp.confrontos as ConfrontoCampeonato[]).some((c) => c.fase === f)) atual = f;
+  }
+  return atual;
+}
+
+/**
+ * Painel do evento ao vivo — mostra fase, mesa e a próxima partida do jogador
+ * com NOMES reais (nunca ID técnico). O jogador pode estar jogando, esperando
+ * ou acompanhando (arquibancada) — a competição segue pelo calendário.
+ */
+function PainelAoVivo({
+  camp,
+  userId,
+  meuConfronto,
+  onJogar,
+}: {
+  camp: CampeonatoOnline;
+  userId: string;
+  meuConfronto: ConfrontoCampeonato | null;
+  onJogar: () => void;
+}) {
+  const fase = faseAtual(camp);
+  const emAndamento = (camp.confrontos as ConfrontoCampeonato[]).filter(
+    (c) => c.status === "pendente" && c.mesa_id,
+  ).length;
+  const nomeAdv = meuConfronto
+    ? nomeDoParticipante(
+        camp,
+        meuConfronto.j1_id === userId ? meuConfronto.j2_id! : meuConfronto.j1_id!,
+      )
+    : null;
+
+  return (
+    <section className="surface mb-6 p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
+          🏆 Campeonato ao Vivo · {rotuloFase(fase)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {(camp.participantes as ParticipanteCampeonato[]).length} participantes
+          {emAndamento > 0 ? ` · ${emAndamento} em andamento` : ""}
+        </p>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          {meuConfronto ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {rotuloFase(meuConfronto.fase)} · Rodada {meuConfronto.rodada}
+                {meuConfronto.mesa ? ` · Mesa ${meuConfronto.mesa}` : ""}
+              </p>
+              <p className="mt-1 truncate font-display text-xl">
+                {nomeDoParticipante(camp, userId)}{" "}
+                <span className="text-muted-foreground">vs</span> {nomeAdv}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {camp.formato === "grupos" && fase === "grupos"
+                ? "Você já jogou sua partida nesta rodada (ou está de bye). Acompanhe os resultados abaixo."
+                : "Sem confronto pendente agora. Acompanhe a classificação — você permanece no evento."}
+            </p>
+          )}
+        </div>
+        {meuConfronto && (
+          <button onClick={onJogar} className="btn-primary shrink-0">
+            <Play className="mr-1 h-4 w-4" /> Jogar
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Classificação — global (liga) ou por grupo (formato grupos, fase de grupos). */
+function ClassificacaoCampeonato({ camp, userId }: { camp: CampeonatoOnline; userId: string }) {
+  const participantes = (camp.participantes as ParticipanteCampeonato[]) ?? [];
+  const confrontos = (camp.confrontos as ConfrontoCampeonato[]) ?? [];
+  const fase = faseAtual(camp);
+
+  // Pontos por participante derivados dos confrontos finalizados (escopo opcional por grupo).
+  const stats = (uid: string, grupo: string | null) => {
+    let pontos = 0;
+    let j = 0;
+    let gp = 0;
+    let gc = 0;
+    for (const c of confrontos) {
+      if (c.status !== "finalizado") continue;
+      if (grupo !== null && c.grupo !== grupo) continue;
+      if (c.j1_id === uid) {
+        j++;
+        gp += c.pl_j1 ?? 0;
+        gc += c.pl_j2 ?? 0;
+        pontos += (c.pl_j1 ?? 0) > (c.pl_j2 ?? 0) ? 3 : c.pl_j1 === c.pl_j2 ? 1 : 0;
+      } else if (c.j2_id === uid) {
+        j++;
+        gp += c.pl_j2 ?? 0;
+        gc += c.pl_j1 ?? 0;
+        pontos += (c.pl_j2 ?? 0) > (c.pl_j1 ?? 0) ? 3 : c.pl_j2 === c.pl_j1 ? 1 : 0;
+      }
+    }
+    return { pontos, j, sg: gp - gc };
+  };
+
+  const tabela = (uids: string[], grupo: string | null) =>
+    uids
+      .map((uid) => ({ uid, ...stats(uid, grupo) }))
+      .sort((a, b) => b.pontos - a.pontos || b.sg - a.sg);
+
+  const linha = (r: { uid: string; pontos: number; j: number; sg: number }, i: number) => {
+    const p = participantes.find((x) => x.user_id === r.uid);
+    return (
+      <tr key={r.uid} className={r.uid === userId ? "text-accent-foreground" : ""}>
+        <td className="py-1">{i + 1}</td>
+        <td className="py-1">
+          <span className="font-mono">{p?.abreviacao ?? "MTI"}</span>{" "}
+          <span className="text-muted-foreground">{p?.nome ?? "Jogador"}</span>
+        </td>
+        <td className="text-center">{r.pontos}</td>
+        <td className="text-center">{r.j}</td>
+        <td className="text-center">{r.sg}</td>
+      </tr>
+    );
+  };
+
+  const header = (
+    <thead>
+      <tr className="text-[11px] tracking-wider text-muted-foreground uppercase">
+        <th className="text-left font-normal">#</th>
+        <th className="text-left font-normal">Jogador</th>
+        <th className="w-8 font-normal">Pts</th>
+        <th className="w-8 font-normal">J</th>
+        <th className="w-10 font-normal">SG</th>
+      </tr>
+    </thead>
+  );
+
+  // Fase de grupos: uma tabela por grupo.
+  if (camp.formato === "grupos" && fase === "grupos") {
+    const grupos = Array.from(
+      new Set(confrontos.filter((c) => c.grupo).map((c) => c.grupo!)),
+    ).sort();
+    return (
+      <div className="space-y-4">
+        {grupos.map((g) => {
+          const uids = new Set<string>();
+          confrontos.forEach((c) => {
+            if (c.grupo === g) {
+              if (c.j1_id) uids.add(c.j1_id);
+              if (c.j2_id) uids.add(c.j2_id);
+            }
+          });
+          return (
+            <div key={g}>
+              <p className="mb-1 text-xs tracking-wider text-muted-foreground uppercase">
+                Grupo {g} · Mesa {g}
+              </p>
+              <table className="w-full text-sm">
+                {header}
+                <tbody>{tabela(Array.from(uids), g).map(linha)}</tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Liga ou mata-mata: tabela global.
+  return (
+    <table className="w-full text-sm">
+      {header}
+      <tbody>{tabela(participantes.map((p) => p.user_id), null).map(linha)}</tbody>
+    </table>
+  );
+}
+
+/** Lista de confrontos agrupados por fase/rodada (com mesa e nomes). */
+function ConfrontosCampeonato({
+  camp,
+  userId,
+  totalRodadas,
+}: {
+  camp: CampeonatoOnline;
+  userId: string;
+  totalRodadas: number;
+}) {
+  const confrontos = (camp.confrontos as ConfrontoCampeonato[]) ?? [];
+  const ehGrupos = camp.formato === "grupos";
+
+  const linha = (c: ConfrontoCampeonato, idx: number) => {
+    const envolvido = c.j1_id === userId || c.j2_id === userId;
+    if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
+    return (
+      <li
+        key={idx}
+        className={`flex items-center justify-between gap-2 ${envolvido ? "text-accent-foreground" : ""}`}
+      >
+        <span className="min-w-0 truncate">
+          {ehGrupos && c.grupo ? <span className="text-muted-foreground">[{c.grupo}] </span> : null}
+          {nomeDoParticipante(camp, c.j1_id ?? "")} x {nomeDoParticipante(camp, c.j2_id ?? "")}
+          {c.bye && <span className="text-muted-foreground"> (bye)</span>}
+        </span>
+        <span className="font-mono text-muted-foreground">
+          {c.status === "finalizado" ? `${c.pl_j1 ?? 0} - ${c.pl_j2 ?? 0}` : "—"}
+        </span>
+      </li>
+    );
+  };
+
+  if (ehGrupos) {
+    // Agrupa por fase, depois por rodada dentro da fase.
+    const fases: Array<NonNullable<ConfrontoCampeonato["fase"]>> = [
+      "grupos",
+      "oitavas",
+      "quartas",
+      "semifinal",
+      "final",
+    ];
+    return (
+      <div className="space-y-4">
+        {fases.map((f) => {
+          const daFase = confrontos.filter((c) => c.fase === f);
+          if (daFase.length === 0) return null;
+          const rodadas = Array.from(new Set(daFase.map((c) => c.rodada))).sort((a, b) => a - b);
+          return (
+            <div key={f}>
+              <p className="mb-1 font-display text-sm">{rotuloFase(f)}</p>
+              {rodadas.map((rod) => (
+                <div key={rod} className="mb-2">
+                  <p className="mb-1 text-xs tracking-wider text-muted-foreground uppercase">
+                    Rodada {rod}
+                  </p>
+                  <ul className="space-y-1 text-sm">
+                    {daFase.filter((c) => c.rodada === rod).map(linha)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Liga: por rodada.
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: totalRodadas }, (_, i) => i + 1).map((rod) => {
+        const lista = confrontos.filter((c) => c.rodada === rod);
+        return (
+          <div key={rod}>
+            <p className="mb-1 text-xs tracking-wider text-muted-foreground uppercase">
+              Rodada {rod}
+            </p>
+            <ul className="space-y-1 text-sm">{lista.map(linha)}</ul>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -337,6 +337,67 @@ function golProprio(side: Side): { x: number; y: number } {
   };
 }
 
+/**
+ * Geometria de finalização: a direção botão→bola deve apontar para o alvo.
+ * `cos` = alinhamento (1 = botão exatamente atrás da bola na direção do gol;
+ * negativo = botão ENTRE a bola e o gol — chutar daqui manda a bola para o
+ * lado errado, o bug do "joga para o outro lado").
+ */
+function alinhamento(disc: Disc, ball: Disc, alvo: { x: number; y: number }): number {
+  const vbx = ball.x - disc.x;
+  const vby = ball.y - disc.y;
+  const vgx = alvo.x - ball.x;
+  const vgy = alvo.y - ball.y;
+  const db = Math.hypot(vbx, vby) || 1;
+  const dg = Math.hypot(vgx, vgy) || 1;
+  return (vbx * vgx + vby * vgy) / (db * dg);
+}
+
+/**
+ * Escolhe o botão com a MELHOR geometria de finalização (§17): posicionado
+ * atrás da bola em relação ao alvo. A CPU consciente nunca chuta "de frente
+ * para o próprio gol". Retorna o botão, o alinhamento (−1..1) e se é um
+ * "gol feito" (bola perto do gol, ângulo limpo e caminho livre).
+ */
+export function escolherFinalizador(
+  mine: Disc[],
+  ball: Disc,
+  alvo: { x: number; y: number },
+  adversarios: Disc[],
+): { disc: Disc; cos: number; golFeito: boolean } | null {
+  let best: { disc: Disc; cos: number; score: number } | null = null;
+  for (const d of mine) {
+    const cos = alinhamento(d, ball, alvo);
+    const dist = Math.hypot(ball.x - d.x, ball.y - d.y);
+    // Alinhamento pesa o dobro; distância desempata (perto = bote mais rápido).
+    const score = cos * 2 - dist / 700;
+    if (!best || score > best.score) best = { disc: d, cos, score };
+  }
+  if (!best) return null;
+  const distGol = Math.hypot(alvo.x - ball.x, alvo.y - ball.y);
+  // Caminho livre: nenhum adversário (exceto goleiro longe) no corredor bola→gol.
+  const corredorLivre = !adversarios.some((a) => {
+    if (a.keeper) return false;
+    const t = Math.max(0, Math.min(1, ((a.x - ball.x) * (alvo.x - ball.x) + (a.y - ball.y) * (alvo.y - ball.y)) / ((distGol * distGol) || 1)));
+    const px = ball.x + t * (alvo.x - ball.x);
+    const py = ball.y + t * (alvo.y - ball.y);
+    return Math.hypot(a.x - px, a.y - py) < a.r + 26;
+  });
+  const golFeito = best.cos > 0.68 && distGol < 260 && corredorLivre;
+  return { disc: best.disc, cos: best.cos, golFeito };
+}
+
+/** Ponto de apoio atrás da bola (lado oposto ao alvo) para reposicionamento. */
+function pontoAtrasDaBola(ball: Disc, alvo: { x: number; y: number }, raio: number): { x: number; y: number } {
+  const gx = alvo.x - ball.x;
+  const gy = alvo.y - ball.y;
+  const gl = Math.hypot(gx, gy) || 1;
+  return {
+    x: ball.x - (gx / gl) * raio * 3.2,
+    y: ball.y - (gy / gl) * raio * 3.2,
+  };
+}
+
 /** Impulso calibrado para empurrar `de` em direção a `para` (mesma física do ai.ts). */
 function impulsoPara(
   de: Disc,
@@ -344,11 +405,16 @@ function impulsoPara(
   difficulty: Difficulty,
   teamPower: number,
   risco: number,
+  precisaoExtra = 1,
 ): { ix: number; iy: number } {
   let dx = para.x - de.x;
   let dy = para.y - de.y;
   const dist = Math.hypot(dx, dy) || 1;
-  const skill = NOISE[difficulty] * (1 - (teamPower - 58) / 120) * (1.25 - risco * 0.5);
+  // A força do clube REDUZ o ruído de forma acentuada: times de elite (Série A)
+  // são cirúrgicos; times fracos ainda erram — sem trapaça, é habilidade.
+  const n = Math.max(0, Math.min(1, (teamPower - 28) / 71));
+  const skill =
+    NOISE[difficulty] * (1.35 - n) * (1.25 - risco * 0.5) * precisaoExtra;
   const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * skill;
   const powerBase = Math.min(1, dist / 240 + 0.6) * FORCE[difficulty];
   const power = Math.max(0.4, Math.min(1.05, powerBase + (Math.random() - 0.5) * 0.14));
@@ -365,6 +431,7 @@ function chuteNaBola(
   difficulty: Difficulty,
   teamPower: number,
   risco: number,
+  precisaoExtra = 1,
 ): JogadaPlanejada {
   const gx = alvo.x - ball.x;
   const gy = alvo.y - ball.y;
@@ -372,7 +439,7 @@ function chuteNaBola(
   const toque = difficulty === "lenda" ? 0.5 : difficulty === "profissional" ? 0.55 : 0.6;
   const aimX = ball.x - (gx / gl) * (shooter.r + ball.r) * toque;
   const aimY = ball.y - (gy / gl) * (shooter.r + ball.r) * toque;
-  const imp = impulsoPara(shooter, { x: aimX, y: aimY }, difficulty, teamPower, risco);
+  const imp = impulsoPara(shooter, { x: aimX, y: aimY }, difficulty, teamPower, risco, precisaoExtra);
   return { discId: shooter.id, ...imp };
 }
 
@@ -390,38 +457,85 @@ export function executarIntencao(
 ): JogadaPlanejada | null {
   const ball = discs.find((d) => d.side === "ball");
   const mine = discs.filter((d) => d.side === side && !d.keeper);
+  const adversarios = discs.filter((d) => d.side !== side && d.side !== "ball");
   if (!ball || mine.length === 0) return null;
 
-  const porProximidade = [...mine].sort(
-    (a, b) => Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y),
-  );
-  const shooter = porProximidade[0]!;
   const golAdv = golAdversario(side);
   const golProprioGoal = golProprio(side);
   const risco = intencao.risk;
+
+  /**
+   * Finalização consciente: escolhe o botão ATRÁS da bola. Se o melhor
+   * alinhamento ainda é ruim (cos baixo — ninguém em posição de bote), a CPU
+   * NÃO chuta de qualquer jeito: reposiciona o botão mais bem colocado para
+   * trás da bola (jogada de aproximação) em vez de entregar a bola.
+   */
+  const finalizar = (alvo: { x: number; y: number }, riscoLocal: number): JogadaPlanejada => {
+    const escolha = escolherFinalizador(mine, ball, alvo, adversarios);
+    if (!escolha) {
+      // Sem botão livre: empurra a bola com o mais próximo (último recurso).
+      const prox = [...mine].sort(
+        (a, b) => Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y),
+      )[0]!;
+      return chuteNaBola(prox, ball, alvo, difficulty, teamPower, riscoLocal);
+    }
+    if (escolha.golFeito) {
+      // GOL FEITO NÃO SE ERRAR: canto OPOSTO ao goleiro, precisão cirúrgica.
+      const keeper = adversarios.find((a) => a.keeper);
+      const referencia = keeper?.y ?? ball.y;
+      const canto =
+        referencia >= FIELD.h / 2 ? golAdv.y - FIELD.goalHeight * 0.32 : golAdv.y + FIELD.goalHeight * 0.32;
+      return chuteNaBola(escolha.disc, ball, { x: alvo.x, y: canto }, "lenda", 99, 0, 0.12);
+    }
+    if (escolha.cos < 0.12) {
+      // Ninguém atrás da bola: reposicionamento inteligente em vez de chutar
+      // para o lado errado. Move o botão mais próximo do ponto de apoio.
+      const apoio = pontoAtrasDaBola(ball, alvo, ball.r);
+      const movedor = [...mine].sort(
+        (a, b) => Math.hypot(a.x - apoio.x, a.y - apoio.y) - Math.hypot(b.x - apoio.x, b.y - apoio.y),
+      )[0]!;
+      const imp = impulsoPara(movedor, apoio, difficulty, teamPower, riscoLocal * 0.6);
+      return { discId: movedor.id, ...imp };
+    }
+    return chuteNaBola(escolha.disc, ball, alvo, difficulty, teamPower, riscoLocal);
+  };
 
   switch (intencao.strategy) {
     case "atacar": {
       // Chute ao gol com variação vertical pelo risco (mais risco = mais canto).
       const spread = FIELD.goalHeight * (0.2 + risco * 0.45);
       const alvo = { x: golAdv.x, y: golAdv.y + (Math.random() - 0.5) * spread };
-      return chuteNaBola(shooter, ball, alvo, difficulty, teamPower, risco);
+      return finalizar(alvo, risco);
     }
     case "contra_atacar": {
       // Direciona a bola ao espaço mais vazio do ataque (canto oposto à bola).
       const yAlvo = ball.y < FIELD.h / 2 ? FIELD.h * 0.72 : FIELD.h * 0.28;
-      return chuteNaBola(shooter, ball, { x: golAdv.x, y: yAlvo }, difficulty, teamPower, risco * 0.8);
+      return finalizar({ x: golAdv.x, y: yAlvo }, risco * 0.8);
     }
     case "reter": {
       // Posse segura: bola para o fundo próprio, longe do gol e do adversário.
       const yFundo = ball.y < FIELD.h / 2 ? FIELD.h - FIELD.margin - 40 : FIELD.margin + 40;
       const xFundo = golProprioGoal.x + (side === "home" ? FIELD.w * 0.18 : -FIELD.w * 0.18);
-      return chuteNaBola(shooter, ball, { x: xFundo, y: yFundo }, difficulty, teamPower, risco * 0.5);
+      return chuteNaBola(
+        [...mine].sort((a, b) => Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y))[0]!,
+        ball,
+        { x: xFundo, y: yFundo },
+        difficulty,
+        teamPower,
+        risco * 0.5,
+      );
     }
     case "defender": {
       // Corta a bola para a lateral do campo (alivia sem entregar no meio).
       const yLateral = ball.y < FIELD.h / 2 ? FIELD.margin + 20 : FIELD.h - FIELD.margin - 20;
-      return chuteNaBola(shooter, ball, { x: ball.x, y: yLateral }, difficulty, teamPower, risco * 0.6);
+      return chuteNaBola(
+        [...mine].sort((a, b) => Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y))[0]!,
+        ball,
+        { x: ball.x, y: yLateral },
+        difficulty,
+        teamPower,
+        risco * 0.6,
+      );
     }
     case "bloquear": {
       // Move um botão para a linha bola→gol próprio, no lado explorado pelo

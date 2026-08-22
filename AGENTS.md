@@ -1,3 +1,62 @@
+## Campeonato Online ao Vivo — grupos→mata-mata + ledger + UI ao vivo (2026-08-22, 22ª passada)
+
+Implementação do Campeonato Online ao Vivo SOBRE a arquitetura existente (diretiva:
+"leia o código, não reinvente"). Nenhuma tabela nova; o sistema reutiliza
+`botao_campeonatos_online` + `mesas_futebol` + RPCs de mesa + `user_wallets`/
+`bank_ledger`. Auditoria primeiro, correções de regras imutáveis, depois o mínimo
+indispensável. Pendente: **re-aplicar `supabase/migrations/futebol.sql` no SQL Editor**.
+
+- **VIOLAÇÃO DE REGRA IMUTÁVEL CORRIGIDA (crítica)**: `registrar_resultado_campeonato`
+  e o bônus de título mutavam `botao_usuarios.pontos_soberania` com UPDATE seco
+  (`+3/-3/+1`, `+50`) — bypass total do ledger (`user_wallets.balance` + `bank_ledger`).
+  Reescritos para `sov_bank_registrar` com `idempotencyKey` por confronto
+  (`campeonato:{id}:partida:{mesa}:{uid}` e `:titulo:{campeao}`). `pontos_soberania`
+  agora só espelha o saldo do ledger (COALESCE). Falha econômica não trava o campeonato
+  (EXCEPTION→WARNING; confronto/pontos já persistidos). Guarda em `testes/campeonato-sql.test.mjs`.
+
+- **Motor puro `career/campeonatoEngine.ts` (NOVO, jiti)**: configurável, não 3 sistemas.
+  `configGrupos(n)` deriva grupos/classificados/fases (8→2×4, 16→4×4, 32→8×4);
+  `distribuirGrupos` (serpente), `roundRobin` (circle method), `gerarFaseGrupos`,
+  `pontosNoGrupo`/`classificarGrupo`/`selecionarClassificados`, `gerarMataMata`
+  (mesa Principal sequencial, 1ºA×2ºB…), `avancarMataMata`, `estimarDuracaoMin`,
+  `gerarAgenda`. 32/32 testes. Duração real exposta (32 grupos só cabe em 90min com
+  slot curto 3+1 — config explícita, não mágica).
+
+- **SQL (`futebol.sql`, aditivo)**: colunas de evento em `botao_campeonatos_online`
+  (`formato` liga|grupos, `agendado_em`, `duracao_partida_min`, `intervalo_min`,
+  `tolerancia_min`, `premio_sov`); `max_jogadores` CHECK 2→32. RPC `_gerar_fase_grupos_campeonato`
+  (espelha o motor em plpgsql); `iniciar_campeonato_online` suporta formato grupos
+  (gera confrontos com grupo/fase/mesa); `avancar_fase_campeonato` (grupos→mata-mata
+  →campeão, classifica por pontos/SG/GP, premia via ledger, FOR UPDATE + só age se a
+  fase completou); `aplicar_wo_campeonato` (dupla ausência → 0-0 sem inventar SOV).
+  Tipos atualizados em `integrations/supabase/types.ts` (tabela + 2 RPCs).
+
+- **Bug amistoso (§17) corrigido**: `MesaOnlineMatch` mostrava `Mesa {uuid}` + linha
+  de debug (`Seu turno · Oponente: Online · Série 1x0 · Jogadas 12/28`) sobreposta ao
+  placar. Agora barra superior limpa: `stageLabel` + `NOME 1 × 0 NOME` (cores) + turno.
+  Sem ID técnico, sem debug.
+
+- **UI hub ao vivo** (`OnlineChampionship.tsx`, adaptada — não página nova): `PainelAoVivo`
+  (fase legível, mesa, próxima partida com NOMES reais, jogador pode jogar/esperar/
+  acompanhar); `ClassificacaoCampeonato` (global na liga; por grupo na fase de grupos);
+  `ConfrontosCampeonato` (por rodada na liga; por fase→rodada nos grupos); seletor de
+  formato no formulário (liga|grupos); `handleFinalizada` chama `avancarFaseCampeonato`
+  (idempotente) após cada resultado. Estado vem do servidor (participantes/confrontos
+  JSONB) — F5 recupera tudo, não depende de memória local.
+
+- **E2E `e2e-campeonato.mjs`**: 4 contas reais (signup) → cria/inscreve/inicia liga →
+  6 confrontos → F5 persiste (8/11 OK; o que falha exige mesa real via `abrir_mesa_campeonato`
+  — coberto pelo E2E de partida do browser — e o deploy das RPCs novas).
+
+- **PRODUÇÃO (ação manual)**: re-aplicar `supabase/migrations/futebol.sql` no SQL Editor
+  (as colunas são aditivas/IF NOT EXISTS; as RPCs são CREATE OR REPLACE — idempotente).
+  Sem isso: formato grupos/W.O./ledger de campeonato não existem em produção (a liga legada
+  continua funcionando com o UPDATE seco antigo).
+
+- **Verificação**: tsc 0 erros; build OK; campeonato-engine 32/32; campeonato-sql 20/20;
+  sov-manutencao 15/15; sem regressão (historia 53, bolsa 29, torcida 42, temporada 57).
+
+
 ## SOV BANK + SOV INVEST (duas carteiras) + Bolsa atômica + dividendos recorrentes (2026-08-22, 21ª passada)
 
 Implementação definitiva do modelo "SOV Bank / SOV Invest / Bolsa de Valores".

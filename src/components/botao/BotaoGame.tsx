@@ -70,8 +70,9 @@ import {
   copaDisponivelNaRodada,
   advanceCopaBrasil,
   avaliarFimTemporada,
-  iniciarNovaTemporada,
   chegouAoPrimeiroLugar,
+  CUSTO_MANUTENCAO,
+  DIVISAO_LABEL,
   type VereditoTemporada,
 } from "./career/competitionApi";
 import {
@@ -768,6 +769,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         }
         if (careerHidratada?.ligas && careerHidratada.divisao) {
           torneioAtivo = careerHidratada.ligas[careerHidratada.divisao] ?? torneioAtivo;
+        }
+
+        // SOV é autoritativo no ledger (user_wallets), nunca no JSONB. A
+        // hidratação realinha o cache ao saldo do banco (escritores
+        // concorrentes deixam o coach.sov para trás).
+        if (careerHidratada) {
+          const saldoLedger = await obterSaldoSov(userId);
+          if (saldoLedger != null && careerHidratada.coach.sov !== saldoLedger) {
+            careerHidratada = {
+              ...careerHidratada,
+              coach: { ...careerHidratada.coach, sov: saldoLedger },
+            };
+          }
         }
 
         // Celular restaurado com a carreira: garante os contatos-base (inclui o
@@ -1515,10 +1529,39 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   // Inicia a próxima temporada (carreira infinita): deduz custo de manutenção,
   // regenera Brasileirão + Copa do Brasil, mantém progresso e SOV.
-  const startNextSeason = () => {
-    if (!career) return;
+  //
+  // ECONOMIA (§9): o custo de manutenção é um débito REAL do Banco Central
+  // — sem o lançamento no ledger, o F5 rehidrata o saldo autoritativo e o
+  // custo "evapora" (era o bug "desconta no front, volta no F5"). O débito
+  // acontece ANTES de persistir a carreira e aborta a transição em falha —
+  // nunca grava uma temporada nova com manutenção fictícia.
+  const startNextSeason = async () => {
+    if (!career || !perfil?.user_id) return;
     const divisao = career.divisao;
-    const novaSov = iniciarNovaTemporada(career.coach.sov, divisao);
+    const custo = CUSTO_MANUTENCAO[divisao];
+    const temporadaNova = (career.temporada ?? 1) + 1;
+
+    // Débito autoritativo + idempotente: repetir o clique/render NUNCA cobra
+    // duas vezes a mesma temporada (chave por usuário+divisão+temporada).
+    const saldoLedger = await registrarTransacaoSov(
+      perfil.user_id,
+      -custo,
+      "fee",
+      `Manutenção da estrutura — Temporada ${temporadaNova} (${DIVISAO_LABEL[divisao]})`,
+      "career",
+      { temporada: temporadaNova, divisao, custoManutencao: custo },
+      {
+        sourceEvent: "manutencao-temporada",
+        idempotencyKey: `manutencao:${perfil.user_id}:t${temporadaNova}:${divisao}`,
+      },
+    );
+    if (saldoLedger === null) {
+      setToast("Não foi possível cobrar a manutenção — verifique a conexão e tente de novo.");
+      return;
+    }
+
+    // O saldo da carreira espelha o ledger (nunca o contrário).
+    const novaSov = saldoLedger;
     // Regra da dívida (§9): pagou → zera; falhou → registra a temporada
     // na sequência; atinge o teto → o botão de continuar não era exibido.
     const novaInad = veredito?.temporadasInadimplente ?? 0;
@@ -1541,7 +1584,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       eventoPendenteId: null,
       rodadaAtual: 0,
       rodadasDesdeEventoNarrativo: 0,
-      temporada: (career.temporada ?? 1) + 1,
+      temporada: temporadaNova,
       temporadasInadimplente: novaInad,
       divisao,
       ligas,

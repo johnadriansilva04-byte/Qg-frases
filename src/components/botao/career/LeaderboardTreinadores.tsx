@@ -25,16 +25,25 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const carregar = async (primeira: boolean) => {
       try {
-        // Query base — só colunas garantidas na versão atual do banco
-        const base = await (supabase as any)
+        // Métrica do ranking: patrimonio_sov (SOV Bank + SOV Invest), mantido
+        // sincronizado pelo trigger do banco. Se a coluna ainda não existir
+        // (migration pendente), cai no cache legado pontos_soberania.
+        const COLS_BASE =
+          "user_id, nome, time_personalizado, abreviacao_time, cores, pontos_soberania, partidas_vencidas, partidas_jogadas, progresso_caminpanha";
+        let base = await (supabase as any)
           .from("botao_usuarios")
-          .select(
-            "user_id, nome, time_personalizado, abreviacao_time, cores, pontos_soberania, partidas_vencidas, partidas_jogadas, progresso_caminpanha",
-          )
-          .order("pontos_soberania", { ascending: false })
+          .select(`${COLS_BASE}, patrimonio_sov`)
+          .order("patrimonio_sov", { ascending: false })
           .limit(20);
+        if (base.error && String(base.error.message ?? "").includes("patrimonio_sov")) {
+          base = await (supabase as any)
+            .from("botao_usuarios")
+            .select(COLS_BASE)
+            .order("pontos_soberania", { ascending: false })
+            .limit(20);
+        }
         if (!alive) return;
         if (base.error) throw base.error;
         // Extrair coach + titulos do JSONB progresso_caminpanha (fonte da verdade da carreira)
@@ -47,7 +56,9 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
             time_personalizado: r.time_personalizado,
             abreviacao_time: r.abreviacao_time,
             cores: r.cores,
-            pontos_soberania: r.pontos_soberania,
+            // Ranking = patrimônio (Bank+Invest) quando disponível — mover
+            // dinheiro entre carteiras NÃO muda a posição.
+            pontos_soberania: r.patrimonio_sov ?? r.pontos_soberania,
             partidas_vencidas: r.partidas_vencidas,
             partidas_jogadas: r.partidas_jogadas,
             coach_apelido: coach?.apelido ?? null,
@@ -56,15 +67,24 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
           } as Row;
         });
         setRows(rows);
+        setErro(null);
       } catch (e: any) {
         if (!alive) return;
         setErro(e?.message ?? "Erro ao carregar ranking");
       } finally {
-        if (alive) setLoading(false);
+        if (alive && primeira) setLoading(false);
       }
-    })();
+    };
+    void carregar(true);
+    // Ranking VIVO: re-busca a cada 25s enquanto a tela está visível — a
+    // posição de cada treinador acompanha o avanço da carreira em tempo quase
+    // real (quem joga agora vê o ranking se mover).
+    const intervalo = window.setInterval(() => {
+      if (document.visibilityState === "visible") void carregar(false);
+    }, 25000);
     return () => {
       alive = false;
+      window.clearInterval(intervalo);
     };
   }, []);
 
@@ -135,7 +155,7 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
               </div>
               <div className="text-right">
                 <p className="font-display text-xl leading-none">{r.pontos_soberania ?? 0}</p>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">soberania</p>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">patrimônio</p>
               </div>
             </li>
           );

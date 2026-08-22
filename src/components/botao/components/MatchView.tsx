@@ -313,6 +313,7 @@ export function MatchView({
   /* ---------- render loop ---------- */
   useEffect(() => {
     let raf = 0;
+    let drawFrames = 0;
     const draw = () => {
       const canvas = canvasRef.current;
       const wrap = wrapRef.current;
@@ -332,6 +333,25 @@ export function MatchView({
         canvas.width = Math.round(cw * dpr);
         canvas.height = Math.round(ch * dpr);
         canvas.style.height = `${ch}px`;
+      }
+      // Diagnóstico E2E: estado da partida no window (somente leitura,
+      // publicado pelo loop de desenho — roda também com tudo parado).
+      drawFrames++;
+      if (drawFrames % 15 === 0) {
+        const ds = discsRef.current;
+        (window as unknown as Record<string, unknown>)["__botaoMatch"] = {
+          discs: ds.map((d) => ({
+            id: d.id,
+            side: d.side,
+            x: Math.round(d.x * 10) / 10,
+            y: Math.round(d.y * 10) / 10,
+            moving: d.vx !== 0 || d.vy !== 0,
+            keeper: !!d.keeper,
+          })),
+          score: { ...scoreRef.current },
+          turn: turnRef.current,
+          moving: ds.some((d) => d.vx !== 0 || d.vy !== 0),
+        };
       }
       const ctx = canvas.getContext("2d")!;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

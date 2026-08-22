@@ -209,9 +209,11 @@ export async function aplicarResultadoRemoto(
     let resultado: { soberania: number; moralTime: number; titulos: number } | null = null;
     await mutateProgressInSupabase(uid, (prog, row) => {
       const career = (prog["career"] ?? EMPTY_CAREER) as CareerState;
+      // Cache = saldo do ledger ou INALTERADO (sem confirmação do ledger o
+      // cache nunca soma delta local — ranking nunca mostra SOV fictício).
       const novaSob =
         saldoSov ??
-        Math.max(0, ((row["pontos_soberania"] as number | undefined) ?? career.coach.sov ?? 0) + delta);
+        ((row["pontos_soberania"] as number | undefined) ?? career.coach.sov ?? 0);
       resultado = {
         soberania: novaSob,
         moralTime: career.moralTime ?? 65,

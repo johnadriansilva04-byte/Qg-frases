@@ -64,6 +64,15 @@ export function SovereigntyPanel({
           <div className="sovereignty-bar">
             <div className="sovereignty-bar-fill" style={{ width: `${progresso}%` }} />
           </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {progresso >= 100
+              ? `A consagração está à vista — ${proximo.nome} é questão de tempo.`
+              : progresso >= 60
+                ? `A torcida já canta o seu nome. Faltam ${proximo.min - coach.sov} SOV para ${proximo.nome}.`
+                : progresso >= 25
+                  ? `A caminhada é longa, mas todo ídolo começou assim. ${proximo.min - coach.sov} SOV até ${proximo.nome}.`
+                  : `O vestiário acredita em você. Construa sua lenda, jogo a jogo.`}
+          </p>
         </div>
       )}
 
@@ -72,20 +81,22 @@ export function SovereigntyPanel({
           <div className="flex items-center justify-between text-[10px] uppercase tracking-widest">
             <span className="flex items-center gap-1 text-muted-foreground">
               <Coins className="size-3.5" />
-              Manutenção da temporada {temporada ?? 1}
+              Conta do clube — Temporada {temporada ?? 1}
             </span>
             <span className={manutencaoOk ? "text-emerald-300" : "text-rose-300"}>
-              {manutencaoOk ? `Saldo +${saldoManutencao}` : `Déficit ${saldoManutencao}`}
+              {manutencaoOk ? "Caixa positivo" : "Alerta da diretoria"}
             </span>
           </div>
           <div className="mt-1 flex items-center justify-between">
             <span className="text-[11px] text-muted-foreground">
-              Custo {custo} · você tem {coach.sov}
+              Estrutura custa {custo} SOV · caixa atual {coach.sov} SOV
             </span>
             <span
               className={`text-[11px] font-medium ${manutencaoOk ? "text-emerald-300" : "text-rose-300"}`}
             >
-              {manutencaoOk ? "Permanência garantida" : "Risco de falência"}
+              {manutencaoOk
+                ? `O clube respira: sobram ${saldoManutencao} SOV após a manutenção.`
+                : `Faltam ${Math.abs(saldoManutencao)} SOV — a diretoria cobra resultados.`}
             </span>
           </div>
         </div>

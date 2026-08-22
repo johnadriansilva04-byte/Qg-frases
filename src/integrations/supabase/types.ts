@@ -398,6 +398,12 @@ export type Database = {
           vencedor_id: string | null;
           criado_em: string;
           atualizado_em: string;
+          formato: string;
+          agendado_em: string | null;
+          duracao_partida_min: number;
+          intervalo_min: number;
+          tolerancia_min: number;
+          premio_sov: number;
         };
         Insert: {
           id?: number;
@@ -413,6 +419,12 @@ export type Database = {
           vencedor_id?: string | null;
           criado_em?: string;
           atualizado_em?: string;
+          formato?: string;
+          agendado_em?: string | null;
+          duracao_partida_min?: number;
+          intervalo_min?: number;
+          tolerancia_min?: number;
+          premio_sov?: number;
         };
         Update: {
           id?: number;
@@ -427,6 +439,12 @@ export type Database = {
           rodada_atual?: number;
           vencedor_id?: string | null;
           atualizado_em?: string;
+          formato?: string;
+          agendado_em?: string | null;
+          duracao_partida_min?: number;
+          intervalo_min?: number;
+          tolerancia_min?: number;
+          premio_sov?: number;
         };
         Relationships: [];
       };
@@ -957,6 +975,14 @@ export type Database = {
       };
       registrar_resultado_campeonato: {
         Args: { p_campeonato_id: number; p_mesa_id: string; p_gols_j1: number; p_gols_j2: number };
+        Returns: Json;
+      };
+      avancar_fase_campeonato: {
+        Args: { p_campeonato_id: number };
+        Returns: Json;
+      };
+      aplicar_wo_campeonato: {
+        Args: { p_campeonato_id: number; p_rodada: number };
         Returns: Json;
       };
       criar_mesa_futebol: {

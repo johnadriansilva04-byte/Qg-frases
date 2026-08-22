@@ -524,39 +524,37 @@ export function MesaOnlineMatch({
   return (
     <div className="space-y-4">
       <div className="surface p-4 flex items-center justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl">Mesa {mesa.mesa_id}</h2>
-          {/* Escalação com nomes dos treinadores sincronizados do Supabase */}
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="flex items-center gap-1.5">
+        <div className="min-w-0 flex-1">
+          {/* Placar limpo: NOME 1 × 0 NOME — sem ID técnico, sem debug. */}
+          <p className="font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
+            {stageLabel}
+          </p>
+          <div className="mt-1 flex items-center justify-center gap-3 text-lg sm:gap-4">
+            <span className="flex min-w-0 items-center gap-1.5">
               <span
-                className="size-3 rounded-full"
+                className="size-3 shrink-0 rounded-full"
                 style={{ background: (souJogador1 ? userTeam : opponentTeam).primary }}
               />
-              <span className="font-semibold">{userTeam.short}</span>
-              <span className="text-muted-foreground">{meuNome}</span>
-              <span className="font-display text-base">{souJogador1 ? placar[0] : placar[1]}</span>
+              <span className="truncate font-semibold">{meuNome}</span>
             </span>
-            <span className="text-muted-foreground">×</span>
-            <span className="flex items-center gap-1.5">
+            <span className="font-display text-2xl tabular-nums sm:text-3xl">
+              {souJogador1 ? placar[0] : placar[1]}
+              <span className="mx-1 text-muted-foreground">×</span>
+              {souJogador1 ? placar[1] : placar[0]}
+            </span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-semibold">{nomeOponente}</span>
               <span
-                className="size-3 rounded-full"
+                className="size-3 shrink-0 rounded-full"
                 style={{ background: (souJogador1 ? opponentTeam : userTeam).primary }}
               />
-              <span className="font-semibold">{opponentTeam.short}</span>
-              <span className="text-muted-foreground">{nomeOponente}</span>
-              <span className="font-display text-base">
-                {souJogador1 ? placar[1] : placar[0]}
-              </span>
             </span>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {meuTurno ? "Seu turno" : "Turno do oponente"} · Oponente:{" "}
-            {oponenteOnline ? "Online" : "Offline"} · Série {serieJ1} x {serieJ2} · Jogadas:{" "}
-            {turnsLeft}/{TOTAL_JOGADAS}
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            {meuTurno ? "Seu turno" : "Turno do oponente"}
           </p>
         </div>
-        <button onClick={handleQuit} className="btn-ghost">
+        <button onClick={handleQuit} className="btn-ghost shrink-0">
           <X className="w-5 h-5" />
         </button>
       </div>

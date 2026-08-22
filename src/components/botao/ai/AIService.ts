@@ -22,33 +22,49 @@ import { gerarTemplate } from "./templateEngine";
 import { SYSTEM_PROMPT_COMENTARISTA, type AIContext, type PromptType } from "./types";
 
 type WebLLMEngine = {
-  generate: (input: string, opts?: unknown) => Promise<string>;
+  chat: {
+    completions: {
+      create: (req: {
+        messages: Array<{ role: "system" | "user"; content: string }>;
+        max_tokens?: number;
+        temperature?: number;
+      }) => Promise<{ choices?: Array<{ message?: { content?: string } }> }>;
+    };
+  };
   unload: () => Promise<void>;
 };
 
 interface WebLLMLib {
   CreateMLCEngine: (
     modelId: string,
-    opts?: { initProgress?: (r: { progress: number; text: string }) => void },
+    opts?: { initProgressCallback?: (r: { progress: number; text: string }) => void },
   ) => Promise<WebLLMEngine>;
-  prebuiltAppConfig?: { models?: Array<{ model_id: string }> };
+  prebuiltAppConfig?: { model_list?: Array<{ model_id: string }> };
 }
 
-const MODEL_ID = "smollm2-360m-instruct-q4f16_1-MLC";
+// Qwen2.5-0.5B: multilíngue (pt-BR razoável), ~400MB cacheados no navegador.
+const MODEL_ID = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
 let webllmLib: WebLLMLib | null = null;
 let webllmLibTried = false;
 let engineLoading: Promise<WebLLMEngine | null> | null = null;
 let activeEngine: WebLLMEngine | null = null;
+// Diagnóstico público (E2E/dev): qual motor respondeu a última geração.
+let ultimoMotor: "llm" | "template" | "nenhum" = "nenhum";
+function marcarMotor(m: "llm" | "template" | "nenhum") {
+  ultimoMotor = m;
+  if (typeof window !== "undefined") {
+    (window as unknown as Record<string, unknown>)["__aiMotor"] = m;
+  }
+}
 
 /** Tenta carregar a lib webllm (dynamic import) — retorna null se ausente. */
 async function loadWebLLMLib(): Promise<WebLLMLib | null> {
   if (webllmLibTried) return webllmLib;
   webllmLibTried = true;
   try {
-    // Import dinâmico com especificador em variável + ignore: evita que o
-    // bundler tente resolver "webllm" estaticamente (o pacote é opcional).
-    // Se não estiver instalado em runtime, cai no catch → fallback de templates.
-    const modName = "webllm";
+    // Import dinâmico com especificador em variável + ignore: o pacote é
+    // grande e só deve baixar em aparelhos potentes (lazy chunk).
+    const modName = "@mlc-ai/web-llm";
     const mod = (await import(/* @vite-ignore */ modName)) as unknown as WebLLMLib;
     if (typeof mod?.CreateMLCEngine === "function") {
       webllmLib = mod;
@@ -70,7 +86,7 @@ async function getEngine(hw: HardwareInfo): Promise<WebLLMEngine | null> {
     if (!lib) return null;
     try {
       const engine = await lib.CreateMLCEngine(MODEL_ID, {
-        initProgress: () => {},
+        initProgressCallback: () => {},
       });
       activeEngine = engine;
       return engine;
@@ -81,6 +97,14 @@ async function getEngine(hw: HardwareInfo): Promise<WebLLMEngine | null> {
     }
   })();
   return engineLoading;
+}
+
+/** Extrai o texto da resposta do chat.completions (tolerante a variações). */
+function extrairResposta(resp: unknown): string | null {
+  const content = (resp as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]
+    ?.message?.content;
+  const txt = typeof content === "string" ? content.trim() : "";
+  return txt.length > 0 ? txt : null;
 }
 
 const DIVISAO_LABEL_AI = {
@@ -156,9 +180,19 @@ export const AIService = {
       const engine = await getEngine(hw);
       if (engine) {
         try {
-          const user = buildUserPrompt(promptType, context);
-          const out = await engine.generate(user, { max_tokens: 80 });
-          if (out && out.trim()) return out.trim();
+          const resp = await engine.chat.completions.create({
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT_COMENTARISTA },
+              { role: "user", content: buildUserPrompt(promptType, context) },
+            ],
+            max_tokens: 90,
+            temperature: 0.85,
+          });
+          const out = extrairResposta(resp);
+          if (out) {
+            marcarMotor("llm");
+            return out;
+          }
         } catch {
           // desliga o engine defeituoso e cai no template
           activeEngine = null;
@@ -167,8 +201,11 @@ export const AIService = {
     }
     // 2. Motor de Templates Procedurais (Supabase > fallback local).
     try {
-      return await gerarTemplate(promptType, context);
+      const out = await gerarTemplate(promptType, context);
+      marcarMotor("template");
+      return out;
     } catch {
+      marcarMotor("template");
       return "Comentarista offline: bola rolando no Futebol de Botão!";
     }
   },
@@ -184,9 +221,19 @@ export const AIService = {
     const engine = await getEngine(hw);
     if (!engine) return null;
     try {
-      const prompt = `${systemPrompt}\n\n${userPrompt}\nResponda em português, no máximo 2 frases, sem sair do personagem.`;
-      const out = await engine.generate(prompt, { max_tokens: 90 });
-      if (out && out.trim()) return out.trim();
+      const resp = await engine.chat.completions.create({
+        messages: [
+          { role: "system", content: `${systemPrompt}\nResponda em português, no máximo 2 frases, sem sair do personagem.` },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 100,
+        temperature: 0.85,
+      });
+      const out = extrairResposta(resp);
+      if (out) {
+        marcarMotor("llm");
+        return out;
+      }
       return null;
     } catch {
       activeEngine = null;
@@ -204,6 +251,15 @@ export const AIService = {
       }
       activeEngine = null;
     }
+  },
+
+  /**
+   * Diagnóstico: qual motor respondeu a última geração ("llm" | "template" |
+   * "nenhum"). Expõe também no window (`__aiMotor`) para o E2E auditar se a
+   * LLM realmente gerou a frase.
+   */
+  motorAtual(): "llm" | "template" | "nenhum" {
+    return ultimoMotor;
   },
 
   /** Expõe o system prompt padrão (para auditoria/reuso externo). */

@@ -1391,6 +1391,33 @@ ALTER TABLE public.mesas_futebol
 COMMIT;
 
 -- ---------------------------------------------------------------------------
+-- Campeonato Online ao Vivo — campos de evento (aditivos, retro-compatíveis).
+-- A arquitetura (participantes/confrontos JSONB, mesas, ledger) já existe;
+-- aqui só entram os metadados de calendário/formato que nenhuma coluna atual
+-- representa. max_jogadores sobe para 32 (era 8).
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.botao_campeonatos_online
+  DROP CONSTRAINT IF EXISTS botao_campeonatos_online_max_jogadores_check;
+ALTER TABLE public.botao_campeonatos_online
+  ADD CONSTRAINT botao_campeonatos_online_max_jogadores_check CHECK (max_jogadores BETWEEN 2 AND 32);
+
+ALTER TABLE public.botao_campeonatos_online
+  ADD COLUMN IF NOT EXISTS formato TEXT NOT NULL DEFAULT 'liga'
+  CHECK (formato IN ('liga','grupos'));
+ALTER TABLE public.botao_campeonatos_online
+  ADD COLUMN IF NOT EXISTS agendado_em TIMESTAMPTZ;             -- início do evento
+ALTER TABLE public.botao_campeonatos_online
+  ADD COLUMN IF NOT EXISTS duracao_partida_min INTEGER NOT NULL DEFAULT 6;
+ALTER TABLE public.botao_campeonatos_online
+  ADD COLUMN IF NOT EXISTS intervalo_min INTEGER NOT NULL DEFAULT 4;
+ALTER TABLE public.botao_campeonatos_online
+  ADD COLUMN IF NOT EXISTS tolerancia_min INTEGER NOT NULL DEFAULT 5;
+ALTER TABLE public.botao_campeonatos_online
+  ADD COLUMN IF NOT EXISTS premio_sov INTEGER NOT NULL DEFAULT 50;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
 -- RPC: criar_campeonato_online(p_nome TEXT, p_max INTEGER DEFAULT 4)
 -- Cria a sala, insere o criador como primeiro participante e devolve a row.
 -- ---------------------------------------------------------------------------
@@ -1577,6 +1604,96 @@ END; $$;
 COMMIT;
 
 -- ---------------------------------------------------------------------------
+-- RPC auxiliar: gera a fase de grupos (formato "grupos") como JSONB de
+-- confrontos. Espelha o motor puro campeonatoEngine.ts (serpente + circle
+-- method). Cada grupo ocupa sua própria mesa (rótulo A, B, C...); cada
+-- confronto carrega grupo/fase/mesa. Não toca em SOV.
+--   p_ids: array de UUIDs dos participantes (tamanho par).
+-- Retorna: [{rodada, grupo, fase, mesa, j1_id, j2_id, pl_j1, pl_j2, status, bye}]
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public._gerar_fase_grupos_campeonato(p_ids UUID[])
+RETURNS JSONB
+LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE
+  v_n INTEGER := array_length(p_ids, 1);
+  v_num_grupos INTEGER;
+  v_por_grupo INTEGER;
+  v_grupos UUID[][];
+  v_g INTEGER;
+  v_i INTEGER;
+  v_r INTEGER;
+  v_grupo UUID[];
+  v_rodadas JSONB;
+  v_pares JSONB;
+  v_par JSONB;
+  v_confrontos JSONB := '[]'::JSONB;
+  v_idx INTEGER;
+  v_dir INTEGER;
+  v_half INTEGER;
+  v_fixo UUID;
+  v_rot UUID[];
+  v_home UUID;
+  v_away UUID;
+  v_tmp UUID;
+  v_gn TEXT;
+BEGIN
+  IF v_n IS NULL OR v_n < 2 THEN RETURN '[]'::JSONB; END IF;
+
+  -- numGrupos = maior potência de 2 (2..8) com grupos de 2..8 (alvo ~4).
+  v_num_grupos := 2;
+  FOREACH v_g IN ARRAY ARRAY[8, 4, 2] LOOP
+    IF v_n % v_g = 0 AND (v_n / v_g) BETWEEN 2 AND 8 THEN
+      -- prefere o que deixa o grupo mais próximo de 4
+      IF abs((v_n / v_g) - 4) < abs((v_n / v_num_grupos) - 4) THEN
+        v_num_grupos := v_g;
+      END IF;
+    END IF;
+  END LOOP;
+  v_por_grupo := v_n / v_num_grupos;
+
+  -- Distribuição serpente (equilibra força entre grupos).
+  v_grupos := (SELECT array_agg(ARRAY[]::UUID[]) FROM generate_series(1, v_num_grupos));
+  FOR v_i IN 1..v_n LOOP
+    v_idx := ((v_i - 1) % v_num_grupos);
+    v_dir := CASE WHEN (((v_i - 1) / v_num_grupos) % 2) = 0 THEN 1 ELSE -1 END;
+    v_g := CASE WHEN v_dir = 1 THEN v_idx + 1 ELSE v_num_grupos - v_idx END;
+    v_grupos[v_g] := v_grupos[v_g] || p_ids[v_i];
+  END LOOP;
+
+  -- Circle-method dentro de cada grupo; mesa = letra do grupo.
+  FOR v_g IN 1..v_num_grupos LOOP
+    v_grupo := v_grupos[v_g];
+    v_gn := chr(64 + v_g); -- A, B, C...
+    -- round-robin
+    DECLARE
+      v_m INTEGER := array_length(v_grupo, 1);
+    BEGIN
+      IF v_m % 2 = 1 THEN v_grupo := v_grupo || NULL::UUID; v_m := v_m + 1; END IF;
+      v_fixo := v_grupo[1];
+      v_rot := v_grupo[2:v_m];
+      FOR v_r IN 1..(v_m - 1) LOOP
+        v_half := v_m / 2;
+        FOR v_i IN 1..v_half LOOP
+          IF v_i = 1 THEN v_home := v_fixo; v_away := v_rot[v_half];
+          ELSE v_home := v_rot[v_i - 1]; v_away := v_rot[v_m - v_i]; END IF;
+          v_confrontos := v_confrontos || jsonb_build_array(jsonb_build_object(
+            'rodada', v_r, 'grupo', v_gn, 'fase', 'grupos', 'mesa', v_gn,
+            'j1_id', v_home, 'j2_id', v_away, 'pl_j1', NULL, 'pl_j2', NULL,
+            'status', CASE WHEN v_home IS NULL OR v_away IS NULL THEN 'finalizado' ELSE 'pendente' END,
+            'bye', v_home IS NULL OR v_away IS NULL));
+        END LOOP;
+        v_tmp := v_rot[1];
+        v_rot := v_rot[2:array_length(v_rot,1)] || ARRAY[v_tmp];
+      END LOOP;
+    END;
+  END LOOP;
+
+  RETURN v_confrontos;
+END; $$;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
 -- RPC: iniciar_campeonato_online(p_codigo TEXT)
 -- Sorteia confrontos (round-robin), marca status em_andamento e devolve a row.
 -- ---------------------------------------------------------------------------
@@ -1609,29 +1726,36 @@ BEGIN
     v_ids := v_ids || ARRAY[v_id];
   END LOOP;
 
-  v_rodadas := public._gerar_confrontos_campeonato(v_ids);
-
-  FOR v_r IN SELECT * FROM jsonb_array_elements(v_rodadas) WITH ORDINALITY AS t(rd, ord) LOOP
-    FOR v_p IN SELECT * FROM jsonb_array_elements((v_r.rd->>'pares')::JSONB) WITH ORDINALITY AS t2(par, ord2) LOOP
-      v_c := jsonb_build_object(
-        'rodada', (v_r.rd->>'rodada')::INT,
-        'mesa_id', NULL,
-        'j1_id', v_p.par->>'j1_id',
-        'j2_id', v_p.par->>'j2_id',
-        'pl_j1', 0,
-        'pl_j2', 0,
-        'status', 'pendente',
-        'bye', COALESCE((v_p.par->>'bye')::BOOLEAN, false)
-      );
-      v_confrontos := v_confrontos || jsonb_build_array(v_c);
+  IF COALESCE(v_row.formato, 'liga') = 'grupos' THEN
+    -- Formato GRUPOS: a RPC gera os confrontos completos (grupo/fase/mesa).
+    -- Byes já vêm marcados como finalizados. Mata-mata é gerado ao completar.
+    v_confrontos := public._gerar_fase_grupos_campeonato(v_ids);
+  ELSE
+    -- Formato LIGA (padrão): round-robin único (comportamento legado).
+    v_rodadas := public._gerar_confrontos_campeonato(v_ids);
+    FOR v_r IN SELECT * FROM jsonb_array_elements(v_rodadas) WITH ORDINALITY AS t(rd, ord) LOOP
+      FOR v_p IN SELECT * FROM jsonb_array_elements((v_r.rd->>'pares')::JSONB) WITH ORDINALITY AS t2(par, ord2) LOOP
+        v_c := jsonb_build_object(
+          'rodada', (v_r.rd->>'rodada')::INT,
+          'mesa_id', NULL,
+          'j1_id', v_p.par->>'j1_id',
+          'j2_id', v_p.par->>'j2_id',
+          'pl_j1', 0,
+          'pl_j2', 0,
+          'status', 'pendente',
+          'bye', COALESCE((v_p.par->>'bye')::BOOLEAN, false)
+        );
+        v_confrontos := v_confrontos || jsonb_build_array(v_c);
+      END LOOP;
     END LOOP;
-  END LOOP;
+  END IF;
 
   UPDATE public.botao_campeonatos_online
      SET status = 'em_andamento',
          fase = 1,
          rodada_atual = 1,
-         confrontos = v_confrontos
+         confrontos = v_confrontos,
+         agendado_em = COALESCE(agendado_em, now())
    WHERE id = v_row.id
   RETURNING * INTO v_row;
 
@@ -1870,35 +1994,65 @@ BEGIN
       );
       v_part := COALESCE(v_el, v_part);
 
-      -- Atualiza pontos de soberania reais dos jogadores (V=+3, E=+1, D=-3)
+      -- Estatísticas de partida (não econômicas) nos perfis. A SOV é movida
+      -- EXCLUSIVAMENTE via sov_bank_registrar (ledger) — nunca UPDATE direto
+      -- em pontos_soberania, que é apenas cache denormalizado.
       IF p_gols_j1 > p_gols_j2 THEN
-        UPDATE public.botao_usuarios SET pontos_soberania = GREATEST(0, pontos_soberania + 3),
+        UPDATE public.botao_usuarios SET
           partidas_jogadas = partidas_jogadas + 1, partidas_vencidas = partidas_vencidas + 1,
           vitorias = vitorias + 1, gols_feitos = gols_feitos + p_gols_j1, gols_sofridos = gols_sofridos + p_gols_j2
         WHERE user_id = v_j1;
-        UPDATE public.botao_usuarios SET pontos_soberania = GREATEST(0, pontos_soberania - 3),
+        UPDATE public.botao_usuarios SET
           partidas_jogadas = partidas_jogadas + 1, derrotas = derrotas + 1,
           gols_feitos = gols_feitos + p_gols_j2, gols_sofridos = gols_sofridos + p_gols_j1
         WHERE user_id = v_j2;
       ELSIF p_gols_j2 > p_gols_j1 THEN
-        UPDATE public.botao_usuarios SET pontos_soberania = GREATEST(0, pontos_soberania + 3),
+        UPDATE public.botao_usuarios SET
           partidas_jogadas = partidas_jogadas + 1, partidas_vencidas = partidas_vencidas + 1,
           vitorias = vitorias + 1, gols_feitos = gols_feitos + p_gols_j2, gols_sofridos = gols_sofridos + p_gols_j1
         WHERE user_id = v_j2;
-        UPDATE public.botao_usuarios SET pontos_soberania = GREATEST(0, pontos_soberania - 3),
+        UPDATE public.botao_usuarios SET
           partidas_jogadas = partidas_jogadas + 1, derrotas = derrotas + 1,
           gols_feitos = gols_feitos + p_gols_j1, gols_sofridos = gols_sofridos + p_gols_j2
         WHERE user_id = v_j1;
       ELSE
-        UPDATE public.botao_usuarios SET pontos_soberania = GREATEST(0, pontos_soberania + 1),
+        UPDATE public.botao_usuarios SET
           partidas_jogadas = partidas_jogadas + 1, empates = empates + 1,
           gols_feitos = gols_feitos + p_gols_j1, gols_sofridos = gols_sofridos + p_gols_j2
         WHERE user_id = v_j1;
-        UPDATE public.botao_usuarios SET pontos_soberania = GREATEST(0, pontos_soberania + 1),
+        UPDATE public.botao_usuarios SET
           partidas_jogadas = partidas_jogadas + 1, empates = empates + 1,
           gols_feitos = gols_feitos + p_gols_j2, gols_sofridos = gols_sofridos + p_gols_j1
         WHERE user_id = v_j2;
       END IF;
+
+      -- SOV via ledger (idempotente por confronto). V=+3, E=+1, D=-3.
+      -- A chave usa campeonato+mesa+jogador: re-chamada não duplica.
+      DECLARE
+        v_delta_j1 INT := CASE WHEN p_gols_j1 > p_gols_j2 THEN 3 WHEN p_gols_j1 = p_gols_j2 THEN 1 ELSE -3 END;
+        v_delta_j2 INT := CASE WHEN p_gols_j2 > p_gols_j1 THEN 3 WHEN p_gols_j2 = p_gols_j1 THEN 1 ELSE -3 END;
+      BEGIN
+        PERFORM public.sov_bank_registrar(
+          v_j1, v_delta_j1, 'reward',
+          format('Campeonato online: resultado %s x %s', p_gols_j1, p_gols_j2),
+          'online', 'campeonato_resultado',
+          'campeonato:' || p_campeonato_id::TEXT || ':partida:' || p_mesa_id || ':' || v_j1::TEXT,
+          jsonb_build_object('campeonato_id', p_campeonato_id, 'mesa_id', p_mesa_id, 'gols', p_gols_j1));
+        PERFORM public.sov_bank_registrar(
+          v_j2, v_delta_j2, 'reward',
+          format('Campeonato online: resultado %s x %s', p_gols_j2, p_gols_j1),
+          'online', 'campeonato_resultado',
+          'campeonato:' || p_campeonato_id::TEXT || ':partida:' || p_mesa_id || ':' || v_j2::TEXT,
+          jsonb_build_object('campeonato_id', p_campeonato_id, 'mesa_id', p_mesa_id, 'gols', p_gols_j2));
+        -- Espelha o saldo autoritativo no cache denormalizado do perfil.
+        UPDATE public.botao_usuarios u
+           SET pontos_soberania = COALESCE((SELECT w.balance FROM public.user_wallets w WHERE w.user_id = u.user_id), u.pontos_soberania)
+         WHERE u.user_id IN (v_j1, v_j2);
+      EXCEPTION WHEN OTHERS THEN
+        -- Campeonato nunca pode travar por falha econômica: loga e segue. O
+        -- confronto/pontos já foram persistidos; a SOV é reconciliável.
+        RAISE WARNING 'registrar_resultado_campeonato: ledger falhou: %', SQLERRM;
+      END;
     END IF;
     IF v_item->>'status' = 'finalizado' THEN v_finalizados := v_finalizados + 1; END IF;
   END LOOP;
@@ -1922,11 +2076,24 @@ BEGIN
      WHERE id = v_row.id
     RETURNING * INTO v_row;
 
-    -- Bônus de título no perfil do campeão
+    -- Título: incrementa contador não-econômico e credita a premiação via
+    -- ledger (idempotente por campeonato+campeão). Nunca UPDATE seco.
     UPDATE public.botao_usuarios
-       SET pontos_soberania = pontos_soberania + 50,
-           campeonatos_ganhos = campeonatos_ganhos + 1
+       SET campeonatos_ganhos = campeonatos_ganhos + 1
      WHERE user_id = v_campeao::UUID;
+    BEGIN
+      PERFORM public.sov_bank_registrar(
+        v_campeao::UUID, 50, 'reward',
+        'Campeonato online: título de campeão',
+        'online', 'campeonato_titulo',
+        'campeonato:' || p_campeonato_id::TEXT || ':titulo:' || v_campeao,
+        jsonb_build_object('campeonato_id', p_campeonato_id));
+      UPDATE public.botao_usuarios u
+         SET pontos_soberania = COALESCE((SELECT w.balance FROM public.user_wallets w WHERE w.user_id = u.user_id), u.pontos_soberania)
+       WHERE u.user_id = v_campeao::UUID;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'registrar_resultado_campeonato: premio titulo falhou: %', SQLERRM;
+    END;
   ELSE
     -- Avança rodada_atual quando a rodada atual estiver completa
     PERFORM 1
@@ -1950,6 +2117,232 @@ BEGIN
 END; $$;
 
 COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- RPC: avancar_fase_campeonato(p_campeonato_id BIGINT)
+-- Formato GRUPOS: quando a fase de grupos está completa, classifica os
+-- participantes de cada grupo, seleciona os classificados e gera a fase de
+-- mata-mata (oitavas/quartas/semifinal) em mesa Principal sequencial. Quando
+-- uma fase mata-mata está completa, avança para a próxima. Quando a final
+-- termina, define o campeão e premia via ledger. Idempotente (FOR UPDATE +
+-- só age se a fase estiver completa e a próxima ainda não existir).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.avancar_fase_campeonato(p_campeonato_id BIGINT)
+RETURNS public.botao_campeonatos_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_row public.botao_campeonatos_online;
+  v_confrontos JSONB;
+  v_grupos JSONB;
+  v_num_grupos INT;
+  v_por_grupo INT;
+  v_classif_por_grupo INT;
+  v_total_classif INT;
+  v_g INT;
+  v_gn TEXT;
+  v_grupo_ids UUID[];
+  v_ordem UUID[];
+  v_classificados JSONB := '[]'::JSONB;
+  v_pos INT;
+  v_total INT;
+  v_primeira_fase TEXT;
+  v_metade INT;
+  v_rodada_base INT;
+  v_j INT;
+  v_a TEXT;
+  v_b TEXT;
+  v_fases TEXT[] := ARRAY['oitavas','quartas','semifinal','final'];
+  v_fase_atual TEXT;
+  v_proxima_fase TEXT;
+  v_vencedores UUID[];
+  v_idx INT;
+  v_campeao TEXT;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT c.* INTO v_row FROM public.botao_campeonatos_online c
+  WHERE c.id = p_campeonato_id FOR UPDATE;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+  IF COALESCE(v_row.formato,'liga') <> 'grupos' THEN RETURN v_row; END IF;
+  IF v_row.status <> 'em_andamento' THEN RETURN v_row; END IF;
+
+  v_confrontos := v_row.confrontos;
+  v_total := jsonb_array_length(v_confrontos);
+
+  -- Determina a fase mais avançada presente e se está completa.
+  v_fase_atual := NULL;
+  FOREACH v_gn IN ARRAY v_fases LOOP
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_confrontos) c WHERE c->>'fase' = v_gn) THEN
+      v_fase_atual := v_gn;
+    END IF;
+  END LOOP;
+
+  IF v_fase_atual IS NULL THEN
+    -- Ainda na fase de grupos: completa?
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_confrontos) c
+               WHERE c->>'fase' = 'grupos' AND c->>'status' <> 'finalizado') THEN
+      RETURN v_row; -- grupos incompletos
+    END IF;
+
+    -- Classifica cada grupo e seleciona classificados (1ºs, depois 2ºs...).
+    SELECT COUNT(DISTINCT c->>'grupo') INTO v_num_grupos
+    FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' IS NOT NULL;
+    v_por_grupo := jsonb_array_length(v_row.participantes) / v_num_grupos;
+    v_classif_por_grupo := CASE WHEN v_por_grupo >= 4 THEN 2 ELSE 1 END;
+    v_total_classif := v_num_grupos * v_classif_por_grupo;
+
+    -- Extrai ids por grupo (na ordem de inscrição) e classifica.
+    FOR v_pos IN 1..v_classif_por_grupo LOOP
+      FOR v_g IN 1..v_num_grupos LOOP
+        v_gn := chr(64 + v_g);
+        -- ids do grupo (participantes cujos confrontos são desse grupo)
+        SELECT array_agg(DISTINCT uid) INTO v_grupo_ids FROM (
+          SELECT c->>'j1_id' AS uid FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND NOT COALESCE((c->>'bye')::BOOLEAN,false)
+          UNION
+          SELECT c->>'j2_id' FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND NOT COALESCE((c->>'bye')::BOOLEAN,false)
+        ) t;
+        -- Ordena por pontos (3/1/0), saldo, gols pró — cálculo set-based.
+        SELECT array_agg(uid ORDER BY pontos DESC, sg DESC, gp DESC) INTO v_ordem FROM (
+          SELECT uid,
+            SUM(CASE WHEN (uid = c->>'j1_id' AND (c->>'pl_j1')::INT > (c->>'pl_j2')::INT)
+                   OR (uid = c->>'j2_id' AND (c->>'pl_j2')::INT > (c->>'pl_j1')::INT) THEN 3
+                  WHEN (c->>'pl_j1')::INT = (c->>'pl_j2')::INT THEN 1 ELSE 0 END) AS pontos,
+            SUM(CASE WHEN uid = c->>'j1_id' THEN (c->>'pl_j1')::INT - (c->>'pl_j2')::INT
+                     ELSE (c->>'pl_j2')::INT - (c->>'pl_j1')::INT END) AS sg,
+            SUM(CASE WHEN uid = c->>'j1_id' THEN (c->>'pl_j1')::INT ELSE (c->>'pl_j2')::INT END) AS gp
+          FROM (
+            SELECT c->>'j1_id' AS uid, c.* FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND c->>'status'='finalizado'
+            UNION ALL SELECT c->>'j2_id', c.* FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND c->>'status'='finalizado'
+          ) s GROUP BY uid
+        ) r;
+        IF v_ordem IS NOT NULL AND array_length(v_ordem,1) >= v_pos THEN
+          v_classificados := v_classificados || jsonb_build_array(
+            jsonb_build_object('uid', v_ordem[v_pos], 'grupo', v_gn, 'pos', v_pos));
+        END IF;
+      END LOOP;
+    END LOOP;
+
+    -- Primeira fase mata-mata pelo total de classificados.
+    v_primeira_fase := CASE WHEN v_total_classif >= 16 THEN 'oitavas'
+                            WHEN v_total_classif >= 8 THEN 'quartas'
+                            WHEN v_total_classif >= 4 THEN 'semifinal' ELSE 'final' END;
+    v_rodada_base := (SELECT COALESCE(MAX((c->>'rodada')::INT),0) FROM jsonb_array_elements(v_confrontos) c) + 1;
+    v_metade := v_total_classif / 2;
+
+    FOR v_j IN 0..(v_metade - 1) LOOP
+      v_a := v_classificados->v_j->>'uid';
+      v_b := v_classificados->(v_total_classif - 1 - v_j)->>'uid';
+      v_confrontos := v_confrontos || jsonb_build_array(jsonb_build_object(
+        'rodada', v_rodada_base + v_j, 'grupo', NULL, 'fase', v_primeira_fase,
+        'mesa', 'Principal', 'mesa_id', NULL, 'j1_id', v_a, 'j2_id', v_b,
+        'pl_j1', NULL, 'pl_j2', NULL, 'status', 'pendente', 'bye', false));
+    END LOOP;
+
+    UPDATE public.botao_campeonatos_online
+       SET confrontos = v_confrontos, rodada_atual = v_rodada_base
+     WHERE id = v_row.id RETURNING * INTO v_row;
+    RETURN v_row;
+  END IF;
+
+  -- Fase mata-mata: completa?
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_confrontos) c
+             WHERE c->>'fase' = v_fase_atual AND c->>'status' <> 'finalizado') THEN
+    RETURN v_row;
+  END IF;
+
+  IF v_fase_atual = 'final' THEN
+    -- Campeão = vencedor da final.
+    SELECT CASE WHEN (c->>'pl_j1')::INT > (c->>'pl_j2')::INT THEN c->>'j1_id' ELSE c->>'j2_id' END
+      INTO v_campeao
+    FROM jsonb_array_elements(v_confrontos) c WHERE c->>'fase' = 'final' LIMIT 1;
+
+    UPDATE public.botao_campeonatos_online
+       SET status = 'finalizado', fase = -1, vencedor_id = v_campeao::UUID
+     WHERE id = v_row.id RETURNING * INTO v_row;
+
+    UPDATE public.botao_usuarios SET campeonatos_ganhos = campeonatos_ganhos + 1 WHERE user_id = v_campeao::UUID;
+    BEGIN
+      PERFORM public.sov_bank_registrar(
+        v_campeao::UUID, v_row.premio_sov, 'reward',
+        'Campeonato online: título de campeão', 'online', 'campeonato_titulo',
+        'campeonato:' || p_campeonato_id::TEXT || ':titulo:' || v_campeao,
+        jsonb_build_object('campeonato_id', p_campeonato_id));
+      UPDATE public.botao_usuarios u SET pontos_soberania =
+        COALESCE((SELECT w.balance FROM public.user_wallets w WHERE w.user_id = u.user_id), u.pontos_soberania)
+      WHERE u.user_id = v_campeao::UUID;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'avancar_fase: premio titulo falhou: %', SQLERRM;
+    END;
+    RETURN v_row;
+  END IF;
+
+  -- Avança para a próxima fase mata-mata (mesa Principal sequencial).
+  v_proxima_fase := v_fases[array_position(v_fases, v_fase_atual) + 1];
+  SELECT array_agg(vencedor ORDER BY rodada) INTO v_vencedores FROM (
+    SELECT (c->>'rodada')::INT AS rodada,
+      CASE WHEN (c->>'pl_j1')::INT > (c->>'pl_j2')::INT THEN (c->>'j1_id')::UUID ELSE (c->>'j2_id')::UUID END AS vencedor
+    FROM jsonb_array_elements(v_confrontos) c WHERE c->>'fase' = v_fase_atual
+  ) t;
+  v_rodada_base := (SELECT COALESCE(MAX((c->>'rodada')::INT),0) FROM jsonb_array_elements(v_confrontos) c) + 1;
+  FOR v_idx IN 1..(array_length(v_vencedores,1)) BY 2 LOOP
+    v_confrontos := v_confrontos || jsonb_build_array(jsonb_build_object(
+      'rodada', v_rodada_base + (v_idx - 1) / 2, 'grupo', NULL, 'fase', v_proxima_fase,
+      'mesa', 'Principal', 'mesa_id', NULL, 'j1_id', v_vencedores[v_idx]::TEXT,
+      'j2_id', v_vencedores[v_idx + 1]::TEXT, 'pl_j1', NULL, 'pl_j2', NULL,
+      'status', 'pendente', 'bye', false));
+  END LOOP;
+
+  UPDATE public.botao_campeonatos_online
+     SET confrontos = v_confrontos, rodada_atual = v_rodada_base
+   WHERE id = v_row.id RETURNING * INTO v_row;
+  RETURN v_row;
+END; $$;
+
+COMMIT;
+
+GRANT EXECUTE ON FUNCTION public.avancar_fase_campeonato(BIGINT) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- RPC: aplicar_wo_campeonato(p_campeonato_id BIGINT, p_rodada INTEGER)
+-- Regra de ausência (§8): após a tolerância, se um confronto da rodada está
+-- pendente e SEM mesa aberta (nenhum dos dois entrou), registra W.O.
+-- determinístico (1×0 para o presente; se ambos ausentes, 0×0 sem pontos de
+-- vitória — contabilizado como empate 0-0). Não inventa penalidade de SOV.
+-- Idempotente (só age em confronto 'pendente' sem mesa_id).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.aplicar_wo_campeonato(p_campeonato_id BIGINT, p_rodada INTEGER)
+RETURNS public.botao_campeonatos_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_row public.botao_campeonatos_online;
+  v_item JSONB;
+  v_idx INT;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+  SELECT c.* INTO v_row FROM public.botao_campeonatos_online c WHERE c.id = p_campeonato_id FOR UPDATE;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+  IF v_row.status <> 'em_andamento' THEN RETURN v_row; END IF;
+
+  -- Confrontos pendentes da rodada, sem mesa aberta, não-bye: W.O. 0x0 (empate
+  -- sem vencedor). O W.O. com presente é registrado pelo jogador presente via
+  -- registrar_resultado_campeonato na mesa — aqui só cobrimos dupla ausência.
+  FOR v_idx IN 0..(jsonb_array_length(v_row.confrontos) - 1) LOOP
+    v_item := v_row.confrontos->v_idx;
+    IF (v_item->>'rodada')::INT = p_rodada
+       AND v_item->>'status' = 'pendente'
+       AND v_item->>'mesa_id' IS NULL
+       AND NOT COALESCE((v_item->>'bye')::BOOLEAN, false) THEN
+      PERFORM public.registrar_resultado_campeonato(p_campeonato_id, 'wo_' || v_idx::TEXT, 0, 0);
+    END IF;
+  END LOOP;
+
+  SELECT c.* INTO v_row FROM public.botao_campeonatos_online c WHERE c.id = p_campeonato_id;
+  RETURN v_row;
+END; $$;
+
+COMMIT;
+
+GRANT EXECUTE ON FUNCTION public.aplicar_wo_campeonato(BIGINT, INTEGER) TO authenticated;
 
 -- ===========================================================================
 -- BANCO DE FRASES DA IA (templates procedurais — fallback on-device)
@@ -2048,66 +2441,66 @@ ALTER TABLE public.botao_times
 -- 20 por divisão. Idempotente para integrações existentes.
 INSERT INTO public.botao_times (id, nome, abreviacao, cores, pais, liga, forca, divisao, is_personalizado)
 VALUES
-  ('fla', 'Rubro-Negro Carioca', 'RNC', ARRAY['#c8102e', '#111111'], 'Rio de Janeiro', 'Brasil', 88, 'serie-a', true),
-  ('pal', 'Alviverde Paulista', 'ALP', ARRAY['#0b7a3b', '#f2f2f2'], 'São Paulo', 'Brasil', 87, 'serie-a', true),
-  ('atl', 'Galo Mineiro', 'GAL', ARRAY['#181818', '#ededed'], 'Belo Horizonte', 'Brasil', 85, 'serie-a', true),
-  ('cor', 'Alvinegro do Parque', 'ADP', ARRAY['#1a1a1a', '#ffffff'], 'São Paulo', 'Brasil', 84, 'serie-a', true),
-  ('gre', 'Imortal Tricolor', 'IMT', ARRAY['#0d6bb0', '#111111'], 'Porto Alegre', 'Brasil', 84, 'serie-a', true),
-  ('spf', 'Tricolor do Morumbi', 'TDM', ARRAY['#e21c21', '#111111'], 'São Paulo', 'Brasil', 83, 'serie-a', true),
-  ('intb', 'Colorado Gaúcho', 'COG', ARRAY['#d10a11', '#ffffff'], 'Porto Alegre', 'Brasil', 82, 'serie-a', true),
-  ('flu', 'Tricolor das Laranjeiras', 'TDL', ARRAY['#7a1b3a', '#0d6b3f'], 'Rio de Janeiro', 'Brasil', 81, 'serie-a', true),
-  ('cru', 'Raposa Celeste', 'RAC', ARRAY['#1b3f95', '#ffffff'], 'Belo Horizonte', 'Brasil', 80, 'serie-a', true),
-  ('bot', 'Estrela Solitária', 'ESO', ARRAY['#222222', '#f5f5f5'], 'Rio de Janeiro', 'Brasil', 79, 'serie-a', true),
-  ('cap', 'Furacão Paranaense', 'FUR', ARRAY['#c8102e', '#111111'], 'Curitiba', 'Brasil', 79, 'serie-a', true),
-  ('for', 'Leão do Pici', 'LDP', ARRAY['#0b3f8f', '#e2231a'], 'Fortaleza', 'Brasil', 78, 'serie-a', true),
-  ('bah', 'Tricolor de Aço', 'TDA', ARRAY['#1e64c8', '#e2231a'], 'Salvador', 'Brasil', 77, 'serie-a', true),
-  ('vas', 'Cruz-Maltino', 'CRM', ARRAY['#111111', '#ffffff'], 'Rio de Janeiro', 'Brasil', 76, 'serie-a', true),
-  ('san', 'Peixe da Vila', 'PXV', ARRAY['#f4f4f4', '#111111'], 'Santos', 'Brasil', 75, 'serie-a', true),
-  ('cax', 'Imperial Serrano', 'IMP', ARRAY['#1b3f95', '#f7d117'], 'Caxias do Sul', 'Brasil', 74, 'serie-a', true),
-  ('cea', 'Vozão Alvinegro', 'VOZ', ARRAY['#1a1a1a', '#ffffff'], 'Fortaleza', 'Brasil', 73, 'serie-a', true),
-  ('vit', 'Leão da Barra', 'LDB', ARRAY['#c8102e', '#111111'], 'Salvador', 'Brasil', 72, 'serie-a', true),
-  ('spo', 'Leão da Ilha', 'LDI', ARRAY['#c8102e', '#111111'], 'Recife', 'Brasil', 71, 'serie-a', true),
-  ('fig', 'Figueira Alvinegra', 'FIG', ARRAY['#111111', '#ffffff'], 'Florianópolis', 'Brasil', 70, 'serie-a', true),
-  ('cha', 'Verdão do Oeste', 'VDO', ARRAY['#0b7a3b', '#f7d117'], 'Chapecó', 'Brasil', 70, 'serie-b', true),
-  ('bru', 'Auriverde Bauruano', 'AUR', ARRAY['#0e5ba6', '#f2c500'], 'Bauru', 'Brasil', 70, 'serie-b', true),
-  ('cor2', 'Coxa Alviverde', 'COX', ARRAY['#0b6b3a', '#ffffff'], 'Curitiba', 'Brasil', 69, 'serie-b', true),
-  ('goi', 'Esmeraldino', 'ESM', ARRAY['#0a7d43', '#ffffff'], 'Goiânia', 'Brasil', 69, 'serie-b', true),
-  ('nau', 'Timbu Alvirrubro', 'TAR', ARRAY['#e2231a', '#ffffff'], 'Recife', 'Brasil', 68, 'serie-b', true),
-  ('par', 'Domínio Paraense', 'DPR', ARRAY['#0b3f8f', '#ffffff'], 'Belém', 'Brasil', 67, 'serie-b', true),
-  ('vil', 'Tigre Colorada', 'TIC', ARRAY['#e2231a', '#ffe500'], 'Nova Lima', 'Brasil', 67, 'serie-b', true),
-  ('ame', 'Coelho Mineiro', 'COE', ARRAY['#0b6b3a', '#e2231a'], 'Belo Horizonte', 'Brasil', 67, 'serie-b', true),
-  ('lon', 'Tubarão do Norte', 'TUB', ARRAY['#0e5ba6', '#ffffff'], 'Londrina', 'Brasil', 66, 'serie-b', true),
-  ('gua', 'Bugre Campineiro', 'BUG', ARRAY['#0b7a3b', '#ffffff'], 'Campinas', 'Brasil', 66, 'serie-b', true),
-  ('itu', 'Galo Interior', 'GIN', ARRAY['#e2231a', '#111111'], 'Itu', 'Brasil', 65, 'serie-b', true),
-  ('cui', 'Dourado do Centro-Oeste', 'DOU', ARRAY['#0f9b4c', '#f7d117'], 'Cuiabá', 'Brasil', 64, 'serie-b', true),
-  ('mir', 'Leão Preto', 'LEA', ARRAY['#111111', '#f2c500'], 'Mogi Mirim', 'Brasil', 64, 'serie-b', true),
-  ('juvbr', 'Jaconero Serrano', 'JAC', ARRAY['#1a7a3f', '#111111'], 'Caxias do Sul', 'Brasil', 63, 'serie-b', true),
-  ('cri', 'Tigre Catarinense', 'TIG', ARRAY['#f2c500', '#111111'], 'Criciúma', 'Brasil', 62, 'serie-b', true),
-  ('ava', 'Leão da Ilha Sul', 'LIS', ARRAY['#0e5ba6', '#ffffff'], 'Florianópolis', 'Brasil', 61, 'serie-b', true),
-  ('rem', 'Leão Azul do Norte', 'LAZ', ARRAY['#0b3f8f', '#ffffff'], 'Belém', 'Brasil', 60, 'serie-b', true),
-  ('pay', 'Papão da Curuzu', 'PAP', ARRAY['#1a1a1a', '#0b7a3b'], 'Belém', 'Brasil', 60, 'serie-b', true),
-  ('abc', 'Alvinegro Potiguar', 'ALP2', ARRAY['#111111', '#ffffff'], 'Natal', 'Brasil', 58, 'serie-b', true),
-  ('sam', 'Azulino Sampaio', 'AZS', ARRAY['#0e5ba6', '#ffffff'], 'Sampaio', 'Brasil', 58, 'serie-b', true),
-  ('pon', 'Macaca Alvinegra', 'MAC', ARRAY['#1a1a1a', '#ffffff'], 'Campinas', 'Brasil', 65, 'serie-c', true),
-  ('joi', 'Jec Verde-Papo', 'JEC', ARRAY['#0b7a3b', '#ffffff'], 'Joinville', 'Brasil', 62, 'serie-c', true),
-  ('fer', 'Mulherada Ferroviária', 'MFE', ARRAY['#8b1a1a', '#ffffff'], 'Araraquara', 'Brasil', 61, 'serie-c', true),
-  ('nov', 'Tigre do Vale', 'TIV', ARRAY['#f2c500', '#111111'], 'Novo Horizonte', 'Brasil', 60, 'serie-c', true),
-  ('tup', 'Azul Carvoeiro', 'AZL', ARRAY['#0e5ba6', '#ffffff'], 'Criciúma', 'Brasil', 59, 'serie-c', true),
-  ('opo', 'Fantasma Alvinegro', 'FAN', ARRAY['#111111', '#ffffff'], 'Ouro Preto', 'Brasil', 58, 'serie-c', true),
-  ('cal', 'Calanga Alameda', 'CLD', ARRAY['#0b7a3b', '#f7d117'], 'Calabria', 'Brasil', 58, 'serie-c', true),
-  ('tom', 'Gavião do Planalto', 'GAV', ARRAY['#e2231a', '#111111'], 'Tomba', 'Brasil', 57, 'serie-c', true),
-  ('mot', 'Moto Rubro-Negro', 'MRN', ARRAY['#c8102e', '#111111'], 'São Luís', 'Brasil', 57, 'serie-c', true),
-  ('csa', 'Azulão do Município', 'AZM', ARRAY['#0e5ba6', '#ffffff'], 'Maceió', 'Brasil', 56, 'serie-c', true),
-  ('crb', 'Galício de Pajuçara', 'GPA', ARRAY['#d10a11', '#ffffff'], 'Maceió', 'Brasil', 56, 'serie-c', true),
-  ('ser', 'Corno do Sertão', 'CSR', ARRAY['#e2231a', '#111111'], 'Sertão', 'Brasil', 55, 'serie-c', true),
-  ('cam', 'Aymoré do Sul', 'AYS', ARRAY['#0b3f8f', '#f7d117'], 'Campo Grande', 'Brasil', 55, 'serie-c', true),
-  ('tre', 'Trevo das Palmeiras', 'TRP', ARRAY['#0b7a3b', '#111111'], 'Palmeiras', 'Brasil', 54, 'serie-c', true),
-  ('nor', 'Nortuno do Amapá', 'NAP', ARRAY['#0e5ba6', '#f7d117'], 'Macapá', 'Brasil', 54, 'serie-c', true),
-  ('asa', 'Aurico Lampião', 'ALP', ARRAY['#f2c500', '#111111'], 'Lampião', 'Brasil', 53, 'serie-c', true),
-  ('jacu', 'Jacu do Norte', 'JDN', ARRAY['#111111', '#ffffff'], 'Natal', 'Brasil', 52, 'serie-c', true),
-  ('riv', 'Palomino Inverso', 'PLI', ARRAY['#7a1b3a', '#0b3f8f'], 'Riacho', 'Brasil', 52, 'serie-c', true),
-  ('alt', 'Alta Colina', 'ALC', ARRAY['#0b6b3a', '#ffffff'], 'Colina', 'Brasil', 51, 'serie-c', true),
-  ('botpb', 'Beltrão Paraibano', 'BTP', ARRAY['#c8102e', '#111111'], 'João Pessoa', 'Brasil', 51, 'serie-c', true)
+('fla', 'Rubro-Negro do Rio (RJ)', 'RNR', ARRAY['#c8102e', '#111111'], 'Rio de Janeiro', 'Brasil', 88, 'serie-a', true),
+  ('pal', 'Alviverde Paulista (SP)', 'ALP', ARRAY['#0b7a3b', '#f2f2f2'], 'São Paulo', 'Brasil', 87, 'serie-a', true),
+  ('atl', 'Galo das Minas (MG)', 'GAL', ARRAY['#181818', '#ededed'], 'Belo Horizonte', 'Brasil', 85, 'serie-a', true),
+  ('cor', 'Alvinegro do Parque (SP)', 'ADP', ARRAY['#1a1a1a', '#ffffff'], 'São Paulo', 'Brasil', 84, 'serie-a', true),
+  ('gre', 'Imortal Gaúcho (RS)', 'IMT', ARRAY['#0d6bb0', '#111111'], 'Porto Alegre', 'Brasil', 84, 'serie-a', true),
+  ('spf', 'Tricolor do Morumbi (SP)', 'TDM', ARRAY['#e21c21', '#111111'], 'São Paulo', 'Brasil', 83, 'serie-a', true),
+  ('intb', 'Colorado Gaúcho (RS)', 'COG', ARRAY['#d10a11', '#ffffff'], 'Porto Alegre', 'Brasil', 82, 'serie-a', true),
+  ('flu', 'Tricolor das Laranjeiras (RJ)', 'TDL', ARRAY['#7a1b3a', '#0d6b3f'], 'Rio de Janeiro', 'Brasil', 81, 'serie-a', true),
+  ('cru', 'Raposa Celeste (MG)', 'RAC', ARRAY['#1b3f95', '#ffffff'], 'Belo Horizonte', 'Brasil', 80, 'serie-a', true),
+  ('bot', 'Estrela Carioca (RJ)', 'ESO', ARRAY['#222222', '#f5f5f5'], 'Rio de Janeiro', 'Brasil', 79, 'serie-a', true),
+  ('cap', 'Furacão Paranaense (PR)', 'FUR', ARRAY['#c8102e', '#111111'], 'Curitiba', 'Brasil', 79, 'serie-a', true),
+  ('for', 'Leão do Pici (CE)', 'LDP', ARRAY['#0b3f8f', '#e2231a'], 'Fortaleza', 'Brasil', 78, 'serie-a', true),
+  ('bah', 'Tricolor de Aço (BA)', 'TDA', ARRAY['#1e64c8', '#e2231a'], 'Salvador', 'Brasil', 77, 'serie-a', true),
+  ('vas', 'Cruzmaltino do Rio (RJ)', 'CRM', ARRAY['#111111', '#ffffff'], 'Rio de Janeiro', 'Brasil', 76, 'serie-a', true),
+  ('san', 'Peixe da Vila (SP)', 'PXV', ARRAY['#f4f4f4', '#111111'], 'Santos', 'Brasil', 75, 'serie-a', true),
+  ('cax', 'Imperial Serrano (RS)', 'IMP', ARRAY['#1b3f95', '#f7d117'], 'Caxias do Sul', 'Brasil', 74, 'serie-a', true),
+  ('cea', 'Vozão de Fortaleza (CE)', 'VOZ', ARRAY['#1a1a1a', '#ffffff'], 'Fortaleza', 'Brasil', 73, 'serie-a', true),
+  ('vit', 'Leão da Barra (BA)', 'LDB', ARRAY['#c8102e', '#111111'], 'Salvador', 'Brasil', 72, 'serie-a', true),
+  ('spo', 'Leão da Ilha (PE)', 'LDI', ARRAY['#c8102e', '#111111'], 'Recife', 'Brasil', 71, 'serie-a', true),
+  ('fig', 'Figueira de Floripa (SC)', 'FIG', ARRAY['#111111', '#ffffff'], 'Florianópolis', 'Brasil', 70, 'serie-a', true),
+  ('cha', 'Verdão do Oeste (SC)', 'VDO', ARRAY['#0b7a3b', '#f7d117'], 'Chapecó', 'Brasil', 70, 'serie-b', true),
+  ('bru', 'Auriverde de Bauru (SP)', 'AUR', ARRAY['#0e5ba6', '#f2c500'], 'Bauru', 'Brasil', 70, 'serie-b', true),
+  ('cor2', 'Coxa Alviverde (PR)', 'COX', ARRAY['#0b6b3a', '#ffffff'], 'Curitiba', 'Brasil', 69, 'serie-b', true),
+  ('goi', 'Esmeraldino de Goiás (GO)', 'ESM', ARRAY['#0a7d43', '#ffffff'], 'Goiânia', 'Brasil', 69, 'serie-b', true),
+  ('nau', 'Timbu Alvirrubro (PE)', 'TAR', ARRAY['#e2231a', '#ffffff'], 'Recife', 'Brasil', 68, 'serie-b', true),
+  ('par', 'Domínio Paraense (PA)', 'DPR', ARRAY['#0b3f8f', '#ffffff'], 'Belém', 'Brasil', 67, 'serie-b', true),
+  ('vil', 'Tigre Colorada (MG)', 'TIC', ARRAY['#e2231a', '#ffe500'], 'Nova Lima', 'Brasil', 67, 'serie-b', true),
+  ('ame', 'Coelho Mineiro (MG)', 'COE', ARRAY['#0b6b3a', '#e2231a'], 'Belo Horizonte', 'Brasil', 67, 'serie-b', true),
+  ('lon', 'Tubarão do Norte (PR)', 'TUB', ARRAY['#0e5ba6', '#ffffff'], 'Londrina', 'Brasil', 66, 'serie-b', true),
+  ('gua', 'Bugre Campineiro (SP)', 'BUG', ARRAY['#0b7a3b', '#ffffff'], 'Campinas', 'Brasil', 66, 'serie-b', true),
+  ('itu', 'Galo de Itu (SP)', 'GIN', ARRAY['#e2231a', '#111111'], 'Itu', 'Brasil', 65, 'serie-b', true),
+  ('cui', 'Dourado de Cuiabá (MT)', 'DOU', ARRAY['#0f9b4c', '#f7d117'], 'Cuiabá', 'Brasil', 64, 'serie-b', true),
+  ('mir', 'Leão Preto (SP)', 'LEA', ARRAY['#111111', '#f2c500'], 'Mogi Mirim', 'Brasil', 64, 'serie-b', true),
+  ('juvbr', 'Jaconero Serrano (RS)', 'JAC', ARRAY['#1a7a3f', '#111111'], 'Caxias do Sul', 'Brasil', 63, 'serie-b', true),
+  ('cri', 'Tigre Catarinense (SC)', 'TIG', ARRAY['#f2c500', '#111111'], 'Criciúma', 'Brasil', 62, 'serie-b', true),
+  ('ava', 'Leão da Ilha Sul (SC)', 'LIS', ARRAY['#0e5ba6', '#ffffff'], 'Florianópolis', 'Brasil', 61, 'serie-b', true),
+  ('rem', 'Leão Azul do Pará (PA)', 'LAZ', ARRAY['#0b3f8f', '#ffffff'], 'Belém', 'Brasil', 60, 'serie-b', true),
+  ('pay', 'Papão da Curuzu (PA)', 'PAP', ARRAY['#1a1a1a', '#0b7a3b'], 'Belém', 'Brasil', 60, 'serie-b', true),
+  ('abc', 'Alvinegro Potiguar (RN)', 'ALP2', ARRAY['#111111', '#ffffff'], 'Natal', 'Brasil', 58, 'serie-b', true),
+  ('sam', 'Azulino do Maranhão (MA)', 'AZS', ARRAY['#0e5ba6', '#ffffff'], 'São Luís', 'Brasil', 58, 'serie-b', true),
+  ('pon', 'Macaca Campineira (SP)', 'MAC', ARRAY['#1a1a1a', '#ffffff'], 'Campinas', 'Brasil', 65, 'serie-c', true),
+  ('joi', 'Jec de Joinville (SC)', 'JEC', ARRAY['#0b7a3b', '#ffffff'], 'Joinville', 'Brasil', 62, 'serie-c', true),
+  ('fer', 'Ferroviária de Araraquara (SP)', 'MFE', ARRAY['#8b1a1a', '#ffffff'], 'Araraquara', 'Brasil', 61, 'serie-c', true),
+  ('nov', 'Tigre do Vale (SP)', 'TIV', ARRAY['#f2c500', '#111111'], 'Novo Horizonte', 'Brasil', 60, 'serie-c', true),
+  ('tup', 'Azul Carvoeiro (SC)', 'AZL', ARRAY['#0e5ba6', '#ffffff'], 'Criciúma', 'Brasil', 59, 'serie-c', true),
+  ('opo', 'Fantasma de Ouro Preto (MG)', 'FAN', ARRAY['#111111', '#ffffff'], 'Ouro Preto', 'Brasil', 58, 'serie-c', true),
+  ('cal', 'Calanga do Cariri (CE)', 'CLD', ARRAY['#0b7a3b', '#f7d117'], 'Juazeiro do Norte', 'Brasil', 58, 'serie-c', true),
+  ('tom', 'Gavião de Feira (BA)', 'GAV', ARRAY['#e2231a', '#111111'], 'Feira de Santana', 'Brasil', 57, 'serie-c', true),
+  ('mot', 'Moto de São Luís (MA)', 'MRN', ARRAY['#c8102e', '#111111'], 'São Luís', 'Brasil', 57, 'serie-c', true),
+  ('csa', 'Azulão de Maceió (AL)', 'AZM', ARRAY['#0e5ba6', '#ffffff'], 'Maceió', 'Brasil', 56, 'serie-c', true),
+  ('crb', 'Galício de Pajuçara (AL)', 'GPA', ARRAY['#d10a11', '#ffffff'], 'Maceió', 'Brasil', 56, 'serie-c', true),
+  ('ser', 'Corno do Sertão (PE)', 'CSR', ARRAY['#e2231a', '#111111'], 'Petrolina', 'Brasil', 55, 'serie-c', true),
+  ('cam', 'Aymoré de Campo Grande (MS)', 'AYS', ARRAY['#0b3f8f', '#f7d117'], 'Campo Grande', 'Brasil', 55, 'serie-c', true),
+  ('tre', 'Trevo de Palmas (TO)', 'TRP', ARRAY['#0b7a3b', '#111111'], 'Palmas', 'Brasil', 54, 'serie-c', true),
+  ('nor', 'Nortuno do Amapá (AP)', 'NAP', ARRAY['#0e5ba6', '#f7d117'], 'Macapá', 'Brasil', 54, 'serie-c', true),
+  ('asa', 'Aurico de Arapiraca (AL)', 'AUR2', ARRAY['#f2c500', '#111111'], 'Arapiraca', 'Brasil', 53, 'serie-c', true),
+  ('jacu', 'Jacu do Norte (RN)', 'JDN', ARRAY['#111111', '#ffffff'], 'Natal', 'Brasil', 52, 'serie-c', true),
+  ('riv', 'Palomino de Aracaju (SE)', 'PLI', ARRAY['#7a1b3a', '#0b3f8f'], 'Aracaju', 'Brasil', 52, 'serie-c', true),
+  ('alt', 'Alta Colina (MG)', 'ALC', ARRAY['#0b6b3a', '#ffffff'], 'Poços de Caldas', 'Brasil', 51, 'serie-c', true),
+  ('botpb', 'Beltrão Paraibano (PB)', 'BTP', ARRAY['#c8102e', '#111111'], 'João Pessoa', 'Brasil', 51, 'serie-c', true)
 ON CONFLICT (id) DO UPDATE SET
   nome = EXCLUDED.nome,
   abreviacao = EXCLUDED.abreviacao,

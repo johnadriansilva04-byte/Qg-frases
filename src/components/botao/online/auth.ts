@@ -201,6 +201,26 @@ export async function cadastrar(input: {
 
     if (!perfilCriado) {
       console.error("Perfil não foi criado após trigger. User ID:", user.id);
+      // CAUSA RAIZ COMUM: signUp para e-mail já registrado (não confirmado)
+      // cria um NOVO auth user, mas o trigger não consegue criar o perfil —
+      // `botao_usuarios.email` é UNIQUE e já pertence ao usuário antigo.
+      // Detectar e orientar login em vez de deixar um usuário fantasma.
+      try {
+        const { data: dono } = await supabase
+          .from("botao_usuarios")
+          .select("user_id")
+          .eq("email", input.email.trim().toLowerCase())
+          .neq("user_id", user.id)
+          .maybeSingle();
+        if (dono) {
+          await supabase.auth.signOut();
+          throw new Error(
+            "Já existe uma conta com esse email. Use a tela de login com a senha original.",
+          );
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("Já existe uma conta")) throw e;
+      }
       throw new Error("Conta criada, mas o perfil falhou. Tente fazer login novamente.");
     }
 

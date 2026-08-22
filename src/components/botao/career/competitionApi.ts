@@ -226,7 +226,7 @@ export function avaliarFimTemporada(
       custoManutencao: custo,
       sobrou,
       continua: true,
-      motivo: `Custo de manutenção pago. Diretoria renova a confiança.`,
+      motivo: `Estrutura paga em dia. A diretoria renova o contrato com orgulho — o projeto segue de pé.`,
       temporadasInadimplente: 0,
     };
   }
@@ -237,7 +237,7 @@ export function avaliarFimTemporada(
       custoManutencao: custo,
       sobrou,
       continua: false,
-      motivo: `Terceira temporada seguida sem cobrir a manutenção. Falência decretada.`,
+      motivo: `Três temporadas sem cobrir a estrutura. O conselho decreta falência — a história termina aqui, mas o futebol sempre dá revanche.`,
       temporadasInadimplente: novasInad,
     };
   }
@@ -248,8 +248,8 @@ export function avaliarFimTemporada(
     sobrou,
     continua: true,
     motivo:
-      `Manutenção em débito (${novasInad}/${MAX_TEMPORADAS_INADIMPLENTE} temporadas). ` +
-      `A diretoria acredita em você: ${restantes === 1 ? "1 temporada" : `${restantes} temporadas`} restantes antes da falência.`,
+      `O caixa não cobriu a estrutura (${novasInad}/${MAX_TEMPORADAS_INADIMPLENTE} temporadas em débito). ` +
+      `A diretoria banca mais ${restantes === 1 ? "uma temporada" : `${restantes} temporadas`} — reaja ou o projeto acaba.`,
     temporadasInadimplente: novasInad,
   };
 }
