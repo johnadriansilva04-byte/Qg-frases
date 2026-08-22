@@ -1615,77 +1615,89 @@ CREATE OR REPLACE FUNCTION public._gerar_fase_grupos_campeonato(p_ids UUID[])
 RETURNS JSONB
 LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE
-  v_n INTEGER := array_length(p_ids, 1);
-  v_num_grupos INTEGER;
+  v_n INTEGER := COALESCE(array_length(p_ids, 1), 0);
+  v_num_grupos INTEGER := 2;
   v_por_grupo INTEGER;
-  v_grupos UUID[][];
+  v_grupos JSONB := '[]'::JSONB;
   v_g INTEGER;
   v_i INTEGER;
   v_r INTEGER;
   v_grupo UUID[];
-  v_rodadas JSONB;
-  v_pares JSONB;
-  v_par JSONB;
   v_confrontos JSONB := '[]'::JSONB;
   v_idx INTEGER;
-  v_dir INTEGER;
   v_half INTEGER;
   v_fixo UUID;
   v_rot UUID[];
   v_home UUID;
   v_away UUID;
   v_tmp UUID;
+  v_m INTEGER;
   v_gn TEXT;
+  v_el JSONB;
 BEGIN
-  IF v_n IS NULL OR v_n < 2 THEN RETURN '[]'::JSONB; END IF;
+  IF v_n < 2 THEN RETURN '[]'::JSONB; END IF;
 
-  -- numGrupos = maior potência de 2 (2..8) com grupos de 2..8 (alvo ~4).
-  v_num_grupos := 2;
-  FOREACH v_g IN ARRAY ARRAY[8, 4, 2] LOOP
-    IF v_n % v_g = 0 AND (v_n / v_g) BETWEEN 2 AND 8 THEN
-      -- prefere o que deixa o grupo mais próximo de 4
-      IF abs((v_n / v_g) - 4) < abs((v_n / v_num_grupos) - 4) THEN
-        v_num_grupos := v_g;
-      END IF;
+  -- numGrupos ∈ {8,4,2,1} com grupos de 2..8 (alvo ~4).
+  FOREACH v_g IN ARRAY ARRAY[8, 4, 2, 1] LOOP
+    IF v_n % v_g = 0 AND (v_n / v_g) BETWEEN 2 AND 8
+       AND abs((v_n / v_g) - 4) < abs((v_n / v_num_grupos) - 4) THEN
+      v_num_grupos := v_g;
     END IF;
   END LOOP;
   v_por_grupo := v_n / v_num_grupos;
 
-  -- Distribuição serpente (equilibra força entre grupos).
-  v_grupos := (SELECT array_agg(ARRAY[]::UUID[]) FROM generate_series(1, v_num_grupos));
+  -- Distribuição SERPENTE: idx por ciclo de 2g — vai (A..G) e volta (G..A).
+  -- Ex.: g=4 → A B C D | D C B A | A B C D... balanceia força entre grupos.
   FOR v_i IN 1..v_n LOOP
-    v_idx := ((v_i - 1) % v_num_grupos);
-    v_dir := CASE WHEN (((v_i - 1) / v_num_grupos) % 2) = 0 THEN 1 ELSE -1 END;
-    v_g := CASE WHEN v_dir = 1 THEN v_idx + 1 ELSE v_num_grupos - v_idx END;
-    v_grupos[v_g] := v_grupos[v_g] || p_ids[v_i];
+    v_idx := (v_i - 1) % (2 * v_num_grupos);
+    IF v_idx < v_num_grupos THEN
+      v_g := v_idx + 1;
+    ELSE
+      v_g := 2 * v_num_grupos - v_idx;
+    END IF;
+    -- Acumula {g, uid} em lista; consolida por grupo após o loop.
+    v_grupos := v_grupos || jsonb_build_array(jsonb_build_object('g', v_g, 'uid', p_ids[v_i]));
   END LOOP;
 
-  -- Circle-method dentro de cada grupo; mesa = letra do grupo.
+  DECLARE
+    v_grp JSONB;
+    v_helpers JSONB := '{}'::JSONB;
+  BEGIN
+    FOR v_g IN 1..v_num_grupos LOOP
+      SELECT COALESCE(jsonb_agg(e->>'uid'), '[]'::JSONB) INTO v_grp
+      FROM jsonb_array_elements(v_grupos) e WHERE (e->>'g')::INT = v_g;
+      v_helpers := v_helpers || jsonb_build_object(v_g::TEXT, v_grp);
+    END LOOP;
+    v_grupos := v_helpers;
+  END;
+
+  -- Round-robin (circle-method) dentro de cada grupo.
   FOR v_g IN 1..v_num_grupos LOOP
-    v_grupo := v_grupos[v_g];
-    v_gn := chr(64 + v_g); -- A, B, C...
-    -- round-robin
-    DECLARE
-      v_m INTEGER := array_length(v_grupo, 1);
-    BEGIN
-      IF v_m % 2 = 1 THEN v_grupo := v_grupo || NULL::UUID; v_m := v_m + 1; END IF;
-      v_fixo := v_grupo[1];
-      v_rot := v_grupo[2:v_m];
-      FOR v_r IN 1..(v_m - 1) LOOP
-        v_half := v_m / 2;
-        FOR v_i IN 1..v_half LOOP
-          IF v_i = 1 THEN v_home := v_fixo; v_away := v_rot[v_half];
-          ELSE v_home := v_rot[v_i - 1]; v_away := v_rot[v_m - v_i]; END IF;
-          v_confrontos := v_confrontos || jsonb_build_array(jsonb_build_object(
-            'rodada', v_r, 'grupo', v_gn, 'fase', 'grupos', 'mesa', v_gn,
-            'j1_id', v_home, 'j2_id', v_away, 'pl_j1', NULL, 'pl_j2', NULL,
-            'status', CASE WHEN v_home IS NULL OR v_away IS NULL THEN 'finalizado' ELSE 'pendente' END,
-            'bye', v_home IS NULL OR v_away IS NULL));
-        END LOOP;
-        v_tmp := v_rot[1];
-        v_rot := v_rot[2:array_length(v_rot,1)] || ARRAY[v_tmp];
+    v_grupo := ARRAY[]::UUID[];
+    FOR v_el IN SELECT value FROM jsonb_array_elements(
+      CASE WHEN jsonb_typeof(v_grupos->(v_g::TEXT)) = 'array' THEN v_grupos->(v_g::TEXT) ELSE '[]'::JSONB END
+    ) LOOP
+      v_grupo := v_grupo || (v_el #>> '{}')::UUID; -- tira aspas do jsonb antes do cast
+    END LOOP;
+    v_gn := chr(64 + v_g);
+    v_m := array_length(v_grupo, 1);
+    IF v_m % 2 = 1 THEN v_grupo := v_grupo || NULL::UUID; v_m := v_m + 1; END IF;
+    v_fixo := v_grupo[1];
+    v_rot := v_grupo[2:v_m];
+    FOR v_r IN 1..(v_m - 1) LOOP
+      v_half := v_m / 2;
+      FOR v_i IN 1..v_half LOOP
+        IF v_i = 1 THEN v_home := v_fixo; v_away := v_rot[v_half];
+        ELSE v_home := v_rot[v_i - 1]; v_away := v_rot[v_m - v_i]; END IF;
+        v_confrontos := v_confrontos || jsonb_build_array(jsonb_build_object(
+          'rodada', v_r, 'grupo', v_gn, 'fase', 'grupos', 'mesa', v_gn,
+          'j1_id', v_home, 'j2_id', v_away, 'pl_j1', NULL, 'pl_j2', NULL,
+          'status', CASE WHEN v_home IS NULL OR v_away IS NULL THEN 'finalizado' ELSE 'pendente' END,
+          'bye', v_home IS NULL OR v_away IS NULL));
       END LOOP;
-    END;
+      v_tmp := v_rot[1];
+      v_rot := v_rot[2:array_length(v_rot,1)] || ARRAY[v_tmp];
+    END LOOP;
   END LOOP;
 
   RETURN v_confrontos;
@@ -1796,7 +1808,7 @@ BEGIN
   v_total := jsonb_array_length(v_confrontos);
 
   FOR v_idx IN 0..(v_total - 1) LOOP
-    v_item := v_confrontos[v_idx + 1];
+    v_item := v_confrontos[v_idx];
     IF (v_item->>'rodada')::INT = p_rodada
        AND v_item->>'mesa_id' IS NULL
        AND v_item->>'status' = 'pendente'
@@ -1805,7 +1817,7 @@ BEGIN
       v_j2 := (v_item->>'j2_id')::UUID;
       IF v_uid = v_j1 OR v_uid = v_j2 THEN
         v_item := jsonb_set(v_item, '{mesa_id}', to_jsonb(p_mesa_id));
-        v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx + 1], v_item);
+        v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx::TEXT], v_item);
         UPDATE public.botao_campeonatos_online SET confrontos = v_confrontos
          WHERE id = v_row.id RETURNING * INTO v_row;
         RETURN v_row;
@@ -1873,7 +1885,7 @@ BEGIN
       p_rodada, v_uid, v_total;
   END IF;
 
-  v_item := v_confrontos[v_idx::int];
+  v_item := v_confrontos[(v_idx - 1)::INT];
   v_j1 := v_item->>'j1_id';
   v_j2 := v_item->>'j2_id';
 
@@ -1907,7 +1919,7 @@ BEGIN
 
   -- Vincula a mesa ao confronto (mesa_id gravado)
   v_item := jsonb_set(v_item, '{mesa_id}', to_jsonb(v_mesa_id));
-  v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx::text], v_item);
+  v_confrontos := jsonb_set(v_confrontos, ARRAY[(v_idx - 1)::TEXT], v_item);
   UPDATE public.botao_campeonatos_online SET confrontos = v_confrontos WHERE id = v_row.id;
 
   RETURN v_mesa_id;
@@ -1946,6 +1958,7 @@ DECLARE
   v_finalizados INTEGER;
   v_ultima_rodada INTEGER;
   v_campeao TEXT;
+  v_achou BOOLEAN;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
 
@@ -1956,18 +1969,20 @@ BEGIN
 
   v_part := v_row.participantes;
   v_confrontos := v_row.confrontos;
-  v_total := jsonb_array_length(v_confrontos);
+  v_total := COALESCE(jsonb_array_length(v_confrontos), 0);
   v_finalizados := 0;
+  v_achou := FALSE;
 
   FOR v_idx IN 0..(v_total - 1) LOOP
-    v_item := v_confrontos[v_idx + 1];
+    v_item := v_confrontos[v_idx];
     IF v_item->>'mesa_id' = p_mesa_id AND v_item->>'status' <> 'finalizado' THEN
+      v_achou := TRUE;
       v_j1 := (v_item->>'j1_id')::UUID;
       v_j2 := (v_item->>'j2_id')::UUID;
       v_item := jsonb_set(v_item, '{pl_j1}', to_jsonb(p_gols_j1));
       v_item := jsonb_set(v_item, '{pl_j2}', to_jsonb(p_gols_j2));
       v_item := jsonb_set(v_item, '{status}', '"finalizado"');
-      v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx + 1], v_item);
+      v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx::TEXT], v_item);
 
       -- Atualiza participantes (pontos 3/1/0 + gols)
       v_el := (
@@ -2032,13 +2047,13 @@ BEGIN
         v_delta_j1 INT := CASE WHEN p_gols_j1 > p_gols_j2 THEN 3 WHEN p_gols_j1 = p_gols_j2 THEN 1 ELSE -3 END;
         v_delta_j2 INT := CASE WHEN p_gols_j2 > p_gols_j1 THEN 3 WHEN p_gols_j2 = p_gols_j1 THEN 1 ELSE -3 END;
       BEGIN
-        PERFORM public.sov_bank_registrar(
+        PERFORM public.sov_bank_registrar_interno(
           v_j1, v_delta_j1, 'reward',
           format('Campeonato online: resultado %s x %s', p_gols_j1, p_gols_j2),
           'online', 'campeonato_resultado',
           'campeonato:' || p_campeonato_id::TEXT || ':partida:' || p_mesa_id || ':' || v_j1::TEXT,
           jsonb_build_object('campeonato_id', p_campeonato_id, 'mesa_id', p_mesa_id, 'gols', p_gols_j1));
-        PERFORM public.sov_bank_registrar(
+        PERFORM public.sov_bank_registrar_interno(
           v_j2, v_delta_j2, 'reward',
           format('Campeonato online: resultado %s x %s', p_gols_j2, p_gols_j1),
           'online', 'campeonato_resultado',
@@ -2057,10 +2072,26 @@ BEGIN
     IF v_item->>'status' = 'finalizado' THEN v_finalizados := v_finalizados + 1; END IF;
   END LOOP;
 
+  -- Mesa conhecida mas já finalizada: retry idempotente → sucesso sem
+  -- reprocessar. Mesa desconhecida: falhar explicitamente evita "resultado
+  -- engolido" silencioso.
+  IF NOT v_achou THEN
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_row.confrontos) c
+      WHERE c->>'mesa_id' = p_mesa_id AND c->>'status' = 'finalizado'
+    ) THEN
+      RETURN v_row;
+    END IF;
+    RAISE EXCEPTION 'nenhum confronto encontrado para a mesa % neste campeonato', p_mesa_id;
+  END IF;
+
   SELECT max((c->>'rodada')::INT) INTO v_ultima_rodada
   FROM jsonb_array_elements(v_confrontos) c;
 
-  IF v_finalizados = v_total THEN
+  -- Termina a campeonato automaticamente SÓ no formato LIGA (o formato GRUPOS
+  -- é conduzido por avancar_fase_campeonato: grupos→mata-mata→campeão). Se o
+  -- formato GRUPOS finalize aqui, o avancar nunca vê status em_andamento.
+  IF v_finalizados = v_total AND COALESCE(v_row.formato, 'liga') = 'liga' THEN
     -- Campeão = maior pontuação (desempate por saldo de gols)
     SELECT el->>'user_id' INTO v_campeao
     FROM jsonb_array_elements(v_part) el
@@ -2082,7 +2113,7 @@ BEGIN
        SET campeonatos_ganhos = campeonatos_ganhos + 1
      WHERE user_id = v_campeao::UUID;
     BEGIN
-      PERFORM public.sov_bank_registrar(
+      PERFORM public.sov_bank_registrar_interno(
         v_campeao::UUID, 50, 'reward',
         'Campeonato online: título de campeão',
         'online', 'campeonato_titulo',
@@ -2201,18 +2232,19 @@ BEGIN
           UNION
           SELECT c->>'j2_id' FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND NOT COALESCE((c->>'bye')::BOOLEAN,false)
         ) t;
-        -- Ordena por pontos (3/1/0), saldo, gols pró — cálculo set-based.
+        -- Ordena por pontos (3/1/0), saldo, gols pró — sub-query nomeada limpa.
+        -- s: uma linha por jogador-por-partida (pl_pro/pl_con em campos).
         SELECT array_agg(uid ORDER BY pontos DESC, sg DESC, gp DESC) INTO v_ordem FROM (
           SELECT uid,
-            SUM(CASE WHEN (uid = c->>'j1_id' AND (c->>'pl_j1')::INT > (c->>'pl_j2')::INT)
-                   OR (uid = c->>'j2_id' AND (c->>'pl_j2')::INT > (c->>'pl_j1')::INT) THEN 3
-                  WHEN (c->>'pl_j1')::INT = (c->>'pl_j2')::INT THEN 1 ELSE 0 END) AS pontos,
-            SUM(CASE WHEN uid = c->>'j1_id' THEN (c->>'pl_j1')::INT - (c->>'pl_j2')::INT
-                     ELSE (c->>'pl_j2')::INT - (c->>'pl_j1')::INT END) AS sg,
-            SUM(CASE WHEN uid = c->>'j1_id' THEN (c->>'pl_j1')::INT ELSE (c->>'pl_j2')::INT END) AS gp
+            SUM(CASE WHEN pl_pro > pl_con THEN 3 WHEN pl_pro = pl_con THEN 1 ELSE 0 END) AS pontos,
+            SUM(pl_pro - pl_con) AS sg,
+            SUM(pl_pro) AS gp
           FROM (
-            SELECT c->>'j1_id' AS uid, c.* FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND c->>'status'='finalizado'
-            UNION ALL SELECT c->>'j2_id', c.* FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND c->>'status'='finalizado'
+            SELECT c->>'j1_id' AS uid, (c->>'pl_j1')::INT AS pl_pro, (c->>'pl_j2')::INT AS pl_con
+            FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND c->>'status'='finalizado'
+            UNION ALL
+            SELECT c->>'j2_id', (c->>'pl_j2')::INT, (c->>'pl_j1')::INT
+            FROM jsonb_array_elements(v_confrontos) c WHERE c->>'grupo' = v_gn AND c->>'status'='finalizado'
           ) s GROUP BY uid
         ) r;
         IF v_ordem IS NOT NULL AND array_length(v_ordem,1) >= v_pos THEN
@@ -2221,6 +2253,9 @@ BEGIN
         END IF;
       END LOOP;
     END LOOP;
+
+    -- [debug temporário]
+    -- RAISE WARNING '[avancar] classificados=% total=%', v_classificados, v_total_classif;
 
     -- Primeira fase mata-mata pelo total de classificados.
     v_primeira_fase := CASE WHEN v_total_classif >= 16 THEN 'oitavas'
@@ -2262,8 +2297,8 @@ BEGIN
 
     UPDATE public.botao_usuarios SET campeonatos_ganhos = campeonatos_ganhos + 1 WHERE user_id = v_campeao::UUID;
     BEGIN
-      PERFORM public.sov_bank_registrar(
-        v_campeao::UUID, v_row.premio_sov, 'reward',
+      PERFORM public.sov_bank_registrar_interno(
+        v_campeao::UUID, COALESCE(v_row.premio_sov, 50), 'reward',
         'Campeonato online: título de campeão', 'online', 'campeonato_titulo',
         'campeonato:' || p_campeonato_id::TEXT || ':titulo:' || v_campeao,
         jsonb_build_object('campeonato_id', p_campeonato_id));
@@ -2323,16 +2358,37 @@ BEGIN
   IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
   IF v_row.status <> 'em_andamento' THEN RETURN v_row; END IF;
 
-  -- Confrontos pendentes da rodada, sem mesa aberta, não-bye: W.O. 0x0 (empate
-  -- sem vencedor). O W.O. com presente é registrado pelo jogador presente via
-  -- registrar_resultado_campeonato na mesa — aqui só cobrimos dupla ausência.
+  -- Confrontos pendentes da rodada, sem mesa aberta, não-bye: W.O. duplo =
+  -- 0-0 empate registrado direto no JSONB. Não passa por registrar_resultado
+  -- (que agora rejeita mesa desconhecida) e não inventa movimentação de SOV
+  -- (o empate com SOV é uma entrada ZERO com chave determinística — opcional).
   FOR v_idx IN 0..(jsonb_array_length(v_row.confrontos) - 1) LOOP
     v_item := v_row.confrontos->v_idx;
     IF (v_item->>'rodada')::INT = p_rodada
        AND v_item->>'status' = 'pendente'
        AND v_item->>'mesa_id' IS NULL
        AND NOT COALESCE((v_item->>'bye')::BOOLEAN, false) THEN
-      PERFORM public.registrar_resultado_campeonato(p_campeonato_id, 'wo_' || v_idx::TEXT, 0, 0);
+      v_item := jsonb_set(v_item, '{pl_j1}', '0'::JSONB);
+      v_item := jsonb_set(v_item, '{pl_j2}', '0'::JSONB);
+      v_item := jsonb_set(v_item, '{status}', '"finalizado"');
+      -- Registro econômico do empate W.O. via ledger (idempotente por confronto).
+      BEGIN
+        PERFORM public.sov_bank_registrar_interno(
+          (v_item->>'j1_id')::UUID, 0, 'reward',
+          'Campeonato online: W.O. (dupla ausência), empate 0-0', 'online', 'campeonato_wo',
+          'campeonato:' || p_campeonato_id::TEXT || ':wo:' || v_idx::TEXT || ':' || (v_item->>'j1_id')::TEXT,
+          jsonb_build_object('campeonato_id', p_campeonato_id));
+        PERFORM public.sov_bank_registrar_interno(
+          (v_item->>'j2_id')::UUID, 0, 'reward',
+          'Campeonato online: W.O. (dupla ausência), empate 0-0', 'online', 'campeonato_wo',
+          'campeonato:' || p_campeonato_id::TEXT || ':wo:' || v_idx::TEXT || ':' || (v_item->>'j2_id')::TEXT,
+          jsonb_build_object('campeonato_id', p_campeonato_id));
+      EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING 'aplicar_wo_campeonato: ledger falhou: %', SQLERRM;
+      END;
+      UPDATE public.botao_campeonatos_online
+         SET confrontos = jsonb_set(confrontos, ARRAY[v_idx::TEXT], v_item)
+       WHERE id = v_row.id;
     END IF;
   END LOOP;
 

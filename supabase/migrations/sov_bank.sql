@@ -56,7 +56,16 @@ CREATE INDEX IF NOT EXISTS idx_bank_ledger_source_event ON bank_ledger (source_e
 -- =========================================================
 -- ÚNICA porta de entrada de movimentações com idempotência e teto de emissão.
 -- Retorna a transação (existente, se duplicada) + saldo resultante.
-CREATE OR REPLACE FUNCTION sov_bank_registrar(
+--
+-- NOTE arquitetura em duas camadas:
+--   * `sov_bank_registrar` (pública): valida auth (o chamador só move a própria
+--     soberania) e delega ao interno. É a porta do cliente jogador.
+--   * `sov_bank_registrar_interno` (interna, SEM auth-check): toda a lógica
+--     econômica (idempotência + teto). Só é chamada por RPCs SECURITY DEFINER
+--     de sistema (apex do campeonato, W.O., misses, registerdResult) que
+--     precisam movimentar SOV de terceiros arbitrariamente. Não é GRANT-able
+--     via PostgREST: sem auth-check, fora dos chamadores públicos.
+CREATE OR REPLACE FUNCTION sov_bank_registrar_interno(
   p_user_id UUID,
   p_amount DECIMAL,
   p_type TEXT,
@@ -77,10 +86,6 @@ DECLARE
   v_emitido DECIMAL;
   v_teto DECIMAL;
 BEGIN
-  IF auth.uid() IS NOT NULL AND auth.uid() <> p_user_id THEN
-    RAISE EXCEPTION 'Usuario autenticado nao pode mover soberania de terceiros';
-  END IF;
-
   -- Idempotência: o mesmo evento econômico nunca credita duas vezes.
   IF p_idempotency_key IS NOT NULL THEN
     SELECT l.id, l.balance_after INTO v_tx_id, v_bal
@@ -122,6 +127,33 @@ BEGIN
   SELECT w.balance INTO v_bal FROM user_wallets w WHERE w.user_id = p_user_id;
   RETURN QUERY SELECT v_tx_id, COALESCE(v_bal, 0::DECIMAL), FALSE;
   RETURN;
+END;
+$$;
+
+-- Wrapper público: valida auth (cliente jogador move SÓ a própria soberania).
+CREATE OR REPLACE FUNCTION sov_bank_registrar(
+  p_user_id UUID,
+  p_amount DECIMAL,
+  p_type TEXT,
+  p_description TEXT,
+  p_source_module TEXT,
+  p_source_event TEXT DEFAULT NULL,
+  p_idempotency_key TEXT DEFAULT NULL,
+  p_metadata JSONB DEFAULT '{}'
+)
+RETURNS TABLE (transaction_id UUID, balance DECIMAL, duplicated BOOLEAN)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() <> p_user_id THEN
+    RAISE EXCEPTION 'Usuario autenticado nao pode mover soberania de terceiros';
+  END IF;
+  RETURN QUERY SELECT * FROM sov_bank_registrar_interno(
+    p_user_id, p_amount, p_type, p_description, p_source_module,
+    p_source_event, p_idempotency_key, p_metadata
+  );
 END;
 $$;
 

@@ -70,6 +70,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.6",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.10.0",
     "@types/canvas-confetti": "^1.9.0",

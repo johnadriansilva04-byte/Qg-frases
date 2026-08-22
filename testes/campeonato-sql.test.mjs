@@ -32,7 +32,9 @@ check("avancar: FOR UPDATE", av.includes("FOR UPDATE"));
 check("avancar: premio configurável", av.includes("premio_sov"));
 
 check("W.O. FOR UPDATE", fn("aplicar_wo_campeonato").includes("FOR UPDATE"));
-check("W.O. não inventa SOV (sem registrar)", !fn("aplicar_wo_campeonato").includes("sov_bank_registrar"));
+// W.O. registra ZERO no ledger (auditável: o empate 0-0 fica rastreável
+// sem criar SOV). Aceito amount=0 via interno.
+check("W.O. registra 0 no ledger (auditável, sem criar SOV)", fn("aplicar_wo_campeonato").includes("sov_bank_registrar_interno") && fn("aplicar_wo_campeonato").includes("0, 'reward'"));
 
 check("max_jogadores até 32", sql.includes("BETWEEN 2 AND 32"));
 check("coluna formato", sql.includes("ADD COLUMN IF NOT EXISTS formato"));

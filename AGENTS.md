@@ -1,3 +1,58 @@
+## Campeonato refinado em pg real (PGlite) + história do usuário completa (2026-08-22, 23ª passada)
+
+Auditoria SQL profunda com **PGlite (PostgreSQL real wasm)** para testar a cadeia
+de migrations e o motor de campeonato de ponta a ponta — o E2E encontrou 6 bugs
+reais no SQL de campeonato (só detectáveis com pg de verdade; lint estrutural e
+tsc não pegam). Depende: `npm i -D @electric-sql/pglite`.
+
+- **Harness `testes/db-local.mjs`**: PGlite + stubs mínimos do ambiente Supabase
+  (schema `auth`, `auth.users` com `raw_user_meta_data`, funções `auth.uid()/role()/jwt()`,
+  roles `authenticated/anon/service_role`, publication `supabase_realtime`, stub
+  `pg_cron`). `aplicarMigrations` aplica os 12 arquivos em ordem; atualmente
+  12/12 limpo. Se `CREATE EXTENSION pg_cron` aparece, o harness substitui.
+- **Fix OFF-BY-ONE (3 RPCs, causa do bug real "nenhum confronto pendente")**:
+  `registrar_resultado_campeonato` e `vincular_mesa_campeonato` liam/escreviam
+  `v_confrontos[v_idx + 1]` e abrir_mesa `[v_idx]`/`ARRAY[v_idx::text]`
+  errados. Todos em plpgsql loops — gravavam mesa/resultado no confronto
+  ERRADO ou appended. Corrigidos para READ `[v_idx]` READ `[v_idx - 1]` e
+  escritas `ARRAY[v_idx::TEXT]`/`ARRAY[(v_idx - 1)::TEXT]`.
+- **Registrar não engole mais resultado achado/desconhecido**: flag `v_achou`
+  + exceção explícita quando nenhum confronto com aquela mesa existe;
+  mesas finalizadas devolvem sucesso idiompo sem reprocessamento.
+- **Formato grupos finalize errado corrigido**: `registrar_resultado_campeonato`
+  só finaliza campeonato quando formato = 'liga'. Antes, ao completar a fase de
+  grupos, ele marcava `status='finalizado'` e o `avancar_fase_campeonato`
+  (que exige `status='em_andamento'`) nunca gerava mata-mata (O bug "grupos
+  gerava partidas e o avancar não agia") — root cause real num E2E por mim.
+- **`_gerar_fase_grupos_campeonato` reescrito**: PostgreSQL não tem arrays
+  bidimensionais (uuid[][]) — a LRU foi substituída por JSONB-object por group
+  key; serpente formula corrigida; n=2 -> 1 grupo (sem CASE), n=4 -> 1 grupo
+  de 4, n=8 -> 2, n=16 -> 4, n=32 -> 8. Impede byes falsificados.
+- **W.O. direto no JSONB**: `aplicar_wo_campeonato` deixou de chamar
+  `registrar_resultado_campeonato` (que agora rejeita mesa desconhecida) e
+  fecha com pl 0/0 + status finalizado num UPDATE seco; **auditável**: cada
+  W.O. grava amount 0 no ledger com chave `campeonato:{id}:wo:{idx}:{uid}`.
+- **`premio_sov` NULL no titulo levar a falhar**: `COALESCE(v_row.premio_sov,50)`.
+- **Auth interno SYSTEM**: `sov_bank_registrar_interno` (sem auth-check) +
+  `sov_bank_registrar` (wrapper com validação). As RPCs SECURITY DEFINER de
+  sistema (registrar_resultado, avancar, WO) chamam o **interno** — antes o
+  wrapper rejeitava premiacao/avancar em terceiros com
+  `'Usuario autenticado nao pode mover soberania de terceiros'` (engolido em
+  EXCEPTION→WARNING com registros). Testes: `db-local` apply + laden 28/28 OK.
+- **E2E completa `testes/campeonato-leder.local.test.mjs`** (pg local):
+  contas-trigger perfis, LIGA 4 com mesa real (abrir+registrar), campeão,
+  idempotencia, ledger, grupos 8-mata-mata/W.O. e finalização (28/28).
+- **História do usuário `testes/historia-usuario.test.mjs`** (7/7):
+  cadastro bonus → liga completa (campeão) → saldo → cache ledger — sem mock.
+- **Conta-nativa do E2E usável como jogador real**: o fluxo usa signup
+  real (`createClient` com publishable), as RPCs públicas — basta logar
+  em browser com o mesmo email ou chamá-lo pelo harness com auth; então
+  entra num campeonato como participante comum. É assim que posso jogar
+  campeonatos com o usuário (sem IA fake).
+- **Verificação**: tsc 0 erros; build OK; campeonato-sql 20/20; db-local
+  12/12; campeonato-leder.local 28/28; historia-usuario 7/7; e comprova
+  E2E browser 8/11 (estet squene em produção com futebol.sql NÃO aplicado).
+
 ## Campeonato Online ao Vivo — grupos→mata-mata + ledger + UI ao vivo (2026-08-22, 22ª passada)
 
 Implementação do Campeonato Online ao Vivo SOBRE a arquitetura existente (diretiva:
