@@ -46,7 +46,10 @@ BEGIN
 END;
 $$;
 
--- Saldo atual da carteira (fonte de verdade da soberania).
+-- Saldo atual da carteira (fonte de verdade da soberania). A leitura cria a
+-- carteira se ela ainda não existir: "wallet inexistente" nunca é confundida
+-- com "saldo 0" — depois da primeira leitura a carteira sempre existe e o 0
+-- passa a ser um saldo REAL (sem movimentações), não um estado desconhecido.
 CREATE OR REPLACE FUNCTION obter_saldo_soberania(p_user_id UUID)
 RETURNS DECIMAL
 LANGUAGE plpgsql
@@ -59,6 +62,7 @@ BEGIN
     RAISE EXCEPTION 'Sem permissao para ler saldo de terceiros';
   END IF;
 
+  PERFORM create_or_update_wallet(p_user_id);
   SELECT balance INTO v_bal FROM user_wallets WHERE user_id = p_user_id;
   RETURN COALESCE(v_bal, 0::DECIMAL);
 END;

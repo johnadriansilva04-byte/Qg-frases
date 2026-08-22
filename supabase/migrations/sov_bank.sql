@@ -299,7 +299,10 @@ BEGIN
     'system', 'signup_bonus', 'signup:' || p_user_id::TEXT, '{}'::JSONB
   ) r;
 
-  RETURN QUERY SELECT TRUE, COALESCE(v_bal, 0::DECIMAL);
+  -- credited reflete a verdade: FALSE quando o bônus já tinha sido creditado
+  -- (chamada idempotente de retry/login seguinte). O saldo retornado é
+  -- sempre o autoritativo do ledger.
+  RETURN QUERY SELECT NOT COALESCE(v_dup, FALSE), COALESCE(v_bal, 0::DECIMAL);
 END;
 $$;
 

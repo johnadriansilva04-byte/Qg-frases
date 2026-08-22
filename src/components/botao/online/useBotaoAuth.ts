@@ -6,8 +6,8 @@ import {
   supabase,
 } from "@/integrations/supabase/client";
 import { buscarPerfil, cachePerfil, limparCache, sair, type Perfil } from "./auth";
-import { criarPerfilSeNaoExistir } from "@/lib/botao/api";
-import { garantirCarteira } from "@/lib/financial/sovApi";
+import { alinharCacheSoberania, criarPerfilSeNaoExistir } from "@/lib/botao/api";
+import { bootstrapFinanceiro } from "@/lib/financial/sovBankApi";
 
 export function useBotaoAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -51,9 +51,6 @@ export function useBotaoAuth() {
         let p = await buscarPerfil(u.id);
         if (!vivo) return;
 
-        // Banco Central SOV: garante a carteira do usuário na primeira vez.
-        void garantirCarteira(u.id);
-
         if (p) {
           cachePerfil(p);
         } else if (u.email) {
@@ -62,6 +59,22 @@ export function useBotaoAuth() {
           else limparCache();
         } else {
           limparCache();
+        }
+
+        // Bootstrap financeiro em TODA sessão (não só no cadastro): carteira +
+        // bônus de cadastro idempotente (signup:{user}). Cobre perfis criados
+        // pelo trigger de signup (que não passava pelo caminho do bônus) e
+        // auto-cura qualquer falha anterior. O cache pontos_soberania e o
+        // estado do perfil são alinhados ao saldo AUTORITATIVO do ledger;
+        // erro real (null) nunca vira 0 nem sobrescreve o cache.
+        if (p) {
+          const saldo = await bootstrapFinanceiro(u.id);
+          if (!vivo) return;
+          if (saldo != null && saldo !== p.pontos_soberania) {
+            await alinharCacheSoberania(u.id, saldo);
+            p = { ...p, pontos_soberania: saldo };
+            cachePerfil(p);
+          }
         }
 
         setPerfil(p);

@@ -164,12 +164,27 @@ BEGIN
     
     v_usuario_criado := TRUE;
     RAISE LOG 'Usuário criado/atualizado com sucesso: %', v_usuario_id;
-    
+
   EXCEPTION WHEN OTHERS THEN
     RAISE LOG 'Erro ao criar usuário %: %', v_usuario_id, SQLERRM;
     -- Se falhar, retorna NEW sem tentar criar o time
     RETURN NEW;
   END;
+
+  -- Banco Central SOV: a carteira e o bônus de cadastro (50 SOV) nascem no
+  -- ledger junto com o perfil — o SOV do usuário novo nasce na fonte
+  -- financeira oficial (bank_ledger → user_wallets), nunca só no cache
+  -- pontos_soberania. sov_bank_bonus_cadastro cria a carteira e credita o
+  -- bônus de forma idempotente (chave signup:{user}). Se o sistema
+  -- financeiro ainda não estiver aplicado, o cadastro não quebra: o
+  -- frontend refaz a tentativa (idempotente) no primeiro login.
+  IF v_usuario_criado THEN
+    BEGIN
+      PERFORM sov_bank_bonus_cadastro(v_usuario_id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE LOG 'Bônus de cadastro não creditado para %: %', v_usuario_id, SQLERRM;
+    END;
+  END IF;
 
   -- Criar time personalizado automaticamente APENAS se o usuário foi criado com sucesso
   -- Usar ON CONFLICT para evitar duplicatas

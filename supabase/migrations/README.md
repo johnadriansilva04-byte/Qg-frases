@@ -42,3 +42,40 @@ Se `sov_bank_config` tiver as chaves `max_users_initial=100`,
 operacional. Sem a migração, o app **degrada com segurança** (fallback para
 as RPCs antigas) — mas nesse estado o SOV BANK **não deve ser declarado
 operacional**.
+
+## RE-APLICAÇÃO OBRIGATÓRIA (produção em estado quebrado — 2026-08-22)
+
+Auditoria E2E em produção (conta-canário "Robô Doidão") provou que o banco
+está com versões ANTIGAS/quebradas do sistema financeiro:
+
+- `create_or_update_wallet` quebra com `42601 query has no destination for
+  result data` → **nenhuma carteira jamais foi criada** (`usuarios_com_carteira = 0`).
+- `sov_bank_registrar` ainda é a versão que ENGOLE erros
+  (`{transaction_id: null, balance: 0}` em vez de propagar) → **nenhuma
+  transação jamais chegou ao ledger** (`transacoes_total = 0`).
+- O trigger de signup (`handle_new_user`) criava o perfil com cache
+  `pontos_soberania = 50` sem criar carteira nem registrar o bônus.
+
+Para corrigir, re-aplique **nesta ordem** no SQL Editor (tudo idempotente):
+
+1. `sov_financial_system.sql` — corrige `create_or_update_wallet` (erro sobe,
+   não é engolido).
+2. `sov_integracao_cartorio.sql` — `obter_saldo_soberania` agora cria a
+   carteira na primeira leitura (wallet inexistente nunca vira "saldo 0").
+3. `sov_bank.sql` — `sov_bank_registrar` sem `EXCEPTION WHEN OTHERS`.
+4. `futebol.sql` — trigger `handle_new_user` agora credita o bônus de
+   cadastro no ledger junto com a criação do perfil. **Não precisa rodar o
+   arquivo inteiro**: basta executar o bloco que vai de
+   `-- Trigger para criar perfil automaticamente` até
+   `FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();`.
+
+Verificação do fluxo de usuário novo (rode após criar uma conta de teste):
+
+```sql
+-- troque pelo id do usuário de teste
+SELECT (SELECT balance FROM user_wallets WHERE user_id = '<uid>') AS wallet,
+       (SELECT pontos_soberania FROM botao_usuarios WHERE user_id = '<uid>') AS cache,
+       (SELECT COUNT(*) FROM bank_ledger WHERE user_id = '<uid>'
+          AND idempotency_key = 'signup:<uid>') AS bonus_no_ledger;
+-- esperado: wallet = 50, cache = 50, bonus_no_ledger = 1
+```

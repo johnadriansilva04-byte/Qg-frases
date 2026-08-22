@@ -125,10 +125,9 @@ BEGIN
   -- Se já existia, retorna o ID existente
   SELECT id INTO v_wallet_id FROM user_wallets WHERE user_id = p_user_id;
   RETURN v_wallet_id;
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Em caso de erro, retorna NULL para não quebrar o app
-    RETURN NULL;
+  -- Sem cláusula de exceção: erro real (FK, permissão, SQL inválido) deve
+  -- subir como 400 visível — nunca virar NULL silencioso que o chamador
+  -- confunde com "carteira criada".
 END;
 $$;
 

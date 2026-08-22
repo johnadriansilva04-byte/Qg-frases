@@ -130,14 +130,32 @@ async function registrarLegado(
   return null;
 }
 
-/** Saldo atual em user_wallets (fonte de verdade). Falha silenciosa → null. */
+/**
+ * Saldo atual em user_wallets (fonte de verdade). Falha silenciosa → null.
+ *
+ * Blindagem "erro nunca vira 0": a versão ANTIGA de obter_saldo_soberania
+ * (produção antes da re-aplicação de sov_integracao_cartorio.sql) devolvia 0
+ * quando a carteira NÃO EXISTIA — indistinguível de saldo zero real, e esse 0
+ * era então gravado no cache/carreira. Se a RPC diz 0 mas não existe linha em
+ * user_wallets, o saldo é DESCONHECIDO (null) e o chamador cai no cache — o
+ * bootstrapFinanceiro da sessão cria a carteira e credita o bônus.
+ */
 export async function obterSaldoSov(userId: string): Promise<number | null> {
   try {
     const { data, error } = await supabase.rpc("obter_saldo_soberania", {
       p_user_id: userId,
     });
     if (error) throw error;
-    return typeof data === "number" ? data : null;
+    if (typeof data !== "number") return null;
+    if (data !== 0) return data;
+    const { data: carteira, error: erroCarteira } = await supabase
+      .from("user_wallets")
+      .select("balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (erroCarteira) throw erroCarteira;
+    if (!carteira) return null; // carteira inexistente = saldo desconhecido
+    return Number(carteira.balance) || 0;
   } catch (e) {
     logErroRpc("obter_saldo_soberania", { p_user_id: userId }, e);
     return null;

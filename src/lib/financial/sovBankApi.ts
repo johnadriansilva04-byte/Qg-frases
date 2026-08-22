@@ -9,6 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import { garantirCarteira } from "@/lib/financial/sovApi";
 
 export type ExtratoItem = {
   id: string;
@@ -121,4 +122,21 @@ export async function bonusCadastro(userId: string): Promise<number | null> {
     console.warn("[SovBank] bônus de cadastro indisponível:", e);
     return null;
   }
+}
+
+/**
+ * Bootstrap financeiro do usuário (roda em TODA sessão, não só no cadastro):
+ * garante a carteira e credita o bônus de cadastro de forma idempotente
+ * (chave `signup:{user}`) — cobre o caso do perfil já ter sido criado pelo
+ * trigger de signup sem passar pelo caminho que chamava o bônus. Retorna o
+ * saldo AUTORITATIVO do ledger; null em erro real (nunca vira 0).
+ */
+export async function bootstrapFinanceiro(userId: string): Promise<number | null> {
+  if (!userId) return null;
+  const saldo = await bonusCadastro(userId);
+  if (saldo != null) return saldo;
+  // Bônus indisponível (migração pendente/erro real): ao menos garante que a
+  // carteira exista para o restante do jogo. Erro continua erro (null).
+  await garantirCarteira(userId);
+  return null;
 }

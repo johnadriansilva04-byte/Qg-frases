@@ -1,3 +1,95 @@
+## E2E em produção com o Robô Doidão + blindagem obterSaldoSov (2026-08-22, 18ª passada)
+
+E2E real no navegador (build de produção servido localmente + Supabase de
+produção), conta-canário "Robô Doidão". SEM backfill de contas de teste.
+
+- **BUG NOVO ENCONTRADO PELO E2E (zeragem pós-F5)**: após criar a carreira
+  (coach.sov=50, cache=50) e dar F5, a hidratação ZERAVA cache e coach.sov em
+  produção. Cadeia: `loadCareerFromSupabase` → `obterSaldoSov` → RPC ANTIGA
+  `obter_saldo_soberania` devolve **0** para usuário sem wallet (não erro!) →
+  `coach.sov = 0` → próximo `saveCareerToSupabase` grava JSONB com 0 e cache
+  `Math.max(0, 0)` = 0. Violação exata da regra "erro/ausência nunca vira 0".
+- **FIX (`sovApi.obterSaldoSov`)**: se a RPC devolve 0, confere a linha em
+  `user_wallets` (RLS permite ao dono ler) — carteira inexistente ⇒ saldo
+  DESCONHECIDO (null), nunca 0; o chamador cai no cache e o
+  `bootstrapFinanceiro` da sessão cria a carteira. Defesa em profundidade que
+  funciona com a RPC antiga E com a nova (a nova cria a carteira na leitura).
+- **E2E PROVADO (conta-canário, produção)**:
+  1. login → bootstrap falha com log (`create_or_update_wallet` 42601) e
+     NÃO toca no cache (50 preservado — antes zerava);
+  2. carreira criada (Técnico, Robô FC, Série C) → JSONB produção com
+     coach/torneio/190 fixtures;
+  3. F5 → CareerMenu "SOV: 50" (antes mostrava 0 e regravava 0);
+  4. partida completa (84 flicks, 0-2) → recompensa chama
+     `sov_bank_registrar`, recebe `transaction_id NULL` da RPC antiga →
+     tratada como FALHA (fallback local, log completo — nunca saldo 0);
+  5. persistência pós-partida: `partidas_jogadas=2`, rodadaAtual=2,
+     moral=53, 20 fixtures jogados, 7 conversas, 10 headlines — tudo no
+     JSONB de produção; cache=50 estável;
+  6. login em navegador limpo (sem sessão) → SOV 50 + carreira intactos.
+- **Como servir o build localmente** (vite dev quebra atrás do proxy do
+  work-host): `npm run build` (preset nitro/vercel) + adaptador Node que
+  serve `.vercel/output/static` e delega ao handler
+  `.vercel/output/functions/__server.func/index.mjs` (exporta `{fetch}`).
+  Partida dirigida por puppeteer-core + /usr/bin/chromium (flicks por
+  eventos de mouse no canvas — browser tools não fazem drag).
+- **PENDENTE (bloqueio real do ledger)**: re-aplicar em produção, no SQL
+  Editor, `sov_financial_system.sql` + `sov_integracao_cartorio.sql` +
+  `futebol.sql` + `sov_bank.sql` (ordem do README). Até lá, TODA recompensa
+  cai no fallback local — degradado mas honesto (cache nunca zerado).
+- **Verificação**: tsc 0 erros; build OK; fluxo-usuario-novo 14/14;
+  sov-consistencia 6/6; persistencia-unica 30/30.
+
+
+## Fluxo do usuário novo — causa raiz corrigida (2026-08-22, 17ª passada)
+
+Auditoria E2E da cadeia financeira do usuário novo (diretiva: "não conserte o
+passado, conserte o processo"; sem backfill de contas de teste).
+
+- **PRODUÇÃO ESTAVA COM O FINANCEIRO MORTO** (probes REST com a chave
+  publishable do bundle pracinha.online): `create_or_update_wallet` quebrava
+  com `42601 query has no destination for result data` para qualquer usuário
+  real → **nenhuma wallet jamais foi criada**; `sov_bank_registrar` era a
+  versão ANTIGA que engole EXCEPTION (`{transaction_id:null,balance:0}`) →
+  **nenhuma transação jamais chegou ao ledger**; `sov_bank_stats()`:
+  `usuarios_com_carteira=0, transacoes_total=0, em_circulacao=0`. Todo SOV
+  exibido na UI sempre foi fallback local/cache — ficção.
+- **CADEIA DO BUG (usuário novo)**: trigger `handle_new_user` criava o perfil
+  com cache `pontos_soberania=50` mas não criava wallet nem registrava o
+  bônus; como o perfil já existia, `useBotaoAuth` nunca chamava
+  `criarPerfilSeNaoExistir` (único lugar que chamava `bonusCadastro`) →
+  bônus nunca ia ao ledger → cache 50 × ledger 0 desde a 1ª ação.
+- **CORREÇÕES (repo)**:
+  - `futebol.sql`: `handle_new_user` agora chama `sov_bank_bonus_cadastro`
+    (idempotente `signup:{user}`) dentro do próprio trigger — carteira+bônus
+    nascem no ledger junto com o perfil; EXCEPTION-guard não quebra o
+    cadastro se o financeiro ainda não estiver aplicado.
+  - `sov_financial_system.sql`: `create_or_update_wallet` sem cláusula de
+    exceção — erro real sobe como 400 (nunca NULL silencioso).
+  - `sov_integracao_cartorio.sql`: `obter_saldo_soberania` cria a carteira na
+    primeira leitura ("wallet inexistente" nunca vira "saldo 0" ambíguo).
+  - `sov_bank.sql`: `sov_bank_bonus_cadastro` retorna `credited=FALSE` no
+    retry idempotente (antes mentia TRUE).
+  - Frontend: `bootstrapFinanceiro(userId)` (sovBankApi) roda em TODA sessão
+    no `useBotaoAuth` — garante wallet+bônus e alinha o cache
+    `pontos_soberania` ao saldo AUTORITATIVO via `alinharCacheSoberania`
+    (lib/botao/api.ts); erro real → null, nunca sobrescreve cache com 0.
+    `criarPerfilSeNaoExistir` usa o mesmo bootstrap (não assume 50 sem
+    ledger).
+- **PROVA E2E (Postgres local docker, migrations REAIS na ordem do README)**:
+  insert em auth.users → trigger → perfil(50)+wallet(50)+ledger(signup +50)
+  +time em 1 passo; retry do bônus = sem duplicar; partida +3 idempotente por
+  chave (duplicated=true no retry); obter_saldo=53; reconciliação
+  consistente; teto de emissão e saldo insuficiente PROPAGAM erro (não viram
+  0). Teste estrutural `testes/fluxo-usuario-novo.test.mjs` (12 invariantes).
+- **BLOQUEIO DE PRODUÇÃO (ação manual do usuário)**: as 4 correções SQL
+  precisam ser re-aplicadas no SQL Editor (ordem e verificação no
+  `supabase/migrations/README.md`, seção "RE-APLICAÇÃO OBRIGATÓRIA"). Sem
+  isso, o frontend degrada com segurança (erro ≠ 0) mas o ledger não grava.
+  Após re-aplicar, o bootstrap no 1º login auto-cura qualquer conta (inclui
+  a canário "Robô Doidão", robo.doidao.e2e@gmail.com — sem backfill manual).
+- **Verificação**: tsc 0 erros; build OK; suítes jiti (53+38+29+9+52+20+57+
+  42+14+19) + estruturais (12+30+6+onclick) + SSR (4 bundles, 0 falhas).
 
 ## Coerência global do usuário + história testada (2026-08-21, 16ª passada)
 

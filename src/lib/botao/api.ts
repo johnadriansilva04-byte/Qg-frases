@@ -4,9 +4,22 @@
  * botao_times, botao_lobbies e botao_blocos.
  */
 import { supabase } from "@/integrations/supabase/client";
-import { bonusCadastro } from "@/lib/financial/sovBankApi";
+import { bootstrapFinanceiro } from "@/lib/financial/sovBankApi";
 import { registrarTransacaoSov } from "@/lib/financial/sovApi";
 import { mergeProgressInSupabase } from "@/components/botao/storage";
+
+/**
+ * Alinha o cache `botao_usuarios.pontos_soberania` ao saldo autoritativo do
+ * ledger. Só escreve quando diverge; chamadores só passam saldos REAIS
+ * (retornados pelo ledger) — erro nunca chega aqui como número.
+ */
+export async function alinharCacheSoberania(userId: string, saldo: number): Promise<void> {
+  const { error } = await supabase
+    .from("botao_usuarios")
+    .update({ pontos_soberania: Math.max(0, Math.round(saldo)) })
+    .eq("user_id", userId);
+  if (error) console.warn("[api] falha ao alinhar cache de soberania:", error);
+}
 
 export type TimeBotao = {
   id: string;
@@ -165,13 +178,14 @@ export async function criarPerfilSeNaoExistir(
     return null;
   }
 
-  try {
-    await supabase.rpc("create_or_update_wallet", { p_user_id: userId });
-    // Bônus de cadastro rastreável no SOV BANK (idempotente por usuário;
-    // alinha o cache inicial pontos_soberania=50 ao ledger).
-    await bonusCadastro(userId);
-  } catch {
-    // Carteira SOV é opcional até a migração financeira ser aplicada.
+  // Bootstrap financeiro: carteira + bônus de cadastro idempotente no ledger.
+  // O cache pontos_soberania é alinhado ao saldo AUTORITATIVO retornado pelo
+  // SOV BANK — nunca assume 50 sem o lançamento ter acontecido. Em erro real
+  // (null), o login seguinte tenta de novo (bootstrap roda em toda sessão).
+  const saldo = await bootstrapFinanceiro(userId);
+  if (saldo != null && saldo !== data.pontos_soberania) {
+    await alinharCacheSoberania(userId, saldo);
+    data.pontos_soberania = saldo;
   }
 
   return data;
