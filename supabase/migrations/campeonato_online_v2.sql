@@ -761,6 +761,19 @@ END; $$;
 COMMIT;
 
 -- ---------------------------------------------------------------------------
+-- 6.5) Colunas da mesa (idempotente — a base futebol.sql já pode ter algumas,
+--      mas NUNCA assume; sem elas toda criação/entrada quebra em 42703).
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.mesas_futebol
+  ADD COLUMN IF NOT EXISTS data_liberacao TIMESTAMPTZ;
+ALTER TABLE public.mesas_futebol
+  ADD COLUMN IF NOT EXISTS aposta_sov NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.mesas_futebol
+  ADD COLUMN IF NOT EXISTS aposta_cobrada_de UUID[] NOT NULL DEFAULT '{}';
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
 -- 7) Aposta da mesa cobrada DE VERDADE (zero-sum):
 --    - criar_mesa_futebol: aposta > 0 debita o criador na hora;
 --    - entrar_mesa_futebol: aposta > 0 debita o convidado na entrada;
