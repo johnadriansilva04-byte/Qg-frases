@@ -767,6 +767,11 @@ COMMIT;
 --    - pagar_premio_mesa: vencedor leva o pote (2× aposta); empate devolve.
 --    Tudo idempotente por chave (aposta:/premio:/devolucao:).
 -- ---------------------------------------------------------------------------
+-- Ambiguidade de sobrecarga: a assinatura antiga (1 arg) precisa sair para a
+-- nova (3 args) assumir — sem isso, chamada com 1 param falha (PGRST203).
+DROP FUNCTION IF EXISTS public.criar_mesa_futebol;
+DROP FUNCTION IF EXISTS public.criar_mesa_futebol(TEXT);
+
 CREATE OR REPLACE FUNCTION public.criar_mesa_futebol(
   p_time TEXT,
   p_data_liberacao TIMESTAMPTZ DEFAULT NULL,
