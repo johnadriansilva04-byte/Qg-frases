@@ -2,16 +2,24 @@
  * OnlineChampionship — modo Campeonato Online (multi-jogador, round-robin).
  *
  * Fluxo:
- *  1. Sala (lobby): criar / entrar por código / iniciar (criador).
- *  2. Em andamento: cada rodada lista os confrontos do usuário; ao jogar um
- *     confronto, cria/vincula uma mesa (mesas_futebol) e abre o MesaOnlineMatch.
- *  3. Ao finalizar a mesa, o resultado é enviado à RPC registrar_resultado_campeonato,
- *     que computa pontos (3/1/0), gols e soberania, e avança/finaliza o campeonato.
- *  4. Tabela de classificação e confrontos atualizam em tempo real (Postgres Changes).
+ *  1. Sala (lobby): criar / entrar por código ou LINK DIRETO (?camp=...) /
+ *     iniciar (criador). Entrar custa no mínimo 50 SOV de saldo (regra do
+ *     servidor; o frontend valida antes para uma mensagem clara).
+ *  2. O dono da sala pode "Preencher com Bots": as vagas restantes são
+ *     completadas com clubes que JÁ existem no universo (base TEAMS) —
+ *     nenhum usuário novo é criado.
+ *  3. Em andamento: confronto contra HUMANO abre a MesaOnlineMatch (realtime);
+ *     confronto contra BOT é jogado localmente contra o motor do jogo
+ *     (MatchView) e o resultado segue o mesmo caminho de registro. Confrontos
+ *     bot × bot são simulados pelo motor (dono da sala) com placar
+ *     determinístico.
+ *  4. Ao finalizar, registrar_resultado_campeonato computa pontos (3/1/0),
+ *     gols, estatísticas do perfil e avança/finaliza o campeonato. O título
+ *     do campeão humano vira troféu na sala de troféus.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, RefreshCw, Users, Crown, Play } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Users, Crown, Play, Link2, Coins, Bot } from "lucide-react";
 import { useBotaoAuth } from "../online/useBotaoAuth";
 import { useJogador } from "@/hooks/useJogador";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,19 +30,33 @@ import {
   buscarCampeonato,
   buscarCampeonatosAbertos,
   registrarResultadoCampeonato,
+  preencherCampeonatoComBots,
+  resolverConfrontoBots,
+  simularConfrontoBots,
+  linkConviteCampeonato,
+  vincularMesaCampeonato,
   type CampeonatoOnline,
   type ConfrontoCampeonato,
   type ParticipanteCampeonato,
+  type BotCampeonato,
 } from "@/lib/multiplayer/campeonato.api";
-import { abrirMesaCampeonato, buscarMesa, type MesaFutebol } from "@/lib/multiplayer/mesa.api";
+import {
+  abrirMesaCampeonato,
+  buscarMesa,
+  criarMesa,
+  finalizarMesa,
+  type MesaFutebol,
+} from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
+import { MatchView } from "@/components/botao/components/MatchView";
+import { TEAMS } from "@/components/botao/data/teams";
+import type { MatchResult } from "@/components/botao/types";
+import { obterSaldoSov } from "@/lib/financial/sovApi";
+import { loadProgressFromSupabase, saveProgressToSupabase } from "@/components/botao/storage";
 import { useAdManager } from "@/lib/adManager";
 
-type Screen = "lobby-list" | "sala" | "jogo";
-
-const STORAGE = {
-  CODIGO: "botao_campeonato_codigo",
-};
+/** Saldo mínimo de SOV para criar/entrar no Campeonato Online (regra §5). */
+export const SOV_MINIMO_CAMPEONATO = 50;
 
 function obterTimePerfil(perfil: {
   user_id: string;
@@ -54,7 +76,7 @@ function obterTimePerfil(perfil: {
 
 function nomeDoParticipante(camp: CampeonatoOnline, uid: string): string {
   const p = (camp.participantes as ParticipanteCampeonato[]).find((x) => x.user_id === uid);
-  return p?.nome ?? "Jogador";
+  return p ? `${p.nome}${p.bot ? " (bot)" : ""}` : "Jogador";
 }
 
 function abrevDoParticipante(camp: CampeonatoOnline, uid: string): string {
@@ -62,12 +84,34 @@ function abrevDoParticipante(camp: CampeonatoOnline, uid: string): string {
   return p?.abreviacao ?? "ADV";
 }
 
+function participanteDo(camp: CampeonatoOnline, uid: string | null): ParticipanteCampeonato | null {
+  if (!uid) return null;
+  return (camp.participantes as ParticipanteCampeonato[]).find((x) => x.user_id === uid) ?? null;
+}
+
+/** Pool de bots = clubes que JÁ existem no universo (base TEAMS), excluindo
+ *  times já presentes na sala. */
+function botsDisponiveis(camp: CampeonatoOnline): BotCampeonato[] {
+  const usados = new Set(
+    (camp.participantes as ParticipanteCampeonato[]).flatMap((p) => [p.time_id, p.nome]),
+  );
+  return TEAMS.filter((t) => !usados.has(t.id) && !usados.has(t.name)).map((t) => ({
+    nome: t.name,
+    time_id: t.id,
+    abreviacao: t.short,
+    power: t.power,
+  }));
+}
+
 export function OnlineChampionship({
   onBack,
   onEstadoPartida,
+  codigoInicial,
 }: {
   onBack?: () => void;
   onEstadoPartida?: (emPartida: boolean) => void;
+  /** Link direto (?camp=CODIGO): entra direto na sala, sem procurar. */
+  codigoInicial?: string | undefined;
 }) {
   const queryClient = useQueryClient();
   const { perfil, recarregar, aplicarPerfil } = useBotaoAuth();
@@ -78,12 +122,22 @@ export function OnlineChampionship({
   const [codigo, setCodigo] = useState<string | null>(null);
   const [codigoEntrar, setCodigoEntrar] = useState("");
   const [nomeSala, setNomeSala] = useState("Campeonato Online");
-  const [maxJogadores, setMaxJogadores] = useState(4);
+  const [maxJogadores, setMaxJogadores] = useState(8);
+  const [premioSov, setPremioSov] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [iniciando, setIniciando] = useState(false);
+  const [preenchendoBots, setPreenchendoBots] = useState(false);
   const [mesaAtiva, setMesaAtiva] = useState<MesaFutebol | null>(null);
   const [confrontoAtivo, setConfrontoAtivo] = useState<ConfrontoCampeonato | null>(null);
+  const [confrontoBot, setConfrontoBot] = useState<{
+    confronto: ConfrontoCampeonato;
+    bot: ParticipanteCampeonato;
+    euSouJ1: boolean;
+  } | null>(null);
+  const [toastLink, setToastLink] = useState<string | null>(null);
+  const entradaLinkTentada = useRef<string | null>(null);
+  const trofeuRegistrado = useRef<string | null>(null);
 
   // Lista de campeonatos abertos
   const { data: abertos = [], refetch: recarregarAbertos } = useQuery({
@@ -98,7 +152,7 @@ export function OnlineChampionship({
     queryKey: ["campeonato", codigo],
     queryFn: () => (codigo ? buscarCampeonato(codigo) : null),
     enabled: !!codigo,
-    refetchInterval: mesaAtiva ? false : 5000,
+    refetchInterval: mesaAtiva || confrontoBot ? false : 5000,
   });
 
   // Inscrição em realtime para atualizar a sala instantaneamente
@@ -123,25 +177,51 @@ export function OnlineChampionship({
   }, [codigo, queryClient]);
 
   useEffect(() => {
-    if (onEstadoPartida) onEstadoPartida(!!mesaAtiva);
-  }, [mesaAtiva, onEstadoPartida]);
+    if (onEstadoPartida) onEstadoPartida(!!mesaAtiva || !!confrontoBot);
+  }, [mesaAtiva, confrontoBot, onEstadoPartida]);
 
-  // Limpa mesa ativa se o campeonato mudar de status finalizado
+  // LINK DIRETO (?camp=CODIGO): entra na sala assim que o perfil carrega —
+  // sem o usuário precisar procurar o campeonato.
   useEffect(() => {
-    if (campeonato?.status === "finalizado" && !mesaAtiva) {
-      // nada a fazer aqui; a tela de sala mostra o campeão
+    if (!codigoInicial || !perfil || entradaLinkTentada.current === codigoInicial) return;
+    entradaLinkTentada.current = codigoInicial;
+    void (async () => {
+      try {
+        await entrarCampeonato(codigoInicial);
+        setCodigo(codigoInicial);
+      } catch (e) {
+        // Sala cheia/começou: ainda assim abre a sala para acompanhar.
+        const existente = await buscarCampeonato(codigoInicial).catch(() => null);
+        if (existente) setCodigo(codigoInicial);
+        else setErro((e as Error)?.message ?? "Não foi possível abrir a sala do campeonato.");
+      }
+    })();
+  }, [codigoInicial, perfil]);
+
+  /** Regra dos 50 SOV: valida antes de chamar a RPC (mensagem clara); a RPC
+   *  continua sendo a autoridade final. */
+  const validarSaldoMinimo = useCallback(async (): Promise<boolean> => {
+    if (!userId) return false;
+    const saldo = await obterSaldoSov(userId);
+    if (saldo !== null && saldo < SOV_MINIMO_CAMPEONATO) {
+      setErro(
+        `Você precisa de pelo menos ${SOV_MINIMO_CAMPEONATO} SOV para o Campeonato Online (saldo atual: ${saldo} SOV).`,
+      );
+      return false;
     }
-  }, [campeonato?.status, mesaAtiva]);
+    return true;
+  }, [userId]);
 
   const handleCriar = useCallback(async () => {
     if (!perfil) {
       setErro("Faça login para criar um campeonato.");
       return;
     }
+    if (!(await validarSaldoMinimo())) return;
     setCriando(true);
     setErro(null);
     try {
-      const camp = await criarCampeonato(nomeSala || "Campeonato Online", maxJogadores);
+      const camp = await criarCampeonato(nomeSala || "Campeonato Online", maxJogadores, premioSov);
       setCodigo(camp.codigo);
       recarregarAbertos();
     } catch (e: unknown) {
@@ -149,26 +229,31 @@ export function OnlineChampionship({
     } finally {
       setCriando(false);
     }
-  }, [perfil, nomeSala, maxJogadores, recarregarAbertos]);
+  }, [perfil, nomeSala, maxJogadores, premioSov, recarregarAbertos, validarSaldoMinimo]);
 
-  const handleEntrar = useCallback(async () => {
-    if (!perfil) {
-      setErro("Faça login para entrar em um campeonato.");
-      return;
-    }
-    if (!codigoEntrar.trim()) {
-      setErro("Informe o código da sala.");
-      return;
-    }
-    setErro(null);
-    try {
-      await entrarCampeonato(codigoEntrar.trim());
-      setCodigo(codigoEntrar.trim());
-      setCodigoEntrar("");
-    } catch (e: unknown) {
-      setErro((e as Error)?.message ?? "Erro ao entrar no campeonato.");
-    }
-  }, [perfil, codigoEntrar]);
+  const handleEntrar = useCallback(
+    async (codigoAlvo?: string) => {
+      if (!perfil) {
+        setErro("Faça login para entrar em um campeonato.");
+        return;
+      }
+      const alvo = (codigoAlvo ?? codigoEntrar).trim();
+      if (!alvo) {
+        setErro("Informe o código da sala.");
+        return;
+      }
+      if (!(await validarSaldoMinimo())) return;
+      setErro(null);
+      try {
+        await entrarCampeonato(alvo);
+        setCodigo(alvo);
+        setCodigoEntrar("");
+      } catch (e: unknown) {
+        setErro((e as Error)?.message ?? "Erro ao entrar no campeonato.");
+      }
+    },
+    [perfil, codigoEntrar, validarSaldoMinimo],
+  );
 
   const handleIniciar = useCallback(async () => {
     if (!campeonato) return;
@@ -183,12 +268,36 @@ export function OnlineChampionship({
     }
   }, [campeonato]);
 
+  const handlePreencherBots = useCallback(async () => {
+    if (!campeonato || campeonato.criador_id !== userId) return;
+    setPreenchendoBots(true);
+    setErro(null);
+    try {
+      const bots = botsDisponiveis(campeonato);
+      await preencherCampeonatoComBots(campeonato.codigo, bots);
+      queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
+    } catch (e: unknown) {
+      setErro((e as Error)?.message ?? "Erro ao preencher com bots.");
+    } finally {
+      setPreenchendoBots(false);
+    }
+  }, [campeonato, userId, queryClient, codigo]);
+
   const handleSairSala = useCallback(() => {
     setCodigo(null);
     setConfrontoAtivo(null);
     setMesaAtiva(null);
+    setConfrontoBot(null);
     recarregarAbertos();
   }, [recarregarAbertos]);
+
+  const copiarLink = useCallback(() => {
+    if (!campeonato) return;
+    const link = linkConviteCampeonato(campeonato.codigo);
+    void navigator.clipboard?.writeText(link).catch(() => {});
+    setToastLink(link);
+    window.setTimeout(() => setToastLink(null), 6000);
+  }, [campeonato]);
 
   // Encontrar confronto pendente do usuário na rodada atual
   const meuConfrontoPendente = useMemo<ConfrontoCampeonato | null>(() => {
@@ -208,10 +317,22 @@ export function OnlineChampionship({
   const handleJogarConfronto = useCallback(async () => {
     if (!campeonato || !perfil || !meuConfrontoPendente) return;
     setErro(null);
+    const adversarioId =
+      meuConfrontoPendente.j1_id === userId ? meuConfrontoPendente.j2_id : meuConfrontoPendente.j1_id;
+    const adversario = participanteDo(campeonato, adversarioId);
+
+    // Confronto contra BOT: partida local contra o motor do jogo — o resultado
+    // segue o mesmo caminho de registro (mesa vinculada + registrar_resultado).
+    if (adversario?.bot) {
+      setConfrontoBot({
+        confronto: meuConfrontoPendente,
+        bot: adversario,
+        euSouJ1: meuConfrontoPendente.j1_id === userId,
+      });
+      return;
+    }
+
     try {
-      // Idempotente: cria UMA mesa compartilhada para o confronto (ou devolve
-      // a já existente). Ambos os jogadores chamam a mesma RPC e caem na mesma
-      // mesa, com jogador_1=j1_id e jogador_2=j2_id definidos pelo confronto.
       const mesaId = await abrirMesaCampeonato(campeonato.id, meuConfrontoPendente.rodada);
       const mesa = await buscarMesa(mesaId);
 
@@ -225,7 +346,7 @@ export function OnlineChampionship({
     } catch (e: unknown) {
       setErro((e as Error)?.message ?? "Erro ao iniciar confronto.");
     }
-  }, [campeonato, perfil, meuConfrontoPendente]);
+  }, [campeonato, perfil, meuConfrontoPendente, userId]);
 
   const handleFinalizada = useCallback(
     async (r: ResultadoMesa) => {
@@ -239,7 +360,7 @@ export function OnlineChampionship({
         const golsJ1 = j1 === mesaAtiva.jogador_1_id ? r.golsJ1 : r.golsJ2;
         const golsJ2 = j2 === mesaAtiva.jogador_1_id ? r.golsJ1 : r.golsJ2;
         await registrarResultadoCampeonato(campeonato.id, mesaAtiva.mesa_id, golsJ1, golsJ2);
-        // Recarrega perfil (soberania atualizada pelas RPCs)
+        // Recarrega perfil (SOV atualizado pelas RPCs)
         const novoPerfil = await recarregar();
         if (novoPerfil) aplicarPerfil(novoPerfil);
       } catch (e: unknown) {
@@ -250,10 +371,156 @@ export function OnlineChampionship({
         queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
       }
     },
-    [campeonato, confrontoAtivo, mesaAtiva, recarregar, aplicarPerfil, queryClient, codigo, markFirstGamePlayed],
+    [
+      campeonato,
+      confrontoAtivo,
+      mesaAtiva,
+      recarregar,
+      aplicarPerfil,
+      queryClient,
+      codigo,
+      markFirstGamePlayed,
+    ],
   );
 
-  // ============ Tela de jogo (mesa ativa) ============
+  /** Fim da partida contra BOT: cria a mesa de registro, vincula ao confronto
+   *  e registra o placar real jogado. */
+  const handleFimConfrontoBot = useCallback(
+    async (r: MatchResult) => {
+      markFirstGamePlayed();
+      if (!campeonato || !confrontoBot || !perfil) return;
+      const { confronto, euSouJ1 } = confrontoBot;
+      const golsJ1 = euSouJ1 ? r.homeGoals : r.awayGoals;
+      const golsJ2 = euSouJ1 ? r.awayGoals : r.homeGoals;
+      try {
+        const mesaId = await criarMesa(obterTimePerfil(perfil).id, { apostaSov: 0 });
+        await vincularMesaCampeonato(campeonato.id, confronto.rodada, mesaId);
+        await registrarResultadoCampeonato(campeonato.id, mesaId, golsJ1, golsJ2);
+        const vencedor =
+          golsJ1 === golsJ2 ? null : golsJ1 > golsJ2 ? confronto.j1_id : confronto.j2_id;
+        if (vencedor) await finalizarMesa(mesaId, vencedor).catch(() => null);
+        const novoPerfil = await recarregar();
+        if (novoPerfil) aplicarPerfil(novoPerfil);
+      } catch (e: unknown) {
+        setErro((e as Error)?.message ?? "Erro ao registrar o confronto.");
+      } finally {
+        setConfrontoBot(null);
+        queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
+      }
+    },
+    [
+      campeonato,
+      confrontoBot,
+      perfil,
+      recarregar,
+      aplicarPerfil,
+      queryClient,
+      codigo,
+      markFirstGamePlayed,
+    ],
+  );
+
+  // Confrontos bot × bot da rodada atual: o DONO simula pelo motor (placar
+  // determinístico por poder dos clubes) e o servidor valida que os dois
+  // lados são bots antes de gravar.
+  const resolvendoBots = useRef(false);
+  useEffect(() => {
+    if (!campeonato || campeonato.status !== "em_andamento") return;
+    if (campeonato.criador_id !== userId) return;
+    if (mesaAtiva || confrontoBot || resolvendoBots.current) return;
+    const rodada = campeonato.rodada_atual;
+    const botxbot = ((campeonato.confrontos as ConfrontoCampeonato[]) ?? []).filter((c) => {
+      if (c.rodada !== rodada || c.bye || c.status !== "pendente") return false;
+      const p1 = participanteDo(campeonato, c.j1_id);
+      const p2 = participanteDo(campeonato, c.j2_id);
+      return Boolean(p1?.bot && p2?.bot);
+    });
+    if (botxbot.length === 0) return;
+    resolvendoBots.current = true;
+    void (async () => {
+      try {
+        for (const c of botxbot) {
+          const p1 = participanteDo(campeonato, c.j1_id);
+          const p2 = participanteDo(campeonato, c.j2_id);
+          const { golsJ1, golsJ2 } = simularConfrontoBots(
+            p1?.power ?? 50,
+            p2?.power ?? 50,
+            `${campeonato.id}:r${rodada}:${c.j1_id}x${c.j2_id}`,
+          );
+          await resolverConfrontoBots(campeonato.id, rodada, c.j1_id!, c.j2_id!, golsJ1, golsJ2);
+        }
+      } catch {
+        /* o servidor valida; em erro, tenta de novo na próxima atualização */
+      } finally {
+        resolvendoBots.current = false;
+        queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
+      }
+    })();
+  }, [campeonato, userId, mesaAtiva, confrontoBot, queryClient, codigo]);
+
+  // Título do campeonato → troféu na sala de troféus (uma vez por campeonato).
+  useEffect(() => {
+    if (!campeonato || campeonato.status !== "finalizado") return;
+    if (campeonato.vencedor_id !== userId || !userId) return;
+    const chave = `camp-online-${campeonato.codigo}`;
+    if (trofeuRegistrado.current === chave) return;
+    trofeuRegistrado.current = chave;
+    void (async () => {
+      const progress = await loadProgressFromSupabase(userId);
+      if (!progress) return;
+      if ((progress.trophies ?? []).some((t) => t.teamId === chave)) return;
+      await saveProgressToSupabase(userId, {
+        ...progress,
+        trophies: [
+          ...(progress.trophies ?? []),
+          { difficulty: "lenda", teamId: chave, date: new Date().toISOString() },
+        ],
+      });
+    })();
+  }, [campeonato, userId]);
+
+  // ============ Tela de jogo contra BOT (motor local) ============
+  if (confrontoBot && perfil && campeonato) {
+    const meuTime = obterTimePerfil(perfil);
+    return (
+      <main className="mx-auto w-full max-w-5xl px-4 py-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Campeonato · Rodada {confrontoBot.confronto.rodada} · {meuTime.abreviacao} ×{" "}
+            {confrontoBot.bot.abreviacao} <Bot className="inline size-3" />
+          </p>
+          <button className="btn-ghost text-sm" onClick={() => setConfrontoBot(null)}>
+            Sair
+          </button>
+        </div>
+        <MatchView
+          key={`bot-${campeonato.id}-r${confrontoBot.confronto.rodada}`}
+          homeId={confrontoBot.euSouJ1 ? meuTime.id : confrontoBot.bot.time_id}
+          awayId={confrontoBot.euSouJ1 ? confrontoBot.bot.time_id : meuTime.id}
+          userSide={confrontoBot.euSouJ1 ? "home" : "away"}
+          difficulty="profissional"
+          turns={24}
+          stageLabel={`Campeonato · Rodada ${confrontoBot.confronto.rodada}`}
+          onFinish={(r) => void handleFimConfrontoBot(r)}
+          onQuit={() => setConfrontoBot(null)}
+          customTeam={{
+            id: meuTime.id,
+            name: meuTime.nome,
+            short: meuTime.abreviacao,
+            primary: meuTime.cores[0] ?? "#1e3a8a",
+            secondary: meuTime.cores[1] ?? "#0b7a3b",
+            power: 75,
+            city: "Cidadela",
+            escudo: "⚽",
+            divisaoInicial: "serie-c",
+            botoesNomes: meuTime.botoesNomes,
+          }}
+        />
+      </main>
+    );
+  }
+
+  // ============ Tela de jogo (mesa ativa, humano × humano) ============
   if (mesaAtiva && perfil && campeonato) {
     const meuTime = obterTimePerfil(perfil);
     return (
@@ -285,6 +552,10 @@ export function OnlineChampionship({
         erro={erro}
         onJogar={handleJogarConfronto}
         meuConfrontoPendente={meuConfrontoPendente}
+        onPreencherBots={handlePreencherBots}
+        preenchendoBots={preenchendoBots}
+        onCopiarLink={copiarLink}
+        toastLink={toastLink}
       />
     );
   }
@@ -321,13 +592,30 @@ export function OnlineChampionship({
               value={maxJogadores}
               onChange={(e) => setMaxJogadores(Number(e.target.value))}
             >
-              {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+              {[2, 4, 6, 8, 12, 16, 20, 24, 32].map((n) => (
                 <option key={n} value={n}>
                   {n} jogadores
                 </option>
               ))}
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              <Coins className="mr-1 inline size-4" /> Prêmio do campeão (SOV, opcional)
+            </label>
+            <input
+              className="input w-full"
+              type="number"
+              min={0}
+              max={10000}
+              value={premioSov}
+              onChange={(e) => setPremioSov(Math.max(0, Number(e.target.value) || 0))}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Para criar ou entrar no Campeonato Online é preciso ter pelo menos{" "}
+            {SOV_MINIMO_CAMPEONATO} SOV.
+          </p>
           <button onClick={handleCriar} disabled={criando || !perfil} className="btn-primary">
             <Plus className="mr-1 h-4 w-4" /> {criando ? "Criando..." : "Abrir sala"}
           </button>
@@ -344,7 +632,7 @@ export function OnlineChampionship({
             onChange={(e) => setCodigoEntrar(e.target.value)}
             placeholder="CAMP-..."
           />
-          <button onClick={handleEntrar} disabled={!perfil} className="btn-primary">
+          <button onClick={() => void handleEntrar()} disabled={!perfil} className="btn-primary">
             <Users className="mr-1 h-4 w-4" /> Entrar
           </button>
         </div>
@@ -369,24 +657,12 @@ export function OnlineChampionship({
                 <p className="text-xs text-muted-foreground">
                   Código <span className="font-mono">{c.codigo}</span> · {numPart}/{c.max_jogadores}{" "}
                   jogadores
+                  {(c.premio_sov ?? 0) > 0 && (
+                    <span className="text-amber-300"> · prêmio {c.premio_sov} SOV</span>
+                  )}
                 </p>
               </div>
-              <button
-                onClick={async () => {
-                  if (!perfil) {
-                    setErro("Faça login para entrar.");
-                    return;
-                  }
-                  try {
-                    await entrarCampeonato(c.codigo);
-                    setCodigo(c.codigo);
-                  } catch (e: unknown) {
-                    setErro((e as Error)?.message ?? "Erro ao entrar.");
-                  }
-                }}
-                disabled={!perfil}
-                className="btn-primary"
-              >
+              <button onClick={() => void handleEntrar(c.codigo)} disabled={!perfil} className="btn-primary">
                 <Users className="mr-1 h-4 w-4" /> Entrar
               </button>
             </article>
@@ -408,6 +684,10 @@ function SalaCampeonato({
   erro,
   onJogar,
   meuConfrontoPendente,
+  onPreencherBots,
+  preenchendoBots,
+  onCopiarLink,
+  toastLink,
 }: {
   camp: CampeonatoOnline;
   userId: string;
@@ -418,15 +698,16 @@ function SalaCampeonato({
   erro: string | null;
   onJogar: () => void;
   meuConfrontoPendente: ConfrontoCampeonato | null;
+  onPreencherBots: () => void;
+  preenchendoBots: boolean;
+  onCopiarLink: () => void;
+  toastLink: string | null;
 }) {
   const participantes = useMemo(
     () => (camp.participantes as ParticipanteCampeonato[]) ?? [],
     [camp.participantes],
   );
-  const confrontos = useMemo(
-    () => (camp.confrontos as ConfrontoCampeonato[]) ?? [],
-    [camp.confrontos],
-  );
+  const confrontos = useMemo(() => (camp.confrontos as ConfrontoCampeonato[]) ?? [], [camp.confrontos]);
   const classificacao = useMemo(
     () =>
       [...participantes].sort(
@@ -438,10 +719,8 @@ function SalaCampeonato({
   );
 
   const souCamp = camp.vencedor_id === userId;
-  const totalRodadas = useMemo(
-    () => confrontos.reduce((m, c) => Math.max(m, c.rodada), 0),
-    [confrontos],
-  );
+  const totalRodadas = useMemo(() => confrontos.reduce((m, c) => Math.max(m, c.rodada), 0), [confrontos]);
+  const vagas = camp.max_jogadores - participantes.length;
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
@@ -461,39 +740,105 @@ function SalaCampeonato({
                   : camp.status === "finalizado"
                     ? "Finalizado"
                     : "Cancelado"}
+              {(camp.premio_sov ?? 0) > 0 && (
+                <span className="text-amber-300"> · prêmio {camp.premio_sov} SOV</span>
+              )}
             </p>
           </div>
         </div>
       </div>
 
       {camp.status === "aguardando" && (
-        <section className="surface mb-6 space-y-4 p-5">
-          <div>
-            <p className="mb-2 text-sm text-muted-foreground">
-              Compartilhe o código para outros jogadores entrarem. Mínimo de 2 para iniciar.
-            </p>
-            <ul className="space-y-1 text-sm">
-              {participantes.map((p) => (
-                <li key={p.user_id} className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" /> {p.nome} ·{" "}
-                  <span className="font-mono">{p.abreviacao ?? "MTI"}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <>
+          <section className="surface mb-4 space-y-4 p-5">
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Compartilhe o link direto: quem entra cai direto nesta sala. Mínimo de 2 para
+                iniciar.
+              </p>
+              <ul className="space-y-1 text-sm" data-testid="lista-participantes">
+                {participantes.map((p) => (
+                  <li key={p.user_id} className="flex items-center gap-2">
+                    {p.bot ? (
+                      <Bot className="h-4 w-4 text-sky-400" />
+                    ) : (
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    )}{" "}
+                    {p.nome} · <span className="font-mono">{p.abreviacao ?? "MTI"}</span>
+                    {p.user_id === camp.criador_id && <Crown className="h-3.5 w-3.5 text-amber-300" />}
+                  </li>
+                ))}
+                {Array.from({ length: Math.max(0, vagas) }).map((_, i) => (
+                  <li key={`vaga-${i}`} className="flex items-center gap-2 text-slate-600">
+                    <Users className="h-4 w-4" /> vaga aberta
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={onCopiarLink} className="btn-ghost" data-testid="copiar-link-camp">
+                <Link2 className="mr-1 h-4 w-4" /> Copiar link da sala
+              </button>
+              {isCriador && vagas > 0 && (
+                <button
+                  onClick={onPreencherBots}
+                  disabled={preenchendoBots}
+                  className="btn-primary"
+                  data-testid="preencher-bots"
+                >
+                  <Bot className="mr-1 h-4 w-4" />{" "}
+                  {preenchendoBots ? "Preenchendo..." : `Preencher com Bots (${vagas} vagas)`}
+                </button>
+              )}
+              {isCriador && (
+                <button
+                  onClick={onIniciar}
+                  disabled={iniciando || participantes.length < 2}
+                  className="btn-primary"
+                  data-testid="iniciar-campeonato"
+                >
+                  <Play className="mr-1 h-4 w-4" /> {iniciando ? "Iniciando..." : "Iniciar campeonato"}
+                </button>
+              )}
+            </div>
+            {!isCriador && (
+              <p className="text-xs text-muted-foreground">Aguarde o criador iniciar o campeonato.</p>
+            )}
+          </section>
+
+          {/* Painel do administrador da sala (dono): visão completa. */}
           {isCriador && (
-            <button
-              onClick={onIniciar}
-              disabled={iniciando || participantes.length < 2}
-              className="btn-primary"
-            >
-              <Play className="mr-1 h-4 w-4" /> {iniciando ? "Iniciando..." : "Iniciar campeonato"}
-            </button>
+            <section className="surface mb-4 p-5" data-testid="admin-campeonato-panel">
+              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Administração da sala
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                <div className="rounded-lg bg-slate-900/60 p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Vagas</p>
+                  <p className="font-display text-xl text-white">
+                    {participantes.length}/{camp.max_jogadores}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-900/60 p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Humanos</p>
+                  <p className="font-display text-xl text-emerald-300">
+                    {participantes.filter((p) => !p.bot).length}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-900/60 p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Bots</p>
+                  <p className="font-display text-xl text-sky-300">
+                    {participantes.filter((p) => p.bot).length}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-900/60 p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Prêmio</p>
+                  <p className="font-display text-xl text-amber-300">{camp.premio_sov ?? 0} SOV</p>
+                </div>
+              </div>
+            </section>
           )}
-          {!isCriador && (
-            <p className="text-xs text-muted-foreground">Aguarde o criador iniciar o campeonato.</p>
-          )}
-        </section>
+        </>
       )}
 
       {camp.status === "em_andamento" && (
@@ -507,6 +852,12 @@ function SalaCampeonato({
                     Rodada {meuConfrontoPendente.rodada} ·{" "}
                     {abrevDoParticipante(camp, meuConfrontoPendente.j1_id!)} x{" "}
                     {abrevDoParticipante(camp, meuConfrontoPendente.j2_id!)}
+                    {participanteDo(
+                      camp,
+                      meuConfrontoPendente.j1_id === userId
+                        ? meuConfrontoPendente.j2_id
+                        : meuConfrontoPendente.j1_id,
+                    )?.bot && <span className="text-sky-300"> (bot — joga na hora)</span>}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -515,7 +866,7 @@ function SalaCampeonato({
                 )}
               </div>
               {meuConfrontoPendente && (
-                <button onClick={onJogar} className="btn-primary">
+                <button onClick={onJogar} className="btn-primary" data-testid="jogar-confronto">
                   <Play className="mr-1 h-4 w-4" /> Jogar
                 </button>
               )}
@@ -536,14 +887,14 @@ function SalaCampeonato({
               </thead>
               <tbody>
                 {classificacao.map((r, i) => (
-                  <tr
-                    key={r.user_id}
-                    className={r.user_id === userId ? "text-accent-foreground" : ""}
-                  >
+                  <tr key={r.user_id} className={r.user_id === userId ? "text-accent-foreground" : ""}>
                     <td className="py-1">{i + 1}</td>
                     <td className="py-1">
                       <span className="font-mono">{r.abreviacao ?? "MTI"}</span>{" "}
-                      <span className="text-muted-foreground">{r.nome}</span>
+                      <span className="text-muted-foreground">
+                        {r.nome}
+                        {r.bot && <Bot className="ml-1 inline size-3 text-sky-400" />}
+                      </span>
                     </td>
                     <td className="text-center">{r.pontos ?? 0}</td>
                     <td className="text-center">
@@ -551,6 +902,7 @@ function SalaCampeonato({
                         confrontos.filter(
                           (c) =>
                             c.status === "finalizado" &&
+                            !c.bye &&
                             (c.j1_id === r.user_id || c.j2_id === r.user_id),
                         ).length
                       }
@@ -575,8 +927,6 @@ function SalaCampeonato({
                     <ul className="space-y-1 text-sm">
                       {lista.map((c, idx) => {
                         const envolvido = c.j1_id === userId || c.j2_id === userId;
-                        // Confronto inválido (mesmo jogador dos dois lados):
-                        // evita exibir "FB x FB" — pula a linha.
                         if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
                         return (
                           <li
@@ -589,7 +939,7 @@ function SalaCampeonato({
                               {c.bye && <span className="text-muted-foreground"> (bye)</span>}
                             </span>
                             <span className="font-mono text-muted-foreground">
-                              {c.status === "finalizado" ? `${c.pl_j1} - ${c.pl_j2}` : "—"}
+                              {c.status === "finalizado" && !c.bye ? `${c.pl_j1} - ${c.pl_j2}` : "—"}
                             </span>
                           </li>
                         );
@@ -611,7 +961,7 @@ function SalaCampeonato({
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             {souCamp
-              ? "Parabéns, você levou o título! +50 pontos de soberania."
+              ? `Parabéns, você levou o título! +50 SOV${(camp.premio_sov ?? 0) > 0 ? ` e prêmio de ${camp.premio_sov} SOV` : ""}.`
               : "Parabéns ao campeão!"}
           </p>
           <button onClick={onBack} className="btn-ghost mt-4">
@@ -621,6 +971,11 @@ function SalaCampeonato({
       )}
 
       {erro && <p className="mt-4 text-sm text-red-500">{erro}</p>}
+      {toastLink && (
+        <p className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs break-all">
+          Link copiado: {toastLink}
+        </p>
+      )}
     </main>
   );
 }

@@ -100,9 +100,14 @@ function CidadelaCompView() {
   const [activeGame, setActiveGame] = useState<Game>(null);
   // §11-§13: convite de mesa via link direto (?mesa=mesa_xxx) — abre o fluxo
   // do convidado (3 propostas de clube + cadastro rápido), nunca cai no hub.
+  // §link-camp: convite de campeonato (?camp=CAMP-...) — mesma lógica.
   const [conviteMesaId, setConviteMesaId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("mesa");
+  });
+  const [conviteCampCodigo, setConviteCampCodigo] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("camp");
   });
   const passosTour: PassoTour[] =
     activeGame === "botao" ? PASSOS_TOUR_FUTEBOL : activeGame === "trilha" ? PASSOS_TOUR_TRILHA : [];
@@ -205,17 +210,48 @@ function CidadelaCompView() {
   }
 
   // §11-§13: link de convite de mesa — o convidado escolhe o clube e entra.
+  // Jogador JÁ autenticado pula o convite: vai direto para a mesa.
   if (conviteMesaId) {
+    if (perfil?.user_id) {
+      const mesaAlvo = conviteMesaId;
+      return (
+        <BotaoGame
+          mesaConviteInicial={mesaAlvo}
+          onBack={() => setConviteMesaId(null)}
+        />
+      );
+    }
     return (
       <ConviteMesaScreen
         mesaId={conviteMesaId}
         onPronto={() => {
-          // Conta criada + associada: entra no Estádio (a mesa o aguarda em
-          // Mesas Online). Limpa o parâmetro para não reabrir o convite.
-          setConviteMesaId(null);
+          // Conta criada + associada: entra DIRETO na mesa (link específico),
+          // nunca no hub genérico.
           setActiveGame("botao");
         }}
         onCancelar={() => setConviteMesaId(null)}
+      />
+    );
+  }
+
+  // §link-camp: link direto do campeonato — o convidado cai direto na sala.
+  if (conviteCampCodigo) {
+    if (perfil?.user_id) {
+      return (
+        <BotaoGame
+          campCodigoInicial={conviteCampCodigo}
+          onBack={() => setConviteCampCodigo(null)}
+        />
+      );
+    }
+    return (
+      <ConviteMesaScreen
+        mesaId={conviteCampCodigo}
+        modo="campeonato"
+        onPronto={() => {
+          setActiveGame("botao");
+        }}
+        onCancelar={() => setConviteCampCodigo(null)}
       />
     );
   }
@@ -383,7 +419,7 @@ function CidadelaCompView() {
             </button>
             <span>•</span>
             <button onClick={() => openModal("soberania")} className="hover:text-primary transition-colors">
-              Soberania
+              SOV
             </button>
           </div>
           <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
@@ -414,7 +450,7 @@ function CidadelaCompView() {
       <InfoModal
         isOpen={activeModal === "soberania"}
         onClose={closeModal}
-        title="Economia de Soberania"
+        title="Economia SOV"
         content={SEO_CONTENT.soberania}
       />
 
@@ -435,6 +471,15 @@ function CidadelaCompView() {
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
         saldoSov={saldoSov}
+        clube={
+          career
+            ? {
+                nome: perfil?.time_personalizado || "Clube",
+                caixa: career.clubeCaixa ?? 0,
+                extrato: career.clubeExtrato ?? [],
+              }
+            : undefined
+        }
         bolsa={career?.bolsa}
         statsCarreira={
           career

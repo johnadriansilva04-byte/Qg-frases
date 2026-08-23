@@ -80,7 +80,7 @@ export function TitleCeremony({ coach, timeName, difficulty, soberaniaAdd, onCon
         </div>
 
         <div className="grid grid-cols-3 gap-3 border-y border-white/10 py-4">
-          <Stat label="Soberania" value={`+${soberaniaAdd}`} accent />
+          <Stat label="SOV" value={`+${soberaniaAdd}`} accent />
           <Stat label="Título" value={`${coach.titulos + 1}º`} />
           <Stat label="Campanhas" value={String(coach.campanhasJogadas)} />
         </div>

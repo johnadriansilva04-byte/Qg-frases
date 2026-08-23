@@ -928,7 +928,26 @@ export type Database = {
     };
     Functions: {
       criar_campeonato_online: {
-        Args: { p_nome?: string; p_max?: number };
+        Args: { p_nome?: string; p_max?: number; p_premio_sov?: number };
+        Returns: Json;
+      };
+      preencher_campeonato_bots: {
+        Args: { p_codigo: string; p_bots: Json };
+        Returns: Json;
+      };
+      resolver_confronto_bots: {
+        Args: {
+          p_campeonato_id: number;
+          p_rodada: number;
+          p_j1: string;
+          p_j2: string;
+          p_gols_j1: number;
+          p_gols_j2: number;
+        };
+        Returns: Json;
+      };
+      pagar_premio_mesa: {
+        Args: { p_mesa_id: string };
         Returns: Json;
       };
       entrar_campeonato_online: {

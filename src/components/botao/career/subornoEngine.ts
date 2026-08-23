@@ -253,7 +253,7 @@ export const SUBORNO_NODES: Record<string, SubornoNode> = {
     id: "flagrante2",
     cena:
       "A polícia entra no momento da entrega. O esquema é desbaratado. " +
-      "Você vira símbolo da limpa no futebol de botão. Soberania dispara — " +
+      "Você vira símbolo da limpa no futebol de botão. SOV dispara — " +
       "mas a insegurança segue: cada novo estranho pode ser um novo emissário.",
     final: true,
     desfecho: "denuncia",

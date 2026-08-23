@@ -29,6 +29,9 @@ import { SOV_BANK } from "@/lib/financial/sovBankConfig";
 import { obterSaldosInvest } from "@/lib/financial/sovInvestApi";
 
 type Aba = "extrato" | "noticias" | "economia";
+/** Toda seção de conteúdo do banco abre sob demanda (clique) e só UMA fica
+ *  aberta por vez — a tela do celular nunca amontoa listas. */
+type Secao = Aba | "ultimas" | "extrato-clube";
 
 const MODULO_LABEL: Record<string, string> = {
   career: "Modo Carreira",
@@ -84,7 +87,7 @@ export function SovBankApp({
    *  dinheiro pessoal. Quando ausente, o bloco do clube não aparece. */
   clube?: { nome: string; caixa: number; extrato: TransacaoClube[] } | undefined;
 }) {
-  const [aba, setAba] = useState<Aba>("extrato");
+  const [secaoAberta, setSecaoAberta] = useState<Secao | null>(null);
   const [saldo, setSaldo] = useState<number | null>(null);
   const [saldoInvest, setSaldoInvest] = useState<number | null>(null);
   const [extrato, setExtrato] = useState<ExtratoItem[]>([]);
@@ -92,8 +95,10 @@ export function SovBankApp({
   const [stats, setStats] = useState<EstatisticasEconomia | null>(null);
   const [reconciliacao, setReconciliacao] = useState<Reconciliacao | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [extratoAberto, setExtratoAberto] = useState(false);
-  const [extratoClubeAberto, setExtratoClubeAberto] = useState(false);
+  const extratoAberto = secaoAberta === "ultimas";
+  const extratoClubeAberto = secaoAberta === "extrato-clube";
+  const alternarSecao = (secao: Secao) =>
+    setSecaoAberta((atual) => (atual === secao ? null : secao));
 
   const carregar = useCallback(async () => {
     if (!userId) {
@@ -236,7 +241,7 @@ export function SovBankApp({
           </div>
           <button
             data-testid="extrato-clube-toggle"
-            onClick={() => setExtratoClubeAberto((v) => !v)}
+            onClick={() => alternarSecao("extrato-clube")}
             className="mt-3 flex w-full items-center justify-between rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-300 hover:border-sky-400/40"
           >
             <span className="flex items-center gap-1.5">
@@ -280,7 +285,7 @@ export function SovBankApp({
       <div className="mb-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
         <button
           data-testid="extrato-toggle"
-          onClick={() => setExtratoAberto((v) => !v)}
+          onClick={() => alternarSecao("ultimas")}
           className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500"
         >
           <span>Últimas movimentações</span>
@@ -302,62 +307,67 @@ export function SovBankApp({
           ))}
       </div>
 
-      {/* Abas */}
-      <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-900/80 p-1">
+      {/* Seções sob demanda: título → clique → expansão (uma por vez). */}
+      <div className="space-y-2">
         {(
           [
-            ["extrato", ReceiptText, "Extrato"],
+            ["extrato", ReceiptText, `Extrato completo (${extrato.length})`],
             ["noticias", Newspaper, "Notícias"],
             ["economia", PieChart, "Economia"],
           ] as const
         ).map(([id, Icon, label]) => (
-          <button
+          <div
             key={id}
-            onClick={() => setAba(id)}
-            className={`flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold transition ${
-              aba === id
-                ? "bg-amber-300 text-slate-950"
-                : "text-slate-400 hover:text-white"
-            }`}
+            className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
           >
-            <Icon className="size-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
+            <button
+              data-testid={`secao-${id}-toggle`}
+              onClick={() => alternarSecao(id)}
+              className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-slate-300"
+            >
+              <span className="flex items-center gap-1.5">
+                <Icon className="size-3.5 text-amber-200/70" />
+                {label}
+              </span>
+              {secaoAberta === id ? (
+                <ChevronUp className="size-4" />
+              ) : (
+                <ChevronDown className="size-4" />
+              )}
+            </button>
 
-      {aba === "extrato" && (
-        <div className="space-y-1.5">
-          {extrato.length === 0 && !carregando && (
-            <p className="py-4 text-center text-xs text-slate-500">Extrato vazio.</p>
-          )}
-          {extrato.map((item) => (
-            <LinhaMovimentacao key={item.id} item={item} />
-          ))}
-        </div>
-      )}
+            {id === "extrato" && secaoAberta === "extrato" && (
+              <div className="mt-2 space-y-1.5">
+                {extrato.length === 0 && !carregando && (
+                  <p className="py-4 text-center text-xs text-slate-500">Extrato vazio.</p>
+                )}
+                {extrato.map((item) => (
+                  <LinhaMovimentacao key={item.id} item={item} />
+                ))}
+              </div>
+            )}
 
-      {aba === "noticias" && (
-        <div className="space-y-2">
-          {noticias.length === 0 && !carregando && (
-            <p className="py-4 text-center text-xs text-slate-500">
-              Sem boletins econômicos no momento.
-            </p>
-          )}
-          {noticias.map((n, i) => (
-            <div key={i} className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-              <p className="text-xs font-bold text-amber-200">{n.titulo}</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-300">{n.corpo}</p>
-              <p className="mt-1 text-[9px] uppercase tracking-widest text-slate-600">
-                Fonte: {n.fonte}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+            {id === "noticias" && secaoAberta === "noticias" && (
+              <div className="mt-2 space-y-2">
+                {noticias.length === 0 && !carregando && (
+                  <p className="py-4 text-center text-xs text-slate-500">
+                    Sem boletins econômicos no momento.
+                  </p>
+                )}
+                {noticias.map((n, i) => (
+                  <div key={i} className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
+                    <p className="text-xs font-bold text-amber-200">{n.titulo}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-300">{n.corpo}</p>
+                    <p className="mt-1 text-[9px] uppercase tracking-widest text-slate-600">
+                      Fonte: {n.fonte}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
-      {aba === "economia" && (
-        <div className="space-y-2">
+            {id === "economia" && secaoAberta === "economia" && (
+        <div className="mt-2 space-y-2">
           {!stats && !carregando && (
             <p className="py-4 text-center text-xs text-slate-500">
               Estatísticas indisponíveis neste ambiente.
@@ -406,7 +416,10 @@ export function SovBankApp({
             </>
           )}
         </div>
-      )}
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

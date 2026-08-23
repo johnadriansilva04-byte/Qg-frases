@@ -561,7 +561,7 @@ export function CelularConversas({
                   setConversaSelecionada(null);
                 }}
                 className="flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-1 transition hover:bg-amber-400/20"
-                title="Saldo de Soberania — abrir o Banco"
+                title="Saldo de SOV — abrir o Banco"
               >
                 <Coins className="size-3.5 text-amber-300" />
                 <span className="text-[11px] font-black tabular-nums text-amber-200">

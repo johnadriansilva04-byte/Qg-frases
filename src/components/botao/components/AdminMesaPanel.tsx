@@ -18,7 +18,9 @@ type Props = {
 export function AdminMesaPanel({ mesa, userId, onVoltar, onEntrar, onCopiarLink }: Props) {
   const souCriador = mesa.jogador_1_id === userId;
   const aposta = mesa.aposta_sov ?? 0;
-  const arrecadado = aposta * (mesa.jogador_2_id ? 2 : 1);
+  // Arrecadado REAL: aposta × quantos jogadores já pagaram (cobrança no servidor).
+  const pagantes = mesa.aposta_cobrada_de?.length ?? 0;
+  const arrecadado = aposta * Math.max(pagantes, mesa.jogador_2_id ? 2 : 1);
   const bloqueada =
     mesa.data_liberacao != null && new Date(mesa.data_liberacao).getTime() > Date.now();
   const statusLabel =
@@ -78,13 +80,31 @@ export function AdminMesaPanel({ mesa, userId, onVoltar, onEntrar, onCopiarLink 
               <Crown className="size-4 text-amber-300" />
               <span className="text-sm font-semibold text-white">{mesa.time_j1}</span>
             </div>
-            <span className="text-[10px] uppercase tracking-widest text-amber-300">Criador</span>
+            <span className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-amber-300">
+              {aposta > 0 && (mesa.aposta_cobrada_de ?? []).includes(mesa.jogador_1_id) && (
+                <span className="text-emerald-300">aposta paga</span>
+              )}
+              Criador
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2">
             <span className="text-sm font-semibold text-white">
               {mesa.time_j2 ?? "Aguardando convidado..."}
             </span>
-            <span className="text-[10px] uppercase tracking-widest text-slate-500">
+            <span className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-slate-500">
+              {aposta > 0 && mesa.jogador_2_id && (
+                <span
+                  className={
+                    (mesa.aposta_cobrada_de ?? []).includes(mesa.jogador_2_id)
+                      ? "text-emerald-300"
+                      : "text-rose-300"
+                  }
+                >
+                  {(mesa.aposta_cobrada_de ?? []).includes(mesa.jogador_2_id)
+                    ? "aposta paga"
+                    : "aposta pendente"}
+                </span>
+              )}
               {mesa.jogador_2_id ? "Convidado" : "vaga aberta"}
             </span>
           </div>

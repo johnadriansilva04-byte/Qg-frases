@@ -218,3 +218,13 @@ export async function trocarTurnoMesa(mesaId: string): Promise<MesaFutebol | nul
   if (error) throw error;
   return data as MesaFutebol | null;
 }
+
+/**
+ * Paga o pote da aposta da mesa (zero-sum, idempotente): vencedor leva 2× a
+ * aposta; empate finalizado devolve a aposta de cada um.
+ */
+export async function pagarPremioMesa(mesaId: string): Promise<unknown> {
+  const { data, error } = await supabase.rpc("pagar_premio_mesa", { p_mesa_id: mesaId });
+  if (error) throw error;
+  return data;
+}

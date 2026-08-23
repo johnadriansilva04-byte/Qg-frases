@@ -36,6 +36,7 @@ import {
   saveTournamentToSupabase,
   adicionarPontosVideo,
   mutateProgressInSupabase,
+  reconciliarTrofeusCarreira,
   type Progress,
 } from "./storage";
 import {
@@ -264,6 +265,10 @@ type Screen =
 
 interface BotaoGameProps {
   onBack?: () => void;
+  /** Link direto de mesa (?mesa=...): abre o amistoso online já entrando nela. */
+  mesaConviteInicial?: string | undefined;
+  /** Link direto de campeonato (?camp=...): abre a sala do campeonato direto. */
+  campCodigoInicial?: string | undefined;
 }
 
 /** Chave do resume pós-F5 (sessionStorage, por aba e por usuário). */
@@ -292,9 +297,13 @@ function bonusCampeao(dificuldade: Difficulty): number {
   return POINTS.CAMPEAO_BASE + bonus;
 }
 
-export function BotaoGame({ onBack }: BotaoGameProps = {}) {
+export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: BotaoGameProps = {}) {
   const { perfil, carregando, logout, aplicarPerfil, recarregar, contaSemCadastro } = useBotaoAuth();
-  const [screen, setScreen] = useState<Screen>("menu");
+  // Link direto (?mesa= / ?camp=): a tela inicial já é o fluxo da sala —
+  // o convidado nunca precisa procurar a mesa/campeonato.
+  const [screen, setScreen] = useState<Screen>(
+    mesaConviteInicial ? "online" : campCodigoInicial ? "online-championship" : "menu",
+  );
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
@@ -610,6 +619,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         ts: number;
       };
       // Só restaura para o MESMO usuário e por até 2h (sessão recente).
+      // Link direto (?mesa=/?camp=) NÃO restaura tela antiga — a sala manda.
+      if (mesaConviteInicial || campCodigoInicial) return;
       if (salvo.uid !== uid || Date.now() - salvo.ts > 2 * 3600_000) return;
       if (salvo.patrocinioPagoPartida) setPatrocinioPagoPartida(salvo.patrocinioPagoPartida);
       if (salvo.matchEnd) {
@@ -806,10 +817,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       setLoading(true);
 
       try {
-        const [remoteProgress, remoteCareer] = await Promise.all([
+        const [remoteProgressRaw, remoteCareer] = await Promise.all([
           loadProgressFromSupabase(userId),
           loadCareerFromSupabase(userId),
         ]);
+
+        // Sala de Troféus reflete os títulos da carreira: contas antigas com
+        // títulos no ranking e sala vazia são reconciliadas na entrada
+        // (idempotente — o limite é a contagem de títulos do treinador).
+        const remoteProgress = reconciliarTrofeusCarreira(remoteProgressRaw, remoteCareer);
+        if (remoteProgress.trophies.length !== remoteProgressRaw.trophies.length) {
+          void saveProgressToSupabase(userId, remoteProgress);
+        }
 
         setProgress(remoteProgress);
         let careerHidratada = remoteCareer;
@@ -917,7 +936,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // "Carreira no Campus" → "Continuar Campanha" (estado já persistido).
         // EXCEÇÃO: se um refresh (F5) restaurou uma tela da sessão, ela manda —
         // a hidratação só repõe os dados, não muda a tela.
-        if (!telaRestauradaRef.current) setScreen("menu");
+        // Link direto (?mesa=/?camp=): a tela da sala vence o restore — o
+        // convidado NÃO é jogado de volta ao menu pela hidratação.
+        if (!telaRestauradaRef.current && !mesaConviteInicial && !campCodigoInicial) setScreen("menu");
       } catch (error) {
         hydratedUserRef.current = null;
         console.error("[BotaoGame] Erro ao hidratar campanha do Supabase:", error);
@@ -1897,19 +1918,39 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     tourRef.current = ligaFinal;
     if (perfil?.user_id) {
       void registrarPartidaRemota(perfil.user_id, novaCareer, userTeam.id, f, r, "brasileirao");
+      // O fluxo real atualiza partidas_jogadas/partidas_vencidas via
+      // aplicarResultadoRemoto — o harness simula local e precisa manter os
+      // mesmos contadores (perfil/ranking/leitura pública refletem a partida).
+      void mutateProgressInSupabase(perfil.user_id, (prog, row) => ({
+        patch: {
+          gols_feitos: ((prog["gols_feitos"] as number | undefined) ?? 0) + gf,
+          gols_sofridos: ((prog["gols_sofridos"] as number | undefined) ?? 0) + ga,
+        },
+        extraColumns: {
+          partidas_jogadas: ((row["partidas_jogadas"] as number | undefined) ?? 0) + 1,
+          partidas_vencidas:
+            ((row["partidas_vencidas"] as number | undefined) ?? 0) + (gf > ga ? 1 : 0),
+        },
+      }));
     }
 
     // 4) Fim da liga → veredito (tela real de fim de temporada).
     if (ligaCompleta && ligaFinal.format === "pontos-corridos") {
       {
         persistTournament(ligaFinal);
+        const campeaoLiga = ligaFinal.champion === userTeam.id;
         novaCareer = {
           ...novaCareer,
           ligas: ligasAtualizadas
             ? { ...ligasAtualizadas, [careerAtual.divisao]: ligaFinal }
             : novaCareer.ligas,
-          coach: { ...novaCareer.coach, titulos: novaCareer.coach.titulos + (ligaFinal.champion === userTeam.id ? 1 : 0) },
+          coach: { ...novaCareer.coach, titulos: novaCareer.coach.titulos + (campeaoLiga ? 1 : 0) },
         };
+        // O título da carreira também entra na Sala de Troféus (mesma regra
+        // do fluxo real — a sala nunca fica vazia com títulos no ranking).
+        if (campeaoLiga) {
+          persist(reconciliarTrofeusCarreira(progress, { coach: { titulos: novaCareer.coach.titulos } }));
+        }
         // Premiação de fim de campanha entra no caixa do clube — por posição,
         // na escala da divisão (campeão embolsa o bônus de título).
         const posicaoFinal =
@@ -1968,6 +2009,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       avancarTemporada: startNextSeason,
       evoluirBotao: handleEvoluirBotao,
       identidadeBotao: handleIdentidadeBotao,
+      aceitarTransferencia: handleAceitarTransferencia,
+      recusarTransferencia: handleRecusarTransferencia,
       setScreen,
     };
   });
@@ -2732,8 +2775,13 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
     // Campeão da copa: bônus de Soberania + manchete.
     let novas: Headline[] = [];
+    let novoTitulos = career.coach.titulos;
     if (copa.finished && copa.champion === userTeam.id) {
       novaSov += bonusCampeao(tour?.difficulty ?? difficulty);
+      // O título da Copa também conta para o treinador e entra na Sala de
+      // Troféus (antes só incrementava SOV — o troféu nunca aparecia).
+      novoTitulos += 1;
+      persist(reconciliarTrofeusCarreira(progress, { coach: { titulos: novoTitulos } }));
       // (a premiação entra no caixa do clube mais abaixo, via deltaCopaVal)
       novas = [
         {
@@ -2763,7 +2811,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...career,
       copaBrasil: copa,
       moralTime: moral,
-      coach: { ...career.coach },
+      coach: { ...career.coach, titulos: novoTitulos },
     };
     if (deltaCopaVal > 0) {
       const r1 = registrarReceitaClube(
@@ -3049,6 +3097,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         if (t.champion === t.userTeamId) {
           novoTitulos += 1;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
+          // O título da carreira também entra na Sala de Troféus (antes só
+          // o torneio amistoso gravava lá — a sala ficava vazia com títulos).
+          persist(reconciliarTrofeusCarreira(progress, { coach: { titulos: novoTitulos } }));
           // Cerimônia de premiação!
           setCeremonyBonus(bonusCampeao(t.difficulty));
           setShowCeremony(true);
@@ -3784,7 +3835,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
               </button>
             </div>
           ) : (
-            <OnlineMatchV3 onBack={() => setScreen("menu")} onEstadoPartida={setEmPartidaOnline} />
+            <OnlineMatchV3
+              onBack={() => setScreen("menu")}
+              onEstadoPartida={setEmPartidaOnline}
+              mesaInicialId={mesaConviteInicial}
+            />
           )}
         </div>
       </Shell>
@@ -3815,6 +3870,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             <OnlineChampionship
               onBack={() => setScreen("menu")}
               onEstadoPartida={setEmPartidaOnline}
+              codigoInicial={campCodigoInicial}
             />
           )}
         </div>
@@ -4065,6 +4121,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           naoLidas={naoLidasCelular}
           perfilCidadela={perfilCidadela}
           saldoSov={saldoSov}
+          clube={
+            career
+              ? {
+                  nome: perfil?.time_personalizado || "Clube",
+                  caixa: career.clubeCaixa ?? 0,
+                  extrato: career.clubeExtrato ?? [],
+                }
+              : undefined
+          }
         />
       </Shell>
     );
@@ -4155,7 +4220,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         {screen === "tournament-setup" && (
           <Setup
             title="Carreira no Campus"
-            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver Soberania."
+            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver SOV."
             userTeam={userTeam}
             rivalTeam={rivalTeam}
             setRivalTeam={setRivalTeam}
@@ -4561,7 +4626,9 @@ function TrophyRoom({
   onBack: () => void;
 }) {
   const getTeam = (teamId: string): Team => {
-    if (teamId === userTeam.id) return userTeam;
+    // "carreira" = título conquistado no Modo Carreira (Brasileirão/Copa) —
+    // o troféu é do time do jogador.
+    if (teamId === userTeam.id || teamId === "carreira") return userTeam;
     return teamByIdSync(teamId);
   };
 

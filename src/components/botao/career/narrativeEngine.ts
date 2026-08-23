@@ -395,7 +395,7 @@ function construirArco(
           {
             id: "aceitar",
             texto: "Aceitar a propina",
-            descricao: "Lucro imediato. Soberania despenca, moral afunda.",
+            descricao: "Lucro imediato. SOV despenca, moral afunda.",
             proximoId: `${estadoId}-propina`,
             efeitos: { sov: -10, moral: -8, bonusPoder: 2, flag: "aceitou_dinheiro" },
             riscoAlto: true,

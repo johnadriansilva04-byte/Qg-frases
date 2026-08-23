@@ -1,34 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
 import { Swords, Users, Check, ChevronRight } from "lucide-react";
 import { buscarMesa, linkConviteMesa, type MesaFutebol } from "@/lib/multiplayer/mesa.api";
+import { buscarCampeonato, type CampeonatoOnline } from "@/lib/multiplayer/campeonato.api";
 import { TEAMS, type Team } from "@/components/botao/data/teams";
 import { gerarOfertasIniciais, type OfertaClube } from "@/components/botao/career/ofertasIniciais";
 import { distribuirTorcidaInicial } from "@/components/botao/career/torcidaEngine";
 import { PORTE_LABEL } from "@/components/botao/career/forcaClube";
+import { PROFISSOES, escolherProfissao, type ProfissaoId } from "@/lib/cidadela/profissoes";
 import { cadastrar, type Perfil } from "./auth";
 
 type Props = {
+  /** mesa_x (modo "mesa") ou CAMP-x (modo "campeonato"). */
   mesaId: string;
+  modo?: "mesa" | "campeonato";
   onPronto: (perfil: Perfil) => void;
   onCancelar: () => void;
 };
 
 /**
- * Fluxo do convidado por link de mesa (§12-§13): NÃO cai num cadastro
- * genérico — vê a tela do campeonato com 3 propostas de clube, escolhe uma,
- * informa só nome + e-mail, e entra direto na mesa. A conta criada é um
- * usuário normal (com origem registrada como convite de mesa).
+ * Fluxo do convidado por link (§12-§13 + §link): NÃO cai num cadastro
+ * genérico — vê a tela do campeonato/mesa com 3 propostas de clube, escolhe
+ * uma, informa nome + e-mail, escolhe a profissão (1 pergunta, sem tour) e
+ * entra direto na mesa/sala. A conta criada é um usuário normal.
  */
-export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
+export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar }: Props) {
   const [mesa, setMesa] = useState<MesaFutebol | null>(null);
+  const [camp, setCamp] = useState<CampeonatoOnline | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [clube, setClube] = useState<OfertaClube | null>(null);
+  const [profissao, setProfissao] = useState<ProfissaoId | null>(null);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  // 3 propostas de clubes (pequenos) determinísticas por mesa (§12).
+  // 3 propostas de clubes (pequenos) determinísticas por convite (§12).
   const ofertas = useMemo(() => {
     const clubesC = TEAMS.filter((t) => t.divisaoInicial === "serie-c").map((t) => ({
       id: t.id,
@@ -47,33 +53,53 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
 
   useEffect(() => {
     let vivo = true;
-    void buscarMesa(mesaId)
-      .then((m) => {
-        if (vivo) setMesa(m);
-      })
-      .catch(() => {
-        if (vivo) setErro("Não foi possível abrir o convite desta mesa.");
-      })
-      .finally(() => {
-        if (vivo) setCarregando(false);
-      });
+    if (modo === "campeonato") {
+      void buscarCampeonato(mesaId)
+        .then((c) => {
+          if (vivo) setCamp(c);
+        })
+        .catch(() => {
+          if (vivo) setErro("Não foi possível abrir o convite deste campeonato.");
+        })
+        .finally(() => {
+          if (vivo) setCarregando(false);
+        });
+    } else {
+      void buscarMesa(mesaId)
+        .then((m) => {
+          if (vivo) setMesa(m);
+        })
+        .catch(() => {
+          if (vivo) setErro("Não foi possível abrir o convite desta mesa.");
+        })
+        .finally(() => {
+          if (vivo) setCarregando(false);
+        });
+    }
     return () => {
       vivo = false;
     };
-  }, [mesaId]);
+  }, [mesaId, modo]);
 
+  const conviteValido = modo === "campeonato" ? camp !== null : mesa !== null;
   const bloqueada =
-    mesa?.data_liberacao != null && new Date(mesa.data_liberacao).getTime() > Date.now();
-  const cheia = mesa?.jogador_2_id != null;
+    modo === "mesa" &&
+    mesa?.data_liberacao != null &&
+    new Date(mesa.data_liberacao).getTime() > Date.now();
+  const cheia =
+    modo === "mesa"
+      ? mesa?.jogador_2_id != null
+      : camp != null && camp.participantes.length >= camp.max_jogadores;
+  const fechado = modo === "campeonato" && camp != null && camp.status !== "aguardando";
 
   const confirmar = async () => {
-    if (!clube || !nome.trim() || !email.trim()) return;
+    if (!clube || !nome.trim() || !email.trim() || !profissao) return;
     setEnviando(true);
     setErro(null);
     try {
       // Cadastro rápido (§13): nome + e-mail + clube escolhido. A senha é
       // gerada e o usuário define/ redefine depois — a conta é um usuário
-      // normal com origem registrada como convite de mesa.
+      // normal com origem registrada como convite.
       const senhaProvisoria = `convite-${mesaId.slice(-6)}-${Math.random().toString(36).slice(2, 8)}`;
       const timeClube: Team | undefined = TEAMS.find((t) => t.id === clube.clubeId);
       const coresClube: [string, string, string] = timeClube
@@ -88,7 +114,7 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
         numero: 7,
         cores: coresClube,
       });
-      // Origem registrada: convite de mesa (não quebra se a coluna não existir).
+      // Origem registrada: convite (não quebra se a coluna não existir).
       try {
         const { supabase } = await import("@/integrations/supabase/client");
         await (supabase.rpc as CallableFunction)("atualizar_perfil_clube", {
@@ -103,6 +129,8 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
       } catch {
         /* perfil já criado pelo cadastro */
       }
+      // Profissão escolhida em UMA pergunta — cadastro concluído, sem tour.
+      await escolherProfissao(perfil.user_id, profissao).catch(() => null);
       onPronto(perfil);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível criar sua conta.");
@@ -128,9 +156,17 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
               Voltar
             </button>
           </div>
-        ) : !mesa ? (
+        ) : !conviteValido ? (
           <div className="py-6 text-center">
             <p className="text-sm text-slate-400">Este convite não existe mais.</p>
+            <button onClick={onCancelar} className="btn-ghost mt-4">
+              Voltar
+            </button>
+          </div>
+        ) : fechado ? (
+          <div className="py-6 text-center">
+            <p className="text-sm text-amber-300">Este campeonato já começou.</p>
+            <p className="mt-1 text-xs text-slate-500">Peça um novo convite ao organizador.</p>
             <button onClick={onCancelar} className="btn-ghost mt-4">
               Voltar
             </button>
@@ -147,7 +183,9 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
           </div>
         ) : cheia ? (
           <div className="py-6 text-center">
-            <p className="text-sm text-amber-300">Esta mesa já está cheia.</p>
+            <p className="text-sm text-amber-300">
+              {modo === "campeonato" ? "Este campeonato já está cheio." : "Esta mesa já está cheia."}
+            </p>
             <p className="mt-1 text-xs text-slate-500">Peça um novo convite ao organizador.</p>
             <button onClick={onCancelar} className="btn-ghost mt-4">
               Voltar
@@ -156,8 +194,15 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
         ) : (
           <>
             <h2 className="font-display text-2xl leading-snug">
-              Bem-vindo! Você vai participar deste campeonato.
+              Bem-vindo! Você vai participar{" "}
+              {modo === "campeonato" ? "deste campeonato." : "desta mesa."}
             </h2>
+            {modo === "campeonato" && camp && (
+              <p className="mt-1 text-xs text-amber-300">
+                {camp.nome} · {camp.participantes.length}/{camp.max_jogadores} jogadores
+                {(camp.premio_sov ?? 0) > 0 && ` · prêmio ${camp.premio_sov} SOV`}
+              </p>
+            )}
             <p className="mt-1 text-sm text-muted-foreground">
               Três clubes querem que você administre, treine e comande um deles durante este
               campeonato. Qual clube você escolhe?
@@ -240,6 +285,33 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
               </div>
             )}
 
+            {clube && (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-300">
+                  Sua profissão na Cidadela
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Escolha qual profissão você quer ter na Cidadela antes de começar o campeonato.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2" data-testid="convite-profissoes">
+                  {PROFISSOES.filter((p) => p.disponivel).map((p) => (
+                    <button
+                      key={p.id}
+                      data-testid={`convite-profissao-${p.id}`}
+                      onClick={() => setProfissao(p.id)}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                        profissao === p.id
+                          ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-200"
+                          : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-emerald-500/40"
+                      }`}
+                    >
+                      {p.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mt-6 flex items-center justify-between gap-3">
               <button onClick={onCancelar} className="btn-ghost">
                 Voltar
@@ -247,15 +319,25 @@ export function ConviteMesaScreen({ mesaId, onPronto, onCancelar }: Props) {
               <button
                 data-testid="convite-confirmar"
                 onClick={() => void confirmar()}
-                disabled={!clube || nome.trim().length < 2 || !/.+@.+\..+/.test(email) || enviando}
+                disabled={
+                  !clube ||
+                  !profissao ||
+                  nome.trim().length < 2 ||
+                  !/.+@.+\..+/.test(email) ||
+                  enviando
+                }
                 className="btn-primary gap-2 disabled:opacity-50"
               >
-                {enviando ? "Entrando..." : `Comandar o ${clube?.sigla ?? ""}`}
+                {enviando
+                  ? "Entrando..."
+                  : modo === "campeonato"
+                    ? "Entrar no campeonato"
+                    : `Comandar o ${clube?.sigla ?? ""}`}
                 <ChevronRight className="size-4" />
               </button>
             </div>
             <p className="mt-3 text-[10px] text-slate-600">
-              Link desta mesa: {linkConviteMesa(mesaId)}
+              Link deste convite: {linkConviteMesa(mesaId)}
             </p>
           </>
         )}

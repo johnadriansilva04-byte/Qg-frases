@@ -247,6 +247,15 @@ function CampusView() {
         historia={career?.historia}
         naoLidas={career?.conversas?.filter((c) => c.naoLida).length ?? 0}
         saldoSov={saldoSov}
+        clube={
+          career
+            ? {
+                nome: perfil?.time_personalizado || "Clube",
+                caixa: career.clubeCaixa ?? 0,
+                extrato: career.clubeExtrato ?? [],
+              }
+            : undefined
+        }
         bolsa={career?.bolsa}
       />
     </div>

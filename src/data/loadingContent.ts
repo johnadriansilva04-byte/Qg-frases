@@ -32,7 +32,7 @@ export const LOADING_CONTENT: Record<LoadingCategoria, IntroTexto[]> = {
     },
     {
       titulo: "Dica de SOV",
-      corpo: "Soberania gasta mal vira dívida narrativa. Pague contas do clube antes de assumir novos desafios.",
+      corpo: "SOV gasto mal vira dívida narrativa. Pague contas do clube antes de assumir novos desafios.",
     },
     {
       titulo: "Dica do Celular",

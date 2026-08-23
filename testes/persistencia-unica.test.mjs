@@ -307,10 +307,44 @@ expect(
   sovBankApp.includes("extratoAberto") && sovBankApp.includes("extratoClubeAberto"),
   "SovBankApp: extratos recolhíveis (clique para expandir)",
 );
+expect(
+  sovBankApp.includes("useState<Secao | null>(null)") &&
+    sovBankApp.includes("alternarSecao") &&
+    !sovBankApp.includes('useState<Aba>("extrato")'),
+  "SovBankApp: TODAS as seções fechadas por padrão (acordeão, uma aberta por vez)",
+);
+expect(
+  sovBankApp.includes('secaoAberta === "extrato"') &&
+    sovBankApp.includes('secaoAberta === "noticias"') &&
+    sovBankApp.includes('secaoAberta === "economia"'),
+  "SovBankApp: Extrato/Notícias/Economia só renderizam sob demanda (clique)",
+);
 const celularConv = ler("src/components/botao/career/CelularConversas.tsx");
 expect(
   celularConv.includes("clube={clube}") && celularConv.includes("SovBankApp userId"),
   "Celular: aba Banco recebe o Perfil do Clube",
+);
+
+// 23b. Título da carreira (liga + Copa) entra na Sala de Troféus — a sala
+// nunca fica vazia com títulos no ranking; contas antigas reconciliam no F5.
+const storageTs = ler("src/components/botao/storage.ts");
+expect(
+  storageTs.includes("reconciliarTrofeusCarreira") && storageTs.includes('"carreira"'),
+  "storage: reconciliarTrofeusCarreira (títulos da carreira → sala de troféus)",
+);
+expect(
+  bj.includes("reconciliarTrofeusCarreira(progress") &&
+    bj.includes("novoTitulos += 1") &&
+    bj.includes('teamId === "carreira"'),
+  "BotaoGame: título da liga + Copa gravam troféu e o render resolve o time",
+);
+expect(
+  bj.includes("reconciliarTrofeusCarreira(remoteProgressRaw, remoteCareer)"),
+  "BotaoGame: hidratação reconcilia troféus de contas antigas (F5 seguro)",
+);
+expect(
+  bj.includes("partidas_vencidas:") && bj.includes("simularPartidaE2E"),
+  "BotaoGame: harness E2E mantém contadores de perfil (partidas/vitórias)",
 );
 
 // 24. §6: ofertas de transferência por data + área de negociação.
@@ -354,6 +388,93 @@ expect(
   rotaCidadela.includes("conviteMesaId") && rotaCidadela.includes('get("mesa")'),
   "rota /cidadela: parâmetro ?mesa= abre o fluxo do convidado",
 );
+
+// === Campeonato Online v2 (link direto, bots, 50 SOV, aposta real) ===
+const campV2Sql = ler("supabase/migrations/campeonato_online_v2.sql");
+expect(
+  campV2Sql.includes("preencher_campeonato_bots") &&
+    campV2Sql.includes("so o dono da sala pode preencher com bots") &&
+    campV2Sql.includes("resolver_confronto_bots") &&
+    campV2Sql.includes("pelo menos 50 SOV"),
+  "migration v2: bots (dono-only) + resolver bot×bot + regra 50 SOV",
+);
+expect(
+  campV2Sql.includes("ARRAY[v_idx]::TEXT[]") && !campV2Sql.includes("v_confrontos[v_idx + 1]"),
+  "migration v2: indexação jsonb 0-based corrigida (off-by-one eliminado)",
+);
+expect(
+  campV2Sql.includes("pagar_premio_mesa") &&
+    campV2Sql.includes("aposta_cobrada_de") &&
+    campV2Sql.includes("sov_bank_registrar"),
+  "migration v2: aposta cobrada no servidor + prêmio idempotente",
+);
+expect(
+  campV2Sql.includes("p_amount < 0 AND v_new_balance < 0"),
+  "migration v2: record_transaction — crédito NUNCA bloqueado em conta negativa",
+);
+expect(
+  campV2Sql.includes("'finalizado' ELSE 'pendente' END") ||
+    campV2Sql.includes("THEN 'finalizado' ELSE 'pendente'"),
+  "migration v2: bye nasce finalizado (rodada nunca trava em número ímpar)",
+);
+const campApi = ler("src/lib/multiplayer/campeonato.api.ts");
+expect(
+  campApi.includes("linkConviteCampeonato") &&
+    campApi.includes("preencherCampeonatoComBots") &&
+    campApi.includes("simularConfrontoBots"),
+  "campeonato.api: link direto + preencher bots + simulação determinística",
+);
+const onlineCamp = ler("src/components/botao/components/OnlineChampionship.tsx");
+expect(
+  onlineCamp.includes("Preencher com Bots") &&
+    onlineCamp.includes("campeonato.criador_id !== userId") &&
+    onlineCamp.includes("SOV_MINIMO_CAMPEONATO"),
+  "OnlineChampionship: botão bots só do dono + regra 50 SOV",
+);
+expect(
+  onlineCamp.includes("admin-campeonato-panel") &&
+    onlineCamp.includes("premio_sov") &&
+    onlineCamp.includes("32"),
+  "OnlineChampionship: painel admin com vagas/humanos/bots/prêmio + salas de 32",
+);
+expect(
+  onlineCamp.includes("adversario?.bot") && onlineCamp.includes("MatchView"),
+  "OnlineChampionship: confronto contra bot joga no motor local (MatchView)",
+);
+expect(
+  onlineV3.includes("pagarPremioMesa") && !onlineV3.includes("aplicarApostaSoberania"),
+  "OnlineMatchV3: aposta paga no servidor (nunca delta local)",
+);
+expect(
+  rotaCidadela.includes("conviteCampCodigo") &&
+    rotaCidadela.includes('get("camp")') &&
+    rotaCidadela.includes("mesaConviteInicial") &&
+    rotaCidadela.includes("campCodigoInicial"),
+  "rota /cidadela: ?camp= e ?mesa= autenticado caem DIRETO na sala/mesa",
+);
+const botaoGame = ler("src/components/botao/BotaoGame.tsx");
+expect(
+  botaoGame.includes("mesaConviteInicial") &&
+    botaoGame.includes("campCodigoInicial") &&
+    botaoGame.includes('setScreen("online-championship")'),
+  "BotaoGame: link direto abre o fluxo online automaticamente",
+);
+const conviteProfissao = ler("src/components/botao/online/ConviteMesaScreen.tsx");
+expect(
+  conviteProfissao.includes("convite-profissoes") &&
+    conviteProfissao.includes("antes de começar o campeonato") &&
+    conviteProfissao.includes('modo?: "mesa" | "campeonato"'),
+  "ConviteMesaScreen: profissão em 1 pergunta + modo campeonato",
+);
+// Nomenclatura: pontos são SOV (nunca "pontos de soberania" em UI).
+const semSoberaniaUI = [
+  "src/components/botao/components/OnlineMatch.tsx",
+  "src/components/botao/components/OnlineMatchV3.tsx",
+  "src/components/botao/career/SeasonTransition.tsx",
+  "src/components/botao/career/TitleCeremony.tsx",
+  "src/components/botao/career/SeasonHub.tsx",
+].every((f) => !/pontos de soberania|Apostar Soberania|label="Soberania"|>Soberania<\/p>/.test(ler(f)));
+expect(semSoberaniaUI, "nomenclatura: telas online/fim de temporada usam SOV, não 'Soberania'");
 
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);

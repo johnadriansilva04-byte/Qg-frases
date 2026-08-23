@@ -36,6 +36,18 @@ migração é aplicada **manualmente** colando o conteúdo do arquivo no
     o Invest, ledger-first) e `sov_bank_saldos`. Tipos novos no ledger:
     `invest_transfer`, `invest_withdraw`, `dividend`, `fee` (IOF).
     **Depende de `sov_bank.sql`** (colunas de rastreabilidade do ledger).
+12. `campeonato_online_v2.sql` — **Campeonato Online v2** (2026-08-23):
+    salas de até 32 jogadores, regra dos 50 SOV para criar/entrar,
+    `preencher_campeonato_bots` + `resolver_confronto_bots` (só o dono),
+    correção CRÍTICA do off-by-one de indexação jsonb em
+    `vincular_mesa_campeonato`/`abrir_mesa_campeonato` (a mesa do campeonato
+    gravava no confronto errado), byes nascem finalizados, campeão bot não
+    quebra a FK, aposta da mesa cobrada de verdade (criação/entrada) +
+    `pagar_premio_mesa` (zero-sum, idempotente), e a correção definitiva do
+    `record_transaction` (crédito NUNCA bloqueado em conta negativa).
+    **Depende de `futebol.sql`, `sov_financial_system.sql` e `sov_bank.sql`.**
+    Sem ela: salas 9+ não criam, bots não preenchem e a regra dos 50 SOV não
+    é imposta pelo servidor (o frontend degrada com mensagem clara).
 
 ## Como verificar se o SOV BANK está operacional
 

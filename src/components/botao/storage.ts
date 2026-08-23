@@ -136,6 +136,33 @@ export async function loadProgressFromSupabase(userId: string): Promise<Progress
   }
 }
 
+/**
+ * Reconcilia a Sala de Troféus com os títulos da carreira.
+ * Os títulos do treinador (Brasileirão + Copa do Brasil) são contados em
+ * `career.coach.titulos`, mas a Sala de Troféus só lia `progress.trophies`
+ * (torneio amistoso) — o jogador ganhava o título e a sala continuava vazia.
+ * Idempotente: cada título da carreira vira UMA entrada (limite = contagem).
+ */
+export function reconciliarTrofeusCarreira(
+  progress: Progress,
+  career: { coach?: { titulos?: number | undefined } | undefined } | null,
+): Progress {
+  const titulos = career?.coach?.titulos ?? 0;
+  const deCarreira = progress.trophies.filter((t) => t.teamId === "carreira").length;
+  if (titulos <= deCarreira) return progress;
+  const faltam = titulos - deCarreira;
+  const novos = Array.from({ length: faltam }, (_, i) => ({
+    difficulty: "lenda" as Difficulty,
+    teamId: "carreira",
+    date: new Date(Date.now() + i).toISOString(),
+  }));
+  return {
+    ...progress,
+    titles: { ...progress.titles, lenda: progress.titles.lenda + faltam },
+    trophies: [...progress.trophies, ...novos],
+  };
+}
+
 export async function deleteProgressFromSupabase(userId: string) {
   try {
     await supabase

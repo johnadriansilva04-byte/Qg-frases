@@ -13,6 +13,18 @@ export type ParticipanteCampeonato = {
   pontos: number;
   gols_pro: number;
   gols_contra: number;
+  /** Bot = clube existente do universo controlado pelo motor do jogo. */
+  bot?: boolean;
+  /** Força do clube (bots) — usada na simulação bot × bot. */
+  power?: number;
+};
+
+/** Bot do campeonato: SEMPRE um clube que já existe no universo (TEAMS). */
+export type BotCampeonato = {
+  nome: string;
+  time_id: string;
+  abreviacao: string;
+  power: number;
 };
 
 export type ConfrontoCampeonato = {
@@ -38,17 +50,47 @@ export type CampeonatoOnline = {
   confrontos: ConfrontoCampeonato[];
   rodada_atual: number;
   vencedor_id: string | null;
+  /** Prêmio do campeão em SOV (informativo — a premiação é registrada no SOV Bank). */
+  premio_sov?: number;
   criado_em: string;
   atualizado_em: string;
 };
 
+/** Link direto para a sala do campeonato: cai direto na sala (§link). */
+export function linkConviteCampeonato(codigo: string): string {
+  const base = typeof window !== "undefined" ? window.location.origin : "https://pracinha.online";
+  return `${base}/cidadela?camp=${encodeURIComponent(codigo)}`;
+}
+
 /** Cria uma nova sala de campeonato (criador é o 1º participante). */
-export async function criarCampeonato(nome: string, maxJogadores = 4): Promise<CampeonatoOnline> {
+export async function criarCampeonato(
+  nome: string,
+  maxJogadores = 4,
+  premioSov = 0,
+): Promise<CampeonatoOnline> {
   const { data, error } = await supabase.rpc("criar_campeonato_online", {
     p_nome: nome,
     p_max: maxJogadores,
+    p_premio_sov: premioSov,
   });
-  if (error) throw error;
+  if (error) {
+    // Produção sem a migration v2 (função antiga de 2 args): degrada para a
+    // assinatura antiga — salas grandes (9+) e regra dos 50 SOV exigem a v2.
+    if (error.code === "PGRST202" || error.code === "42883") {
+      if (maxJogadores > 8) {
+        throw new Error(
+          "Salas com mais de 8 jogadores precisam da migration campeonato_online_v2 aplicada no banco.",
+        );
+      }
+      const legacy = await supabase.rpc("criar_campeonato_online", {
+        p_nome: nome,
+        p_max: maxJogadores,
+      });
+      if (legacy.error) throw legacy.error;
+      return legacy.data as CampeonatoOnline;
+    }
+    throw error;
+  }
   return data as CampeonatoOnline;
 }
 
@@ -121,7 +163,7 @@ export async function vincularMesaCampeonato(
   return data as CampeonatoOnline;
 }
 
-/** Registra o resultado de um confronto e computa pontos/soberania. */
+/** Registra o resultado de um confronto e computa pontos/SOV. */
 export async function registrarResultadoCampeonato(
   campeonatoId: number,
   mesaId: string,
@@ -136,4 +178,68 @@ export async function registrarResultadoCampeonato(
   });
   if (error) throw error;
   return data as CampeonatoOnline;
+}
+
+/**
+ * Preencher com Bots (SÓ o dono da sala): completa as vagas restantes com
+ * clubes que JÁ existem no universo do jogo. Nenhum usuário novo é criado.
+ */
+export async function preencherCampeonatoComBots(
+  codigo: string,
+  bots: BotCampeonato[],
+): Promise<CampeonatoOnline> {
+  const { data, error } = await supabase.rpc("preencher_campeonato_bots", {
+    p_codigo: codigo,
+    p_bots: bots,
+  });
+  if (error) throw error;
+  return data as CampeonatoOnline;
+}
+
+/**
+ * Resolve um confronto bot × bot com o placar da simulação do motor
+ * existente (SÓ o dono da sala; o servidor rejeita confronto com humano).
+ */
+export async function resolverConfrontoBots(
+  campeonatoId: number,
+  rodada: number,
+  j1: string,
+  j2: string,
+  golsJ1: number,
+  golsJ2: number,
+): Promise<CampeonatoOnline> {
+  const { data, error } = await supabase.rpc("resolver_confronto_bots", {
+    p_campeonato_id: campeonatoId,
+    p_rodada: rodada,
+    p_j1: j1,
+    p_j2: j2,
+    p_gols_j1: golsJ1,
+    p_gols_j2: golsJ2,
+  });
+  if (error) throw error;
+  return data as CampeonatoOnline;
+}
+
+/** Simulação determinística de um confronto bot × bot pela força (power)
+ *  dos clubes — o mesmo critério do motor de temporada. */
+export function simularConfrontoBots(
+  powerJ1: number,
+  powerJ2: number,
+  chave: string,
+): { golsJ1: number; golsJ2: number } {
+  // Hash determinístico da chave (campeonato+rodada+j1xj2) — F5/retry não
+  // muda o placar.
+  let h = 2166136261;
+  for (let i = 0; i < chave.length; i++) {
+    h ^= chave.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const diff = powerJ1 - powerJ2;
+  const base = (n: number) => (h >>> n) % 3;
+  let golsJ1 = base(3);
+  let golsJ2 = base(11);
+  if (diff > 6 && golsJ1 <= golsJ2) golsJ1 = golsJ2 + 1;
+  else if (diff < -6 && golsJ2 <= golsJ1) golsJ2 = golsJ1 + 1;
+  else if (diff > 0 && golsJ1 < golsJ2) [golsJ1, golsJ2] = [golsJ2, golsJ1];
+  return { golsJ1, golsJ2 };
 }

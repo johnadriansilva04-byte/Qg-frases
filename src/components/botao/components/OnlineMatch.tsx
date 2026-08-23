@@ -161,7 +161,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
             <h2 className="font-display text-2xl">Lobbies Online</h2>
             <div className="flex items-center gap-2 mt-2">
               <Trophy className="w-4 h-4 text-yellow-500" />
-              <span className="text-sm font-medium">{pontosSoberania} pontos de soberania</span>
+              <span className="text-sm font-medium">{pontosSoberania} SOV</span>
             </div>
           </div>
           {onBack && (
@@ -424,7 +424,7 @@ export function OnlineMatch({ onBack, onEstadoPartida }: { onBack?: () => void; 
               {souVencedor ? "+10 pontos" : blocoAtual.vencedor === 'empate' ? "+0 pontos" : "-5 pontos"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Total: {pontosSoberania} pontos de soberania
+              Total: {pontosSoberania} SOV
             </p>
           </div>
         )}

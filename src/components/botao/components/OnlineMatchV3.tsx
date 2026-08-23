@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, RefreshCw, Users, ArrowLeft } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useJogador } from "@/hooks/useJogador";
@@ -9,11 +9,11 @@ import {
   buscarMesa,
   buscarMesasAguardando,
   linkConviteMesa,
+  pagarPremioMesa,
   type MesaFutebol,
 } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
 import { AdminMesaPanel } from "./AdminMesaPanel";
-import { aplicarApostaSoberania } from "../career/careerRemote";
 import { useAdManager } from "@/lib/adManager";
 
 type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado" | "admin";
@@ -21,9 +21,12 @@ type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado" | "admin";
 export function OnlineMatchV3({
   onBack,
   onEstadoPartida,
+  mesaInicialId,
 }: {
   onBack?: () => void;
   onEstadoPartida?: (emPartida: boolean) => void;
+  /** Link direto (?mesa=...): entra direto nesta mesa ao carregar o perfil. */
+  mesaInicialId?: string | undefined;
 }) {
   const queryClient = useQueryClient();
   const { data: jogador } = useJogador();
@@ -33,11 +36,14 @@ export function OnlineMatchV3({
 
   const [mesaId, setMesaId] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>("lobby-list");
-  // Aposta de soberania no modo online (opcional, 0 = não apostar).
+  // Aposta de SOV da mesa (opcional, 0 = sem aposta) — cobrada no servidor na
+  // criação/entrada e paga ao vencedor (zero-sum).
   const [apostaSoberania, setApostaSoberania] = useState<number>(0);
   // §9: data de liberação da mesa (vazio = abre na hora).
   const [dataLiberacao, setDataLiberacao] = useState<string>("");
   const [toastLink, setToastLink] = useState<string | null>(null);
+  const [erroMesa, setErroMesa] = useState<string | null>(null);
+  const linkDiretoTentado = useRef<string | null>(null);
   const soberaniaAtual = perfil?.pontos_soberania ?? 0;
 
   // Notificar estado de partida online
@@ -74,7 +80,7 @@ export function OnlineMatchV3({
     refetchInterval: screen === "jogo" ? false : 3000, // Desativar polling durante partida
   });
 
-  // Criar mesa
+  // Criar mesa — a aposta é cobrada no servidor na hora (débito do criador).
   const novaMesa = useMutation({
     mutationFn: async () => {
       if (!perfil || !userId) throw new Error("Perfil não carregado.");
@@ -90,11 +96,11 @@ export function OnlineMatchV3({
       recarregarMesas();
     },
     onError: (error) => {
-      // Silenciar erro
+      setErroMesa((error as Error)?.message ?? "Não foi possível criar a mesa.");
     },
   });
 
-  // Entrar em mesa
+  // Entrar em mesa — a aposta é cobrada no servidor na entrada.
   const entrar = useMutation({
     mutationFn: async (mesa: MesaFutebol) => {
       if (!perfil || !meuTime) throw new Error("Perfil não carregado.");
@@ -106,9 +112,31 @@ export function OnlineMatchV3({
       recarregarMesas();
     },
     onError: (error) => {
-      // Silenciar erro
+      setErroMesa((error as Error)?.message ?? "Não foi possível entrar na mesa.");
     },
   });
+
+  // Link direto (?mesa=...): entra nesta mesa exata assim que o perfil carrega —
+  // o convidado não precisa procurar a mesa na lista.
+  useEffect(() => {
+    if (!mesaInicialId || !perfil || !meuTime || linkDiretoTentado.current === mesaInicialId) return;
+    linkDiretoTentado.current = mesaInicialId;
+    void (async () => {
+      const mesa = await buscarMesa(mesaInicialId).catch(() => null);
+      if (!mesa) {
+        setErroMesa("Mesa do link não encontrada.");
+        return;
+      }
+      const souParticipante = mesa.jogador_1_id === userId || mesa.jogador_2_id === userId;
+      if (!souParticipante && mesa.status === "aguardando") {
+        entrar.mutate(mesa);
+      } else {
+        setMesaId(mesa.mesa_id);
+        setScreen("jogo");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesaInicialId, perfil?.user_id, meuTime?.id]);
 
   if (screen === "jogo" && mesaAtual && perfil && meuTime) {
     return (
@@ -126,13 +154,10 @@ export function OnlineMatchV3({
           // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
           markFirstGamePlayed();
 
-          // Aplica aposta de soberania (se houver) antes de recarregar perfil.
-          if (apostaSoberania > 0) {
-            const venceu = r.vencedorId === userId;
-            await aplicarApostaSoberania(apostaSoberania, venceu, r.empate);
-            setApostaSoberania(0);
-          }
-          // Recarrega o perfil para refletir soberania/ranking atualizados
+          // Aposta da mesa: o pote é pago NO SERVIDOR (zero-sum, idempotente)
+          // — nunca mais um delta local solto no cliente.
+          await pagarPremioMesa(mesaAtual.mesa_id).catch(() => null);
+          // Recarrega o perfil para refletir SOV/ranking atualizados
           const novoPerfil = await recarregar();
           if (novoPerfil) aplicarPerfil(novoPerfil);
         }}
@@ -173,6 +198,12 @@ export function OnlineMatchV3({
           <button onClick={() => setToastLink(null)} className="ml-2 underline">fechar</button>
         </div>
       )}
+      {erroMesa && (
+        <div className="mb-4 rounded-xl border border-rose-400/40 bg-rose-400/10 p-3 text-xs text-rose-200">
+          {erroMesa}
+          <button onClick={() => setErroMesa(null)} className="ml-2 underline">fechar</button>
+        </div>
+      )}
 
       <section className="surface mb-6 space-y-4 p-5">
         <h2 className="text-xl">Seu time</h2>
@@ -202,10 +233,10 @@ export function OnlineMatchV3({
       <section className="surface mb-6 space-y-4 p-5">
         <h2 className="text-xl">Criar mesa</h2>
         <p className="text-sm text-muted-foreground">
-          Soberania disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
+          SOV disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm font-medium">Apostar Soberania:</label>
+          <label className="text-sm font-medium">Apostar SOV:</label>
           <input
             type="number"
             min={0}
