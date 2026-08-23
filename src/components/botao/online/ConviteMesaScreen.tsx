@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Swords, Users, Check, ChevronRight } from "lucide-react";
 import { buscarMesa, linkConviteMesa, type MesaFutebol } from "@/lib/multiplayer/mesa.api";
-import { buscarCampeonato, type CampeonatoOnline } from "@/lib/multiplayer/campeonato.api";
+import {
+  buscarCampeonato,
+  linkConviteCampeonato,
+  type CampeonatoOnline,
+} from "@/lib/multiplayer/campeonato.api";
 import { TEAMS, type Team } from "@/components/botao/data/teams";
 import { gerarOfertasIniciais, type OfertaClube } from "@/components/botao/career/ofertasIniciais";
 import { distribuirTorcidaInicial } from "@/components/botao/career/torcidaEngine";
@@ -337,7 +341,8 @@ export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar 
               </button>
             </div>
             <p className="mt-3 text-[10px] text-slate-600">
-              Link deste convite: {linkConviteMesa(mesaId)}
+              Link deste convite:{" "}
+              {modo === "campeonato" ? linkConviteCampeonato(mesaId) : linkConviteMesa(mesaId)}
             </p>
           </>
         )}
