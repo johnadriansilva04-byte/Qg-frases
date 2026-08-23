@@ -278,15 +278,16 @@ expect(
   "MatchView: evolução tem impacto real (chute mais forte + mais massa)",
 );
 
-// 21. §3: README documenta a conta oficial do OpenHands + credencial segura.
+// 21. §3: README documenta a conta E2E oficial do projeto (credenciais de
+// teste fictícias — o dono decidiu publicá-las para outros agentes).
 const readme = ler("README.md");
 expect(
-  readme.includes("open.rangers.fc.oficial@gmail.com") && readme.includes("OPENHANDS_E2E_PASSWORD"),
-  "README: conta oficial do OpenHands + mecanismo de credencial por variável de ambiente",
+  readme.includes("openhands.rookie.e2e@gmail.com") && readme.includes("Rookie#2026!E2E"),
+  "README: conta E2E oficial (e-mail + senha de teste) documentada",
 );
 expect(
-  !/senha[:=]\s*["']?[A-Za-z0-9!@#]{6,}/.test(readme),
-  "README: NUNCA contém senha real",
+  readme.includes("Rookie FC") && readme.includes("RFC"),
+  "README: identidade do clube E2E documentada",
 );
 
 // 22. Exclusão total também na tela de conta (não só na api).

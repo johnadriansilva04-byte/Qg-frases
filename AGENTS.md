@@ -1,3 +1,63 @@
+## Separação CLUBE×TREINADOR + promoção real + economia equilibrada + E2E magnata (2026-08-23, 24ª passada)
+
+Jornada E2E longa da conta oficial (T15→T33+): promoções, rebaixamentos,
+salários, manutenções e a economia toda sob observação. Bugs REAIS achados
+jogando e corrigidos na hora:
+
+- **§10-§14: CLUBE ≠ TREINADOR** (`career/clubeFinancas.ts`, PURO/jiti):
+  `career.clubeCaixa` (receita esportiva: pontos da partida na escala da
+  divisão, premiação por posição, patrocínio) + `clubeExtrato` (cap 60).
+  O treinador enriquece SÓ pelo salário (a cada 10 rodadas, por divisão:
+  C=10/B=15/A=25) e atividades pessoais. Manutenção sai do caixa do clube.
+  Salário = transferência interna (wallet não muda de total): par de
+  lançamentos no ledger (`salario:{uid}:t{t}:r{r}:saida/:entrada`), líquido
+  zero — rastreável sem criar SOV. Migração: carreiras antigas sem
+  `clubeCaixa` recebem o coach.sov acumulado como caixa inicial (a receita
+  esportiva delas já era, na prática, do clube). `SovereigntyPanel` mostra
+  "Seu SOV" × "Caixa do clube"; `SeasonEndScreen` rotula "Caixa do clube".
+- **BUG PRODUÇÃO — crédito bloqueado em conta negativa**: `record_transaction`
+  (sov_financial_system.sql) rejeitava QUALQUER transação que deixasse o
+  saldo negativo, INCLUSIVE CRÉDITO — conta endividada não recebia receita/
+  prêmio/salário e afundava para sempre (o E2E mostrou o ledger travado em
+  -3292 com só manutenções gravadas). Fix: bloqueio só para DÉBITO
+  (`p_amount < 0 AND v_new_balance < 0`). **PRODUÇÃO: re-aplicar
+  `sov_financial_system.sql` no SQL Editor** (ver migrations/README).
+- **BUG — promoção/rebaixamento não aplicada**: `startNextSeason` recriava as
+  ligas com `career.divisao`/`composicoes` ANTIGAS (o jogador "subia" sem
+  subir). Agora deriva `processarResultadoTemporada(ligas concluídas)` e cria
+  as ligas da divisão NOVA. `finishTournamentMatch` não toca mais em
+  divisao/composicoes (fonte única no avanço). Nomes desincronizados:
+  `teamByIdSync` caía em `TEAMS[0]` (Rubro-Negro) para id fora da divisão —
+  agora `timeDesconhecido(id)` (nunca mais "Flamengo" fantasma).
+- **BUG — temporada sem veredito / veredito fantasma**: (a) liga completa
+  clonada ficava com `phase="grupos"` para sempre (a temporada nunca fechava)
+  → ligaFinal agora fecha phase+campeão quando completa, robusto a clone;
+  (b) hidratação com ligas em andamento limpava NADA — o veredito da sessão
+  anterior reabria na 1ª partida da temporada nova → hidratação zera o
+  veredito quando as ligas não estão concluídas; (c) refs frescas
+  (`careerRef/tourRef/vereditoRef` + `setVereditoRef`) sincronizadas em TODOS
+  os caminhos (sim, startNextSeason, gameOverReset, hidratação) — chamadas
+  rápidas não leem estado velho.
+- **Economia equilibrada** (medida pelo E2E com campanha real): receita da
+  partida por divisão (`RECEITA_MULT_POR_DIVISAO` C=5/B=8/A=12 × pontos) —
+  time que vence lucra, time na média paga as contas, time em crise afunda
+  (antes: Série A com 13V/19 ainda quebrava). Premiação por posição
+  `premiacaoDa` (campeão/vice/top4/resto na escala da divisão).
+  `COACH_LEVELS` por patrimônio pessoal (0/60/150/300/600/1200/2500, novo
+  nível "Magnata") — sem isso o treinador nunca passava de "Promessa".
+- **Harness E2E** (`?e2e=1`, `window.__e2e`): simula UMA rodada em estado
+  LOCAL com as engines reais (applyResult, simularRodadaDivisoes, torcida,
+  clubeFinancas, ledger idempotente por fixture) — a rajada não depende de
+  re-render (a primeira versão chamava finishTournamentMatch e travava em
+  closures velhas: 60 chamadas = 0 rodadas). Só existe com o parâmetro.
+- **README**: conta E2E oficial documentada (e-mail + senha de teste) —
+  decisão do dono: qualquer agente entra e CONTINUA, nunca cria outra conta.
+- **Verificação**: tsc 0 erros; build OK; clube-financas 17 (novo);
+  promocao-rebaixamento 136 (novo); evolucao-botoes 34; persistencia-unica 57;
+  sov-consistencia 6; regras-fim 36; conversas 41; temporada 57; bolsa 29.
+  E2E magnata 4 temporadas seguidas (0 falhas, promoção C→B→A e rebaixamento
+  A→B naturais, salário r10 no extrato, ledger íntegro após o fix).
+
 ## Carreira com ofertas de clubes + evolução de botões + identidade do OpenHands (2026-08-23, 23ª passada)
 
 Transformação da entrada da carreira e do módulo Meu Clube/Conta (prompt do

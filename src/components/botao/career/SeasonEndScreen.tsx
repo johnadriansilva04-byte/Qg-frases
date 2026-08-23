@@ -166,7 +166,7 @@ export function SeasonEndScreen({
           <div className="grid grid-cols-3 gap-2 border-y border-white/10 py-2">
             <Tile
               icon={<Coins className="size-3.5" />}
-              label="Soberania"
+              label="Caixa do clube"
               value={String(veredito.soberaniaFinal)}
               accent={continua ? "emerald" : "rose"}
             />

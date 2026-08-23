@@ -169,8 +169,11 @@ BEGIN
   -- Calcular novo saldo
   v_new_balance := v_current_balance + p_amount;
 
-  -- Não permitir saldo negativo (exceto para penalidades específicas)
-  IF v_new_balance < 0 AND p_transaction_type NOT IN ('penalty', 'bet_loss') THEN
+  -- Não permitir saldo negativo APENAS em débito (sacar mais do que tem).
+  -- CRÉDITO (p_amount > 0) nunca pode ser bloqueado: ele RECUPERA uma conta
+  -- endividada — sem isso, quem estava no vermelho não recebia nem receita
+  -- de partida, nem prêmio, nem salário, e afundava para sempre.
+  IF p_amount < 0 AND v_new_balance < 0 AND p_transaction_type NOT IN ('penalty', 'bet_loss') THEN
     RAISE EXCEPTION 'Saldo insuficiente para transação';
   END IF;
 

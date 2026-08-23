@@ -1,6 +1,7 @@
 import { type CareerState, type Coach, type Divisao, type Headline } from "./types";
 import { normalizarConversas } from "./conversasEngine";
 import { normalizarNiveis } from "./evolucaoBotoes";
+import { normalizarClubeFinancas } from "./clubeFinancas";
 import { HISTORIA_INICIAL, type HistoriaState } from "./historia/types";
 
 const DIVISOES_VALIDAS: Divisao[] = ["serie-a", "serie-b", "serie-c"];
@@ -41,6 +42,7 @@ export function normalizarHistoria(bruta: unknown): HistoriaState {
  */
 export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
   const base: CareerState = { ...EMPTY_CAREER, ...bruta };
+  const fin = normalizarClubeFinancas(bruta.clubeCaixa, bruta.clubeExtrato);
   return {
     ...base,
     coach: {
@@ -81,6 +83,13 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
           }
         : undefined,
     clubeOrigemId: typeof bruta.clubeOrigemId === "string" ? bruta.clubeOrigemId : undefined,
+    // Caixa do clube: negativo é dívida válida (§10-§14); extrato saneado.
+    // MIGRAÇÃO: carreiras antigas (antes da separação clube×treinador) tinham
+    // a receita esportiva acumulada no coach.sov. Esse valor era, na prática,
+    // o caixa do clube — sem a migração, o clube "perderia" o patrimônio na
+    // hidratação e a manutenção da temporada passaria a quebrar.
+    clubeCaixa: bruta.clubeCaixa === undefined && (bruta.coach?.sov ?? 0) > 0 ? bruta.coach!.sov! : fin.caixa,
+    clubeExtrato: fin.extrato,
     ultimaRodadaProcessada: Number.isFinite(bruta.ultimaRodadaProcessada)
       ? bruta.ultimaRodadaProcessada!
       : -1,

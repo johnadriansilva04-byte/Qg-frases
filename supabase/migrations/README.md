@@ -52,6 +52,18 @@ operacional. Sem a migração, o app **degrada com segurança** (fallback para
 as RPCs antigas) — mas nesse estado o SOV BANK **não deve ser declarado
 operacional**.
 
+## RE-APLICAÇÃO OBRIGATÓRIA (2026-08-23 — 3 blocos pendentes)
+
+1. **`sov_financial_system.sql`** — `record_transaction` passa a bloquear só
+   DÉBITO sem saldo. A versão antiga rejeitava CRÉDITO em conta negativa
+   ("Saldo insuficiente" num crédito!), então conta endividada NUNCA recebia
+   receita de partida/prêmio/salário e afundava para sempre (bug achado pelo
+   E2E magnata). Rode o arquivo inteiro (idempotente).
+2. **`futebol.sql`** — só o bloco final `-- EXCLUIR CONTA TOTAL` (RPC
+   `excluir_conta_total`): apaga auth.users + todos os domínios.
+3. **`sov_bank.sql`** — se ainda não foi re-aplicado na 22ª passada
+   (`sov_bank_registrar` sem engolir erros).
+
 ## RE-APLICAÇÃO OBRIGATÓRIA (produção em estado quebrado — 2026-08-22)
 
 Auditoria E2E em produção (conta-canário "Robô Doidão") provou que o banco

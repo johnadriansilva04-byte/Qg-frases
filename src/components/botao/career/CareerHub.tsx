@@ -6,6 +6,7 @@ import { nextUserFixture, sortTable } from "../tournament";
 import type { Fixture, Tournament } from "../types";
 import { NewsPortal } from "./NewsPortal";
 import { SovereigntyPanel } from "./SovereigntyPanel";
+import { salarioDa } from "./clubeFinancas";
 import {
   CUSTO_MANUTENCAO,
   DIVISAO_LABEL,
@@ -87,6 +88,8 @@ export function CareerHub({
           moral={career.moralTime}
           temporada={temporada}
           divisao={divisao}
+          clubeCaixa={career.clubeCaixa}
+          salarioPor10={salarioDa(divisao)}
         />
       )}
 

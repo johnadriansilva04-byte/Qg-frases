@@ -18,12 +18,15 @@ export type Coach = {
 };
 
 export const COACH_LEVELS: { nome: string; min: number; icon: string }[] = [
+  // Níveis por PATRIMÔNIO PESSOAL (§14: o treinador enriquece com salário e
+  // investimentos próprios — nunca com a receita do clube).
   { nome: "Aprendiz", min: 0, icon: "🎓" },
-  { nome: "Promessa", min: 30, icon: "🌱" },
-  { nome: "Treinador Consolidado", min: 100, icon: "⚙️" },
-  { nome: "Estrategista", min: 250, icon: "♟️" },
-  { nome: "Ídolo", min: 500, icon: "⭐" },
-  { nome: "Lenda", min: 1000, icon: "👑" },
+  { nome: "Promessa", min: 60, icon: "🌱" },
+  { nome: "Treinador Consolidado", min: 150, icon: "⚙️" },
+  { nome: "Estrategista", min: 300, icon: "♟️" },
+  { nome: "Ídolo", min: 600, icon: "⭐" },
+  { nome: "Magnata", min: 1200, icon: "💼" },
+  { nome: "Lenda", min: 2500, icon: "👑" },
 ];
 
 export function nivelDoTreinador(sov: number) {
@@ -345,6 +348,12 @@ export type CareerState = {
   /** Clube cuja vaga o time do jogador assumiu na temporada 1 — a oferta
    *  escolhida na entrada da carreira (§4). */
   clubeOrigemId?: string | undefined;
+  /** Caixa do CLUBE (§10-§14): recebe a receita esportiva (pontos, bônus,
+   *  premiações) e paga manutenção + salário do treinador. Pode ficar
+   *  negativo (dívida do clube). Separado do dinheiro pessoal (coach.sov). */
+  clubeCaixa?: number | undefined;
+  /** Extrato do caixa do clube (receitas/despesas/salários). */
+  clubeExtrato?: import("./clubeFinancas").TransacaoClube[] | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

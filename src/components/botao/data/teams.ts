@@ -148,13 +148,28 @@ export async function getAllTeams(): Promise<Team[]> {
 
 export async function teamById(id: string): Promise<Team> {
   const teams = await loadTeamsFromDB();
-  return teams.find((team) => team.id === id) ?? TEAMS.find((team) => team.id === id) ?? TEAMS[0]!;
+  return teams.find((team) => team.id === id) ?? TEAMS.find((team) => team.id === id) ?? timeDesconhecido(id);
+}
+
+/** Fallback honesto: id sem clube conhecido NUNCA vira o Rubro-Negro (TEAMS[0])
+ *  — era o bug do "nome do time desincronizado" quando um clube saía da
+ *  divisão após promoção/rebaixamento e o cache local ficava sem ele. */
+export function timeDesconhecido(id: string): Team {
+  return {
+    id,
+    name: `Clube ${id.slice(0, 3).toUpperCase()}`,
+    short: id.slice(0, 3).toUpperCase(),
+    city: "Cidadela",
+    primary: "#334155",
+    secondary: "#94a3b8",
+    power: 55,
+  };
 }
 
 export function teamByIdSync(id: string): Team {
   const fromDb = cachedTeamsSyncData.find((team) => team.id === id);
   if (fromDb) return fromDb;
-  return TEAMS.find((team) => team.id === id) ?? TEAMS[0]!;
+  return TEAMS.find((team) => team.id === id) ?? timeDesconhecido(id);
 }
 
 export function timesDaDivisao(divisao: TeamDivision): Team[] {

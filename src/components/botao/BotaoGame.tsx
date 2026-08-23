@@ -77,6 +77,16 @@ import {
 } from "./career/competitionApi";
 import { gerarOfertasIniciais, type OfertaClube } from "./career/ofertasIniciais";
 import {
+  chaveSalarioLedger,
+  devePagarSalario,
+  idSalario,
+  premiacaoDa,
+  receitaDa,
+  registrarDespesaClube,
+  registrarReceitaClube,
+  salarioDa,
+} from "./career/clubeFinancas";
+import {
   bonusForcaTime,
   chaveEvolucao,
   evoluirBotao,
@@ -405,10 +415,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // Checa na montagem e ao voltar o foco (ex.: usuário voltou da aba da Trilha).
   const careerRef = useRef<CareerState | null>(null);
   const perfilRef = useRef<Perfil | null>(null);
+  const tourRef = useRef<Tournament | null>(null);
+  const vereditoRef = useRef<VereditoTemporada | null>(null);
+  const setVereditoRef = (v: VereditoTemporada | null) => {
+    vereditoRef.current = v;
+    setVeredito(v);
+  };
   useEffect(() => {
     careerRef.current = career;
     perfilRef.current = perfil;
-  }, [career, perfil]);
+    tourRef.current = tour;
+    vereditoRef.current = veredito;
+  }, [career, perfil, tour, veredito]);
 
   useEffect(() => {
     const consumir = () => {
@@ -826,13 +844,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // e a condição fica falsa). Sem isso, o refresh deixava a carreira
         // travada em "Campanha encerrada" sem caminho para a próxima temporada.
         if (careerHidratada?.ligas && ligasConcluidas(careerHidratada.ligas)) {
-          setVeredito(
+          setVereditoRef(
             avaliarFimTemporada(
-              careerHidratada.coach.sov,
+              careerHidratada.clubeCaixa ?? 0,
               careerHidratada.divisao,
               careerHidratada.temporadasInadimplente ?? 0,
             ),
           );
+        } else {
+          // Ligas em andamento/zeradas: temporada em curso — qualquer veredito
+          // derivado de uma sessão anterior é velho e precisa morrer aqui
+          // (senão a 1ª partida da temporada nova reabria a tela de fim).
+          setVereditoRef(null);
         }
         if (remoteCareer && careerHidratada) {
           // Repara registros antigos que tinham coach vazio no JSONB e
@@ -1590,6 +1613,236 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     finishTournamentMatch(r);
   };
 
+  /**
+   * [E2E/dev] Simula UMA RODADA da carreira em estado LOCAL: usa as MESMAS
+   * engines do jogo (applyResult, simularRodadaDivisoes, processarResultado,
+   * torcida, clubeFinancas, bolsa), mas resolve a rodada inteira de uma vez
+   * no estado local — as chamadas em rajada do harness não dependem de
+   * re-render entre partidas. O resultado do jogador vem do simulateMatch
+   * com força efetiva (mérito, não atalho). No fim da liga, o veredito de
+   * fim de temporada é aberto normalmente (SeasonEndScreen real).
+   */
+  const simularPartidaE2E = () => {
+    const tourAtual = tourRef.current;
+    const careerAtual = careerRef.current;
+    if (!tourAtual || !careerAtual) return "sem-carreira";
+    if (vereditoRef.current) return "veredito";
+    if (careerAtual.woProximaPartida) return "wo-pendente";
+    const f = nextUserFixture(tourAtual);
+    if (!f || tourAtual.phase !== "grupos") return "fim";
+
+    // 1) Resultado do jogador com força efetiva do universo.
+    const overrides = careerAtual.torcida ? forcasDaTemporada(careerAtual, userTeam) : undefined;
+    const r = simulateMatch(f.homeId, f.awayId, difficulty, false, overrides);
+    const gf = f.homeId === userTeam.id ? r.homeGoals : r.awayGoals;
+    const ga = f.homeId === userTeam.id ? r.awayGoals : r.homeGoals;
+
+    // 2) Aplica na liga do usuário + simula a rodada nas 3 divisões.
+    const ligaNova = structuredClone(tourAtual);
+    const fx = ligaNova.groupFixtures.find((x) => x.id === f.id)!;
+    applyResult(ligaNova, fx, r);
+    const ligasBase = careerAtual.ligas
+      ? { ...careerAtual.ligas, [careerAtual.divisao]: ligaNova }
+      : null;
+    const ligasAtualizadas = ligasBase
+      ? simularRodadaDivisoes(ligasBase as LigasTemporada, userTeam.id, f.stage, difficulty, overrides)
+      : undefined;
+    const ligaFinal = ligasAtualizadas ? ligasAtualizadas[careerAtual.divisao] : ligaNova;
+    // Liga concluída: fecha a fase e coroa o campeão. Precisa ser robusta a
+    // ligas JÁ completas clonadas (phase ficava "grupos" para sempre e a
+    // temporada nunca abria o veredito — a rodada seguinte não existia).
+    const ligaCompleta = ligaFinal.groupFixtures.every((x) => x.played);
+    if (ligaCompleta && ligaFinal.format === "pontos-corridos" && ligaFinal.phase !== "fim") {
+      const tabela = sortTable(ligaFinal.groups[0]!.table);
+      ligaFinal.champion = tabela[0]!.teamId;
+      ligaFinal.phase = "fim";
+      if (ligasAtualizadas) ligasAtualizadas[careerAtual.divisao] = ligaFinal;
+    }
+    persistTournament(ligaFinal);
+
+    // 3) Carreira: receita do clube, moral, rodada, salário (§10-§14).
+    let novaCareer: CareerState = {
+      ...careerAtual,
+      rodadaAtual: (careerAtual.rodadaAtual ?? 0) + 1,
+      ligas: ligasAtualizadas ?? careerAtual.ligas,
+    };
+    const receita = receitaDa(
+      careerAtual.divisao,
+      gf > ga ? POINTS.VITORIA : gf < ga ? POINTS.DERROTA : POINTS.EMPATE,
+    );
+    const temporadaAtual = novaCareer.temporada ?? 1;
+    if (receita !== 0) {
+      const fin = registrarReceitaClube(
+        novaCareer.clubeCaixa ?? 0,
+        novaCareer.clubeExtrato ?? [],
+        receita,
+        gf > ga
+          ? `Vitória ${gf}x${ga} (rodada ${novaCareer.rodadaAtual})`
+          : gf === ga
+            ? `Empate ${gf}x${ga} (rodada ${novaCareer.rodadaAtual})`
+            : `Receita esportiva (rodada ${novaCareer.rodadaAtual})`,
+        novaCareer.rodadaAtual,
+        temporadaAtual,
+      );
+      novaCareer = { ...novaCareer, clubeCaixa: fin.caixa, clubeExtrato: fin.extrato };
+    }
+    novaCareer = {
+      ...novaCareer,
+      moralTime:
+        gf > ga
+          ? Math.min(100, novaCareer.moralTime + 4)
+          : gf < ga
+            ? Math.max(0, novaCareer.moralTime - 6)
+            : Math.max(0, novaCareer.moralTime - 1),
+    };
+    // Salário a cada 10 rodadas (caixa do clube → carteira pessoal).
+    if (devePagarSalario(novaCareer.rodadaAtual)) {
+      const salario = salarioDa(novaCareer.divisao);
+      const idTx = idSalario(temporadaAtual, novaCareer.rodadaAtual);
+      if (!(novaCareer.clubeExtrato ?? []).some((tx) => tx.id === idTx)) {
+        novaCareer = {
+          ...novaCareer,
+          clubeCaixa: (novaCareer.clubeCaixa ?? 0) - salario,
+          clubeExtrato: [
+            {
+              id: idTx,
+              tipo: "salario" as const,
+              valor: -salario,
+              descricao: `Salário do treinador (rodada ${novaCareer.rodadaAtual})`,
+              rodada: novaCareer.rodadaAtual,
+              temporada: temporadaAtual,
+            },
+            ...(novaCareer.clubeExtrato ?? []),
+          ].slice(0, 60),
+          coach: { ...novaCareer.coach, sov: novaCareer.coach.sov + salario },
+        };
+        if (perfil?.user_id) {
+          const chave = chaveSalarioLedger(perfil.user_id, temporadaAtual, novaCareer.rodadaAtual);
+          void (async () => {
+            const saida = await registrarTransacaoSov(
+              perfil.user_id!,
+              -salario,
+              "fee",
+              `Salário pago pelo clube (rodada ${novaCareer.rodadaAtual})`,
+              "career",
+              { rodada: novaCareer.rodadaAtual, tipo: "salario-saida" },
+              { sourceEvent: "salario", idempotencyKey: `${chave}:saida` },
+            );
+            if (saida !== null) {
+              await registrarTransacaoSov(
+                perfil.user_id!,
+                salario,
+                "reward",
+                `Salário do treinador (rodada ${novaCareer.rodadaAtual})`,
+                "career",
+                { rodada: novaCareer.rodadaAtual, tipo: "salario-entrada" },
+                { sourceEvent: "salario", idempotencyKey: `${chave}:entrada` },
+              );
+            }
+          })();
+        }
+      }
+    }
+    // Delta da partida no ledger (idempotente por fixture) — receita do clube.
+    if (perfil?.user_id && receita !== 0) {
+      void registrarTransacaoSov(
+        perfil.user_id,
+        receita,
+        "reward",
+        `Receita do clube — partida ${gf}x${ga}`,
+        "career",
+        { golsPro: gf, golsContra: ga, rodada: novaCareer.rodadaAtual },
+        { sourceEvent: "partida", idempotencyKey: `partida:${perfil.user_id}:${f.id}` },
+      );
+    }
+    // Torcida migra com a rodada inteira (zero-sum).
+    if (ligasAtualizadas) {
+      novaCareer = aplicarRodadaTorcida(novaCareer, ligasAtualizadas, f.stage);
+      if (ligaFinal.groupFixtures.every((x) => x.played) && ligasConcluidas(ligasAtualizadas)) {
+        novaCareer = aplicarTitulosDaTemporada(novaCareer, ligasAtualizadas);
+      }
+    }
+    persistCareer(novaCareer);
+    // Refs sincronizadas: rajadas E2E chamam de novo antes do re-render.
+    careerRef.current = novaCareer;
+    tourRef.current = ligaFinal;
+    if (perfil?.user_id) {
+      void registrarPartidaRemota(perfil.user_id, novaCareer, userTeam.id, f, r, "brasileirao");
+    }
+
+    // 4) Fim da liga → veredito (tela real de fim de temporada).
+    if (ligaCompleta && ligaFinal.format === "pontos-corridos") {
+      {
+        persistTournament(ligaFinal);
+        novaCareer = {
+          ...novaCareer,
+          ligas: ligasAtualizadas
+            ? { ...ligasAtualizadas, [careerAtual.divisao]: ligaFinal }
+            : novaCareer.ligas,
+          coach: { ...novaCareer.coach, titulos: novaCareer.coach.titulos + (ligaFinal.champion === userTeam.id ? 1 : 0) },
+        };
+        // Premiação de fim de campanha entra no caixa do clube — por posição,
+        // na escala da divisão (campeão embolsa o bônus de título).
+        const posicaoFinal =
+          sortTable(ligaFinal.groups[0]!.table).findIndex((row) => row.teamId === userTeam.id) + 1;
+        const premio = premiacaoDa(
+          careerAtual.divisao,
+          posicaoFinal,
+          bonusCampeao(ligaFinal.difficulty),
+        );
+        const fin = registrarReceitaClube(
+          novaCareer.clubeCaixa ?? 0,
+          novaCareer.clubeExtrato ?? [],
+          premio,
+          `Premiação da temporada ${temporadaAtual}`,
+          novaCareer.rodadaAtual,
+          temporadaAtual,
+        );
+        novaCareer = { ...novaCareer, clubeCaixa: fin.caixa, clubeExtrato: fin.extrato };
+        persistCareer(novaCareer);
+        careerRef.current = novaCareer;
+        tourRef.current = ligaFinal;
+        if (perfil?.user_id) {
+          void registrarTransacaoSov(
+            perfil.user_id,
+            premio,
+            "reward",
+            `Premiação da temporada ${temporadaAtual}`,
+            "career",
+            { temporada: temporadaAtual },
+            {
+              sourceEvent: "premiacao_temporada",
+              idempotencyKey: `premio:${perfil.user_id}:t${temporadaAtual}`,
+            },
+          );
+        }
+        const v = avaliarFimTemporada(
+          novaCareer.clubeCaixa ?? 0,
+          novaCareer.divisao,
+          careerAtual.temporadasInadimplente ?? 0,
+        );
+        setVereditoRef(v);
+        return "veredito";
+      }
+    }
+    return "ok";
+  };
+  const e2eAtivo =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1";
+  useEffect(() => {
+    if (!e2eAtivo) return;
+    (window as unknown as Record<string, unknown>)["__e2e"] = {
+      simularPartida: simularPartidaE2E,
+      getCareer: () => careerRef.current,
+      getTour: () => tourRef.current,
+      getVeredito: () => vereditoRef.current,
+      avancarTemporada: startNextSeason,
+      evoluirBotao: handleEvoluirBotao,
+      identidadeBotao: handleIdentidadeBotao,
+      setScreen,
+    };
+  });
+
   // Avança a narrativa dinâmica aplicando efeitos e, no desfecho, gera manchete.
   const aplicarNarrativa = (escolha: NarrativaEscolha) => {
     if (!career?.narrativa) return;
@@ -1655,8 +1908,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (!career) return;
     const divisao = career.divisao;
     const temporadaEncerrada = career.temporada ?? 1;
-    const custoManutencao = (career.coach.sov ?? 0) - iniciarNovaTemporada(career.coach.sov, divisao);
-    const novaSov = iniciarNovaTemporada(career.coach.sov, divisao);
+    // §12: a manutenção é despesa DO CLUBE — sai do caixa do clube (que pode
+    // ficar negativo = dívida), nunca do bolso do treinador.
+    const caixaAtual = career.clubeCaixa ?? 0;
+    const custoManutencao = caixaAtual - iniciarNovaTemporada(caixaAtual, divisao);
+    const novaCaixa = iniciarNovaTemporada(caixaAtual, divisao);
     // Débito real da manutenção no ledger (idempotente por temporada encerrada
     // — F5/clique duplo nunca cobra duas vezes). Se o ledger estiver
     // indisponível, o avanço NÃO é bloqueado: a dívida fica no snapshot local
@@ -1678,9 +1934,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // Contador interno de inadimplência (oculto do jogador): pagou → zera;
     // falhou → registra a temporada na sequência (sem bloquear nunca).
     const novaInad = veredito?.temporadasInadimplente ?? 0;
-    const composicoes = career.composicoes ?? composicoesIniciais(userTeam, divisao);
+    // PROMOÇÃO/REBAIXAMENTO é aplicada AQUI (não em finishTournamentMatch): as
+    // novas composições são derivadas das ligas concluídas — quem subiu entra
+    // na divisão de cima, quem caiu desce, e o time do jogador joga na
+    // divisão da própria classificação. Se as ligas ainda não constam como
+    // concluídas (estado antigo), cai na composição salva. Sem isso, a nova
+    // temporada recriava a divisão VELHA e o jogador "subia" sem subir.
+    const resultadoTemp =
+      career.ligas && ligasConcluidas(career.ligas)
+        ? processarResultadoTemporada(career.ligas, userTeam.id)
+        : null;
+    const divisaoNova = resultadoTemp?.novaDivisao ?? divisao;
+    const composicoes =
+      resultadoTemp?.composicoes ??
+      career.composicoes ??
+      composicoesIniciais(userTeam, divisaoNova);
     const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
-    const ativa = ligas[divisao];
+    const ativa = ligas[divisaoNova];
     persistTournament(ativa);
     const poolCopa = Object.values(ligas)
       .flatMap((liga) => liga.groups.flatMap((g) => g.teamIds))
@@ -1699,7 +1969,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       rodadasDesdeEventoNarrativo: 0,
       temporada: (career.temporada ?? 1) + 1,
       temporadasInadimplente: novaInad,
-      divisao,
+      divisao: divisaoNova,
       ligas,
       composicoes,
       copaBrasil: copa,
@@ -1707,17 +1977,37 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       suborno: undefined,
       desafioPatrocinador: gerarDesafioPatrocinador(0),
       conversas: [],
+      // Caixa do clube paga a manutenção (pode ficar negativo = dívida do
+      // clube) e o lançamento entra no extrato — a nova temporada começa com
+      // a contabilidade do clube limpa de pendentes.
+      clubeCaixa: novaCaixa,
+      clubeExtrato:
+        custoManutencao > 0
+          ? registrarDespesaClube(
+              caixaAtual,
+              career.clubeExtrato ?? [],
+              custoManutencao,
+              `Manutenção do clube — temporada ${temporadaEncerrada}`,
+              0,
+              temporadaEncerrada,
+              `manutencao-t${temporadaEncerrada}`,
+            ).extrato
+          : (career.clubeExtrato ?? []),
       coach: {
         ...career.coach,
-        sov: novaSov,
         campanhasJogadas: career.coach.campanhasJogadas + 1,
       },
     };
     // A torcida atravessa temporadas (clubes promovidos/rebaixados levam seus
     // torcedores); garante cobertura se o universo mudou.
-    persistCareer(garantirTorcidaUniverso(novaCareer, userTeam));
+    const careerFinal = garantirTorcidaUniverso(novaCareer, userTeam);
+    persistCareer(careerFinal);
     if (perfil?.user_id) void registrarTemporadaRemota(perfil.user_id, novaCareer);
-    setVeredito(null);
+    // Refs sincronizadas imediatamente: sem isso, chamadas rápidas (E2E ou
+    // clique duplo) liam o veredito/carreira da temporada ENCERRADA.
+    careerRef.current = careerFinal;
+    tourRef.current = ativa;
+    setVereditoRef(null);
     setCurrentCopaFix(null);
     setScreen("hub");
   };
@@ -1738,7 +2028,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     };
     persistCareer(novaCareer);
     persistTournament(null);
-    setVeredito(null);
+    careerRef.current = novaCareer;
+    tourRef.current = null;
+    setVereditoRef(null);
     setCurrentCopaFix(null);
     setScreen("menu");
     setToast("Carreira reiniciada após falência. Recomece do zero.");
@@ -2278,6 +2570,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     let novas: Headline[] = [];
     if (copa.finished && copa.champion === userTeam.id) {
       novaSov += bonusCampeao(tour?.difficulty ?? difficulty);
+      // (a premiação entra no caixa do clube mais abaixo, via deltaCopaVal)
       novas = [
         {
           id: `copa-campeao-${Date.now()}`,
@@ -2297,19 +2590,42 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ];
     }
 
+    // §12: a premiação da Copa é receita DO CLUBE — entra no caixa do clube
+    // (com extrato), não no bolso do treinador. O delta total continua indo
+    // ao ledger (wallet = pessoal + caixa).
+    const deltaCopa = novaSov - career.coach.sov;
+    const deltaCopaVal = deltaCopa;
     let novaCareer: CareerState = {
       ...career,
       copaBrasil: copa,
       moralTime: moral,
-      // O delta da copa TAMBÉM entra no snapshot local — antes só ia ao ledger
-      // e o coach.sov local ficava para trás até a próxima hidratação.
-      coach: { ...career.coach, sov: novaSov },
+      coach: { ...career.coach },
     };
+    if (deltaCopaVal > 0) {
+      const r1 = registrarReceitaClube(
+        novaCareer.clubeCaixa ?? 0,
+        novaCareer.clubeExtrato ?? [],
+        deltaCopaVal,
+        `Copa do Brasil: ${gf}x${ga} (${currentCopaFix.stage})`,
+        novaCareer.rodadaAtual,
+        novaCareer.temporada ?? 1,
+      );
+      novaCareer = { ...novaCareer, clubeCaixa: r1.caixa, clubeExtrato: r1.extrato };
+    } else if (deltaCopaVal < 0) {
+      const r1 = registrarDespesaClube(
+        novaCareer.clubeCaixa ?? 0,
+        novaCareer.clubeExtrato ?? [],
+        -deltaCopaVal,
+        `Copa do Brasil: eliminação ${gf}x${ga} (${currentCopaFix.stage})`,
+        novaCareer.rodadaAtual,
+        novaCareer.temporada ?? 1,
+      );
+      novaCareer = { ...novaCareer, clubeCaixa: r1.caixa, clubeExtrato: r1.extrato };
+    }
     if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
 
     // Resultado da copa no Banco Central SOV (module 'career'). Delta puro
     // (pode ser negativo — 'penalty' aceita levar o saldo a negativo).
-    const deltaCopa = novaSov - career.coach.sov;
     if (deltaCopa !== 0 && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
@@ -2514,28 +2830,38 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     let posTabela: number | undefined;
     let extraMsg: string | undefined;
     if (career) {
+      // §11-§12: a receita esportiva (pontos da partida, bônus de campanha)
+      // é DO CLUBE — cai no caixa do clube, NUNCA direto no bolso do treinador.
+      // O treinador enriquece pelo salário (a cada 10 rodadas) e pelas suas
+      // atividades pessoais (investimentos, narrativa, história).
       let novaSov = career.coach.sov;
+      let caixaClube = career.clubeCaixa ?? 0;
+      let extratoClube = career.clubeExtrato ?? [];
       let moral = career.moralTime;
+      const temporadaAtual = career.temporada ?? 1;
+      const rodadaDaPartida = (career.rodadaAtual ?? 0) + 1;
 
-      // Pontos escassos: V=+3 / E=+1 / D=0
+      // Pontos escassos: V=+3 / E=+1 / D=0 — receita do clube, na escala da
+      // divisão (bilheteria + direitos: clube maior fatura mais por jogo).
+      let receita = 0;
       if (gf > ga) {
-        novaSov += POINTS.VITORIA;
+        receita += POINTS.VITORIA;
         moral = Math.min(100, moral + 4);
       } else if (gf < ga) {
-        novaSov += POINTS.DERROTA;
+        receita += POINTS.DERROTA;
         moral = Math.max(0, moral - 6);
       } else {
-        novaSov += POINTS.EMPATE;
+        receita += POINTS.EMPATE;
         moral = Math.max(0, moral - 1);
       }
 
-      // Bônus condicionais da última escolha:
+      // Bônus condicionais da última escolha (prêmio/penalidade esportiva):
       const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1];
       if (lastChoice === "goleada") {
-        if (gf - ga >= 2) novaSov += 5;
-        else if (gf < ga) novaSov -= 3;
+        if (gf - ga >= 2) receita += 5;
+        else if (gf < ga) receita -= 3;
       }
-      if (lastChoice === "respeito" && gf > ga) novaSov += 2;
+      if (lastChoice === "respeito" && gf > ga) receita += 2;
       if (lastChoice === "titular" && gf > ga) moral = Math.min(100, moral + 4);
 
       let novoTitulos = career.coach.titulos;
@@ -2545,41 +2871,59 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         tour?.phase === "grupos" &&
         t.phase === "mata-mata" &&
         t.knockout[0]?.fixtures.some((f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId);
-      if (classificouAgora) novaSov += POINTS.CLASSIFICOU_MATA;
+      if (classificouAgora) receita += POINTS.CLASSIFICOU_MATA;
+      // Escala da divisão aplicada sobre a receita esportiva da partida.
+      receita = receitaDa(career.divisao, receita);
 
-      // Fim de campanha: bônus de posição final
+      // Fim de campanha: premiação por posição final (caixa do clube) —
+      // tabela de pontos corridos: a posição é a da TABELA, não do mata-mata.
       const manchetesFim: string[] = [];
       if (t.phase === "fim") {
-        // Determina posição do usuário
+        const tabelaFinal = sortTable(t.groups[0]?.table ?? []);
+        const posicaoFim = Math.max(1, tabelaFinal.findIndex((row) => row.teamId === t.userTeamId) + 1);
+        receita += premiacaoDa(career.divisao, posicaoFim, bonusCampeao(t.difficulty));
         if (t.champion === t.userTeamId) {
-          const bonus = bonusCampeao(t.difficulty);
-          novaSov += bonus;
           novoTitulos += 1;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
           // Cerimônia de premiação!
-          setCeremonyBonus(bonus);
+          setCeremonyBonus(bonusCampeao(t.difficulty));
           setShowCeremony(true);
+        } else if (posicaoFim === 2) {
+          manchetesFim.push(`Vice-campeão: ${career.coach.apelido} chega perto do título`);
+        } else if (posicaoFim <= 4) {
+          manchetesFim.push(`Top 4: ${career.coach.apelido} fecha a temporada na parte de cima`);
+        }
+      }
+
+      // A receita entra no caixa do clube (com extrato). Resultado negativo
+      // (penalidade esportiva) sai do caixa — clube pode ficar no vermelho.
+      if (receita !== 0) {
+        if (receita > 0) {
+          const r1 = registrarReceitaClube(
+            caixaClube,
+            extratoClube,
+            receita,
+            gf > ga
+              ? `Vitória ${gf}x${ga} (rodada ${rodadaDaPartida})`
+              : gf === ga
+                ? `Empate ${gf}x${ga} (rodada ${rodadaDaPartida})`
+                : `Receita esportiva (rodada ${rodadaDaPartida})`,
+            rodadaDaPartida,
+            temporadaAtual,
+          );
+          caixaClube = r1.caixa;
+          extratoClube = r1.extrato;
         } else {
-          // Vice? Terceiro? Quarto?
-          const finalStage = t.knockout[t.knockout.length - 1];
-          const foiVice = finalStage?.fixtures.some(
-            (f) =>
-              (f.homeId === t.userTeamId || f.awayId === t.userTeamId) &&
-              f.stage.toLowerCase().includes("final"),
+          const r1 = registrarDespesaClube(
+            caixaClube,
+            extratoClube,
+            -receita,
+            `Penalidade esportiva (rodada ${rodadaDaPartida})`,
+            rodadaDaPartida,
+            temporadaAtual,
           );
-          const semiStage = t.knockout[t.knockout.length - 2];
-          const foiSemi = semiStage?.fixtures.some(
-            (f) => f.homeId === t.userTeamId || f.awayId === t.userTeamId,
-          );
-          if (foiVice) {
-            novaSov += POINTS.VICE;
-            manchetesFim.push(`Vice-campeão: ${career.coach.apelido} chega perto do título`);
-          } else if (foiSemi) {
-            novaSov += POINTS.TERCEIRO;
-            manchetesFim.push(`Semifinalista: ${career.coach.apelido} termina no Top 4`);
-          } else {
-            novaSov += POINTS.QUARTO;
-          }
+          caixaClube = r1.caixa;
+          extratoClube = r1.extrato;
         }
       }
 
@@ -2636,9 +2980,16 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // Avança a rodada do Brasileirão para distribuir narrativas/Copa.
         rodadaAtual: (career.rodadaAtual ?? 0) + 1,
         rodadasDesdeEventoNarrativo: (career.rodadasDesdeEventoNarrativo ?? 0) + 1,
-        divisao: resultadoTemp?.novaDivisao ?? career.divisao,
+        // Promoção/rebaixamento NÃO é aplicada aqui: ela entra no
+        // `startNextSeason` derivando as novas composições das ligas
+        // concluídas (senão o jogador "subia" sem subir — a temporada nova
+        // recriava a divisão velha).
+        divisao: career.divisao,
         ligas: ligasAtualizadas ?? career.ligas,
-        composicoes: resultadoTemp?.composicoes ?? career.composicoes,
+        composicoes: career.composicoes,
+        // §14: caixa do clube separado do dinheiro pessoal.
+        clubeCaixa: caixaClube,
+        clubeExtrato: extratoClube,
         coach: {
           ...career.coach,
           // Dívida permitida: saldo negativo é estado econômico válido.
@@ -2647,6 +2998,64 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         },
       };
       novaCareer = addHeadlines(novaCareer, novas);
+
+      // §13: SALÁRIO DO TREINADOR a cada 10 rodadas — sai do caixa do clube
+      // para a carteira pessoal. Idempotente por rodada (extrato + ledger).
+      if (devePagarSalario(novaCareer.rodadaAtual)) {
+        const salario = salarioDa(novaCareer.divisao);
+        const idTx = idSalario(novaCareer.temporada ?? 1, novaCareer.rodadaAtual);
+        if (!(novaCareer.clubeExtrato ?? []).some((tx) => tx.id === idTx)) {
+          novaCareer = {
+            ...novaCareer,
+            clubeCaixa: (novaCareer.clubeCaixa ?? 0) - salario,
+            clubeExtrato: [
+              {
+                id: idTx,
+                tipo: "salario" as const,
+                valor: -salario,
+                descricao: `Salário do treinador (rodada ${novaCareer.rodadaAtual})`,
+                rodada: novaCareer.rodadaAtual,
+                temporada: novaCareer.temporada ?? 1,
+              },
+              ...(novaCareer.clubeExtrato ?? []),
+            ].slice(0, 60),
+            coach: { ...novaCareer.coach, sov: novaCareer.coach.sov + salario },
+          };
+          // Transferência interna (wallet não muda de total): o extrato do
+          // Banco registra o PAR (saída do caixa + entrada pessoal), líquido
+          // zero — rastreável sem criar SOV.
+          if (perfil?.user_id) {
+            const chave = chaveSalarioLedger(
+              perfil.user_id,
+              novaCareer.temporada ?? 1,
+              novaCareer.rodadaAtual,
+            );
+            void (async () => {
+              const saida = await registrarTransacaoSov(
+                perfil.user_id!,
+                -salario,
+                "fee",
+                `Salário pago pelo clube (rodada ${novaCareer.rodadaAtual})`,
+                "career",
+                { rodada: novaCareer.rodadaAtual, tipo: "salario-saida" },
+                { sourceEvent: "salario", idempotencyKey: `${chave}:saida` },
+              );
+              if (saida !== null) {
+                await registrarTransacaoSov(
+                  perfil.user_id!,
+                  salario,
+                  "reward",
+                  `Salário do treinador (rodada ${novaCareer.rodadaAtual})`,
+                  "career",
+                  { rodada: novaCareer.rodadaAtual, tipo: "salario-entrada" },
+                  { sourceEvent: "salario", idempotencyKey: `${chave}:entrada` },
+                );
+              }
+            })();
+          }
+          setTimeout(() => setToast(`💼 Salário recebido: +${salario} SOV na sua conta pessoal`), 1500);
+        }
+      }
 
       // === RPG narrativo: sequência, rede social e gatilhos de eventos ===
       const resultadoRpg = gf > ga ? ("vitoria" as const) : gf < ga ? ("derrota" as const) : ("empate" as const);
@@ -2687,6 +3096,19 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const temProxima = t.phase !== "fim" && !!nextUserFixture(t);
       const rDesafio = aplicarDesafioPatrocinador(novaCareer, gf, ga, temProxima);
       novaCareer = rDesafio.estado;
+      // Patrocínio é receita DO CLUBE (o patrocinador paga o clube, não o
+      // treinador) — entra no caixa com extrato.
+      if (rDesafio.ganhou > 0) {
+        const rPat = registrarReceitaClube(
+          novaCareer.clubeCaixa ?? 0,
+          novaCareer.clubeExtrato ?? [],
+          rDesafio.ganhou,
+          `Patrocínio — desafio cumprido (rodada ${novaCareer.rodadaAtual})`,
+          novaCareer.rodadaAtual,
+          novaCareer.temporada ?? 1,
+        );
+        novaCareer = { ...novaCareer, clubeCaixa: rPat.caixa, clubeExtrato: rPat.extrato };
+      }
 
       // === Bolsa de Valores da Cidadela (§24, §25): o Clube reage ao resultado
       // real da rodada; demais setores driftam; dividendos são distribuídos e
@@ -2825,7 +3247,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       // (chave `dividendo:{t}:r{n}`), desafio → abaixo, bônus de fim de
       // temporada → aplicarFimCampanhaRemoto. Registrar o patchSob inteiro aqui
       // CREDITAVA TUDO DUAS VEZES (saldo do ledger divergia da UI).
-      patchSob = novaCareer.coach.sov - career.coach.sov;
+      // A variação da partida vai para o CAIXA DO CLUBE (receita esportiva) —
+      // o delta pessoal do treinador neste fluxo é só o salário (se a rodada
+      // pagou). patchSob alimenta a tela de fim de jogo: mostra o caixa.
+      patchSob = (novaCareer.clubeCaixa ?? 0) - (career.clubeCaixa ?? 0);
 
       // Recompensa do patrocinador no Banco Central SOV (module 'career'),
       // idempotente por desafio (o id do desafio é único por proposta).
@@ -2849,11 +3274,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       posTabela = posicaoUsuario > 0 ? posicaoUsuario : undefined;
       extraMsg = manchetesFim[0];
 
-      // Fim de temporada (liga concluída): economia de Soberania decide se o
-      // treinador segue (temporada infinita) ou é demitido (Game Over).
+      // Fim de temporada (liga concluída): a manutenção é paga pelo CAIXA DO
+      // CLUBE (não pelo bolso do treinador). Sem caixa, o clube fica devendo
+      // — e a temporada seguinte começa mesmo assim.
       if (t.phase === "fim") {
         const v = avaliarFimTemporada(
-          novaCareer.coach.sov,
+          novaCareer.clubeCaixa ?? 0,
           novaCareer.divisao,
           career.temporadasInadimplente ?? 0,
         );

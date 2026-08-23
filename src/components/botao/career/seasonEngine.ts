@@ -1,7 +1,7 @@
 import { resolveTeam } from "./competitionApi";
 import { timesDaDivisao, type Team } from "../data/teams";
 import { simulateMatch, sortTable } from "../tournament";
-import type { Difficulty, Fixture, GroupRow, Tournament } from "../types";
+import type { Difficulty, Fixture, GroupRow, MatchResult, Tournament } from "../types";
 import type { Divisao } from "./types";
 
 export type ComposicoesDivisoes = Record<Divisao, string[]>;
@@ -216,6 +216,40 @@ export function ligasConcluidas(ligas: LigasTemporada): boolean {
   return DIVISOES.every(
     (divisao) => ligas[divisao].groupFixtures.every((fixture) => fixture.played),
   );
+}
+
+/**
+ * Simula a temporada INTEIRA rodada a rodada (todas as divisões, com força
+ * efetiva opcional). A cada estágio novo da liga do usuário, aplica
+ * `jogarUsuario(fixture)` como o jogo real do jogador e simula o resto.
+ * Determinístico se `jogarUsuario` for determinístico. Usado por testes e
+ * ferramentas de balanceamento — a UI joga de verdade.
+ */
+export function simularTemporadaCompleta(
+  ligas: LigasTemporada,
+  userTeamId: string,
+  difficulty: Difficulty,
+  jogarUsuario: (fixture: Fixture) => MatchResult,
+  powerOverrides?: Record<string, number>,
+): LigasTemporada {
+  let atual = ligas;
+  let guarda = 0;
+  while (!ligasConcluidas(atual) && guarda < 500) {
+    guarda++;
+    const ligaUser = DIVISOES.map((d) => atual[d]).find(
+      (l) => l.groups[0]?.teamIds.includes(userTeamId) && l.phase === "grupos",
+    );
+    if (!ligaUser) break;
+    const fixUsuario = ligaUser.groupFixtures.find(
+      (f) => !f.played && (f.homeId === userTeamId || f.awayId === userTeamId),
+    );
+    if (!fixUsuario) break;
+    const resultado = jogarUsuario(fixUsuario);
+    const liga = atual[DIVISOES.find((d) => atual[d] === ligaUser) ?? "serie-c"];
+    applyFixtureResult(liga, fixUsuario, resultado);
+    atual = simularRodadaDivisoes(atual, userTeamId, fixUsuario.stage, difficulty, powerOverrides);
+  }
+  return atual;
 }
 
 export interface ResultadoTemporada {

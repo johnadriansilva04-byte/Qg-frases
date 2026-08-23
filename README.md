@@ -12,35 +12,36 @@ valores, mercado de clubes e a Cidadela (RPG por profissões).
 - Documento legado do gerador de frases (origem do repo):
   `README-FRASES-LEGADO.md`.
 
-## Conta oficial do OpenHands (E2E)
+## Conta E2E oficial do projeto
 
-O OpenHands tem **uma conta pessoal de jogador** dentro do jogo. Ela é a
-única conta autorizada para testes E2E executados pelo OpenHands:
+Existe **uma única conta E2E oficial** deste projeto. Ela foi criada pelo
+OpenHands durante o desenvolvimento e deve ser usada por QUALQUER agente/IA
+que baixar o projeto e precisar testar o jogo — **não crie outra conta**.
 
 | Campo | Valor |
 | --- | --- |
-| E-mail | `open.rangers.fc.oficial@gmail.com` |
-| Treinador | **Open** |
-| Clube | **Open FC** |
-| Sigla | **OFC** |
+| E-mail | `openhands.rookie.e2e@gmail.com` |
+| Senha | `Rookie#2026!E2E` |
+| Treinador | **Rookie** |
+| Clube | **Rookie FC** |
+| Sigla | **RFC** |
 
-Regras para agentes/IA que forem testar o jogo:
+São credenciais fictícias/de teste criadas exclusivamente para este jogo
+(não servem para nenhum outro serviço).
 
-1. **Nunca crie outra conta para o OpenHands** — a conta acima é a única.
-   Contas antigas criadas por engano (ex.: `open.rangers.adversario.e2e@`,
-   `open.rangers.terceiro.e2e@`, `open.rangers.fc.e2e@`, `robo.doidao.e2e@`)
-   são inválidas e serão apagadas manualmente pelo dono do projeto.
-2. **Senha não fica no repositório.** A senha da conta oficial é fornecida ao
-   agente autorizado pelo ambiente de execução, na variável de ambiente
-   `OPENHANDS_E2E_PASSWORD` (ou pelo dono, na conversa). Se a variável não
-   existir, **pare e peça a credencial ao dono** — não tente adivinhar, não
-   crie conta nova e não redefina a senha.
-3. Se **outro agente/IA** for jogar/testar, ele deve criar a **própria conta
-   pública de jogador** com a própria identidade (nome curto de treinador +
-   clube distintos). Nunca use a conta do OpenHands para representar outro
-   agente.
-4. Todas são **contas de jogador**, sem privilégio administrativo: nada de
-   backfill, SQL direto para subir saldo/patrimônio ou atalhos de teste.
+Fluxo esperado de qualquer agente:
+
+1. Baixa o projeto → lê este README → entra com a conta acima.
+2. Continua a jornada E2E de onde ela estiver (nunca reinicia, nunca cria
+   conta nova).
+3. Joga como um jogador normal: sem SQL, sem backfill, sem criar SOV, sem
+   atalhos administrativos. Nunca ultrapassar os 200.000 SOV do universo.
+
+Outras contas antigas criadas por engano (`open.rangers.*`, `robo.doidao.*`,
+`japasport@`, `john@`) **não** fazem parte do E2E — o dono do projeto as
+apaga manualmente. Se outro agente/IA precisar de identidade própria no
+jogo (não para o E2E), aí sim ele cria a própria conta pública de jogador
+com identidade distinta (treinador ≠ clube, nomes curtos).
 
 ## Rodando localmente
 

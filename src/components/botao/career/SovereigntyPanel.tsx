@@ -1,4 +1,4 @@
-import { Crown, TrendingUp, Heart, Coins } from "lucide-react";
+import { Crown, Heart, Coins, Landmark } from "lucide-react";
 import { nivelDoTreinador, type Coach, type Divisao } from "./types";
 import { CUSTO_MANUTENCAO } from "./competitionApi";
 
@@ -7,11 +7,17 @@ export function SovereigntyPanel({
   moral,
   temporada,
   divisao,
+  clubeCaixa,
+  salarioPor10,
 }: {
   coach: Coach;
   moral: number;
   temporada?: number;
   divisao?: Divisao;
+  /** Caixa DO CLUBE (§10-§14): receita esportiva, manutenção e salários. */
+  clubeCaixa?: number | undefined;
+  /** Salário pago a cada 10 rodadas (informativo). */
+  salarioPor10?: number | undefined;
 }) {
   const { atual, proximo } = nivelDoTreinador(coach.sov);
   const progresso = proximo
@@ -21,7 +27,8 @@ export function SovereigntyPanel({
     moral >= 70 ? "text-emerald-300" : moral >= 40 ? "text-amber-300" : "text-rose-300";
 
   const custo = divisao ? CUSTO_MANUTENCAO[divisao] : 0;
-  const saldoManutencao = coach.sov - custo;
+  const caixa = clubeCaixa ?? 0;
+  const saldoManutencao = caixa - custo;
   const manutencaoOk = saldoManutencao >= 0;
 
   return (
@@ -40,11 +47,16 @@ export function SovereigntyPanel({
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         <Stat
           icon={<Crown className="size-4" />}
-          label="SOV"
+          label="Seu SOV"
           value={coach.sov}
           accent
         />
-        <Stat icon={<TrendingUp className="size-4" />} label="Títulos" value={coach.titulos} />
+        <Stat
+          icon={<Landmark className="size-4" />}
+          label="Caixa do clube"
+          value={caixa}
+          valueClass={caixa < 0 ? "text-rose-300" : "text-emerald-300"}
+        />
         <Stat
           icon={<Heart className="size-4" />}
           label="Moral"
@@ -52,6 +64,11 @@ export function SovereigntyPanel({
           valueClass={moralColor}
         />
       </div>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        A receita das partidas é do clube. Você recebe salário
+        {salarioPor10 ? ` de ${salarioPor10} SOV` : ""} a cada 10 rodadas — e enriquece com
+        investimentos próprios.
+      </p>
 
       {proximo && (
         <div className="mt-4">
@@ -80,12 +97,12 @@ export function SovereigntyPanel({
           </div>
           <div className="mt-1 flex items-center justify-between">
             <span className="text-[11px] text-muted-foreground">
-              Custo {custo} · você tem {coach.sov}
+              Custo {custo} · caixa do clube {caixa}
             </span>
             <span
               className={`text-[11px] font-medium ${manutencaoOk ? "text-emerald-300" : "text-rose-300"}`}
             >
-              {manutencaoOk ? "Permanência garantida" : "Risco de falência"}
+              {manutencaoOk ? "Permanência garantida" : "Clube no vermelho"}
             </span>
           </div>
         </div>
