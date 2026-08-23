@@ -585,6 +585,17 @@ BEGIN
   v_j1 := v_item->>'j1_id';
   v_j2 := v_item->>'j2_id';
 
+  -- BOT não é usuário real: mesa realtime exige FK em auth.users. Quando um
+  -- lado é bot, a partida é jogada localmente contra o motor e registrada
+  -- direto no confronto (sem mesa). Devolvemos um identificador sintético
+  -- que o frontend reconhece e usa o caminho local.
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_row.participantes) el
+             WHERE el->>'user_id' = v_j1 AND COALESCE((el->>'bot')::BOOLEAN, false))
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_row.participantes) el
+                WHERE el->>'user_id' = v_j2 AND COALESCE((el->>'bot')::BOOLEAN, false)) THEN
+    RETURN 'botmatch_' || p_campeonato_id || '_' || p_rodada || '_' || v_j1 || '_' || v_j2;
+  END IF;
+
   SELECT
     COALESCE((SELECT el->>'time_id' FROM jsonb_array_elements(v_row.participantes) el WHERE el->>'user_id' = v_j1), 'Meu Time'),
     COALESCE((SELECT el->>'time_id' FROM jsonb_array_elements(v_row.participantes) el WHERE el->>'user_id' = v_j2), 'Meu Time')
@@ -608,6 +619,153 @@ BEGIN
   UPDATE public.botao_campeonatos_online SET confrontos = v_confrontos WHERE id = v_row.id;
 
   RETURN v_mesa_id;
+END; $$;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- 5c) Resultado de confronto HUMANO × BOT: o placar jogado localmente contra o
+--     motor é registrado direto no confronto (sem mesa realtime, que exige FK
+--     em auth.users para o bot). Valida que UM lado é humano (o chamador) e o
+--     outro é bot. Atualiza participantes + estatísticas do humano + avanço.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_resultado_vs_bot(
+  p_campeonato_id BIGINT,
+  p_rodada INTEGER,
+  p_gols_humano INTEGER,
+  p_gols_bot INTEGER
+)
+RETURNS public.botao_campeonatos_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_row public.botao_campeonatos_online;
+  v_part JSONB;
+  v_confrontos JSONB;
+  v_idx INTEGER;
+  v_item JSONB;
+  v_j1 TEXT;
+  v_j2 TEXT;
+  v_humano TEXT;
+  v_bot TEXT;
+  v_gols_j1 INTEGER;
+  v_gols_j2 INTEGER;
+  v_el JSONB;
+  v_total INTEGER;
+  v_finalizados INTEGER := 0;
+  v_ultima_rodada INTEGER;
+  v_campeao JSONB;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT c.* INTO v_row FROM public.botao_campeonatos_online c
+  WHERE c.id = p_campeonato_id FOR UPDATE;
+
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+  IF v_row.status <> 'em_andamento' THEN RAISE EXCEPTION 'campeonato nao esta em andamento'; END IF;
+
+  v_part := v_row.participantes;
+  v_confrontos := v_row.confrontos;
+  v_total := jsonb_array_length(v_confrontos);
+
+  -- Localiza o confronto pendente do humano contra um bot nesta rodada.
+  SELECT (ord - 1)::INT INTO v_idx
+  FROM jsonb_array_elements(v_confrontos) WITH ORDINALITY AS t(item, ord)
+  WHERE (t.item->>'rodada')::INT = p_rodada
+    AND t.item->>'status' = 'pendente'
+    AND COALESCE((t.item->>'bye')::BOOLEAN, false) = false
+    AND (t.item->>'j1_id' = v_uid::TEXT OR t.item->>'j2_id' = v_uid::TEXT)
+  LIMIT 1;
+
+  IF v_idx IS NULL THEN
+    RAISE EXCEPTION 'nenhum confronto pendente seu nesta rodada';
+  END IF;
+
+  v_item := v_confrontos[v_idx];
+  v_j1 := v_item->>'j1_id';
+  v_j2 := v_item->>'j2_id';
+  v_humano := v_uid::TEXT;
+  v_bot := CASE WHEN v_j1 = v_humano THEN v_j2 ELSE v_j1 END;
+
+  -- Valida que o outro lado é bot.
+  IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_part) el
+                 WHERE el->>'user_id' = v_bot AND COALESCE((el->>'bot')::BOOLEAN, false)) THEN
+    RAISE EXCEPTION 'registrar_resultado_vs_bot vale apenas contra bot';
+  END IF;
+
+  v_gols_j1 := CASE WHEN v_j1 = v_humano THEN p_gols_humano ELSE p_gols_bot END;
+  v_gols_j2 := CASE WHEN v_j1 = v_humano THEN p_gols_bot ELSE p_gols_humano END;
+
+  v_item := jsonb_set(v_item, '{pl_j1}', to_jsonb(GREATEST(0, v_gols_j1)));
+  v_item := jsonb_set(v_item, '{pl_j2}', to_jsonb(GREATEST(0, v_gols_j2)));
+  v_item := jsonb_set(v_item, '{status}', '"finalizado"');
+  v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx]::TEXT[], v_item);
+
+  v_el := (
+    SELECT jsonb_agg(
+      CASE
+        WHEN el->>'user_id' = v_j1 THEN
+          el || jsonb_build_object(
+            'pontos', (el->>'pontos')::INT + CASE WHEN v_gols_j1 > v_gols_j2 THEN 3 WHEN v_gols_j1 = v_gols_j2 THEN 1 ELSE 0 END,
+            'gols_pro', (el->>'gols_pro')::INT + v_gols_j1,
+            'gols_contra', (el->>'gols_contra')::INT + v_gols_j2)
+        WHEN el->>'user_id' = v_j2 THEN
+          el || jsonb_build_object(
+            'pontos', (el->>'pontos')::INT + CASE WHEN v_gols_j2 > v_gols_j1 THEN 3 WHEN v_gols_j2 = v_gols_j1 THEN 1 ELSE 0 END,
+            'gols_pro', (el->>'gols_pro')::INT + v_gols_j2,
+            'gols_contra', (el->>'gols_contra')::INT + v_gols_j1)
+        ELSE el
+      END)
+    FROM jsonb_array_elements(v_part) el
+  );
+  v_part := COALESCE(v_el, v_part);
+
+  -- Estatísticas do humano (o bot não tem perfil).
+  UPDATE public.botao_usuarios SET
+    pontos_soberania = GREATEST(0, pontos_soberania + CASE WHEN p_gols_humano > p_gols_bot THEN 3 WHEN p_gols_humano = p_gols_bot THEN 1 ELSE -3 END),
+    partidas_jogadas = partidas_jogadas + 1,
+    partidas_vencidas = partidas_vencidas + CASE WHEN p_gols_humano > p_gols_bot THEN 1 ELSE 0 END,
+    vitorias = vitorias + CASE WHEN p_gols_humano > p_gols_bot THEN 1 ELSE 0 END,
+    empates = empates + CASE WHEN p_gols_humano = p_gols_bot THEN 1 ELSE 0 END,
+    derrotas = derrotas + CASE WHEN p_gols_humano < p_gols_bot THEN 1 ELSE 0 END,
+    gols_feitos = gols_feitos + p_gols_humano,
+    gols_sofridos = gols_sofridos + p_gols_bot
+  WHERE user_id = v_uid;
+
+  -- Avanço de rodada / fim do campeonato (mesma lógica do registrar_resultado).
+  FOR v_idx IN 0..(v_total - 1) LOOP
+    IF (v_confrontos[v_idx]->>'status') = 'finalizado' THEN v_finalizados := v_finalizados + 1; END IF;
+  END LOOP;
+
+  SELECT max((c->>'rodada')::INT) INTO v_ultima_rodada
+  FROM jsonb_array_elements(v_confrontos) c;
+
+  IF v_finalizados = v_total THEN
+    SELECT el INTO v_campeao FROM jsonb_array_elements(v_part) el
+    ORDER BY (el->>'pontos')::INT DESC, ((el->>'gols_pro')::INT - (el->>'gols_contra')::INT) DESC LIMIT 1;
+    UPDATE public.botao_campeonatos_online
+       SET status = 'finalizado', fase = -1, participantes = v_part, confrontos = v_confrontos,
+           vencedor_id = CASE WHEN COALESCE((v_campeao->>'bot')::BOOLEAN, false) THEN NULL ELSE (v_campeao->>'user_id')::UUID END
+     WHERE id = v_row.id RETURNING * INTO v_row;
+    IF NOT COALESCE((v_campeao->>'bot')::BOOLEAN, false) THEN
+      UPDATE public.botao_usuarios SET pontos_soberania = pontos_soberania + 50,
+        campeonatos_ganhos = campeonatos_ganhos + 1 WHERE user_id = (v_campeao->>'user_id')::UUID;
+    END IF;
+  ELSE
+    PERFORM 1 FROM jsonb_array_elements(v_confrontos) c
+    WHERE (c->>'rodada')::INT = v_row.rodada_atual AND c->>'status' <> 'finalizado' LIMIT 1;
+    IF NOT FOUND AND v_row.rodada_atual < v_ultima_rodada THEN
+      UPDATE public.botao_campeonatos_online
+         SET participantes = v_part, confrontos = v_confrontos, rodada_atual = v_row.rodada_atual + 1
+       WHERE id = v_row.id RETURNING * INTO v_row;
+    ELSE
+      UPDATE public.botao_campeonatos_online
+         SET participantes = v_part, confrontos = v_confrontos
+       WHERE id = v_row.id RETURNING * INTO v_row;
+    END IF;
+  END IF;
+
+  RETURN v_row;
 END; $$;
 
 COMMIT;
