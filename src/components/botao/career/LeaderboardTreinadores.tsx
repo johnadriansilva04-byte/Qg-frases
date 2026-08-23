@@ -25,7 +25,7 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const buscar = async () => {
       try {
         // Query base — só colunas garantidas na versão atual do banco
         const base = await (supabase as any)
@@ -62,9 +62,13 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    };
+    // Pontos atualizam SEM F5: refetch periódico enquanto a aba está aberta.
+    void buscar();
+    const id = window.setInterval(() => void buscar(), 15000);
     return () => {
       alive = false;
+      window.clearInterval(id);
     };
   }, []);
 
@@ -135,7 +139,7 @@ export function LeaderboardTreinadores({ compact = false }: { compact?: boolean 
               </div>
               <div className="text-right">
                 <p className="font-display text-xl leading-none">{r.pontos_soberania ?? 0}</p>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">soberania</p>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">SOV</p>
               </div>
             </li>
           );

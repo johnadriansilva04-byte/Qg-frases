@@ -56,7 +56,7 @@ async function entrarOuCriarConta(email, senha, perfil) {
 const EMAIL_DONO = "universal.e2e.openhands@gmail.com";
 const SENHA_DONO = "Universal#2026!E2E";
 
-// 0) migration v2 aplicada?
+// 0) migration v2 aplicada — confirma antes de criar
 const donoProbe = await entrarOuCriarConta(EMAIL_DONO, SENHA_DONO, {
   nome: "Universal",
   time: "Universal FC",
@@ -67,6 +67,8 @@ if (probe.body?.code === "PGRST202") {
   console.log("⚠️  migration campeonato_online_v2.sql ainda não aplicada. Aplique e rode de novo.");
   process.exit(2);
 }
+const saldoDono = await rpc(donoProbe.token, "obter_saldo_soberania", { p_user_id: donoProbe.uid });
+console.log(`Saldo do dono (Universal): ${saldoDono.body} SOV`);
 
 // 1) Sala de 32 (reutiliza se já existir uma aberta do dono)
 let sala;
