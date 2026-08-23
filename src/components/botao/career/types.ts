@@ -337,6 +337,14 @@ export type CareerState = {
   /** Última temporada em que a chegada ao 1º lugar foi celebrada (§10).
    *  Impede que a comemoração volte depois de F5/hidratação. */
   marcoLiderTemporada?: number | undefined;
+  /** Evolução dos 5 botões de linha (§7-§10): nível 0..5 da habilidade única
+   *  de cada botão. Custa SOV progressivo e melhora o desempenho real. */
+  botoesNiveis?: number[] | undefined;
+  /** Identidade visual dos botões (§11): símbolo/escudo + cor de acento. */
+  identidadeBotao?: { simbolo: string; cor: string } | undefined;
+  /** Clube cuja vaga o time do jogador assumiu na temporada 1 — a oferta
+   *  escolhida na entrada da carreira (§4). */
+  clubeOrigemId?: string | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

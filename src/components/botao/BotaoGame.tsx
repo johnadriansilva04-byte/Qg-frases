@@ -72,8 +72,18 @@ import {
   avaliarFimTemporada,
   iniciarNovaTemporada,
   chegouAoPrimeiroLugar,
+  CUSTO_MANUTENCAO,
   type VereditoTemporada,
 } from "./career/competitionApi";
+import { gerarOfertasIniciais, type OfertaClube } from "./career/ofertasIniciais";
+import {
+  bonusForcaTime,
+  chaveEvolucao,
+  evoluirBotao,
+  normalizarNiveis,
+  podeEvoluir,
+} from "./career/evolucaoBotoes";
+import { distribuirTorcidaInicial as distribuirTorcidaBase } from "./career/torcidaEngine";
 import {
   NARRATIVA_INICIAL,
   gerarNarrativa,
@@ -453,16 +463,44 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     // efetivo do time na próxima partida (reflete moral/tática do elenco).
     const bonus = career?.bonusProximaPartida ?? 0;
     const penal = career?.penaltiesProximaPartida ?? 0;
+    // Evolução dos botões (§8): a média dos níveis soma força real ao time.
+    const bonusBotoes = bonusForcaTime(career?.botoesNiveis ?? []);
     return createCustomTeam(
       "custom",
       customTeamData.nome,
       customTeamData.short,
       customTeamData.primary,
       customTeamData.secondary,
-      Math.max(40, Math.min(99, 75 + bonus - penal)),
+      Math.max(40, Math.min(99, 75 + bonus - penal + bonusBotoes)),
       customTeamData.botoesNomes,
     );
-  }, [customTeamData, career?.bonusProximaPartida, career?.penaltiesProximaPartida]);
+  }, [customTeamData, career?.bonusProximaPartida, career?.penaltiesProximaPartida, career?.botoesNiveis]);
+
+  /**
+   * Ofertas de entrada da carreira (§4): o treinador começa desconhecido —
+   * só clubes PEQUENOS da divisão inicial fazem proposta. Determinístico por
+   * usuário (F5 não muda as ofertas).
+   */
+  const ofertasIniciais = useMemo(() => {
+    const clubesC = TEAMS.filter((t) => t.divisaoInicial === "serie-c").map((t) => ({
+      id: t.id,
+      nome: t.name,
+      sigla: t.short,
+      cidade: t.city,
+      power: t.power,
+      escudo: t.escudo,
+    }));
+    const torcidaBase = distribuirTorcidaBase(TEAMS.map((t) => ({ id: t.id, power: t.power })));
+    const fans: Record<string, number> = Object.fromEntries(
+      Object.entries(torcidaBase).map(([id, t]) => [id, t.fans]),
+    );
+    return gerarOfertasIniciais(
+      clubesC,
+      perfil?.user_id ?? "treinador-desconhecido",
+      fans,
+      CUSTO_MANUTENCAO["serie-c"],
+    );
+  }, [perfil?.user_id]);
 
   // Formação PS2 escolhida pelo usuário no perfil (tática + posições dos botões).
   const formation = useMemo<Array<[number, number]>>(() => {
@@ -1275,7 +1313,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
 
   const iniciarCampanha = async (c: CareerState) => {
     const divisaoInicial = c.divisao ?? "serie-c";
-    const composicoes = c.composicoes ?? composicoesIniciais(userTeam, divisaoInicial);
+    // A oferta escolhida define a vaga que o time do jogador assume (§4).
+    const composicoes =
+      c.composicoes ?? composicoesIniciais(userTeam, divisaoInicial, c.clubeOrigemId);
     const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
     const ativa = ligas[divisaoInicial];
     persistTournament(ativa);
@@ -1322,12 +1362,95 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     setScreen("hub");
   };
 
-  const finishCoachSetup = (coach: CareerState["coach"]) => {
+  const finishCoachSetup = (coach: CareerState["coach"], oferta: OfertaClube | null) => {
     const base = career ?? EMPTY_CAREER;
-    const coachComSaldo = { ...coach, sov: perfil?.pontos_soberania ?? coach.sov };
-    const nova: CareerState = { ...base, coach: coachComSaldo };
+    const bonusAssinatura = oferta?.bonusAssinatura ?? 0;
+    const coachComSaldo = {
+      ...coach,
+      sov: (perfil?.pontos_soberania ?? coach.sov) + bonusAssinatura,
+    };
+    const nova: CareerState = {
+      ...base,
+      coach: coachComSaldo,
+      clubeOrigemId: oferta?.clubeId ?? base.clubeOrigemId,
+    };
     persistCareer(nova);
+    // Bônus de assinatura da oferta vai ao ledger (idempotente por temporada 1
+    // + clube — F5/retry nunca paga duas vezes; a hidratação realinha o saldo
+    // local ao ledger autoritativo se o registro falhar).
+    if (oferta && perfil?.user_id) {
+      void registrarTransacaoSov(
+        perfil.user_id,
+        bonusAssinatura,
+        "reward",
+        `Bônus de assinatura — ${oferta.nome}`,
+        "career",
+        { clubeId: oferta.clubeId, temporada: 1 },
+        {
+          sourceEvent: "assinatura_clube",
+          idempotencyKey: `assinatura:${perfil.user_id}:t1:${oferta.clubeId}`,
+        },
+      );
+    }
     iniciarCampanha(nova);
+  };
+
+  /* ---------- evolução dos botões (§7-§10) ---------- */
+  const [evoluindoBotao, setEvoluindoBotao] = useState<number | null>(null);
+
+  /**
+   * Evolui a habilidade de um botão: cobra SOV com preço progressivo. Compra é
+   * gasto voluntário — ledger-first: se o débito não for confirmado, nada
+   * evolui (nunca evolução fantasma nem débito duplo — chave idempotente por
+   * botão+nível).
+   */
+  const handleEvoluirBotao = async (idx: number) => {
+    if (!career || evoluindoBotao !== null) return;
+    const niveis = normalizarNiveis(career.botoesNiveis);
+    const nivelAtual = niveis[idx] ?? 0;
+    const check = podeEvoluir(niveis, idx, career.coach.sov);
+    if (!check.ok || check.custo === null) {
+      setToast(check.motivo ?? "Não foi possível evoluir este botão.");
+      return;
+    }
+    setEvoluindoBotao(idx);
+    try {
+      if (perfil?.user_id) {
+        const novoSaldo = await registrarTransacaoSov(
+          perfil.user_id,
+          -check.custo,
+          "fee",
+          `Evolução do botão ${idx + 1} → nível ${nivelAtual + 1}`,
+          "career",
+          { botao: idx, nivel: nivelAtual + 1 },
+          {
+            sourceEvent: "evolucao_botao",
+            idempotencyKey: chaveEvolucao(perfil.user_id, idx, nivelAtual + 1),
+          },
+        );
+        if (novoSaldo === null) {
+          setToast("Não foi possível confirmar o pagamento. Tente novamente.");
+          return;
+        }
+      }
+      const atual = careerRef.current ?? career;
+      const atualizado: CareerState = {
+        ...atual,
+        botoesNiveis: evoluirBotao(normalizarNiveis(atual.botoesNiveis), idx),
+        coach: { ...atual.coach, sov: atual.coach.sov - check.custo },
+      };
+      persistCareer(atualizado);
+      setToast(`🔧 Botão ${idx + 1} evoluiu para o nível ${nivelAtual + 1}!`);
+    } finally {
+      setEvoluindoBotao(null);
+    }
+  };
+
+  /** Escudo + cor de acento dos botões (§11) — salvo na carreira (JSONB). */
+  const handleIdentidadeBotao = (simbolo: string, cor: string) => {
+    const atual = careerRef.current ?? career;
+    if (!atual) return;
+    persistCareer({ ...atual, identidadeBotao: { simbolo, cor } });
   };
 
   /**
@@ -3052,7 +3175,21 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onTrophies={() => setScreen("trophies")}
             onHome={() => setScreen("menu")}
           />
-          <ProfileSetup perfil={perfil} onPronto={aoLogar} onBack={() => setScreen("menu")} />
+          <ProfileSetup
+            perfil={perfil}
+            onPronto={aoLogar}
+            onBack={() => setScreen("menu")}
+            evolucao={{
+              niveis: normalizarNiveis(career?.botoesNiveis),
+              saldoSov: career?.coach.sov ?? 0,
+              simbolo: career?.identidadeBotao?.simbolo ?? "",
+              cor: career?.identidadeBotao?.cor ?? "",
+              evoluindo: evoluindoBotao,
+              carreiraAtiva: !!career?.coach.nome,
+              onEvoluir: handleEvoluirBotao,
+              onIdentidade: handleIdentidadeBotao,
+            }}
+          />
         </div>
       </Shell>
     );
@@ -3109,6 +3246,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           timeName={userTeam.name}
           divisao={career?.divisao ?? "serie-c"}
           nomeInicial={perfil?.nome}
+          ofertas={career?.clubeOrigemId ? [] : ofertasIniciais}
           onFinish={finishCoachSetup}
           onBack={() => setScreen("menu")}
         />
@@ -3212,6 +3350,9 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           customTeam={userTeam}
           formation={formation}
           aiContext={aiContext}
+          botaoNiveis={normalizarNiveis(career?.botoesNiveis)}
+          botaoSimbolo={career?.identidadeBotao?.simbolo || undefined}
+          botaoCor={career?.identidadeBotao?.cor || undefined}
           resumeKey={
             perfil?.user_id
               ? `botao:partida:v1:${perfil.user_id}:${
@@ -3531,7 +3672,7 @@ function Menu({
         <MenuCard
           icon={<UserCircle className="size-5" />}
           title="Meu Clube / Conta"
-          desc="Login, personalizar time, tática, nomear botões e cores. Acesso à conta."
+          desc="Login, identidade do clube, tática e evolução dos botões. Acesso à conta."
           onClick={onProfile}
           accent="sky"
           dataTour="perfil"

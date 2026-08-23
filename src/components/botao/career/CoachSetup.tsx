@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { Sparkles, ChevronRight, FileSignature, Coins, Target } from "lucide-react";
+import { Sparkles, ChevronRight, FileSignature, Users, Coins, Shield, Check } from "lucide-react";
 import type { Coach, Divisao, TacticalStyle } from "./types";
 import { CUSTO_MANUTENCAO, DIVISAO_LABEL } from "./competitionApi";
+import type { OfertaClube } from "./ofertasIniciais";
+import { PORTE_LABEL } from "./forcaClube";
 
 type Props = {
   timeName: string;
-  /** Divisão da temporada 1 — compõe a oferta do clube. */
+  /** Divisão da temporada 1 — compõe as ofertas. */
   divisao?: Divisao | undefined;
   /** Identidade já conhecida do login (§13) — o nome vem preenchido, editável. */
   nomeInicial?: string | undefined;
-  onFinish: (coach: Coach) => void;
+  /** Ofertas de clubes pequenos interessados no treinador (determinísticas). */
+  ofertas: OfertaClube[];
+  onFinish: (coach: Coach, oferta: OfertaClube | null) => void;
   onBack: () => void;
 };
 
@@ -19,14 +23,21 @@ const ESTILOS: { id: TacticalStyle; nome: string; desc: string; icon: string }[]
   { id: "defesa", nome: "Retranca inteligente", desc: "Compacto e contra-ataques. -1 gol sofrido.", icon: "🛡️" },
 ];
 
+function formatarTorcida(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(".", ",")} mil`;
+  return String(n);
+}
+
 /**
  * Entrada da carreira em 3 passos (nunca 6 telas de enrolação):
- *  1. OFERTA DO CLUBE — a diretoria apresenta a proposta da temporada 1;
+ *  1. OFERTAS — "Estes clubes estão interessados em você" (só clubes pequenos:
+ *     o treinador começa desconhecido);
  *  2. Identidade — quem é o treinador (nome vem do login);
  *  3. Estilo tático — e assina.
  */
-export function CoachSetup({ timeName, divisao, nomeInicial, onFinish, onBack }: Props) {
+export function CoachSetup({ timeName, divisao, nomeInicial, ofertas, onFinish, onBack }: Props) {
   const [step, setStep] = useState(0);
+  const [oferta, setOferta] = useState<OfertaClube | null>(null);
   // §13: usuário logado já tem identidade — nunca pedir nome do zero.
   const [nome, setNome] = useState(nomeInicial ?? "");
   const [apelido, setApelido] = useState("");
@@ -35,27 +46,30 @@ export function CoachSetup({ timeName, divisao, nomeInicial, onFinish, onBack }:
   const [bio, setBio] = useState("");
 
   const divisaoInicial = divisao ?? "serie-c";
-  const manutencao = CUSTO_MANUTENCAO[divisaoInicial];
   const totalSteps = 3;
 
   const podeAvancar = () => {
+    if (step === 0) return ofertas.length === 0 || oferta !== null;
     if (step === 1) return nome.trim().length >= 2;
     return true;
   };
 
   const avancar = () => {
     if (step < totalSteps - 1) return setStep(step + 1);
-    onFinish({
-      nome: nome.trim(),
-      apelido: apelido.trim() || nome.trim().split(" ")[0]!,
-      cidade: cidade.trim() || "—",
-      estilo,
-      bio: bio.trim(),
-      sov: 0,
-      campanhasJogadas: 0,
-      titulos: 0,
-      criadoEm: new Date().toISOString(),
-    });
+    onFinish(
+      {
+        nome: nome.trim(),
+        apelido: apelido.trim() || nome.trim().split(" ")[0]!,
+        cidade: cidade.trim() || "—",
+        estilo,
+        bio: bio.trim(),
+        sov: 0,
+        campanhasJogadas: 0,
+        titulos: 0,
+        criadoEm: new Date().toISOString(),
+      },
+      oferta,
+    );
   };
 
   return (
@@ -69,41 +83,81 @@ export function CoachSetup({ timeName, divisao, nomeInicial, onFinish, onBack }:
         {step === 0 && (
           <div className="space-y-4">
             <p className="font-display text-2xl leading-snug">
-              O telefone toca. Do outro lado, a diretoria do{" "}
-              <span className="text-primary">{timeName}</span> tem uma proposta.
+              Você ainda é um treinador <span className="text-primary">desconhecido</span>. Mas o
+              telefone tocou:{" "}
+              <span className="text-primary">estes clubes estão interessados em você.</span>
             </p>
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4">
-              <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">
-                <FileSignature className="size-3.5" />
-                Oferta de clube · Temporada 1
-              </p>
-              <h3 className="mt-2 font-display text-xl font-bold text-emerald-100">
-                Contrato de treinador — {timeName}
-              </h3>
-              <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                <li className="flex items-center gap-2">
-                  <Target className="size-4 shrink-0 text-emerald-300" />
-                  <span>
-                    Competição: <strong className="text-white">{DIVISAO_LABEL[divisaoInicial]}</strong>{" "}
-                    do Brasileirão da Cidadela + Copa do Brasil
-                  </span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Coins className="size-4 shrink-0 text-amber-300" />
-                  <span>
-                    Manutenção do clube: <strong className="text-white">{manutencao} SOV</strong> por
-                    temporada (o clube pode fechar no vermelho — você recupera jogando)
-                  </span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Sparkles className="size-4 shrink-0 text-cyan-300" />
-                  <span>Bônus por título, desafios de patrocinador e dividendos de investimentos</span>
-                </li>
-              </ul>
-              <p className="mt-3 border-t border-white/10 pt-2 text-xs italic text-slate-400">
-                "O time atravessa uma seca de títulos. A pressão é enorme. Mas quem nasceu treinador
-                não recusa vestiário." — Diretoria
-              </p>
+            <p className="text-sm text-muted-foreground">
+              São clubes pequenos — pouca torcida, orçamento apertado, estrutura simples. É onde
+              toda grande carreira começa. Analise as propostas e escolha onde começar.
+            </p>
+
+            <div className="space-y-2">
+              {ofertas.map((o) => {
+                const ativa = oferta?.clubeId === o.clubeId;
+                return (
+                  <button
+                    key={o.clubeId}
+                    data-testid={`oferta-${o.clubeId}`}
+                    onClick={() => setOferta(o)}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      ativa
+                        ? "border-emerald-500/60 bg-emerald-500/10"
+                        : "border-white/10 bg-slate-900/40 hover:border-emerald-500/40"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-slate-800 text-xl">
+                        {o.escudo}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-display text-lg font-bold text-white truncate">
+                            {o.nome}
+                          </h3>
+                          <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-slate-300">
+                            {PORTE_LABEL[o.porte]}
+                          </span>
+                          {ativa && <Check className="ml-auto size-5 shrink-0 text-emerald-400" />}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{o.cidade} · {o.sigla}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-300 sm:grid-cols-4">
+                          <span className="flex items-center gap-1">
+                            <Shield className="size-3.5 text-sky-300" /> Força {o.power}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Users className="size-3.5 text-rose-300" /> {formatarTorcida(o.torcida)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Coins className="size-3.5 text-amber-300" /> +{o.bonusAssinatura} SOV
+                          </span>
+                          <span className="text-slate-400">
+                            Estrutura {"★".repeat(o.estrutura)}{"☆".repeat(5 - o.estrutura)}
+                          </span>
+                        </div>
+                        <p className="mt-2 border-t border-white/5 pt-2 text-xs italic text-slate-400">
+                          "{o.discurso}"
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+              {ofertas.length === 0 && (
+                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+                  <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">
+                    <FileSignature className="size-3.5" />
+                    Oferta de clube · Temporada 1
+                  </p>
+                  <h3 className="mt-2 font-display text-xl font-bold text-emerald-100">
+                    Contrato de treinador — {timeName}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {DIVISAO_LABEL[divisaoInicial]} do Brasileirão da Cidadela + Copa do Brasil ·
+                    manutenção de {CUSTO_MANUTENCAO[divisaoInicial]} SOV por temporada.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -184,7 +238,7 @@ export function CoachSetup({ timeName, divisao, nomeInicial, onFinish, onBack }:
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
               <p className="text-xs uppercase tracking-widest text-primary">Prévia da manchete</p>
               <p className="mt-1 font-display text-lg">
-                "{apelido || nome || "O treinador"} assume o comando do {timeName} para a nova temporada"
+                "{apelido || nome || "O treinador"} assume {oferta ? `o projeto do ${oferta.nome}` : `o comando do ${timeName}`} para a nova temporada"
               </p>
             </div>
           </div>
@@ -198,7 +252,7 @@ export function CoachSetup({ timeName, divisao, nomeInicial, onFinish, onBack }:
             disabled={!podeAvancar()}
             className="btn-primary gap-2 disabled:opacity-50"
           >
-            {step === 0 && "Aceitar proposta"}
+            {step === 0 && (oferta ? `Aceitar proposta do ${oferta.sigla}` : "Continuar")}
             {step === 1 && "Continuar"}
             {step === 2 && "Assinar contrato"} <ChevronRight className="size-4" />
           </button>

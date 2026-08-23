@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, LogIn, UserPlus, Trash2, Save, Shirt, Users, RotateCcw } from "lucide-react";
+import { ChevronLeft, LogIn, UserPlus, Trash2, Save, Shirt, Users, Sparkles, Coins } from "lucide-react";
 import {
   cadastrar,
   cachePerfil,
@@ -8,21 +8,38 @@ import {
   limparCache,
   type Perfil,
 } from "../online/auth";
-import { atualizarPerfilClube } from "@/lib/botao/api";
+import { atualizarPerfilClube, excluirContaUsuario } from "@/lib/botao/api";
 import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
 import {
-  BOTOES_NOMES_DEFAULT,
   FORMACAO_DEFAULT,
   FORMACOES,
   formacaoById,
-  normalizarBotoesNomes,
   type Tatica,
 } from "./formacoes";
+import {
+  custoProximoNivel,
+  estrelasNivel,
+  MAX_NIVEL_BOTAO,
+  podeEvoluir,
+  type NiveisBotoes,
+} from "./evolucaoBotoes";
+import { TEAMS } from "../data/teams";
 
 type Props = {
   perfil: Perfil | null;
   onPronto: (p?: Perfil) => void;
   onBack: () => void;
+  /** Evolução dos botões + identidade visual (§7-§11). Ligado à carreira. */
+  evolucao?: {
+    niveis: NiveisBotoes;
+    saldoSov: number;
+    simbolo: string;
+    cor: string;
+    evoluindo: number | null;
+    carreiraAtiva: boolean;
+    onEvoluir: (idx: number) => void;
+    onIdentidade: (simbolo: string, cor: string) => void;
+  } | undefined;
 };
 
 type Modo = "login" | "cadastro" | "editar";
@@ -33,11 +50,12 @@ type Modo = "login" | "cadastro" | "editar";
  *  - Criar conta / logar / deslogar
  *  - Personalizar time (nome, sigla, cores, número)
  *  - Escolher tática/formação (1-2-2, 1-3-1, 1-1-3, 1-2-1-1, 2-2-1)
- *  - Nomear cada um dos 5 botões de campo
- *  - Excluir conta
+ *  - EVOLUIR os 5 botões de campo (habilidade única, preço progressivo — §7-§10)
+ *  - Escolher o escudo/símbolo e a cor de acento dos botões (§11)
+ *  - Excluir conta (exclusão TOTAL via RPC excluir_conta_total)
  * Tudo é salvo no Supabase (botao_usuarios + RPC atualizar_perfil_clube).
  */
-export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
+export function ProfileSetup({ perfil, onPronto, onBack, evolucao }: Props) {
   const modoInicial: Modo = perfil ? "editar" : "login";
   const [modo, setModo] = useState<Modo>(modoInicial);
 
@@ -54,9 +72,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
 
   // --- personalização PS2 ---
   const [tatica, setTatica] = useState<Tatica>((perfil?.tatica as Tatica) ?? FORMACAO_DEFAULT);
-  const [botoes, setBotoes] = useState<[string, string, string, string, string]>(
-    normalizarBotoesNomes(perfil?.botoes_nomes),
-  );
 
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -86,21 +101,18 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         if (!validarCoresUnicas(cores)) {
           throw new Error("As três cores devem ser diferentes.");
         }
-        if (botoes.some((b) => !b.trim())) {
-          throw new Error("Nomeie todos os 5 botões de campo.");
-        }
         const p = await cadastrar({ email, senha, nome, time, abreviacao, numero, cores });
         // Criação via trigger usa defaults de tatica/botoes. Atualiza em seguida.
         if (p.user_id) {
           const atualizado = await atualizarPerfilClube(p.user_id, {
             tatica,
-            botoes: botoes,
+            botoes: [...formacao.nomesPadrao],
           });
           if (atualizado) {
             const perfilFinal: Perfil = {
               ...p,
               tatica: atualizado.tatica ?? tatica,
-              botoes_nomes: atualizado.botoes_nomes ?? botoes,
+              botoes_nomes: atualizado.botoes_nomes ?? [...formacao.nomesPadrao],
             };
             cachePerfil(perfilFinal);
             onPronto(perfilFinal);
@@ -140,10 +152,6 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
       setErro("As três cores devem ser diferentes.");
       return;
     }
-    if (botoes.some((b) => !b.trim())) {
-      setErro("Nomeie todos os 5 botões de campo.");
-      return;
-    }
     setErro(null);
     setSalvando(true);
     try {
@@ -153,7 +161,7 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         abreviacao,
         cores,
         tatica,
-        botoes: botoes,
+        botoes: [...formacao.nomesPadrao],
       });
       if (!atualizado) throw new Error("Não foi possível salvar.");
       const perfilFinal: Perfil = {
@@ -164,7 +172,7 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         cores: atualizado.cores,
         numero_jogador: perfil.numero_jogador,
         tatica: atualizado.tatica ?? tatica,
-        botoes_nomes: atualizado.botoes_nomes ?? botoes,
+        botoes_nomes: atualizado.botoes_nomes ?? [...formacao.nomesPadrao],
       };
       cachePerfil(perfilFinal);
       onPronto(perfilFinal);
@@ -186,12 +194,9 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
     }
     setSalvando(true);
     try {
-      const { error } = await supabase
-        .from("botao_usuarios")
-        .delete()
-        .eq("user_id", perfil.user_id);
-      if (error) throw error;
-      await supabase.auth.signOut();
+      // Exclusão TOTAL (RPC excluir_conta_total): perfil, carteira, ledger,
+      // carreira, Cidadela e o próprio registro de autenticação.
+      await excluirContaUsuario(perfil.user_id);
       limparCache();
       onPronto(undefined);
     } catch (e) {
@@ -298,13 +303,7 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         </div>
 
         {modo === "cadastro" && (
-          <PersonalizacaoBotoes
-            tatica={tatica}
-            setTatica={setTatica}
-            botoes={botoes}
-            setBotoes={setBotoes}
-            formacao={formacao}
-          />
+          <PersonalizacaoTatica tatica={tatica} setTatica={setTatica} formacao={formacao} />
         )}
       </div>
     );
@@ -381,14 +380,17 @@ export function ProfileSetup({ perfil, onPronto, onBack }: Props) {
         </button>
       </div>
 
-      {/* Tática + botões */}
-      <PersonalizacaoBotoes
-        tatica={tatica}
-        setTatica={setTatica}
-        botoes={botoes}
-        setBotoes={setBotoes}
-        formacao={formacao}
-      />
+      {/* Tática */}
+      <PersonalizacaoTatica tatica={tatica} setTatica={setTatica} formacao={formacao} />
+
+      {/* Evolução dos botões + identidade visual (§7-§11) */}
+      {evolucao && (
+        <PainelEvolucaoBotoes
+          evolucao={evolucao}
+          cores={cores}
+          abreviacao={abreviacao}
+        />
+      )}
 
       {/* Zona de perigo */}
       <div className="panel space-y-3 border-destructive/40">
@@ -492,41 +494,25 @@ function PersonalizacaoClube({
   );
 }
 
-function PersonalizacaoBotoes({
+/** Seletor de formação + prévia (sem nomear botões — §7: o foco agora é evoluir). */
+function PersonalizacaoTatica({
   tatica,
   setTatica,
-  botoes,
-  setBotoes,
   formacao,
 }: {
   tatica: Tatica;
   setTatica: (t: Tatica) => void;
-  botoes: [string, string, string, string, string];
-  setBotoes: (b: [string, string, string, string, string]) => void;
   formacao: ReturnType<typeof formacaoById>;
 }) {
-  const setBotao = (i: number, v: string) => {
-    const next = [...botoes] as [string, string, string, string, string];
-    next[i] = v;
-    setBotoes(next);
-  };
-  const restaurarPadrao = () => {
-    setBotoes([...formacao.nomesPadrao] as [string, string, string, string, string]);
-  };
-
   return (
     <div className="panel space-y-4">
-      <SectionTitle icon={<Users className="size-4" />}>Tática & botões de campo</SectionTitle>
+      <SectionTitle icon={<Users className="size-4" />}>Tática de campo</SectionTitle>
 
-      {/* Seletor de formação */}
       <div className="grid gap-2 sm:grid-cols-2">
         {FORMACOES.map((f) => (
           <button
             key={f.id}
-            onClick={() => {
-              setTatica(f.id);
-              setBotoes([...f.nomesPadrao] as [string, string, string, string, string]);
-            }}
+            onClick={() => setTatica(f.id)}
             className={`rounded-lg border p-3 text-left transition ${
               tatica === f.id
                 ? "border-primary bg-primary/10"
@@ -539,45 +525,136 @@ function PersonalizacaoBotoes({
         ))}
       </div>
 
-      {/* Mini campo de preview */}
       <Campo label="Pré-visualização da formação">
-        <CampoMini formacao={formacao} cores={["#1e3a8a", "#f59e0b"]} botoes={botoes} />
+        <CampoMini formacao={formacao} cores={["#1e3a8a", "#f59e0b"]} />
       </Campo>
+    </div>
+  );
+}
 
-      {/* Nomes dos 5 botões */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
-            Nomear botões (1 a 5)
-          </span>
-          <button
-            onClick={restaurarPadrao}
-            className="btn-ghost gap-1 text-xs"
-            title="Restaurar nomes padrão"
-          >
-            <RotateCcw className="size-3" /> Padrão
-          </button>
-        </div>
-        {formacao.posicoes.map((pos, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <span
-              className="size-8 shrink-0 rounded-full text-center text-xs leading-8 font-bold text-white"
-              style={{ background: "#1e3a8a" }}
+/** Símbolos/escudos disponíveis para o botão (§11): os símbolos dos clubes. */
+const SIMBOLOS_ESCUDOS = [...new Set(TEAMS.map((t) => t.escudo).filter((e): e is string => !!e))];
+
+/**
+ * Painel de evolução dos botões (§7-§11): cada botão tem UMA habilidade com
+ * nível 0..5 (estrelas), preço progressivo em SOV, e o jogador escolhe o
+ * escudo/símbolo + a cor de acento que aparecem dentro do botão em campo.
+ */
+function PainelEvolucaoBotoes({
+  evolucao,
+  cores,
+  abreviacao,
+}: {
+  evolucao: NonNullable<Props["evolucao"]>;
+  cores: string[];
+  abreviacao: string;
+}) {
+  const { niveis, saldoSov, simbolo, cor, evoluindo, carreiraAtiva, onEvoluir, onIdentidade } =
+    evolucao;
+  const corAtiva = cor || cores[0] || "#1e3a8a";
+
+  return (
+    <div className="panel space-y-4" data-testid="painel-evolucao-botoes">
+      <SectionTitle icon={<Sparkles className="size-4" />}>Evolução dos botões</SectionTitle>
+      <p className="text-xs text-muted-foreground">
+        Cada botão tem uma habilidade. Invista SOV para evoluí-la: chute mais forte e botão mais
+        pesado em campo. O preço sobe a cada nível — escolha bem onde investir.
+      </p>
+
+      {!carreiraAtiva && (
+        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+          Comece uma carreira para evoluir seus botões (a evolução usa o dinheiro da carreira).
+        </p>
+      )}
+
+      <div className="space-y-3">
+        {niveis.map((nivel, i) => {
+          const custo = custoProximoNivel(nivel);
+          const check = podeEvoluir(niveis, i, saldoSov);
+          return (
+            <div key={i} className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+              <div className="flex items-center gap-3">
+                <span
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 text-sm"
+                  style={{ background: corAtiva, borderColor: cores[1] ?? "#f59e0b" }}
+                  title={simbolo || abreviacao}
+                >
+                  {simbolo || <span className="text-[10px] font-bold text-white">{i + 1}</span>}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white">Botão {i + 1}</span>
+                    <span className="text-sm tracking-wider text-amber-300">
+                      {estrelasNivel(nivel)}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all"
+                      style={{ width: `${(nivel / MAX_NIVEL_BOTAO) * 100}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Habilidade nível {nivel}/{MAX_NIVEL_BOTAO}
+                  </p>
+                </div>
+                <button
+                  data-testid={`evoluir-botao-${i}`}
+                  onClick={() => onEvoluir(i)}
+                  disabled={!carreiraAtiva || !check.ok || evoluindo !== null}
+                  className="btn-primary shrink-0 gap-1 px-3 py-2 text-xs disabled:opacity-40"
+                  title={check.ok ? undefined : (check.motivo ?? "")}
+                >
+                  <Coins className="size-3.5" />
+                  {custo === null
+                    ? "Máximo"
+                    : evoluindo === i
+                      ? "..."
+                      : `Aumentar — $${custo}`}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+        <p className="font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+          Escudo dentro do botão
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {SIMBOLOS_ESCUDOS.map((s) => (
+            <button
+              key={s}
+              data-testid={`escudo-${s}`}
+              onClick={() => onIdentidade(s === simbolo ? "" : s, corAtiva)}
+              className={`flex size-9 items-center justify-center rounded-lg border text-lg transition ${
+                simbolo === s
+                  ? "border-primary bg-primary/15"
+                  : "border-white/10 hover:border-primary/40"
+              }`}
             >
-              {i + 1}
-            </span>
-            <input
-              className="field-input flex-1"
-              maxLength={18}
-              value={botoes[i]}
-              onChange={(e) => setBotao(i, e.target.value)}
-              placeholder={`Botão ${i + 1}`}
+              {s}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+          Cor do botão
+        </p>
+        <div className="mt-2 flex gap-2">
+          {cores.map((c, i) => (
+            <button
+              key={i}
+              data-testid={`cor-botao-${i}`}
+              onClick={() => onIdentidade(simbolo, c)}
+              className={`size-9 rounded-full border-2 transition ${
+                corAtiva === c ? "border-white" : "border-white/20"
+              }`}
+              style={{ background: c }}
+              title={`Cor ${i + 1}`}
             />
-            <span className="text-[10px] text-muted-foreground tabular-nums w-16 text-right">
-              {Math.round(pos[0] * 100)}% · {Math.round(pos[1] * 100)}%
-            </span>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -587,11 +664,9 @@ function PersonalizacaoBotoes({
 function CampoMini({
   formacao,
   cores,
-  botoes,
 }: {
   formacao: ReturnType<typeof formacaoById>;
   cores: [string, string];
-  botoes: [string, string, string, string, string];
 }) {
   const W = 100;
   const H = 62;
@@ -637,7 +712,6 @@ function CampoMini({
             label={String(i + 1)}
             primaria={primaria}
             secundaria={secundaria}
-            nome={botoes[i]}
           />
         ))}
       </svg>

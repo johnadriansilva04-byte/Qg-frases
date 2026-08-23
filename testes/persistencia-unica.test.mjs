@@ -236,5 +236,64 @@ expect(
   "BotaoGame: relatório médico por gatilho; reação da torcida vai para o feed",
 );
 
+// 18. §7-§10: evolução de botões substitui o "nomear botões".
+const profileSetup = ler("src/components/botao/career/ProfileSetup.tsx");
+expect(
+  !profileSetup.includes("Nomear botões") && !profileSetup.includes("PersonalizacaoBotoes"),
+  "ProfileSetup: sistema de nomear botões REMOVIDO",
+);
+expect(
+  profileSetup.includes("PainelEvolucaoBotoes") &&
+    profileSetup.includes("estrelasNivel") &&
+    profileSetup.includes("Aumentar — $"),
+  "ProfileSetup: painel de evolução com estrelas + preço progressivo",
+);
+expect(
+  bj.includes("chaveEvolucao(perfil.user_id, idx, nivelAtual + 1)"),
+  "BotaoGame: evolução de botão com débito idempotente no ledger",
+);
+
+// 19. §4: entrada da carreira = ofertas de clubes pequenos.
+expect(
+  coachSetup.includes("estão interessados em você") && coachSetup.includes("ofertas"),
+  "CoachSetup: etapa 1 mostra ofertas de clubes interessados",
+);
+expect(
+  bj.includes('t.divisaoInicial === "serie-c"') && bj.includes("gerarOfertasIniciais"),
+  "BotaoGame: ofertas vêm só dos clubes pequenos (Série C)",
+);
+expect(
+  bj.includes("assinatura:${perfil.user_id}:t1:") && bj.includes("clubeOrigemId"),
+  "BotaoGame: bônus de assinatura idempotente + clube de origem persistido",
+);
+
+// 20. §11: escudo + cor dentro do botão em campo.
+const matchView = ler("src/components/botao/components/MatchView.tsx");
+expect(
+  matchView.includes("botaoSimbolo") && matchView.includes("userSimbolo"),
+  "MatchView: símbolo/escudo desenhado dentro do botão do usuário",
+);
+expect(
+  matchView.includes("multTiro(") && matchView.includes("massaExtra("),
+  "MatchView: evolução tem impacto real (chute mais forte + mais massa)",
+);
+
+// 21. §3: README documenta a conta oficial do OpenHands + credencial segura.
+const readme = ler("README.md");
+expect(
+  readme.includes("open.rangers.fc.oficial@gmail.com") && readme.includes("OPENHANDS_E2E_PASSWORD"),
+  "README: conta oficial do OpenHands + mecanismo de credencial por variável de ambiente",
+);
+expect(
+  !/senha[:=]\s*["']?[A-Za-z0-9!@#]{6,}/.test(readme),
+  "README: NUNCA contém senha real",
+);
+
+// 22. Exclusão total também na tela de conta (não só na api).
+expect(
+  profileSetup.includes("excluirContaUsuario"),
+  "ProfileSetup: excluir conta usa a RPC de exclusão total",
+);
+
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);

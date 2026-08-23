@@ -27,6 +27,7 @@ import {
 } from "../engine/estrategia";
 import { AIService } from "../ai/AIService";
 import { teamByIdSync, type Team } from "../data/teams";
+import { massaExtra, multTiro } from "../career/evolucaoBotoes";
 import type { Difficulty, MatchResult } from "../types";
 import { RotateCcw } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
@@ -75,6 +76,13 @@ type Props = {
   /** Chave de sessionStorage para sobreviver ao F5 (placar/jogadas/turno).
    *  Só no modo offline — online sincroniza pelo servidor. */
   resumeKey?: string | undefined;
+  /** Evolução dos botões do usuário (nível 0..5 por botão de linha): chute
+   *  mais forte e botão mais pesado conforme o nível (§8). */
+  botaoNiveis?: number[] | undefined;
+  /** Símbolo/escudo desenhado dentro dos botões do usuário (§11). */
+  botaoSimbolo?: string | undefined;
+  /** Cor de acento dos botões do usuário (§11). */
+  botaoCor?: string | undefined;
 };
 
 type Aim = { discId: string; px: number; py: number } | null;
@@ -138,6 +146,9 @@ export function MatchView({
   formation,
   aiContext,
   resumeKey,
+  botaoNiveis,
+  botaoSimbolo,
+  botaoCor,
 }: Props) {
   // Função auxiliar para buscar time, usando o time personalizado se necessário
   const getTeam = (teamId: string): Team => {
@@ -154,6 +165,18 @@ export function MatchView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const discsRef = useRef<Disc[]>(initialDiscs(formation));
+
+  // Evolução dos botões (§8): aplica a massa extra dos níveis aos discos do
+  // usuário uma vez na criação (botão evoluído = mais pesado, desvia menos).
+  const botoesAplicadosRef = useRef(false);
+  if (!botoesAplicadosRef.current && botaoNiveis && botaoNiveis.length > 0) {
+    botoesAplicadosRef.current = true;
+    for (const d of discsRef.current) {
+      if (d.side !== userSide || d.keeper) continue;
+      const idx = Number(d.id.replace(`${userSide}-`, "")) - 1;
+      d.mass += massaExtra(botaoNiveis[idx] ?? 0);
+    }
+  }
   const aimRef = useRef<Aim>(null);
   const simRef = useRef(false);
   const turnRef = useRef<Side>(lerMatchResume(resumeKey, turns)?.turn ?? initialTurn ?? "home");
@@ -350,6 +373,8 @@ export function MatchView({
         // Rótulos dos botões aparecem no lado do usuário (home ou away).
         userSide === "home" ? home.botoesNomes : away.botoesNomes,
         userSide,
+        botaoSimbolo,
+        botaoCor,
       );
       const aim = aimRef.current;
       if (aim) {
@@ -768,8 +793,14 @@ export function MatchView({
     turnsHistoryRef.current.push(turnsRef.current);
     turnHistoryRef.current.push(turnRef.current);
 
-    d.vx = ix;
-    d.vy = iy;
+    // Evolução do botão (§8): chute mais forte conforme o nível da habilidade.
+    let mult = 1;
+    if (!isOnline && botaoNiveis && d.side === userSide && !d.keeper) {
+      const idx = Number(d.id.replace(`${userSide}-`, "")) - 1;
+      mult = multTiro(botaoNiveis[idx] ?? 0);
+    }
+    d.vx = ix * mult;
+    d.vy = iy * mult;
 
     // Memória da partida (§11): a CPU observa direção/força/zona do tiro do
     // jogador para detectar padrões e adaptar a estratégia.
@@ -1083,6 +1114,8 @@ function drawDiscs(
   as: string,
   userNomes?: string[],
   userSide: "home" | "away" = "home",
+  userSimbolo?: string,
+  userCor?: string,
 ) {
   for (const d of discs) {
     ctx.save();
@@ -1100,7 +1133,9 @@ function drawDiscs(
       ctx.strokeStyle = "#333";
       ctx.stroke();
     } else {
-      const primary = d.side === "home" ? hp : ap;
+      // §11: o usuário pode escolher a cor de acento do próprio botão.
+      const corUsuario = d.side === userSide && userCor ? userCor : null;
+      const primary = corUsuario ?? (d.side === "home" ? hp : ap);
       const secondary = d.side === "home" ? hs : as;
       const grad = ctx.createRadialGradient(
         d.x - d.r * 0.35,
@@ -1124,8 +1159,16 @@ function drawDiscs(
         ctx.fillStyle = secondary;
         ctx.fill();
       }
-      // Rótulo do botão (nome do jogador) para o lado do usuário.
-      if (d.side === userSide && !d.keeper) {
+      // §11: símbolo/escudo escolhido desenhado DENTRO do botão do usuário.
+      if (d.side === userSide && !d.keeper && userSimbolo) {
+        ctx.font = `${Math.round(d.r * 1.1)}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(userSimbolo, d.x, d.y);
+      }
+      // Rótulo do botão (nome do jogador) para o lado do usuário — some quando
+      // o escudo está ativo para não poluir o botão (§11: não encher a tela).
+      if (d.side === userSide && !d.keeper && !userSimbolo) {
         const idx = Number(d.id.replace(`${userSide}-`, "")) - 1;
         const nome = userNomes?.[idx];
         if (nome) {

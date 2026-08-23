@@ -1,3 +1,73 @@
+## Carreira com ofertas de clubes + evolução de botões + identidade do OpenHands (2026-08-23, 23ª passada)
+
+Transformação da entrada da carreira e do módulo Meu Clube/Conta (prompt do
+dono §1-§15). Tudo sobre as correções da 22ª passada (mantidas intactas).
+
+- **ENTRADA DA CARREIRA = OFERTAS DE CLUBES PEQUENOS (§4)**: `career/
+  ofertasIniciais.ts` (PURO, jiti) — `gerarOfertasIniciais(clubes, seed,
+  torcida, manutencao)`: 3 ofertas determinísticas por usuário (hash FNV-1a;
+  F5 não muda) dos clubes MAIS FRACOS da divisão inicial. Cada oferta mostra
+  escudo, nome, porte, força, torcida, bônus de assinatura (5-20 SOV — clube
+  pequeno, orçamento pequeno), estrutura ★ e discurso da diretoria. O clube
+  aceito define a VAGA que o time do jogador assume na liga:
+  `seasonEngine.composicoesIniciais(userTeam, divisao, clubeSubstituidoId)`
+  remove o clube que "contratou" e insere o time do jogador. Bônus de
+  assinatura vai ao ledger com chave `assinatura:{uid}:t1:{clubeId}`.
+  `career.clubeOrigemId` persiste a escolha. CoachSetup mantém 3 etapas
+  (ofertas → identidade → estilo) — a CareerIntro ("Entrar como Técnico")
+  continua existindo entre o CareerMenu e o CoachSetup.
+- **FORÇA DOS CLUBES (§5-§6)**: `career/forcaClube.ts` (PURO) — `porteDoClube`
+  calibrado na distribuição REAL da base (C 51-65 = pequeno, B 58-70 = médio,
+  A 70-88 = grande; o AGENTS dizia C 28-48 — desatualizado),
+  `estruturaDoClube` 1-5, `forcaRealClube` = power + `bonusTorcida` (mesma
+  curva da simulação — torcidaEngine) + ajuste de estrutura. A torcida de 1M
+  (zero-sum) já existia e segue igual.
+- **EVOLUÇÃO DE BOTÕES substitui "nomear botões" (§7-§10)**: `career/
+  evolucaoBotoes.ts` (PURO) — 5 botões de linha, UMA habilidade cada, nível
+  0..5, custos [20, 50, 120, 280, 650] (estritamente progressivos). Impacto
+  real: `multTiro` (+5%/nível no impulso do chute) e `massaExtra` (botão mais
+  pesado) aplicados no MatchView; `bonusForcaTime` (média 0..+5) soma no
+  power do time. `estrelasNivel` = ★/☆. Persistido em `career.botoesNiveis`
+  (JSONB, saneado no normalizarCareer). Compra é gasto VOLUNTÁRIO: exige
+  saldo (dívida só existe pela manutenção), ledger-first com chave
+  `botao:{uid}:{idx}:n{nivel}` — falhou o débito, nada evolui.
+- **ESCUDO DENTRO DO BOTÃO (§11)**: `career.identidadeBotao {simbolo, cor}` —
+  o jogador escolhe um símbolo dos escudos dos 60 clubes + uma das 3 cores do
+  perfil; o MatchView desenha o símbolo dentro dos botões do usuário (o nome
+  do jogador some quando o escudo está ativo) e usa a cor de acento.
+- **ProfileSetup**: `PersonalizacaoBotoes` (nomear botões) REMOVIDO —
+  `PersonalizacaoTatica` (formação + prévia) + `PainelEvolucaoBotoes`
+  (estrelas, barra, "Aumentar — $X", picker de escudo/cor). `excluirConta`
+  agora usa `excluirContaUsuario` (RPC de exclusão total — antes fazia DELETE
+  direto só no perfil). Cadastro salva `botoes_nomes` padrão da formação
+  (constraint do DB segue satisfeita, sem UI).
+- **README.md reescrito**: conta oficial do OpenHands documentada
+  (`open.rangers.fc.oficial@gmail.com`, Treinador Open × Clube Open FC) +
+  regra de credencial: senha via variável `OPENHANDS_E2E_PASSWORD`, NUNCA no
+  repo; outras IAs criam as próprias contas; contas duplicadas antigas serão
+  apagadas pelo dono. README antigo (gerador de frases) movido para
+  `README-FRASES-LEGADO.md`.
+- **E2E REAL executado** (`testes/e2e-carreira.mjs`, puppeteer-core +
+  chromium headless, viewport celular 390x844, build de produção servido por
+  `testes/serve-build.mjs`): conta nova (Rookie × Rookie FC) → portão de
+  profissão → 3 ofertas (asa/nor/alt, todas "Clube pequeno") → assinatura →
+  hub temporada 1 → painel de evolução → ★☆☆☆☆ → evoluiu botão 1 → ★ e preço
+  subiu para $50 → escudo+cor aplicados em campo (cor visível na partida) →
+  6 jogadas sem travamento. **Ledger de produção provado**: signup +50,
+  assinatura +8 (chave idempotente), evolução −20 (chave idempotente) →
+  saldo 38 = hub. Zero duplicação entre runs (idempotência + regra "sem
+  saldo não evolui" seguraram cliques repetidos). ATENÇÃO ao re-rodar: mate
+  processos serve-build antigos — um servidor velho serve HTML SSR com
+  hashes de assets velhos (404 → loading travado em 0%).
+- **Bug menor registrado**: emojis de escudo aparecem como "tofu" no chromium
+  headless (falta fonte de emoji no sandbox; em celular real renderizam).
+- **Verificação**: tsc 0 erros; build OK; evolucao-botoes 34 (novo);
+  persistencia-unica 54 (+8 guardas novas); demais suítes intactas
+  (regras-fim 36, conversas 41, temporada 57, ia 52, torcida 42+14, f5 19,
+  bolsa 29, história 53, sessão 11, entregas 9, onboarding 22,
+  marketplace 11, sov-invest 46, conta-sem-perfil 33, fluxo-novo 14,
+  celular-anuncios 12, sov-consistencia 6, f5-partida 27, onclick OK).
+
 ## Fim de temporada sem bloqueio + chances ocultas + entrada enxuta + exclusão total (2026-08-23, 22ª passada)
 
 Correções pedidas pelo dono após auditoria da jornada do jogador (E2E da conta

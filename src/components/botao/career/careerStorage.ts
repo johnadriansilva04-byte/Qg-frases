@@ -1,5 +1,6 @@
 import { type CareerState, type Coach, type Divisao, type Headline } from "./types";
 import { normalizarConversas } from "./conversasEngine";
+import { normalizarNiveis } from "./evolucaoBotoes";
 import { HISTORIA_INICIAL, type HistoriaState } from "./historia/types";
 
 const DIVISOES_VALIDAS: Divisao[] = ["serie-a", "serie-b", "serie-c"];
@@ -70,6 +71,16 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     marcoLiderTemporada: Number.isFinite(bruta.marcoLiderTemporada)
       ? Math.max(0, Math.round(bruta.marcoLiderTemporada!))
       : 0,
+    // Evolução dos botões: sempre 5 níveis inteiros 0..5 (§7-§10).
+    botoesNiveis: normalizarNiveis(bruta.botoesNiveis),
+    identidadeBotao:
+      bruta.identidadeBotao && typeof bruta.identidadeBotao.simbolo === "string"
+        ? {
+            simbolo: bruta.identidadeBotao.simbolo,
+            cor: typeof bruta.identidadeBotao.cor === "string" ? bruta.identidadeBotao.cor : "",
+          }
+        : undefined,
+    clubeOrigemId: typeof bruta.clubeOrigemId === "string" ? bruta.clubeOrigemId : undefined,
     ultimaRodadaProcessada: Number.isFinite(bruta.ultimaRodadaProcessada)
       ? bruta.ultimaRodadaProcessada!
       : -1,

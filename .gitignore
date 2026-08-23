@@ -34,3 +34,4 @@ dist-ssr
 *.sw?
 .env
 test-ssr-*.bundle.mjs
+.e2e-shots/

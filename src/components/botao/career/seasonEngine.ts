@@ -78,40 +78,59 @@ export function criarLigaComTimes(
   };
 }
 
-/** Garante que o time personalizado está presente na divisão em que o usuário joga. */
-function normalizeDivisionIds(divisao: Divisao, ids: string[], userTeam: Team, activeDivision: Divisao): string[] {
-  const clean = [...new Set(ids)].filter(Boolean);
+/** Garante que o time personalizado está presente na divisão em que o usuário joga.
+ *  Quando a entrada da carreira veio de uma oferta (§4), o time do jogador
+ *  assume a vaga do clube que o contratou (`clubeSubstituidoId`) — o clube
+ *  sai da composição da liga naquela temporada. */
+function normalizeDivisionIds(
+  divisao: Divisao,
+  ids: string[],
+  userTeam: Team,
+  activeDivision: Divisao,
+  clubeSubstituidoId?: string,
+): string[] {
+  let clean = [...new Set(ids)].filter(Boolean);
   if (activeDivision === divisao && !clean.includes(userTeam.id)) {
+    if (clubeSubstituidoId && clean.includes(clubeSubstituidoId)) {
+      clean = clean.filter((id) => id !== clubeSubstituidoId);
+    }
     clean.splice(Math.min(clean.length, TAMANHO_DIVISAO - 1), 0, userTeam.id);
   }
   const base = timesDaDivisao(divisao).map((team) => team.id);
   while (clean.length < TAMANHO_DIVISAO) {
-    const next = base.find((id) => !clean.includes(id));
+    const next = base.find((id) => !clean.includes(id) && id !== clubeSubstituidoId);
     if (!next) break;
     clean.push(next);
   }
   return clean.slice(0, TAMANHO_DIVISAO);
 }
 
-export function composicoesIniciais(userTeam: Team, activeDivision: Divisao): ComposicoesDivisoes {
+export function composicoesIniciais(
+  userTeam: Team,
+  activeDivision: Divisao,
+  clubeSubstituidoId?: string,
+): ComposicoesDivisoes {
   return {
     "serie-a": normalizeDivisionIds(
       "serie-a",
       timesDaDivisao("serie-a").map((team) => team.id),
       userTeam,
       activeDivision,
+      clubeSubstituidoId,
     ),
     "serie-b": normalizeDivisionIds(
       "serie-b",
       timesDaDivisao("serie-b").map((team) => team.id),
       userTeam,
       activeDivision,
+      clubeSubstituidoId,
     ),
     "serie-c": normalizeDivisionIds(
       "serie-c",
       timesDaDivisao("serie-c").map((team) => team.id),
       userTeam,
       activeDivision,
+      clubeSubstituidoId,
     ),
   };
 }
