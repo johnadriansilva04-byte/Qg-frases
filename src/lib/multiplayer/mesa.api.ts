@@ -30,12 +30,30 @@ export type MesaFutebol = {
   atualizado_em: string;
   modalidade: "amistoso" | "campeonato";
   campeonato_id: number | null;
+  /** §9: data a partir da qual a mesa abre para convidados (null = aberta). */
+  data_liberacao?: string | null;
+  /** §9: aposta da mesa em SOV (0 = sem aposta). */
+  aposta_sov?: number;
+  /** Jogadores cuja aposta já foi cobrada. */
+  aposta_cobrada_de?: string[];
 };
 
-/** Criar uma nova mesa de futebol (amistoso). */
-export async function criarMesa(time: string): Promise<string> {
-  const { data, error } = await supabase.rpc("criar_mesa_futebol", {
+/** Link direto de convite para a mesa (§11): abre o fluxo daquela mesa. */
+export function linkConviteMesa(mesaId: string): string {
+  const base = typeof window !== "undefined" ? window.location.origin : "https://pracinha.online";
+  return `${base}/cidadela?mesa=${encodeURIComponent(mesaId)}`;
+}
+
+/** Criar uma nova mesa de futebol (amistoso). Suporta data de liberação
+ *  (a mesa só abre para convidados a partir dela) e aposta da mesa. */
+export async function criarMesa(
+  time: string,
+  opcoes?: { dataLiberacao?: string | null; apostaSov?: number },
+): Promise<string> {
+  const { data, error } = await (supabase.rpc as CallableFunction)("criar_mesa_futebol", {
     p_time: time,
+    p_data_liberacao: opcoes?.dataLiberacao ?? null,
+    p_aposta_sov: opcoes?.apostaSov ?? 0,
   });
 
   if (error) throw error;

@@ -3,13 +3,18 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BadgeCheck,
+  Building2,
+  ChevronDown,
+  ChevronUp,
   Landmark,
   Newspaper,
   PieChart,
   ReceiptText,
   ShieldAlert,
+  UserRound,
 } from "lucide-react";
 import { obterSaldoSov } from "@/lib/financial/sovApi";
+import type { TransacaoClube } from "@/components/botao/career/clubeFinancas";
 import {
   obterEstatisticas,
   obterExtrato,
@@ -70,7 +75,15 @@ function txCurto(id: string): string {
   return `TX-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
-export function SovBankApp({ userId }: { userId: string | null }) {
+export function SovBankApp({
+  userId,
+  clube,
+}: {
+  userId: string | null;
+  /** Perfil do Clube (§3): caixa/extrato próprios da carreira, separados do
+   *  dinheiro pessoal. Quando ausente, o bloco do clube não aparece. */
+  clube?: { nome: string; caixa: number; extrato: TransacaoClube[] } | undefined;
+}) {
   const [aba, setAba] = useState<Aba>("extrato");
   const [saldo, setSaldo] = useState<number | null>(null);
   const [saldoInvest, setSaldoInvest] = useState<number | null>(null);
@@ -79,6 +92,8 @@ export function SovBankApp({ userId }: { userId: string | null }) {
   const [stats, setStats] = useState<EstatisticasEconomia | null>(null);
   const [reconciliacao, setReconciliacao] = useState<Reconciliacao | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [extratoAberto, setExtratoAberto] = useState(false);
+  const [extratoClubeAberto, setExtratoClubeAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!userId) {
@@ -178,26 +193,113 @@ export function SovBankApp({ userId }: { userId: string | null }) {
         <p className="mt-1 text-[10px] text-slate-500">
           Dividendos e investimentos caem no SOV Invest. Retirada Invest → Bank: IOF 10%.
         </p>
+        {/* Perfil pessoal × Perfil do clube (§3): dois mundos separados. */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 px-3 py-2">
+            <p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-amber-200">
+              <UserRound className="size-3" /> Perfil Pessoal
+            </p>
+            <p className="mt-1 text-sm font-black text-white">
+              {saldo === null ? "—" : formatarSov(saldo)}
+            </p>
+          </div>
+          {clube && (
+            <div className="rounded-xl border border-sky-400/20 bg-sky-400/5 px-3 py-2">
+              <p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-sky-300">
+                <Building2 className="size-3" /> Caixa do Clube
+              </p>
+              <p className={`mt-1 text-sm font-black ${clube.caixa < 0 ? "text-rose-300" : "text-emerald-300"}`}>
+                {formatarSov(clube.caixa)}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Perfil do Clube (§3-§5): finanças do clube com extrato recolhível. */}
+      {clube && (
+        <div className="mb-3 rounded-2xl border border-sky-400/20 bg-sky-400/5 p-3" data-testid="perfil-clube">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300">
+                Perfil do Clube · {clube.nome}
+              </p>
+              <p className={`mt-1 text-2xl font-black ${clube.caixa < 0 ? "text-rose-300" : "text-emerald-300"}`}>
+                {formatarSov(clube.caixa)}{" "}
+                <span className="text-xs font-bold text-sky-300">{SOV_BANK.MOEDA}</span>
+              </p>
+              {clube.caixa < 0 && (
+                <p className="text-[10px] text-rose-300">Clube endividado — recupera jogando.</p>
+              )}
+            </div>
+            <Building2 className="size-8 text-sky-400/50" />
+          </div>
+          <button
+            data-testid="extrato-clube-toggle"
+            onClick={() => setExtratoClubeAberto((v) => !v)}
+            className="mt-3 flex w-full items-center justify-between rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-300 hover:border-sky-400/40"
+          >
+            <span className="flex items-center gap-1.5">
+              <ReceiptText className="size-3.5 text-sky-300" />
+              Extrato do clube ({clube.extrato.length})
+            </span>
+            {extratoClubeAberto ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </button>
+          {extratoClubeAberto && (
+            <div className="mt-2 space-y-1.5">
+              {clube.extrato.length === 0 && (
+                <p className="py-3 text-center text-xs text-slate-500">Sem lançamentos ainda.</p>
+              )}
+              {clube.extrato.map((tx) => (
+                <div
+                  key={tx.id}
+                  className="flex items-center justify-between rounded-lg border border-white/5 bg-slate-950/50 px-2.5 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] text-slate-200">{tx.descricao}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-slate-500">
+                      {tx.tipo} · T{tx.temporada} R{tx.rodada}
+                    </p>
+                  </div>
+                  <span
+                    className={`ml-2 shrink-0 text-xs font-bold ${
+                      tx.valor >= 0 ? "text-emerald-300" : "text-rose-300"
+                    }`}
+                  >
+                    {tx.valor >= 0 ? "+" : ""}
+                    {formatarSov(tx.valor)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Últimas movimentações */}
       <div className="mb-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-          Últimas movimentações
-        </p>
-        {carregando ? (
-          <p className="py-2 text-center text-xs text-slate-500">Carregando...</p>
-        ) : ultimas.length === 0 ? (
-          <p className="py-2 text-center text-xs text-slate-500">
-            Nenhuma movimentação ainda — todo Sovereign que entrar aqui terá origem rastreável.
-          </p>
-        ) : (
-          <div className="space-y-1.5">
-            {ultimas.map((item) => (
-              <LinhaMovimentacao key={item.id} item={item} compact />
-            ))}
-          </div>
-        )}
+        <button
+          data-testid="extrato-toggle"
+          onClick={() => setExtratoAberto((v) => !v)}
+          className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500"
+        >
+          <span>Últimas movimentações</span>
+          {extratoAberto ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </button>
+        {extratoAberto &&
+          (carregando ? (
+            <p className="py-2 text-center text-xs text-slate-500">Carregando...</p>
+          ) : ultimas.length === 0 ? (
+            <p className="py-2 text-center text-xs text-slate-500">
+              Nenhuma movimentação ainda — todo Sovereign que entrar aqui terá origem rastreável.
+            </p>
+          ) : (
+            <div className="mt-2 space-y-1.5">
+              {ultimas.map((item) => (
+                <LinhaMovimentacao key={item.id} item={item} compact />
+              ))}
+            </div>
+          ))}
       </div>
 
       {/* Abas */}

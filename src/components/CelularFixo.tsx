@@ -37,6 +37,8 @@ type Props = {
   saldoSov?: number | null | undefined;
   /** Bolsa (carreira) — resumo apenas-leitura na aba Banco do celular. */
   bolsa?: import("./botao/career/types").BolsaState | undefined;
+  /** Perfil do Clube (§3): caixa/extrato próprios da carreira no Banco. */
+  clube?: { nome: string; caixa: number; extrato: import("./botao/career/clubeFinancas").TransacaoClube[] } | undefined;
 };
 
 export function CelularFixo({
@@ -59,6 +61,7 @@ export function CelularFixo({
   statsCarreira,
   saldoSov = null,
   bolsa,
+  clube,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [recompensaTempo, setRecompensaTempo] = useState<number | null>(null);
@@ -188,6 +191,7 @@ export function CelularFixo({
             abaInicial={irAoGrupo}
             saldoSov={saldoSov}
             bolsa={bolsa}
+            clube={clube}
           />
         )}
       </div>

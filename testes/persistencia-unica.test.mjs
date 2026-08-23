@@ -296,5 +296,64 @@ expect(
   "ProfileSetup: excluir conta usa a RPC de exclusão total",
 );
 
+// 23. §3-§5: Banco no celular com Perfil Pessoal × Perfil do Clube + extrato
+// recolhível (nunca aberto por padrão).
+const sovBankApp = ler("src/components/financial/SovBankApp.tsx");
+expect(
+  sovBankApp.includes("perfil-clube") && sovBankApp.includes("Perfil Pessoal"),
+  "SovBankApp: Perfil Pessoal × Perfil do Clube separados",
+);
+expect(
+  sovBankApp.includes("extratoAberto") && sovBankApp.includes("extratoClubeAberto"),
+  "SovBankApp: extratos recolhíveis (clique para expandir)",
+);
+const celularConv = ler("src/components/botao/career/CelularConversas.tsx");
+expect(
+  celularConv.includes("clube={clube}") && celularConv.includes("SovBankApp userId"),
+  "Celular: aba Banco recebe o Perfil do Clube",
+);
+
+// 24. §6: ofertas de transferência por data + área de negociação.
+const transfEngine = ler("src/components/botao/career/transferenciaEngine.ts");
+expect(
+  transfEngine.includes("rodada === RODADA_MEIO") && transfEngine.includes("rodada === RODADA_FIM"),
+  "Transferências: gatilho por data (meio r10 / fim r19)",
+);
+expect(
+  bj.includes("handleAceitarTransferencia") &&
+    bj.includes('screen === "transferencias"') &&
+    bj.includes("proximoClubeId: undefined"),
+  "BotaoGame: aceitar assina (bônus no pessoal) e consome a mudança na nova temporada",
+);
+
+// 25. §9-§11: mesa com data de liberação + link de convite + admin do dono.
+const mesaApi = ler("src/lib/multiplayer/mesa.api.ts");
+expect(
+  mesaApi.includes("linkConviteMesa") && mesaApi.includes("p_data_liberacao"),
+  "mesa.api: link direto + data de liberação na criação",
+);
+expect(
+  futebolSql.includes("data_liberacao TIMESTAMPTZ") &&
+    futebolSql.includes("mesa bloqueada ate"),
+  "futebol.sql: coluna data_liberacao + guarda na entrada da mesa",
+);
+const onlineV3 = ler("src/components/botao/components/OnlineMatchV3.tsx");
+expect(
+  onlineV3.includes("AdminMesaPanel") && onlineV3.includes("linkConviteMesa"),
+  "OnlineMatchV3: painel de administração do dono + link de convite",
+);
+const conviteScreen = ler("src/components/botao/online/ConviteMesaScreen.tsx");
+expect(
+  conviteScreen.includes("Três clubes querem que você administre") &&
+    conviteScreen.includes("convite-nome") &&
+    conviteScreen.includes("convite-email"),
+  "ConviteMesaScreen: 3 propostas + cadastro rápido (nome + e-mail)",
+);
+const rotaCidadela = ler("src/routes/cidadela.tsx");
+expect(
+  rotaCidadela.includes("conviteMesaId") && rotaCidadela.includes('get("mesa")'),
+  "rota /cidadela: parâmetro ?mesa= abre o fluxo do convidado",
+);
+
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);

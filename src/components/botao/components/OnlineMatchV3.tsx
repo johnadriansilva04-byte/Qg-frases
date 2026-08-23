@@ -8,13 +8,15 @@ import {
   entrarMesa,
   buscarMesa,
   buscarMesasAguardando,
+  linkConviteMesa,
   type MesaFutebol,
 } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
+import { AdminMesaPanel } from "./AdminMesaPanel";
 import { aplicarApostaSoberania } from "../career/careerRemote";
 import { useAdManager } from "@/lib/adManager";
 
-type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado";
+type Screen = "lobby-list" | "lobby-view" | "jogo" | "resultado" | "admin";
 
 export function OnlineMatchV3({
   onBack,
@@ -33,6 +35,9 @@ export function OnlineMatchV3({
   const [screen, setScreen] = useState<Screen>("lobby-list");
   // Aposta de soberania no modo online (opcional, 0 = não apostar).
   const [apostaSoberania, setApostaSoberania] = useState<number>(0);
+  // §9: data de liberação da mesa (vazio = abre na hora).
+  const [dataLiberacao, setDataLiberacao] = useState<string>("");
+  const [toastLink, setToastLink] = useState<string | null>(null);
   const soberaniaAtual = perfil?.pontos_soberania ?? 0;
 
   // Notificar estado de partida online
@@ -74,7 +79,10 @@ export function OnlineMatchV3({
     mutationFn: async () => {
       if (!perfil || !userId) throw new Error("Perfil não carregado.");
       const timeId = meuTime?.id ?? "MTI";
-      return criarMesa(timeId);
+      return criarMesa(timeId, {
+        dataLiberacao: dataLiberacao ? new Date(dataLiberacao).toISOString() : null,
+        apostaSov: apostaSoberania,
+      });
     },
     onSuccess: (novaMesaId) => {
       setMesaId(novaMesaId);
@@ -132,6 +140,23 @@ export function OnlineMatchV3({
     );
   }
 
+  // §10: Administração da Mesa (só o criador).
+  if (screen === "admin" && mesaAtual && perfil) {
+    return (
+      <AdminMesaPanel
+        mesa={mesaAtual}
+        userId={userId}
+        onVoltar={() => setScreen("lobby-list")}
+        onEntrar={() => setScreen("jogo")}
+        onCopiarLink={() => {
+          const link = linkConviteMesa(mesaAtual.mesa_id);
+          void navigator.clipboard?.writeText(link).catch(() => {});
+          setToastLink(link);
+        }}
+      />
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
       <div className="flex items-center gap-3 mb-6">
@@ -142,6 +167,12 @@ export function OnlineMatchV3({
         )}
         <h2 className="font-display text-2xl">Mesas Online v3</h2>
       </div>
+      {toastLink && (
+        <div className="mb-4 rounded-xl border border-sky-400/40 bg-sky-400/10 p-3 text-xs text-sky-200">
+          Link de convite copiado: <span className="break-all font-mono">{toastLink}</span>
+          <button onClick={() => setToastLink(null)} className="ml-2 underline">fechar</button>
+        </div>
+      )}
 
       <section className="surface mb-6 space-y-4 p-5">
         <h2 className="text-xl">Seu time</h2>
@@ -210,6 +241,26 @@ export function OnlineMatchV3({
             </span>
           )}
         </div>
+        {/* §9: data de liberação (opcional) — a mesa só abre para convidados a partir dela. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm font-medium">Liberação (opcional):</label>
+          <input
+            type="datetime-local"
+            value={dataLiberacao}
+            onChange={(e) => setDataLiberacao(e.target.value)}
+            className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+          />
+          {dataLiberacao && (
+            <button onClick={() => setDataLiberacao("")} className="btn-ghost px-2 py-1 text-xs">
+              Abrir agora
+            </button>
+          )}
+          {dataLiberacao && (
+            <span className="text-xs text-sky-300">
+              Mesa bloqueada até {new Date(dataLiberacao).toLocaleString("pt-BR")}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => novaMesa.mutate()}
           disabled={novaMesa.isPending || !perfil}
@@ -237,28 +288,57 @@ export function OnlineMatchV3({
         {mesas.map((mesa) => {
           const souJogador1 = mesa.jogador_1_id === userId;
           const souParticipante = souJogador1 || mesa.jogador_2_id === userId;
+          const bloqueada =
+            mesa.data_liberacao != null && new Date(mesa.data_liberacao).getTime() > Date.now();
           return (
             <article key={mesa.id} className="surface flex flex-wrap items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <h3 className="truncate text-lg leading-tight">Mesa {mesa.mesa_id}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {mesa.status === "aguardando"
-                    ? "Aguardando adversário"
-                    : mesa.status === "em_andamento"
-                      ? `Em jogo · ${mesa.placar_j1} x ${mesa.placar_j2}`
-                      : `Finalizado · ${mesa.placar_j1} x ${mesa.placar_j2}`}
+                  {bloqueada
+                    ? `Bloqueada até ${new Date(mesa.data_liberacao!).toLocaleString("pt-BR")}`
+                    : mesa.status === "aguardando"
+                      ? "Aguardando adversário"
+                      : mesa.status === "em_andamento"
+                        ? `Em jogo · ${mesa.placar_j1} x ${mesa.placar_j2}`
+                        : `Finalizado · ${mesa.placar_j1} x ${mesa.placar_j2}`}
                 </p>
-              </div>
-              {souParticipante ? (
+                {/* §11: link direto de convite para a mesa. */}
                 <button
                   onClick={() => {
-                    setMesaId(mesa.mesa_id);
-                    setScreen("jogo");
+                    const link = linkConviteMesa(mesa.mesa_id);
+                    void navigator.clipboard?.writeText(link).catch(() => {});
+                    setToastLink(link);
                   }}
-                  className="btn-primary"
+                  className="mt-1 text-[11px] text-sky-300 underline underline-offset-2 hover:text-sky-200"
                 >
-                  Reentrar
+                  Copiar link de convite
                 </button>
+              </div>
+              {souParticipante ? (
+                <div className="flex flex-col items-end gap-1.5">
+                  <button
+                    onClick={() => {
+                      setMesaId(mesa.mesa_id);
+                      setScreen("jogo");
+                    }}
+                    className="btn-primary"
+                  >
+                    Reentrar
+                  </button>
+                  {souJogador1 && (
+                    <button
+                      onClick={() => {
+                        setMesaId(mesa.mesa_id);
+                        setScreen("admin");
+                      }}
+                      className="btn-ghost text-xs"
+                      data-testid={`admin-${mesa.mesa_id}`}
+                    >
+                      Administrar mesa
+                    </button>
+                  )}
+                </div>
               ) : mesa.status === "aguardando" ? (
                 <button
                   onClick={() => entrar.mutate(mesa)}

@@ -4,6 +4,7 @@ import { Target, Trophy, Crown, Grid3X3, IdCard } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
+import { ConviteMesaScreen } from "@/components/botao/online/ConviteMesaScreen";
 import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 import { TourContextual, type PassoTour } from "@/components/cidadela/TourContextual";
@@ -97,6 +98,12 @@ const GAMES = [
 function CidadelaCompView() {
   const [hydrated, setHydrated] = useState(false);
   const [activeGame, setActiveGame] = useState<Game>(null);
+  // §11-§13: convite de mesa via link direto (?mesa=mesa_xxx) — abre o fluxo
+  // do convidado (3 propostas de clube + cadastro rápido), nunca cai no hub.
+  const [conviteMesaId, setConviteMesaId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("mesa");
+  });
   const passosTour: PassoTour[] =
     activeGame === "botao" ? PASSOS_TOUR_FUTEBOL : activeGame === "trilha" ? PASSOS_TOUR_TRILHA : [];
   const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
@@ -193,6 +200,22 @@ function CidadelaCompView() {
         categoria="COMUNIDADE"
         duracao={2600}
         onCompleto={() => setHydrated(true)}
+      />
+    );
+  }
+
+  // §11-§13: link de convite de mesa — o convidado escolhe o clube e entra.
+  if (conviteMesaId) {
+    return (
+      <ConviteMesaScreen
+        mesaId={conviteMesaId}
+        onPronto={() => {
+          // Conta criada + associada: entra no Estádio (a mesa o aguarda em
+          // Mesas Online). Limpa o parâmetro para não reabrir o convite.
+          setConviteMesaId(null);
+          setActiveGame("botao");
+        }}
+        onCancelar={() => setConviteMesaId(null)}
       />
     );
   }

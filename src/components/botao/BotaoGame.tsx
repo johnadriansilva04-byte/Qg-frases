@@ -35,6 +35,7 @@ import {
   deleteTournamentLocal,
   saveTournamentToSupabase,
   adicionarPontosVideo,
+  mutateProgressInSupabase,
   type Progress,
 } from "./storage";
 import {
@@ -76,6 +77,11 @@ import {
   type VereditoTemporada,
 } from "./career/competitionApi";
 import { gerarOfertasIniciais, type OfertaClube } from "./career/ofertasIniciais";
+import {
+  gerarOfertaTransferencia,
+  responderOferta,
+  type OfertaTransferencia,
+} from "./career/transferenciaEngine";
 import {
   chaveSalarioLedger,
   devePagarSalario,
@@ -148,6 +154,7 @@ import { registrarDonoClube, liberarDonoClube } from "@/lib/cidadela/clubesPropr
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { PropriedadeScreen } from "./career/PropriedadeScreen";
+import { TransferenciasScreen } from "./career/TransferenciasScreen";
 import { LoadingScreen } from "./career/LoadingScreen";
 import { AIService } from "./ai/AIService";
 import { relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
@@ -250,6 +257,7 @@ type Screen =
   | "calendario"
   | "economia"
   | "propriedade"
+  | "transferencias"
   | "tournament-match"
   | "match-end"
   | "trophies";
@@ -309,6 +317,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   // a SeasonEndScreen animada por cima de tudo. Também é DERIVADO das ligas
   // concluídas na hidratação — F5 no fim da temporada não trava a carreira.
   const [veredito, setVeredito] = useState<VereditoTemporada | null>(null);
+  const [transferenciaProcessando, setTransferenciaProcessando] = useState<string | null>(null);
   // Saldo REAL de SOV (user_wallets via bank_ledger) — barra de status do
   // celular. O remoto é autoritativo; o cache da carreira cobre o instante
   // entre a partida e a confirmação do ledger.
@@ -859,8 +868,28 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         }
         if (remoteCareer && careerHidratada) {
           // Repara registros antigos que tinham coach vazio no JSONB e
-          // persiste contatos/convite recém-gerados.
-          void saveCareerToSupabase(userId, careerHidratada);
+          // persiste contatos/convite recém-gerados — DENTRO da fila de
+          // escrita (merge), nunca regravando o snapshot inteiro por cima do
+          // estado remoto (senão a hidratação sobrescrevia dados mais novos
+          // que chegaram entre o load e este save).
+          void mutateProgressInSupabase(userId, (prog) => {
+            const remoto = (prog["career"] ?? {}) as Partial<CareerState>;
+            return {
+              patch: {
+                career: {
+                  ...careerHidratada,
+                  // Campos que o remoto já tem mais novos vencem (não regrava
+                  // o que a hidratação não tocou).
+                  ofertasTransferencia:
+                    (remoto.ofertasTransferencia?.length ?? 0) >
+                    (careerHidratada.ofertasTransferencia?.length ?? 0)
+                      ? remoto.ofertasTransferencia
+                      : careerHidratada.ofertasTransferencia,
+                  proximoClubeId: remoto.proximoClubeId ?? careerHidratada.proximoClubeId,
+                },
+              },
+            };
+          });
         }
         // Partida de liga/copa interrompida pelo F5: agora que o torneio e a
         // carreira estão frescos, reidrata o confronto. Fixture já jogado ou
@@ -1476,6 +1505,74 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     persistCareer({ ...atual, identidadeBotao: { simbolo, cor } });
   };
 
+  /* ---------- ofertas de transferência (§6) ---------- */
+  /**
+   * Aceita a proposta de outro clube: marca a oferta, registra o clube-alvo da
+   * próxima temporada (`proximoClubeId`) e paga o bônus de assinatura ao
+   * treinador (dinheiro pessoal, ledger idempotente). A mudança efetiva de
+   * clube acontece no startNextSeason.
+   */
+  const handleAceitarTransferencia = async (ofertaId: string) => {
+    const atual = careerRef.current ?? career;
+    if (!atual) return;
+    const oferta = (atual.ofertasTransferencia ?? []).find((o) => o.id === ofertaId);
+    if (!oferta || oferta.respondida !== "pendente") return;
+    // Bônus de assinatura → carteira pessoal (ledger idempotente). Se o
+    // ledger estiver indisponível/negativo-bloqueado (RPC antiga), o aceite
+    // NÃO é bloqueado: o bônus entra no snapshot local e é realinhado pelo
+    // ledger na próxima hidratação — o jogador não perde a proposta por um
+    // problema de infraestrutura.
+    let bonusConfirmado = false;
+    if (perfil?.user_id && oferta.bonusAssinatura > 0) {
+      const saldo = await registrarTransacaoSov(
+        perfil.user_id,
+        oferta.bonusAssinatura,
+        "reward",
+        `Bônus de assinatura — ${oferta.clubeNome}`,
+        "career",
+        { clubeId: oferta.clubeId, oferta: oferta.id },
+        {
+          sourceEvent: "assinatura_transferencia",
+          idempotencyKey: `transfer:${perfil.user_id}:${oferta.id}`,
+        },
+      );
+      bonusConfirmado = saldo !== null;
+    } else {
+      bonusConfirmado = true;
+    }
+    const respondida = responderOferta(oferta, true);
+    const novaCareer: CareerState = {
+      ...atual,
+      ofertasTransferencia: (atual.ofertasTransferencia ?? []).map((o) =>
+        o.id === ofertaId ? respondida : o,
+      ),
+      proximoClubeId: oferta.clubeId,
+      coach: { ...atual.coach, sov: atual.coach.sov + oferta.bonusAssinatura },
+    };
+    persistCareer(novaCareer);
+    setToast(
+      bonusConfirmado
+        ? `✍️ Você assinou com o ${oferta.clubeNome}! A mudança vale na próxima temporada.`
+        : `✍️ Assinado com o ${oferta.clubeNome}! O bônus entra quando o Banco confirmar.`,
+    );
+  };
+
+  /** Recusa a proposta: só marca a oferta (o treinador fica no clube atual). */
+  const handleRecusarTransferencia = (ofertaId: string) => {
+    const atual = careerRef.current ?? career;
+    if (!atual) return;
+    const oferta = (atual.ofertasTransferencia ?? []).find((o) => o.id === ofertaId);
+    if (!oferta || oferta.respondida !== "pendente") return;
+    const respondida = responderOferta(oferta, false);
+    persistCareer({
+      ...atual,
+      ofertasTransferencia: (atual.ofertasTransferencia ?? []).map((o) =>
+        o.id === ofertaId ? respondida : o,
+      ),
+    });
+    setToast(`Proposta do ${oferta.clubeNome} recusada. Você segue no seu clube.`);
+  };
+
   /**
    * Avalia o desafio de patrocinador pendente contra o resultado da partida.
    * Se a meta for cumprida, soma a recompensa ao SOV e gera um novo
@@ -1695,6 +1792,38 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             ? Math.max(0, novaCareer.moralTime - 6)
             : Math.max(0, novaCareer.moralTime - 1),
     };
+    // §6: oferta de transferência por data (meio r10 / fim r19) — mesmo
+    // gatilho do fluxo real, para o E2E exercitar a negociação.
+    {
+      const tabelaAtual = ligaFinal.groups[0]?.table ?? [];
+      const posAtual = sortTable(tabelaAtual).findIndex((row) => row.teamId === userTeam.id) + 1;
+      const totalTimes = tabelaAtual.length || 20;
+      const prestigio = Math.round(((totalTimes - posAtual + 1) / totalTimes) * 60 + (novaCareer.moralTime / 100) * 40);
+      const ofertaNova = gerarOfertaTransferencia(
+        TEAMS.map((tm) => ({
+          id: tm.id,
+          nome: tm.name,
+          sigla: tm.short,
+          power: tm.power,
+          escudo: tm.escudo,
+          divisao: tm.divisaoInicial ?? "serie-c",
+        })),
+        temporadaAtual,
+        novaCareer.rodadaAtual,
+        novaCareer.divisao,
+        prestigio,
+        perfil?.user_id ?? userTeam.id,
+      );
+      if (
+        ofertaNova &&
+        !(novaCareer.ofertasTransferencia ?? []).some((o) => o.id === ofertaNova.id)
+      ) {
+        novaCareer = {
+          ...novaCareer,
+          ofertasTransferencia: [ofertaNova, ...(novaCareer.ofertasTransferencia ?? [])].slice(0, 6),
+        };
+      }
+    }
     // Salário a cada 10 rodadas (caixa do clube → carteira pessoal).
     if (devePagarSalario(novaCareer.rodadaAtual)) {
       const salario = salarioDa(novaCareer.divisao);
@@ -1944,13 +2073,40 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       career.ligas && ligasConcluidas(career.ligas)
         ? processarResultadoTemporada(career.ligas, userTeam.id)
         : null;
-    const divisaoNova = resultadoTemp?.novaDivisao ?? divisao;
+    let divisaoNova = resultadoTemp?.novaDivisao ?? divisao;
     const composicoes =
       resultadoTemp?.composicoes ??
       career.composicoes ??
       composicoesIniciais(userTeam, divisaoNova);
-    const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
-    const ativa = ligas[divisaoNova];
+    // §6: transferência aceita — o treinador muda de clube na nova temporada.
+    // A vaga do clube-assinado substitui a vaga atual do time do jogador na
+    // divisão dele (a receita esportiva passa a ir para o caixa do NOVO clube).
+    let composicoesFinais = composicoes;
+    let divisaoFinal = divisaoNova;
+    let mudouDeClube: OfertaTransferencia | null = null;
+    if (career.proximoClubeId) {
+      const ofertaAceita = (career.ofertasTransferencia ?? []).find(
+        (o) => o.respondida === "aceita" && o.clubeId === career.proximoClubeId,
+      );
+      if (ofertaAceita) {
+        mudouDeClube = ofertaAceita;
+        divisaoFinal = ofertaAceita.divisaoOfertante as typeof divisaoNova;
+        divisaoNova = divisaoFinal;
+        // Garante o time do jogador na divisão do novo clube, no lugar da
+        // vaga do clube-assinado (que sai da liga — virou o time do jogador).
+        composicoesFinais = {
+          ...composicoes,
+          [divisaoFinal]: [
+            userTeam.id,
+            ...(composicoes[divisaoFinal] ?? []).filter(
+              (id) => id !== userTeam.id && id !== ofertaAceita.clubeId,
+            ),
+          ].slice(0, 20),
+        };
+      }
+    }
+    const ligas = criarLigasDaTemporada(composicoesFinais, userTeam, difficulty);
+    const ativa = ligas[divisaoFinal];
     persistTournament(ativa);
     const poolCopa = Object.values(ligas)
       .flatMap((liga) => liga.groups.flatMap((g) => g.teamIds))
@@ -1969,9 +2125,12 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       rodadasDesdeEventoNarrativo: 0,
       temporada: (career.temporada ?? 1) + 1,
       temporadasInadimplente: novaInad,
-      divisao: divisaoNova,
+      divisao: divisaoFinal,
       ligas,
-      composicoes,
+      composicoes: composicoesFinais,
+      // §6: mudança de clube consumida — o caixa da NOVA temporada é do novo
+      // clube (zera: o caixa do clube anterior fica para trás, não migra).
+      proximoClubeId: undefined,
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
       suborno: undefined,
@@ -2009,6 +2168,11 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     tourRef.current = ativa;
     setVereditoRef(null);
     setCurrentCopaFix(null);
+    if (mudouDeClube) {
+      setToast(
+        `🏟️ Nova casa! Você assume o ${mudouDeClube.clubeNome} na temporada ${(career.temporada ?? 1) + 1}.`,
+      );
+    }
     setScreen("hub");
   };
 
@@ -2963,6 +3127,68 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         }),
       );
 
+      // §6: OFERTA DE TRANSFERÊNCIA por data (meio da temporada r10 / fim r19).
+      // Prestígio = quão bem vai o treinador (posição invertida + moral) —
+      // determina se um clube da divisão de cima se interessa no fim da temporada.
+      const prestigioAtual =
+        tabelaOrdenada.length > 0
+          ? Math.round(
+              ((tabelaOrdenada.length - posicaoUsuario + 1) / tabelaOrdenada.length) * 60 +
+                (moral / 100) * 40,
+            )
+          : 40;
+      const ofertaNova = gerarOfertaTransferencia(
+        TEAMS.map((tm) => ({
+          id: tm.id,
+          nome: tm.name,
+          sigla: tm.short,
+          power: tm.power,
+          escudo: tm.escudo,
+          divisao: tm.divisaoInicial ?? "serie-c",
+        })),
+        temporadaAtual,
+        rodadaDaPartida,
+        career.divisao,
+        prestigioAtual,
+        perfil?.user_id ?? userTeam.id,
+      );
+      let ofertaParaPersistir: OfertaTransferencia | null = null;
+      if (
+        ofertaNova &&
+        !(career.ofertasTransferencia ?? []).some((o) => o.id === ofertaNova.id)
+      ) {
+        ofertaParaPersistir = ofertaNova;
+        enfileirarConversas([
+          {
+            id: `oferta-${ofertaNova.id}`,
+            tipo: "evento",
+            nome: `Diretoria do ${ofertaNova.clubeNome}`,
+            avatar: ofertaNova.escudo,
+            cargo: "Proposta de clube",
+            naoLida: true,
+            linkExterno: {
+              rotulo: "Ver proposta de transferência",
+              to: "/cidadela?aba=transferencias",
+            },
+            mensagens: [
+              {
+                id: `oferta-m-${ofertaNova.id}`,
+                texto: ofertaNova.proposta,
+                remetente: "outro",
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+        ]);
+        setTimeout(
+          () =>
+            setToast(
+              `📩 Proposta de clube: ${ofertaNova.clubeNome} quer você! (veja em Transferências)`,
+            ),
+          1600,
+        );
+      }
+
       let novaCareer: CareerState = {
         ...career,
         bonusProximaPartida: 0,
@@ -2990,6 +3216,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         // §14: caixa do clube separado do dinheiro pessoal.
         clubeCaixa: caixaClube,
         clubeExtrato: extratoClube,
+        // §6: nova oferta de transferência entra na lista persistida.
+        ofertasTransferencia: ofertaParaPersistir
+          ? [ofertaParaPersistir, ...(career.ofertasTransferencia ?? [])].slice(0, 6)
+          : (career.ofertasTransferencia ?? []),
         coach: {
           ...career.coach,
           // Dívida permitida: saldo negativo é estado econômico válido.
@@ -3696,6 +3926,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     );
   }
 
+  if (screen === "transferencias") {
+    return (
+      <Shell>
+        <TransferenciasScreen
+          ofertas={career?.ofertasTransferencia ?? []}
+          onAceitar={(id) => {
+            setTransferenciaProcessando(id);
+            void handleAceitarTransferencia(id).finally(() => setTransferenciaProcessando(null));
+          }}
+          onRecusar={handleRecusarTransferencia}
+          onVoltar={() => setScreen("hub")}
+          processando={transferenciaProcessando}
+        />
+      </Shell>
+    );
+  }
+
   /* ---------- prioridade do celular oficial (§15) ---------- */
   // Decisão prioritária (suborno > narrativa > choice) renderizada no celular
   // FIXO, único celular do jogo (§15). Calculada antes das telas de jogo.
@@ -3932,6 +4179,10 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             onOpenCalendario={() => setScreen("calendario")}
             onOpenEconomia={() => setScreen("economia")}
             onOpenPropriedade={() => setScreen("propriedade")}
+            onOpenTransferencias={() => setScreen("transferencias")}
+            ofertasPendentes={
+              (career?.ofertasTransferencia ?? []).filter((o) => o.respondida === "pendente").length
+            }
           />
         )}
 
@@ -4015,6 +4266,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         perfilCidadela={perfilCidadela}
         saldoSov={saldoSov}
         bolsa={career?.bolsa}
+        clube={
+          career?.coach.nome
+            ? {
+                nome: userTeam.name,
+                caixa: career.clubeCaixa ?? 0,
+                extrato: career.clubeExtrato ?? [],
+              }
+            : undefined
+        }
       />
     </Shell>
   );

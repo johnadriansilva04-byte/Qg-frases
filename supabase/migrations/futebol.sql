@@ -664,7 +664,11 @@ FOR EACH ROW EXECUTE FUNCTION public.atualizar_timestamp_mesa();
 COMMIT;
 
 -- Função para criar mesa
-CREATE OR REPLACE FUNCTION public.criar_mesa_futebol(p_time TEXT)
+CREATE OR REPLACE FUNCTION public.criar_mesa_futebol(
+  p_time TEXT,
+  p_data_liberacao TIMESTAMPTZ DEFAULT NULL,
+  p_aposta_sov NUMERIC DEFAULT 0
+)
 RETURNS TEXT
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -677,8 +681,10 @@ BEGIN
   v_mesa_id := 'mesa_' || substring(encode(gen_random_uuid()::text::bytea, 'hex'), 1, 12);
 
   INSERT INTO public.mesas_futebol AS m
-    (mesa_id, jogador_1_id, time_j1, status, jogador_1_online, ultimo_heartbeat_j1)
-  VALUES (v_mesa_id, v_uid, p_time, 'aguardando', true, now());
+    (mesa_id, jogador_1_id, time_j1, status, jogador_1_online, ultimo_heartbeat_j1,
+     data_liberacao, aposta_sov)
+  VALUES (v_mesa_id, v_uid, p_time, 'aguardando', true, now(),
+          p_data_liberacao, GREATEST(0, COALESCE(p_aposta_sov, 0)));
 
   RETURN v_mesa_id;
 END; $$;
@@ -707,6 +713,10 @@ BEGIN
 
   IF v_mesa.jogador_2_id IS NOT NULL THEN RAISE EXCEPTION 'mesa cheia'; END IF;
   IF v_mesa.status <> 'aguardando' THEN RAISE EXCEPTION 'mesa indisponivel'; END IF;
+  -- §9: data de liberação — antes dela, a mesa não abre para convidados.
+  IF v_mesa.data_liberacao IS NOT NULL AND v_mesa.data_liberacao > now() THEN
+    RAISE EXCEPTION 'mesa bloqueada ate %', v_mesa.data_liberacao;
+  END IF;
 
   UPDATE public.mesas_futebol m
      SET jogador_2_id            = v_uid,
@@ -2779,5 +2789,40 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.excluir_conta_total() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ============================================================================
+-- MESAS ONLINE: data de liberação + aposta da mesa (§9-§11, 2026-08-23)
+-- ============================================================================
+-- A mesa pode ter uma DATA DE LIBERAÇÃO: antes dela, convidados veem a mesa
+-- bloqueada; chegada a data, ela abre sozinha (verificada na leitura/listagem).
+-- A aposta da mesa (opcional) é cobrada na entrada e devolvida ao vencedor.
+
+ALTER TABLE public.mesas_futebol
+  ADD COLUMN IF NOT EXISTS data_liberacao TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS aposta_sov NUMERIC NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS aposta_cobrada_de UUID[] NOT NULL DEFAULT '{}';
+
+-- A mesa está disponível para um jogador entrar? (data de liberação respeitada)
+CREATE OR REPLACE FUNCTION public.mesa_disponivel(p_mesa_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_liberacao TIMESTAMPTZ;
+BEGIN
+  SELECT data_liberacao INTO v_liberacao
+  FROM public.mesas_futebol
+  WHERE mesa_id = p_mesa_id;
+  -- Sem data de liberação (mesa antiga) ou data já alcançada: liberada.
+  RETURN v_liberacao IS NULL OR v_liberacao <= now();
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.mesa_disponivel(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.criar_mesa_futebol(TEXT, TIMESTAMPTZ, NUMERIC) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';

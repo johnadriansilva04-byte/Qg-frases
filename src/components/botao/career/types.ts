@@ -354,6 +354,12 @@ export type CareerState = {
   clubeCaixa?: number | undefined;
   /** Extrato do caixa do clube (receitas/despesas/salários). */
   clubeExtrato?: import("./clubeFinancas").TransacaoClube[] | undefined;
+  /** Ofertas de transferência recebidas (§6): meio/fim de temporada, chegam
+   *  pelo celular, aceitar muda o clube-alvo da próxima temporada. */
+  ofertasTransferencia?: import("./transferenciaEngine").OfertaTransferencia[] | undefined;
+  /** Clube para o qual o treinador assinou (aceite de oferta) — entra na
+   *  próxima temporada no lugar da vaga dele. */
+  proximoClubeId?: string | undefined;
 };
 
 export const CAREER_KEY = "botao:career:v1";

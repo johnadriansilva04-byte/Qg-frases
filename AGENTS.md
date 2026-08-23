@@ -1,3 +1,45 @@
+## Auditoria E2E do ecossistema: Banco (Pessoal×Clube), Transferências, Mesas (2026-08-23, 25ª passada)
+
+Auditoria ponta a ponta do celular, finanças, clubes, online e mesas, com
+correções e E2E real de cada fluxo.
+
+- **§3-§5 Banco no celular**: `SovBankApp` ganhou prop `clube` (Perfil Pessoal
+  × **Perfil do Clube** — caixa/extrato próprios, card dedicado). Os extratos
+  (pessoal e do clube) agora são **recolhíveis** (`extratoAberto` /
+  `extratoClubeAberto`) — nunca abrem uma lista enorme por padrão. Fio:
+  BotaoGame → CelularFixo → CelularConversas → SovBankApp.
+- **§6 Ofertas de transferência**: `career/transferenciaEngine.ts` (PURO,
+  jiti) — gatilho por DATA (meio da temporada r10 / fim r19), determinístico
+  por temporada+seed. Prestígio (posição invertida + moral) decide se um
+  clube da divisão de CIMA oferta no fim. A oferta chega como conversa no
+  celular + card na área **Transferências** (CareerHub, badge de pendentes).
+  Aceitar paga bônus de assinatura ao treinador (ledger idempotente; RPC
+  antiga em produção não bloqueia o aceite) e marca `proximoClubeId` — o
+  `startNextSeason` troca o clube (vaga do clube-assinado) e zera o caixa
+  (a receita passa a ir para o novo clube). Persistido em
+  `career.ofertasTransferencia` (saneado no normalizarCareer). E2E provado:
+  oferta → aceitar → nova temporada na divisão do novo clube, F5 preserva.
+- **§9-§11 Mesas online**: `mesas_futebol.data_liberacao` (+ `aposta_sov`,
+  `aposta_cobrada_de`) — a mesa bloqueada até a data não abre para
+  convidados (guarda na RPC `entrar_mesa_futebol`) e abre sozinha depois.
+  `criar_mesa_futebol(time, data_liberacao, aposta_sov)` (retrocompatível).
+  `linkConviteMesa(mesaId)` = link direto `/cidadela?mesa=...`. **Painel de
+  Administração da Mesa** (`AdminMesaPanel`): criador vê participantes,
+  status, aposta/arrecadado/premiação (zero-sum), data de liberação, link.
+  **Fluxo do convidado** (`ConviteMesaScreen`): abre pelo link, vê 3
+  propostas de clube, escolhe, cadastro rápido (nome + e-mail) e entra —
+  NUNCA cai num cadastro genérico. Mesa bloqueada/cheia/inexistente tratadas.
+  **PRODUÇÃO: re-aplicar `futebol.sql` (bloco final mesas) no SQL Editor.**
+- **BUG hidratação sobrescrevendo remoto**: o save de reparo na hidratação
+  (`saveCareerToSupabase`) regravava o snapshot inteiro — substituído por
+  `mutateProgressInSupabase` (merge na fila; campos mais novos do remoto
+  vencem). Era o que apagava ofertas recém-criadas entre o load e o save.
+- **Verificação**: tsc 0 erros; build OK; persistencia-unica 67 (+10 guardas
+  novas: banco pessoal×clube, extrato recolhível, transferências, mesas,
+  convite); transferencias 17 (novo); demais suítes intactas. E2E real:
+  celular/banco (7 checks), convite (3 clubes + cadastro rápido),
+  transferência (oferta → aceitar → divisão nova, F5).
+
 ## Separação CLUBE×TREINADOR + promoção real + economia equilibrada + E2E magnata (2026-08-23, 24ª passada)
 
 Jornada E2E longa da conta oficial (T15→T33+): promoções, rebaixamentos,

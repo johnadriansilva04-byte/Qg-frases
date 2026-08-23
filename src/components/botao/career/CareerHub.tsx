@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Calendar, ChevronRight, Coins, Trophy, Building2 } from "lucide-react";
+import { Calendar, ChevronRight, Coins, Trophy, Building2, ArrowLeftRight } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
 import { nextUserFixture, sortTable } from "../tournament";
@@ -35,6 +35,10 @@ interface CareerHubProps {
   onOpenEconomia: () => void;
   /** Abre a tela de Propriedade de Clubes (sistema de cotas → proprietário). */
   onOpenPropriedade: () => void;
+  /** Abre a área de Transferência/Negociação (ofertas de clubes, §6). */
+  onOpenTransferencias: () => void;
+  /** Ofertas de transferência pendentes (badge no botão). */
+  ofertasPendentes?: number | undefined;
 }
 
 /**
@@ -53,6 +57,8 @@ export function CareerHub({
   onOpenCalendario,
   onOpenEconomia,
   onOpenPropriedade,
+  onOpenTransferencias,
+  ofertasPendentes = 0,
 }: CareerHubProps) {
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
@@ -150,6 +156,21 @@ export function CareerHub({
               <span className="mt-1 block font-display text-xs">Mercado de Clubes</span>
             </button>
           </div>
+          <button
+            onClick={onOpenTransferencias}
+            className="menu-card menu-accent-fuchsia relative !p-3"
+            data-testid="abrir-transferencias"
+          >
+            <span className="menu-card-icon menu-accent-fuchsia !size-9">
+              <ArrowLeftRight className="size-4" />
+            </span>
+            <span className="mt-1 block font-display text-xs">Transferências</span>
+            {ofertasPendentes > 0 && (
+              <span className="absolute right-1.5 top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-black text-slate-950">
+                {ofertasPendentes}
+              </span>
+            )}
+          </button>
 
           {career && (
             <NewsPortal

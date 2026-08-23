@@ -2,6 +2,7 @@ import { type CareerState, type Coach, type Divisao, type Headline } from "./typ
 import { normalizarConversas } from "./conversasEngine";
 import { normalizarNiveis } from "./evolucaoBotoes";
 import { normalizarClubeFinancas } from "./clubeFinancas";
+import { normalizarOfertasTransferencia } from "./transferenciaEngine";
 import { HISTORIA_INICIAL, type HistoriaState } from "./historia/types";
 
 const DIVISOES_VALIDAS: Divisao[] = ["serie-a", "serie-b", "serie-c"];
@@ -90,6 +91,9 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
     // hidratação e a manutenção da temporada passaria a quebrar.
     clubeCaixa: bruta.clubeCaixa === undefined && (bruta.coach?.sov ?? 0) > 0 ? bruta.coach!.sov! : fin.caixa,
     clubeExtrato: fin.extrato,
+    // Ofertas de transferência (§6): saneadas; clube-assinado preservado.
+    ofertasTransferencia: normalizarOfertasTransferencia(bruta.ofertasTransferencia),
+    proximoClubeId: typeof bruta.proximoClubeId === "string" ? bruta.proximoClubeId : undefined,
     ultimaRodadaProcessada: Number.isFinite(bruta.ultimaRodadaProcessada)
       ? bruta.ultimaRodadaProcessada!
       : -1,

@@ -103,6 +103,8 @@ type Props = {
   saldoSov?: number | null | undefined;
   /** Bolsa (career.bolsa) — resumo SOMENTE LEITURA na aba Banco do celular. */
   bolsa?: import("./types").BolsaState | undefined;
+  /** Perfil do Clube (§3): caixa/extrato próprios da carreira no Banco. */
+  clube?: { nome: string; caixa: number; extrato: import("./clubeFinancas").TransacaoClube[] } | undefined;
 };
 
 export function CelularConversas({
@@ -125,6 +127,7 @@ export function CelularConversas({
   abaInicial = null,
   saldoSov = null,
   bolsa,
+  clube,
 }: Props) {
   const [aba, setAba] = useState<AbaCelular>("menu");
   // Notificação externa pede uma aba específica (§7: clique → abre o grupo).
@@ -931,7 +934,7 @@ export function CelularConversas({
 
             {aba === "banco" && (
               <>
-                <SovBankApp userId={userId} />
+                <SovBankApp userId={userId} clube={clube} />
                 {/* A bolsa vive UMA vez no JSONB da carreira — resumo
                     somente-leitura, escrever não é opção do Banco. */}
                 <BolsaResumoCard bolsa={bolsa} />
