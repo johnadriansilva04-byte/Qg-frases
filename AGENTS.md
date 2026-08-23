@@ -1,3 +1,49 @@
+## Campeonato Online v2: link direto, bots, 50 SOV, aposta real (2026-08-23, 26ª passada)
+
+Auditoria E2E do Campeonato Online/Amistoso + sincronização de dados.
+Causas-raiz encontradas (NÃO reintroduzir):
+
+- **OFF-BY-ONE jsonb (o bug que quebrava a mesa do campeonato)**: arrays
+  jsonb são 0-based e `WITH ORDINALITY` é 1-based. As RPCs antigas
+  (`vincular_mesa_campeonato`, `abrir_mesa_campeonato`) liam/gravavam o
+  elemento ERRADO de `confrontos` — a mesa era vinculada ao confronto
+  seguinte (ou nenhum). Correção em `campeonato_online_v2.sql`: `ord - 1` +
+  `ARRAY[idx]::TEXT[]`. Padrão proibido: `jsonb_set(arr, ARRAY[int]...)`.
+- **record_transaction antiga em produção**: crédito em conta negativa era
+  REJEITADO (conta endividada não recebia prêmio/receita/bônus — probe real:
+  `sov_bank_registrar(+1)` → "Saldo insuficiente"). A correção está DENTRO da
+  `campeonato_online_v2.sql` (reaplicar o arquivo resolve).
+- **Bye travava rodada**: confrontos `bye` nasciam `pendente` e o avanço de
+  rodada exigia tudo `finalizado` → campeonato ímpar nunca avançava. Agora
+  bye nasce `finalizado`.
+- **Aposta de mesa era ficção**: `aposta_sov` era gravada mas nunca cobrada.
+  Agora `criar_mesa_futebol`/`entrar_mesa_futebol` debitam via
+  `sov_bank_registrar` (chave `aposta:{mesa}:{uid}`) e `pagar_premio_mesa`
+  paga o pote zero-sum ao vencedor (idempotente `premio:{mesa}`; empate
+  devolve). `aposta_cobrada_de` (UUID[]) marca quem pagou.
+- **Campeonato v2**: salas 2..32 (CHECK + RPC), regra 50 SOV em
+  criar/entrar (frontend valida via `obterSaldoSov`, RPC é a autoridade),
+  `preencher_campeonato_bots`/`resolver_confronto_bots` (SÓ o dono; bots =
+  clubes existentes da base TEAMS, `bot:true`, uuid gerado, nunca criam
+  usuário), campeão bot → `vencedor_id NULL` (não quebra a FK).
+- **Link direto**: `?camp=CODIGO` e `?mesa=id` em /cidadela — autenticado cai
+  DIRETO na sala/mesa (BotaoGame `campCodigoInicial`/`mesaConviteInicial`;
+  a tela inicial já é o fluxo e a hidratação/resume NÃO sobrescrevem);
+  convidado novo → ConviteMesaScreen (modo mesa|campeonato) com profissão em
+  1 pergunta (`escolherProfissao` após o cadastro) → entra direto.
+- **Botões/UX**: "Preencher com Bots" e "Iniciar campeonato" só renderizam
+  para `criador_id === userId`. Confronto humano×bot usa MatchView local +
+  mesa de registro (criar/vincular/registrar); bot×bot é simulado
+  deterministicamente pelo dono (`simularConfrontoBots`, hash FNV da chave).
+- **Troféu de campeonato online**: ao finalizar, campeão humano ganha trophy
+  `camp-online-{codigo}` em progress.trophies (dedupe por teamId).
+- **Verificação**: tsc 0; 87 guardas estruturais; pg local docker: campeonato
+  inteiro com bots ponta a ponta (4 jogadores, 3 rodadas, campeão humano,
+  stats no perfil), aposta debitada/paga/idempotente, regra 50 SOV nas 3
+  bordas; E2E navegador do link (3 cenários) 0 falhas.
+  **PRODUÇÃO: aplicar `campeonato_online_v2.sql` no SQL Editor** (ordem 12 no
+  migrations/README) — sem ela: salas 9+, bots e 50 SOV não valem no servidor.
+
 ## Auditoria E2E do ecossistema: Banco (Pessoal×Clube), Transferências, Mesas (2026-08-23, 25ª passada)
 
 Auditoria ponta a ponta do celular, finanças, clubes, online e mesas, com
