@@ -32,9 +32,9 @@ import {
   registrarResultadoCampeonato,
   preencherCampeonatoComBots,
   resolverConfrontoBots,
+  registrarResultadoVsBot,
   simularConfrontoBots,
   linkConviteCampeonato,
-  vincularMesaCampeonato,
   type CampeonatoOnline,
   type ConfrontoCampeonato,
   type ParticipanteCampeonato,
@@ -43,8 +43,6 @@ import {
 import {
   abrirMesaCampeonato,
   buscarMesa,
-  criarMesa,
-  finalizarMesa,
   type MesaFutebol,
 } from "@/lib/multiplayer/mesa.api";
 import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
@@ -392,13 +390,12 @@ export function OnlineChampionship({
       const { confronto, euSouJ1 } = confrontoBot;
       const golsJ1 = euSouJ1 ? r.homeGoals : r.awayGoals;
       const golsJ2 = euSouJ1 ? r.awayGoals : r.homeGoals;
+      const meusGols = euSouJ1 ? golsJ1 : golsJ2;
+      const golsBot = euSouJ1 ? golsJ2 : golsJ1;
       try {
-        const mesaId = await criarMesa(obterTimePerfil(perfil).id, { apostaSov: 0 });
-        await vincularMesaCampeonato(campeonato.id, confronto.rodada, mesaId);
-        await registrarResultadoCampeonato(campeonato.id, mesaId, golsJ1, golsJ2);
-        const vencedor =
-          golsJ1 === golsJ2 ? null : golsJ1 > golsJ2 ? confronto.j1_id : confronto.j2_id;
-        if (vencedor) await finalizarMesa(mesaId, vencedor).catch(() => null);
+        // Contra bot: registra direto no confronto (sem mesa realtime — bot não
+        // é usuário real e quebraria a FK).
+        await registrarResultadoVsBot(campeonato.id, confronto.rodada, meusGols, golsBot);
         const novoPerfil = await recarregar();
         if (novoPerfil) aplicarPerfil(novoPerfil);
       } catch (e: unknown) {

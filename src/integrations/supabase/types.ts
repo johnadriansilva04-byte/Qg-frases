@@ -946,6 +946,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      registrar_resultado_vs_bot: {
+        Args: { p_campeonato_id: number; p_rodada: number; p_gols_humano: number; p_gols_bot: number };
+        Returns: Json;
+      };
       pagar_premio_mesa: {
         Args: { p_mesa_id: string };
         Returns: Json;

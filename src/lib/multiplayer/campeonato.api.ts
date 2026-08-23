@@ -220,6 +220,24 @@ export async function resolverConfrontoBots(
   return data as CampeonatoOnline;
 }
 
+/** Registra o resultado de um confronto HUMANO × BOT jogado localmente
+ *  (sem mesa realtime — o bot não é usuário real). */
+export async function registrarResultadoVsBot(
+  campeonatoId: number,
+  rodada: number,
+  golsHumano: number,
+  golsBot: number,
+): Promise<CampeonatoOnline> {
+  const { data, error } = await supabase.rpc("registrar_resultado_vs_bot", {
+    p_campeonato_id: campeonatoId,
+    p_rodada: rodada,
+    p_gols_humano: golsHumano,
+    p_gols_bot: golsBot,
+  });
+  if (error) throw error;
+  return data as CampeonatoOnline;
+}
+
 /** Simulação determinística de um confronto bot × bot pela força (power)
  *  dos clubes — o mesmo critério do motor de temporada. */
 export function simularConfrontoBots(
