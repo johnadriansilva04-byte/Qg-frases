@@ -203,9 +203,9 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
   },
   {
     id: "namorada-cobranca",
-    titulo: "Mensagem da namorada",
+    titulo: "Mensagem da Valéria",
     descricao:
-      "Amor, aqui é a Júlia. Você de novo enrolado no estádio? Tá ficando difícil lidar com " +
+      "Amor, aqui é a Valéria. Você de novo enrolado no estádio? Tá ficando difícil lidar com " +
       "essas semanas sem te ver. Promete que hoje sai cedo e a gente conversa?",
     escolhas: [
       {
@@ -280,7 +280,7 @@ export const REMETENTE_DECISAO: Record<string, { nome: string; cargo: string; av
   "treino-intensivo": { nome: "Professor Léo", cargo: "Preparador Físico", avatar: "🏃" },
   "presidente-ultimato": { nome: "Presidente", cargo: "Dono do Clube", avatar: "🎩" },
   "empresario-proposta": { nome: "Wagner", cargo: "Empresário", avatar: "💼" },
-  "namorada-cobranca": { nome: "Júlia", cargo: "Namorada", avatar: "💛" },
+  "namorada-cobranca": { nome: "Valéria", cargo: "Namorada", avatar: "💛" },
   "subornador-abordagem": { nome: "Intermediário", cargo: "Subornador", avatar: "🕶️" },
 };
 

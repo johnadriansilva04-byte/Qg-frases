@@ -184,7 +184,9 @@ export function dataDaRodada(indice: number): string {
 /**
  * Custo de manutenção da temporada — Soberania necessária ao fim de cada
  * temporada para manter o clube e seguir no comando. Sobe com a divisão.
- * Abaixo desse valor: falência/demissão (Game Over).
+ * Não cobrir o custo NUNCA bloqueia a carreira: o clube segue endividado
+ * (saldo pode ficar negativo — a economia do SOV aceita dívida via 'penalty'
+ * no ledger) e o jogador se recupera jogando.
  */
 export const CUSTO_MANUTENCAO: Record<Divisao, number> = {
   "serie-a": 120,
@@ -197,21 +199,36 @@ export interface VereditoTemporada {
   soberaniaFinal: number;
   custoManutencao: number;
   sobrou: number;
-  /** true = segue no comando (temporada infinita); false = Game Over. */
+  /** Sempre true: falta de dinheiro nunca encerra a carreira — só endivida. */
   continua: boolean;
   motivo: string;
-  /** Quantas temporadas consecutivas sem pagar a manutenção (0-3). */
+  /** Temporadas consecutivas sem pagar a manutenção (contador INTERNO —
+   *  nunca exibido ao jogador; limitado a MAX_TEMPORADAS_INADIMPLENTE). */
   temporadasInadimplente: number;
 }
 
-/** Teto da tolerância de dívida (§9): na 3ª falha consecutiva → falência. */
+/** Teto do contador interno de tolerância à dívida (mecânica oculta). */
 export const MAX_TEMPORADAS_INADIMPLENTE = 3;
 
 /**
- * Avalia, ao fim da temporada, se o treinador continua ou é demitido.
- * Conseguiu pagar → zera a dívida. Falhou → registra a temporada. Na 3ª
- * falha (i.e. prev+1 === MAX) → Game Over. O jogador sabe quantas chances
- * restam — o aviso é explícito e persistido (não sume no reload).
+ * Avisos narrativos da diretoria por nível de inadimplência. NUNCA expõem
+ * número de chances/tentativas — o jogador só percebe a "cutucada" da
+ * diretoria, que endurece conforme a dívida persiste.
+ */
+const AVISO_DIRETORIA = [
+  `Manutenção em débito. A diretoria manteve você no cargo, mas cobrou ` +
+    `resultados na sala de reunião. O clube segue com você.`,
+  `Manutenção em débito de novo. A cobrança foi dura: o presidente lembrou ` +
+    `que paciência e orçamento têm limite. Você permanece no comando.`,
+  `A diretoria assumiu a dívida do clube por decisão de emergência. Você ` +
+    `segue no cargo — sob observação permanente da mesa.`,
+];
+
+/**
+ * Avalia o fim da temporada. Pagou a manutenção → confiança renovada e
+ * contador interno zerado. Não pagou → a temporada SEGUINTE começa mesmo
+ * assim, o saldo fica negativo (dívida real) e a diretoria deixa seu aviso.
+ * O jogador nunca fica preso por falta de dinheiro.
  */
 export function avaliarFimTemporada(
   soberania: number,
@@ -230,36 +247,24 @@ export function avaliarFimTemporada(
       temporadasInadimplente: 0,
     };
   }
-  const novasInad = temporadasInadimplente + 1;
-  if (novasInad >= MAX_TEMPORADAS_INADIMPLENTE) {
-    return {
-      soberaniaFinal: soberania,
-      custoManutencao: custo,
-      sobrou,
-      continua: false,
-      motivo: `Terceira temporada seguida sem cobrir a manutenção. Falência decretada.`,
-      temporadasInadimplente: novasInad,
-    };
-  }
-  const restantes = MAX_TEMPORADAS_INADIMPLENTE - novasInad;
+  const novasInad = Math.min(temporadasInadimplente + 1, MAX_TEMPORADAS_INADIMPLENTE);
   return {
     soberaniaFinal: soberania,
     custoManutencao: custo,
     sobrou,
     continua: true,
-    motivo:
-      `Manutenção em débito (${novasInad}/${MAX_TEMPORADAS_INADIMPLENTE} temporadas). ` +
-      `A diretoria acredita em você: ${restantes === 1 ? "1 temporada" : `${restantes} temporadas`} restantes antes da falência.`,
+    motivo: AVISO_DIRETORIA[novasInad - 1] ?? AVISO_DIRETORIA[0]!,
     temporadasInadimplente: novasInad,
   };
 }
 
 /**
- * Deduz o custo de manutenção ao iniciar a temporada seguinte. A carreira é
- * INFINITA enquanto o veredito permitir.
+ * Deduz o custo de manutenção ao iniciar a temporada seguinte. O saldo PODE
+ * ficar negativo — é a dívida do clube, recuperável com resultados,
+ * dividendos e negócios. A carreira é INFINITA.
  */
 export function iniciarNovaTemporada(soberania: number, divisao: Divisao): number {
-  return Math.max(0, soberania - CUSTO_MANUTENCAO[divisao]);
+  return soberania - CUSTO_MANUTENCAO[divisao];
 }
 
 /* ---------- Marco de 1º lugar (§10) ---------- */

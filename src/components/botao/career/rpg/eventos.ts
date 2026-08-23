@@ -75,15 +75,83 @@ export const EVENTOS_RPG: EventoRpg[] = [
     ],
   },
   {
+    id: "encontro-valeria",
+    remetente: "npc-valeria",
+    titulo: "A esbarrada na padaria",
+    tom: "drama",
+    texto:
+      "Uma mensagem de um número novo:\n\n" +
+      "«Oi! Sou a Valéria — a gente se esbarrou na padaria perto do CT (eu derrubei " +
+      "café no seu casaco, lembra? 😅). Perguntei seu número pro Zé da arquibancada. " +
+      "Você é o técnico novo, né? A cidade não fala de outra coisa.»",
+    escolhas: [
+      {
+        texto: "Responder com simpatia e puxar conversa",
+        desfecho:
+          "A conversa vai longe. Ela ri das suas histórias de vestiário e promete " +
+          "aparecer num jogo. A Cidadela ficou um pouco menor — no bom sentido.",
+        efeitos: { relacao: { npc: "npc-valeria", delta: 20 } },
+      },
+      {
+        texto: "Responder seco: 'tô focado no time'",
+        desfecho:
+          "«Respeito o foco. Boa sorte no campeonato, técnico.» A mensagem some " +
+          "no silêncio. Talvez a padaria ainda cruze vocês de novo.",
+        efeitos: { relacao: { npc: "npc-valeria", delta: 5 } },
+      },
+      {
+        texto: "Ignorar o número desconhecido",
+        desfecho:
+          "Você apaga a mensagem. Na padaria, dias depois, ela passa por você " +
+          "como quem não viu nada. E talvez não tenha visto mesmo.",
+        efeitos: { relacao: { npc: "npc-valeria", delta: -5 } },
+      },
+    ],
+  },
+  {
+    id: "jantar-valeria",
+    remetente: "npc-valeria",
+    titulo: "Um jantar sem futebol",
+    tom: "drama",
+    texto:
+      "Valéria, depois de semanas de conversa boa:\n\n" +
+      "«Eu sei que sua vida é o time. Mas hoje eu queria te roubar um pouco dele. " +
+      "Jantar comigo? Sem falar de futebol — ou fingindo que não vamos falar de " +
+      "futebol. O que você diz?»",
+    escolhas: [
+      {
+        texto: "Aceitar o jantar (oficializar o namoro)",
+        desfecho:
+          "O jantar vira madrugada. Quando você percebe, está contando coisas que " +
+          "nunca contou a ninguém. A partir de hoje, a Cidadela tem um casal novo.",
+        efeitos: { moral: 10, relacao: { npc: "npc-valeria", delta: 30 } },
+      },
+      {
+        texto: "Adiar: 'agora não consigo, o time precisa de mim'",
+        desfecho:
+          "«Tudo bem. Eu entendo — mas não demora demais, tá?» Ela sorri na " +
+          "mensagem, mas você sente o peso da espera.",
+        efeitos: { relacao: { npc: "npc-valeria", delta: 5 } },
+      },
+      {
+        texto: "Recusar de vez",
+        desfecho:
+          "«Ah. Ok.» Duas palavras que encerram uma história antes dela começar. " +
+          "A padaria volta a ser só uma padaria.",
+        efeitos: { moral: -5, relacao: { npc: "npc-valeria", delta: -30 } },
+      },
+    ],
+  },
+  {
     id: "seguidor",
     remetente: "npc-valeria",
     titulo: "Não olha pra trás",
     tom: "terror",
     texto:
       "Valéria liga com a voz baixa, trêmula:\n\n" +
-      "«Amor, eu tava indo pro CT e tinha um homem parado em frente ao portão. " +
+      "«Eu tava indo pro CT e tinha um homem parado em frente ao portão. " +
       "Quando eu passei, ele começou a andar atrás de mim. Eu entrei correndo na " +
-      "padaria. Amor... ele sabia o seu nome.»",
+      "padaria. Ele... ele sabia o seu nome.»",
     escolhas: [
       {
         texto: "Chamar a segurança do clube e investigar (custa SOV)",

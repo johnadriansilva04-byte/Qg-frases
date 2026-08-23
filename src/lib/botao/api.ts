@@ -514,18 +514,35 @@ export async function atualizarPerfilClube(
   return (data as UsuarioBotao | null) ?? null;
 }
 
-/** Exclui a conta do usuário: apaga o perfil em botao_usuarios (cascade) e o
- *  auth user via administração. Por segurança, só o próprio usuário autenticado
- *  pode excluir (RLS + policy delete_dono). Retorna true se removeu. */
+/**
+ * Apaga a conta DE VERDADE: perfil, carteira SOV, extrato, carreira, dados da
+ * Cidadela, mesas online e o próprio registro de autenticação (auth.users) —
+ * tudo via RPC `excluir_conta_total` (SECURITY DEFINER). Se a migration ainda
+ * não estiver aplicada em produção, cai no comportamento legado (apaga só o
+ * perfil público) para não quebrar o botão. Retorna true se removeu.
+ */
 export async function excluirContaUsuario(userId: string): Promise<boolean> {
-  const { error } = await supabase.from("botao_usuarios").delete().eq("user_id", userId);
+  const { error } = await (supabase.rpc as CallableFunction)("excluir_conta_total");
   if (error) {
-    console.error("[API] Erro ao excluir perfil:", error);
-    throw error;
+    const msg = String((error as { message?: string }).message ?? "");
+    const codigo = String((error as { code?: string }).code ?? "");
+    const funcaoInexistente =
+      codigo === "PGRST202" || codigo === "42883" || /function .* does not exist/i.test(msg);
+    if (!funcaoInexistente) {
+      console.error("[API] Erro ao excluir conta (RPC):", error);
+      throw error;
+    }
+    // Fallback legado (migration pendente): apaga só o perfil público.
+    const { error: errDelete } = await supabase
+      .from("botao_usuarios")
+      .delete()
+      .eq("user_id", userId);
+    if (errDelete) {
+      console.error("[API] Erro ao excluir perfil:", errDelete);
+      throw errDelete;
+    }
   }
-  // Encerra a sessão (não há como excluir o auth.user sem service_role; o
-  // perfil e todos os dados em cascade já foram removidos. O logout limpa o
-  // token local, tornando a conta inacessível).
+  // Sessão encerrada — com a RPC aplicada, o auth.users já não existe.
   await supabase.auth.signOut();
   return true;
 }

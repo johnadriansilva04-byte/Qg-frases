@@ -46,7 +46,11 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
       ...EMPTY_CAREER.coach,
       ...(bruta.coach ?? {}),
       nome: bruta.coach?.nome ?? "",
-      sov: Number.isFinite(bruta.coach?.sov) ? Math.max(0, Math.round(bruta.coach!.sov)) : 0,
+      // Dívida é estado válido: saldo negativo sobrevive à hidratação/F5
+      // (piso defensivo contra JSONB corrompido, nunca zera a dívida real).
+      sov: Number.isFinite(bruta.coach?.sov)
+        ? Math.max(-999_999, Math.round(bruta.coach!.sov))
+        : 0,
       titulos: Number.isFinite(bruta.coach?.titulos) ? bruta.coach!.titulos : 0,
       campanhasJogadas: Number.isFinite(bruta.coach?.campanhasJogadas)
         ? bruta.coach!.campanhasJogadas

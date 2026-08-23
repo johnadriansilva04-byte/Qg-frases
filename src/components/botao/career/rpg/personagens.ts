@@ -11,12 +11,17 @@ export const PERSONAGENS: Record<NpcId, PersonagemNpc> = {
     id: "npc-valeria",
     nome: "Valéria",
     avatar: "💛",
-    cargo: "Namorada",
-    relacaoInicial: 55,
+    // Ela NÃO começa como namorada — o vínculo é conquistado (eventos e
+    // escolhas). O rótulo exibido evolui com a relação (cargoValeria).
+    cargo: "Moradora da Cidadela",
+    relacaoInicial: 10,
     systemPrompt:
-      "Você é Valéria, namorada do treinador. Apoia a carreira dele, mas sente " +
-      "falta de atenção e cobra presença. Fala com carinho e ironia leve. Nunca " +
-      "sabe de resultados antes dele contar. Responda em 1-2 frases, informal.",
+      "Você é Valéria, moradora da Cidadela que conheceu o treinador há pouco " +
+      "tempo. Você NÃO é namorada dele: o vínculo está sendo construído. Com " +
+      "relação baixa (abaixo de 30), fale como conhecida curiosa, com ironia " +
+      "leve. Com relação média (30-59), fale como amiga próxima que torce por " +
+      "ele. Com relação alta (60+), aí sim trate-o como namorado, com carinho. " +
+      "Nunca sabe de resultados antes dele contar. Responda em 1-2 frases, informal.",
   },
   "npc-dario": {
     id: "npc-dario",
@@ -176,23 +181,23 @@ type Banco = Partial<Record<ReturnType<typeof faixaRelacao>, string[]>>;
 const RESPOSTAS: Record<NpcId, Banco> = {
   "npc-valeria": {
     inimigo: [
-      "A gente precisa conversar sério. Pessoalmente. Hoje.",
+      "Acho melhor a gente nem se falar mais. Boa sorte com o time.",
       "Você virou uma pessoa que eu não reconheço mais.",
     ],
     hostil: [
-      "Você só lembra de mim quando perde, né?",
-      "Tô sem paciência pra promessa. Me mostra atitude.",
+      "Você só lembra que eu existo quando perde, né?",
+      "Tô sem paciência pra conversa pela metade. Me mostra atitude.",
     ],
     desconhecido: [
-      "Oi, sumido. O time tá te consumindo inteiro, né.",
-      "Vi o resultado. Pelo menos me conta antes de eu ler na rede.",
+      "Oi! Você é o técnico novo, né? A cidade inteira comenta do seu time.",
+      "Te vi saindo do CT outro dia. Esse time te consome inteiro, né.",
     ],
     conhecido: [
-      "Tô torcendo por você, sabia? Só não esquece de mim no meio dessa loucura.",
-      "Quando essa rodada acabar, a gente sai? Sem falar de futebol.",
+      "Tô começando a torcer por você, sabia? Conta como foi o jogo.",
+      "Quando essa rodada acabar, me conta as novidades? Gosto de te ouvir.",
     ],
     aliado: [
-      "Você tá brilhando, amor. Mas dorme também, tá? O time não vai fugir.",
+      "Você tá brilhando. Mas dorme também, tá? O time não vai fugir.",
       "Sei lá como você aguenta essa pressão. Eu tô aqui, tá?",
     ],
     amigo: [
@@ -408,4 +413,17 @@ export function respostaProcedural(id: NpcId, score: number): string {
   const banco = RESPOSTAS[id];
   const lista = banco[faixa] ?? banco["conhecido"] ?? ["..."];
   return lista[Math.floor(Math.random() * lista.length)]!;
+}
+
+/** Relação mínima para a Valéria virar "Namorada" — conquistada, nunca dada. */
+export const LIMIAR_NAMORO = 60;
+
+/**
+ * Rótulo do vínculo com a Valéria conforme a relação atual. Ela NÃO começa
+ * como namorada: o jogador conquista o vínculo por eventos e escolhas.
+ */
+export function cargoValeria(score: number): string {
+  if (score >= LIMIAR_NAMORO) return "Namorada";
+  if (score >= 30) return "Amiga";
+  return "Conhecida";
 }

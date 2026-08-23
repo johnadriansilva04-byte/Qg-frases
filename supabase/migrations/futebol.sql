@@ -2708,3 +2708,76 @@ $$;
 GRANT EXECUTE ON FUNCTION public.cidadela_liberar_dono_clube(TEXT) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+-- ============================================================================
+-- EXCLUIR CONTA TOTAL — apaga TODOS os rastros do usuário no banco
+-- ============================================================================
+-- Chamada pelo botão "Excluir conta" do jogo. Antes era soft-delete (só
+-- botao_usuarios): auth.users, carteira SOV, carreiras e dados da Cidadela
+-- ficavam para trás e a conta "apagada" ainda entrava (login fantasma).
+-- Agora: apaga os dados de domínio, devolve os clubes ao universo e remove
+-- a própria linha de auth.users (auth admin dentro de SECURITY DEFINER).
+CREATE OR REPLACE FUNCTION public.excluir_conta_total()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'usuario nao autenticado';
+  END IF;
+
+  -- Clubes voltam ao universo (nunca são apagados — a economia continua).
+  UPDATE public.botao_times SET dono_user_id = NULL WHERE dono_user_id = v_uid;
+
+  -- Propostas pendentes envolvendo o usuário são canceladas.
+  DELETE FROM public.cidadela_propostas_clubes
+   WHERE de_user_id = v_uid OR para_user_id = v_uid;
+
+  -- Feira / inventário / cartório / chat / missões / presença / tempo.
+  DELETE FROM public.cidadela_market_listings
+   WHERE seller_id = v_uid OR comprador_id = v_uid;
+  DELETE FROM public.cidadela_item_grants WHERE user_id = v_uid;
+  DELETE FROM public.cidadela_inventory WHERE user_id = v_uid;
+  DELETE FROM public.cartorio_pedidos WHERE user_id = v_uid;
+  DELETE FROM public.cartorio_documentos WHERE user_id = v_uid;
+  DELETE FROM public.cidadela_chat_messages WHERE sender_id = v_uid;
+  DELETE FROM public.cidadela_missoes_diarias WHERE user_id = v_uid;
+  DELETE FROM public.cidadela_jogadores_online WHERE user_id = v_uid;
+  DELETE FROM public.cidadela_tempo WHERE user_id = v_uid;
+
+  -- Carreira e histórico relacional.
+  DELETE FROM public.botao_eventos_carreira WHERE user_id = v_uid;
+  DELETE FROM public.botao_partidas_carreira WHERE user_id = v_uid;
+  DELETE FROM public.botao_temporadas_carreira WHERE user_id = v_uid;
+
+  -- Online: mesas e campeonatos do usuário.
+  DELETE FROM public.mesas_futebol
+   WHERE jogador_1_id = v_uid OR jogador_2_id = v_uid;
+  DELETE FROM public.botao_campeonatos_online WHERE criador_id = v_uid;
+  DELETE FROM public.botao_lobbies WHERE usuario_id = v_uid;
+
+  -- Economia: extrato e carteira somem junto com a conta.
+  DELETE FROM public.bank_ledger WHERE user_id = v_uid;
+  DELETE FROM public.user_wallets WHERE user_id = v_uid;
+  DELETE FROM public.sov_market_transactions WHERE user_id = v_uid;
+  DELETE FROM public.anti_cheat_log WHERE user_id = v_uid;
+
+  -- Perfis de domínio (futebol + cidadela).
+  DELETE FROM public.botao_usuarios WHERE user_id = v_uid;
+  DELETE FROM public.cidadela_perfis WHERE user_id = v_uid;
+
+  -- Por fim, a identidade de autenticação — login com o mesmo e-mail/senha
+  -- deixa de existir (sem isso, a conta "apagada" continuava entrando).
+  DELETE FROM auth.users WHERE id = v_uid;
+
+  RETURN jsonb_build_object('excluida', true, 'user_id', v_uid);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.excluir_conta_total() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

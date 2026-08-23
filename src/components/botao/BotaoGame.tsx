@@ -93,7 +93,7 @@ import {
   processarEventosRpg,
   responderContatoNpc,
 } from "./career/rpg/rpgEngine";
-import { PERSONAGENS } from "./career/rpg/personagens";
+import { LIMIAR_NAMORO, PERSONAGENS, personagem } from "./career/rpg/personagens";
 import { eventoPorId } from "./career/rpg/eventos";
 import {
   criarPedidoCartorio,
@@ -1388,7 +1388,18 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     if (next.eventoPendenteId) return next;
     // Sortear evento de carreira antes de cada partida do usuário (40% chance)
     if (Math.random() > 0.4) return next;
-    const evento = sortearEvento(next.ultimasEscolhas);
+    let evento = sortearEvento(next.ultimasEscolhas);
+    // A cobrança da namorada só existe DEPOIS do namoro oficializado
+    // (Valéria é conquistada por evento — nunca aparece do nada).
+    if (evento.id === "namorada-cobranca") {
+      const relacaoVal =
+        next.memoriaRpg?.relacoes?.["npc-valeria"] ??
+        personagem("npc-valeria").relacaoInicial;
+      if (relacaoVal < LIMIAR_NAMORO) {
+        evento = sortearEvento([...next.ultimasEscolhas, "namorada-cobranca"]);
+        if (evento.id === "namorada-cobranca") return next;
+      }
+    }
     return { ...next, eventoPendenteId: evento.id };
   };
 
@@ -1514,13 +1525,35 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
   };
 
   // Inicia a próxima temporada (carreira infinita): deduz custo de manutenção,
-  // regenera Brasileirão + Copa do Brasil, mantém progresso e SOV.
+  // regenera Brasileirão + Copa do Brasil, mantém progresso e SOV. O saldo
+  // PODE ficar negativo — a dívida é real (ledger aceita negativo via
+  // 'penalty') e o jogador se recupera jogando. Nada bloqueia o avanço.
   const startNextSeason = () => {
     if (!career) return;
     const divisao = career.divisao;
+    const temporadaEncerrada = career.temporada ?? 1;
+    const custoManutencao = (career.coach.sov ?? 0) - iniciarNovaTemporada(career.coach.sov, divisao);
     const novaSov = iniciarNovaTemporada(career.coach.sov, divisao);
-    // Regra da dívida (§9): pagou → zera; falhou → registra a temporada
-    // na sequência; atinge o teto → o botão de continuar não era exibido.
+    // Débito real da manutenção no ledger (idempotente por temporada encerrada
+    // — F5/clique duplo nunca cobra duas vezes). Se o ledger estiver
+    // indisponível, o avanço NÃO é bloqueado: a dívida fica no snapshot local
+    // e é realinhada na próxima hidratação.
+    if (perfil?.user_id && custoManutencao > 0) {
+      void registrarTransacaoSov(
+        perfil.user_id,
+        -custoManutencao,
+        "penalty",
+        `Manutenção do clube — fim da temporada ${temporadaEncerrada}`,
+        "career",
+        { temporada: temporadaEncerrada, divisao },
+        {
+          sourceEvent: "manutencao_temporada",
+          idempotencyKey: `manutencao:${perfil.user_id}:t${temporadaEncerrada}`,
+        },
+      );
+    }
+    // Contador interno de inadimplência (oculto do jogador): pagou → zera;
+    // falhou → registra a temporada na sequência (sem bloquear nunca).
     const novaInad = veredito?.temporadasInadimplente ?? 0;
     const composicoes = career.composicoes ?? composicoesIniciais(userTeam, divisao);
     const ligas = criarLigasDaTemporada(composicoes, userTeam, difficulty);
@@ -1688,7 +1721,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...career,
       bonusProximaPartida: bonusPoder,
       moralTime: moral,
-      coach: { ...career.coach, sov: Math.max(0, sov) },
+      // Dívida é permitida: decisões com custo podem levar o saldo a negativo.
+      coach: { ...career.coach, sov },
       ultimasEscolhas: [...career.ultimasEscolhas, choice.id].slice(-8),
       eventoPendenteId: null,
       woProximaPartida,
@@ -2093,14 +2127,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
     copa.rodadaGatilhoConsumida = career.rodadaAtual;
 
     // Soberania/moral simples pelo resultado da copa (peso um pouco maior que
-    // a liga por ser mata-mata).
+    // a liga por ser mata-mata). Derrotas podem endividar (saldo negativo é
+    // permitido — a economia trata a dívida).
     let novaSov = career.coach.sov;
     let moral = career.moralTime;
     if (gf > ga) {
       novaSov += 4;
       moral = Math.min(100, moral + 5);
     } else if (gf < ga) {
-      novaSov = Math.max(0, novaSov - 2);
+      novaSov -= 2;
       moral = Math.max(0, moral - 5);
     } else {
       // Empate no tempo normal, vencedor nos pênaltis:
@@ -2111,7 +2146,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         novaSov += 2;
         moral = Math.min(100, moral + 2);
       } else {
-        novaSov = Math.max(0, novaSov - 1);
+        novaSov -= 1;
         moral = Math.max(0, moral - 3);
       }
     }
@@ -2143,11 +2178,15 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       ...career,
       copaBrasil: copa,
       moralTime: moral,
+      // O delta da copa TAMBÉM entra no snapshot local — antes só ia ao ledger
+      // e o coach.sov local ficava para trás até a próxima hidratação.
+      coach: { ...career.coach, sov: novaSov },
     };
     if (novas.length > 0) novaCareer = addHeadlines(novaCareer, novas);
 
-    // Resultado da copa no Banco Central SOV (module 'career').
-    const deltaCopa = Math.max(0, novaSov) - career.coach.sov;
+    // Resultado da copa no Banco Central SOV (module 'career'). Delta puro
+    // (pode ser negativo — 'penalty' aceita levar o saldo a negativo).
+    const deltaCopa = novaSov - career.coach.sov;
     if (deltaCopa !== 0 && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
@@ -2360,7 +2399,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         novaSov += POINTS.VITORIA;
         moral = Math.min(100, moral + 4);
       } else if (gf < ga) {
-        novaSov = Math.max(0, novaSov + POINTS.DERROTA);
+        novaSov += POINTS.DERROTA;
         moral = Math.max(0, moral - 6);
       } else {
         novaSov += POINTS.EMPATE;
@@ -2371,7 +2410,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1];
       if (lastChoice === "goleada") {
         if (gf - ga >= 2) novaSov += 5;
-        else if (gf < ga) novaSov = Math.max(0, novaSov - 3);
+        else if (gf < ga) novaSov -= 3;
       }
       if (lastChoice === "respeito" && gf > ga) novaSov += 2;
       if (lastChoice === "titular" && gf > ga) moral = Math.min(100, moral + 4);
@@ -2479,7 +2518,8 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
         composicoes: resultadoTemp?.composicoes ?? career.composicoes,
         coach: {
           ...career.coach,
-          sov: Math.max(0, Math.round(novaSov)),
+          // Dívida permitida: saldo negativo é estado econômico válido.
+          sov: Math.round(novaSov),
           titulos: novoTitulos,
         },
       };
@@ -2802,8 +2842,17 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
           sov: career.coach.sov,
           rodadasRestantes: t.groupFixtures.filter((fx) => !fx.played).length,
         } as const;
+        // Mensagens por GATILHO, nunca a cada rodada: o médico só chama
+        // quando há o que reportar (goleada, desfalque, moral em crise ou
+        // sanção pendente) e a reação da torcida vai para a Rede (feed
+        // público), não para as conversas privadas do celular.
+        const gatilhoMedico =
+          Math.abs(gf - ga) >= 3 ||
+          (career.desfalqueBotaoProxima ?? 0) > 0 ||
+          career.woProximaPartida === true ||
+          career.moralTime < 35;
         const [relMed, redes] = await Promise.all([
-          relatorioMedico(resultado),
+          gatilhoMedico ? relatorioMedico(resultado) : Promise.resolve(""),
           redesSociaisRodada(resultado),
         ]);
         const agora = new Date().toLocaleTimeString("pt-BR", {
@@ -2829,23 +2878,23 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
             naoLida: true,
           });
         }
-        for (let i = 0; i < (redes?.length ?? 0); i++) {
-          const t = redes[i]!;
-          novasConv.push({
-            id: "conv-canal-redes",
-            tipo: "evento",
-            nome: "Torcida (Redes Sociais)",
-            avatar: "📱",
-            cargo: "Menções da rodada",
-            canal: "redes",
-            mensagens: [
-              { id: `m-red-${partidaRef}-${i}`, texto: t, remetente: "outro", timestamp: agora },
-            ],
-            naoLida: true,
-          });
-        }
         // Entrega gradual: nunca dump de N mensagens de uma vez (§13).
         enfileirarConversas(novasConv);
+        // Reação da torcida → Rede pública (feed), não conversa privada.
+        // Mescla na carreira FRESCA (careerRef) — nunca regrava snapshot velho.
+        const atual = careerRef.current;
+        if (redes && redes.length > 0 && atual) {
+          const autor = ["Torcida nas Redes", "Arquibancada Virtual", "Nação Botonista"];
+          const posts = redes.slice(0, 2).map((texto, i) =>
+            gerarPostManual(atual, {
+              autor: autor[i % autor.length]!,
+              avatar: "📱",
+              selo: "torcedor",
+              texto,
+            }),
+          );
+          persistCareer(posts.reduce((c, p) => anexarPost(c, p), atual));
+        }
       } catch {
         // fallback silencioso: o jogo segue sem conteúdo IA
       }
@@ -3058,6 +3107,7 @@ export function BotaoGame({ onBack }: BotaoGameProps = {}) {
       <Shell>
         <CoachSetup
           timeName={userTeam.name}
+          divisao={career?.divisao ?? "serie-c"}
           nomeInicial={perfil?.nome}
           onFinish={finishCoachSetup}
           onBack={() => setScreen("menu")}

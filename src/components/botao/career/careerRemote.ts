@@ -88,7 +88,10 @@ export async function loadCareerFromSupabase(
         cidade: coachSalvo.cidade?.trim() || coachFallback.cidade?.trim() || "",
         bio: coachSalvo.bio?.trim() || coachFallback.bio?.trim() || "",
         nome: nomeCoach,
-        sov: saldoSov ?? u?.pontos_soberania ?? coachSalvo.sov ?? 0,
+        // Ledger primeiro (autoritativo). Na falha dele, o snapshot da carreira
+        // (JSONB) vence o cache pontos_soberania — o cache é clampado em 0 e
+        // apagaria uma dívida real (saldo negativo) do snapshot.
+        sov: saldoSov ?? coachSalvo.sov ?? u?.pontos_soberania ?? 0,
       },
     };
   } catch (e) {
@@ -209,9 +212,11 @@ export async function aplicarResultadoRemoto(
     let resultado: { soberania: number; moralTime: number; titulos: number } | null = null;
     await mutateProgressInSupabase(uid, (prog, row) => {
       const career = (prog["career"] ?? EMPTY_CAREER) as CareerState;
+      // Dívida é estado válido: sem o saldo do ledger, o fallback local pode
+      // ficar negativo (nunca é zerado artificialmente).
       const novaSob =
         saldoSov ??
-        Math.max(0, ((row["pontos_soberania"] as number | undefined) ?? career.coach.sov ?? 0) + delta);
+        ((row["pontos_soberania"] as number | undefined) ?? career.coach.sov ?? 0) + delta;
       resultado = {
         soberania: novaSob,
         moralTime: career.moralTime ?? 65,
@@ -224,7 +229,8 @@ export async function aplicarResultadoRemoto(
           career: { ...career, coach: { ...career.coach, sov: novaSob } },
         },
         extraColumns: {
-          pontos_soberania: novaSob,
+          // Cache do leaderboard: nunca negativo (a fonte de verdade é o ledger).
+          pontos_soberania: Math.max(0, novaSob),
           partidas_jogadas: ((row["partidas_jogadas"] as number | undefined) ?? 0) + 1,
           partidas_vencidas:
             ((row["partidas_vencidas"] as number | undefined) ?? 0) + (golsPro > golsContra ? 1 : 0),

@@ -156,20 +156,31 @@ console.log("\n== normalizarConversas (legado do banco) ==");
 console.log("\n== garantirContatosRpg (idempotente por contato) ==");
 {
   let c = garantirContatosRpg(careerBase());
-  ok(c.conversas.length === 4, "4 contatos-base criados");
+  ok(c.conversas.length === 3, "3 contatos-base criados (Valéria NÃO é contato inicial)");
+  ok(!c.conversas.some((x) => x.npcId === "npc-valeria"), "Valéria só entra via evento encontro-valeria");
   const ids1 = c.conversas.map((x) => x.id).sort().join(",");
   c = garantirContatosRpg(c);
-  ok(c.conversas.length === 4, "segunda execução NÃO duplica");
+  ok(c.conversas.length === 3, "segunda execução NÃO duplica");
   ok(c.conversas.map((x) => x.id).sort().join(",") === ids1, "ids estáveis entre execuções");
 
   // Cenário real do bug: só o Pracinha existe (convite do ritual chegou antes)
-  // → os outros 3 contatos ainda precisam nascer, e o Pracinha não duplica.
+  // → os outros 2 contatos ainda precisam nascer, e o Pracinha não duplica.
   let c2 = careerBase({
     conversas: [conv({ id: "conv-npc-npc-pracinha", npcId: "npc-pracinha", nome: "Pracinha", mensagens: [msg("rit-1")] })],
   });
   c2 = garantirContatosRpg(c2);
-  ok(c2.conversas.length === 4, "contatos faltantes são criados mesmo com 1 NPC existente");
+  ok(c2.conversas.length === 3, "contatos faltantes são criados mesmo com 1 NPC existente");
   ok(c2.conversas.filter((x) => x.npcId === "npc-pracinha").length === 1, "Pracinha não duplica");
+
+  // Carreira legada com a Valéria rotulada "Namorada" (bug antigo): o rótulo
+  // é rebaixado para o vínculo REAL da relação (10 → Conhecida).
+  let c3 = careerBase({
+    conversas: [conv({ id: "conv-npc-npc-valeria", npcId: "npc-valeria", nome: "Valéria", cargo: "Namorada", mensagens: [msg("v-1")] })],
+  });
+  c3 = garantirContatosRpg(c3);
+  const val = c3.conversas.find((x) => x.npcId === "npc-valeria")!;
+  ok(val.cargo === "Conhecida", "rótulo legado 'Namorada' é rebaixado para o vínculo real");
+  ok(val.mensagens.length === 1, "mensagens da conversa da Valéria preservadas");
 }
 
 console.log("\n== convidarRitualTrilha (uma conversa do Pracinha) ==");

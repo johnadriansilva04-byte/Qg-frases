@@ -9,7 +9,12 @@
 import type { CareerState, ConversaCelular } from "../types";
 import { anexarConversa } from "../conversasEngine";
 import { eventoPorId, EVENTOS_RPG } from "./eventos";
-import { personagem, relacaoInicial, respostaProcedural } from "./personagens";
+import {
+  cargoValeria,
+  personagem,
+  relacaoInicial,
+  respostaProcedural,
+} from "./personagens";
 import {
   MEMORIA_INICIAL,
   type EscolhaRpg,
@@ -42,13 +47,34 @@ function selecionarEvento(career: CareerState): EventoRpg | null {
     return eventoPorId("aquela-noite") ?? null;
   }
 
-  // 2. Gatilhos de estado real
+  // 2. A apresentação da Valéria é um GATILHO de rodada (uma vez só) — ela
+  // não existe na vida do treinador antes disso, e o vínculo é conquistado.
+  const relacaoValeria = relacaoAtual(mem, "npc-valeria");
+  if (career.rodadaAtual >= 2 && !mem.eventosVistos.includes("encontro-valeria")) {
+    return eventoPorId("encontro-valeria") ?? null;
+  }
+  // Jantar de oficialização: só quando o vínculo já existe e ainda não virou
+  // namoro — nunca repetido.
+  if (
+    mem.eventosVistos.includes("encontro-valeria") &&
+    relacaoValeria >= 30 &&
+    relacaoValeria < 60 &&
+    !mem.eventosVistos.includes("jantar-valeria")
+  ) {
+    return eventoPorId("jantar-valeria") ?? null;
+  }
+
+  // 3. Gatilhos de estado real
   const sov = career.coach.sov;
   const moral = career.moralTime;
 
   const candidatos: string[] = [];
   if (sov < 30) candidatos.push("divida-corretor");
-  if (mem.derrotasSeguidas >= 3) candidatos.push("seguidor", "demissao-sombra");
+  // O "seguidor" só faz sentido quando a Valéria já é próxima do treinador.
+  if (mem.derrotasSeguidas >= 3) {
+    candidatos.push("demissao-sombra");
+    if (relacaoValeria >= 40) candidatos.push("seguidor");
+  }
   if (moral < 30) candidatos.push("vestiario-mudo");
   if (sov >= 30 && sov < 120) candidatos.push("proposta-dario");
   if (mem.derrotasSeguidas === 0 && career.rodadaAtual >= 4) candidatos.push("festa-convite");
@@ -167,10 +193,15 @@ export function aplicarEscolhaRpg(
 
   const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const msgTimestamp = Date.now();
-  const conversas = career.conversas.map((c) =>
-    c.id === conversaId
+  const scoreValeria = relacoes["npc-valeria"] ?? relacaoAtual(mem, "npc-valeria");
+  const conversas = career.conversas.map((c) => {
+    // O vínculo com a Valéria evolui com as escolhas: o rótulo da conversa
+    // acompanha (Conhecida → Amiga → Namorada). Nunca começa como namorada.
+    const cargoDinamico = c.npcId === "npc-valeria" ? cargoValeria(scoreValeria) : c.cargo;
+    return c.id === conversaId
       ? {
           ...c,
+          cargo: cargoDinamico,
           naoLida: false,
           eventoRpg: c.eventoRpg ? { ...c.eventoRpg, respondido: true } : c.eventoRpg,
           mensagens: [
@@ -179,10 +210,11 @@ export function aplicarEscolhaRpg(
             { id: `rpg-d-${Date.now()}`, texto: escolha.desfecho, remetente: "outro" as const, timestamp },
           ],
         }
-      : c,
-  );
+      : { ...c, cargo: cargoDinamico };
+  });
 
-  const sov = Math.max(0, career.coach.sov + (e.sov ?? 0));
+  // Dívida permitida: escolhas com custo podem levar o saldo a negativo.
+  const sov = career.coach.sov + (e.sov ?? 0);
   const moral = Math.max(0, Math.min(100, career.moralTime + (e.moral ?? 0)));
 
   const novo: CareerState = {
@@ -263,14 +295,10 @@ export async function responderContatoNpc(
  * rodando a cada hidratação.
  */
 export function garantirContatosRpg(career: CareerState): CareerState {
-  const existentes = Array.isArray(career.conversas) ? career.conversas : [];
-
   const timestamp = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  // A Valéria NÃO é contato inicial: o jogador a conhece pelo evento
+  // "encontro-valeria" (gatilho de rodada) e conquista o vínculo jogando.
   const iniciais: Array<{ npc: NpcId; msg: string }> = [
-    {
-      npc: "npc-valeria",
-      msg: "Oi, amor! Soube que você assumiu o time. A Cidadela inteira vai conhecer você agora. Me liga quando puder. 💛",
-    },
     {
       npc: "npc-donacida",
       msg: "Filho, sua mãe tá orgulhosa. Só cuida da saúde e fica longe de gente estranha, tá? Te amo.",
@@ -302,6 +330,19 @@ export function garantirContatosRpg(career: CareerState): CareerState {
       ],
       naoLida: true,
     });
+  }
+  // Carreiras antigas tinham a Valéria criada como "Namorada" desde o início:
+  // rebaixa o rótulo para o vínculo REAL da relação (a história das mensagens
+  // é preservada — só o rótulo deixa de mentir).
+  const scoreValeria = relacaoAtual(memoriaRpg(atual), "npc-valeria");
+  const cargoReal = cargoValeria(scoreValeria);
+  if ((atual.conversas ?? []).some((c) => c.npcId === "npc-valeria" && c.cargo !== cargoReal)) {
+    atual = {
+      ...atual,
+      conversas: atual.conversas.map((c) =>
+        c.npcId === "npc-valeria" ? { ...c, cargo: cargoReal } : c,
+      ),
+    };
   }
   return atual;
 }

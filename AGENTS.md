@@ -1,3 +1,75 @@
+## Fim de temporada sem bloqueio + chances ocultas + entrada enxuta + exclusão total (2026-08-23, 22ª passada)
+
+Correções pedidas pelo dono após auditoria da jornada do jogador (E2E da conta
+Rangers). Nenhuma tabela/SQL novo além de UMA RPC anexada ao `futebol.sql`.
+
+- **FIM DE TEMPORADA NUNCA BLOQUEIA POR DINHEIRO** (`competitionApi.ts`):
+  `avaliarFimTemporada` retorna SEMPRE `continua: true`. Não pagou a
+  manutenção → a temporada seguinte começa mesmo assim e o saldo fica
+  NEGATIVO (dívida real): `iniciarNovaTemporada` devolve `sov - custo` sem
+  clamp; o `BotaoGame.startNextSeason` registra o débito no ledger com tipo
+  `penalty` e chave idempotente `manutencao:{uid}:t{n}` (F5/clique duplo
+  nunca cobra duas vezes; ledger indisponível não bloqueia o avanço).
+- **SISTEMA SECRETO DE CHANCES (§5)**: o contador `temporadasInadimplente`
+  continua existindo mas virou 100% INTERNO — `SeasonEndScreen` não mostra
+  mais "Tentativa de recuperação X de 3", e os avisos `AVISO_DIRETORIA`
+  são pura narrativa ("cobrança dura da diretoria", "sob observação
+  permanente") sem número de tentativas/restantes. Guarda estrutural no
+  `testes/persistencia-unica.test.mjs` proíbe os padrões na UI/narrativa.
+- **DÍVIDA É ESTADO VÁLIDO em toda a cadeia**: clamps `Math.max(0, ...)` de
+  SOV removidos de `BotaoGame` (aplicarEscolha, copa, liga), `rpgEngine`
+  (aplicarEscolhaRpg), `careerStorage.normalizarCareer` (piso defensivo
+  -999_999, nunca zera dívida real no F5) e `careerRemote` (cache
+  `pontos_soberania` segue clampado em 0 — é só leaderboard — mas o snapshot
+  JSONB guarda o valor negativo; no load, `saldoSov ?? coachSalvo.sov ??
+  pontos_soberania` — snapshot vence o cache para não apagar dívida).
+  BUG PEGO: `finishCopaMatch` computava `novaSov` mas NUNCA aplicava ao
+  `coach.sov` local (só ia ao ledger) — agora aplica.
+- **ENTRADA DA CARREIRA EM 3 PASSOS** (`CoachSetup.tsx` reescrito): etapa 1 =
+  OFERTA DO CLUBE da temporada 1 (contrato, divisão, manutenção, bônus),
+  etapa 2 = identidade (nome pré-preenchido do login), etapa 3 = estilo
+  tático + "Assinar contrato". Acabaram as 6 telas de enrolação.
+- **NAMORADA É CONQUISTADA, NÃO DADA**: Valéria não é mais contato inicial
+  ("Oi, amor!" removido de `garantirContatosRpg`; contatos-base = 3: Dona
+  Cida, Torcedor, Pracinha). Apresentação via evento-gatilho
+  `encontro-valeria` (rodada ≥2, uma vez); oficialização via `jantar-valeria`
+  (relação 30-59); "seguidor" só com relação ≥40. `cargoValeria(score)` rotula
+  a conversa (Conhecida → Amiga → Namorada em 60+, `LIMIAR_NAMORO`);
+  carreiras legadas com rótulo "Namorada" têm o cargo rebaixado ao vínculo
+  real na hidratação (mensagens preservadas). Respostas procedurais da Valéria
+  reescritas por faixa de vínculo (sem "amor" antes da hora). choicesEngine
+  tinha "Júlia" como namorada — nome canônico é Valéria.
+- **MENSAGENS POR GATILHO, NÃO POR RODADA**: relatório médico (`Dr. Maurício`)
+  só chega quando há o que reportar (goleada ≥3, desfalque, W.O., moral <35);
+  reação da torcida vai para a REDE (feed público, `gerarPostManual` na
+  carreira FRESCA do `careerRef` — nunca regrava snapshot velho), não para
+  conversa privada a cada partida.
+- **EXCLUIR CONTA APAGA TUDO**: RPC `excluir_conta_total()` no `futebol.sql`
+  (SECURITY DEFINER): clubes voltam ao universo (`dono_user_id = NULL`),
+  propostas canceladas, feira/inventário/cartório/chat/missões/presença/
+  tempo/carreira relacional/mesas/campeonatos/lobbies, **ledger + carteira
+  SOV**, `botao_usuarios`, `cidadela_perfis` e por fim `auth.users` (sem
+  isso a conta "apagada" continuava entrando — o login fantasma). Frontend
+  `excluirContaUsuario` chama a RPC com fallback legado (apaga só o perfil)
+  se a migration não estiver aplicada. **PRODUÇÃO: re-aplicar `futebol.sql`
+  no SQL Editor para ativar a exclusão total.**
+- **Estado da conta E2E (produção, probe REST)**: `open.rangers.fc.oficial@
+  gmail.com` — coach.sov=414 (JSONB), temporada 2, rodada 2, série C,
+  história cap. 6, 22 partidas; cache pontos_soberania=50 dessincronizado
+  (ledger é a verdade e realinha na hidratação). Economia global: 701 SOV
+  em circulação / 200.000 emitíveis; 0 clubes com dono ainda. Senha da conta
+  NÃO consta em nenhum arquivo do repo (README.md é legado do gerador de
+  frases) — login E2E depende da credencial informada pelo dono.
+- **Verificação**: tsc 0 erros; build OK; regras-fim-temporada 36 (reescrito:
+  continua SEMPRE, dívida negativa, motivo sem vazar contador); conversas 41
+  (3 contatos-base + rebaixamento do rótulo legado); persistencia-unica 46
+  (6 guardas novas: 3 etapas, chances ocultas, dívida, exclusão total,
+  Valéria por gatilho, mensagens por gatilho); demais suítes intactas
+  (f5 19, temporada 57, ia 52, torcida 42+14, entregas 9, bolsa 29,
+  história 53, sessão-antiga 11, sov-invest 46, conta-sem-perfil 33,
+  fluxo-usuario-novo 14, celular-anuncios 12, sov-consistencia 6,
+  f5-partida 27, onclick-guard OK, onboarding 22, marketplace 11).
+
 ## SOV BANK + SOV INVEST (duas carteiras) + Bolsa atômica + dividendos recorrentes (2026-08-22, 21ª passada)
 
 Implementação definitiva do modelo "SOV Bank / SOV Invest / Bolsa de Valores".

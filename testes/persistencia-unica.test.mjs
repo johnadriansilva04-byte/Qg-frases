@@ -155,5 +155,86 @@ expect(
 // 11. §13: coach name prefilled from logged identity.
 expect(coachSetup.includes("nomeInicial"), "CoachSetup: aceita identidade do login");
 
+// 12. Entrada da carreira enxuta: oferta do clube na temporada 1 (3 etapas).
+expect(
+  coachSetup.includes("Aceitar proposta") && coachSetup.includes("CUSTO_MANUTENCAO"),
+  "CoachSetup: etapa 1 é a oferta do clube da temporada 1",
+);
+expect(
+  coachSetup.includes("const totalSteps = 3"),
+  "CoachSetup: exatamente 3 etapas (nunca 6)",
+);
+
+// 13. §5 — O contador de chances NUNCA vaza para o jogador.
+const seasonEnd = ler("src/components/botao/career/SeasonEndScreen.tsx");
+const competitionApi = ler("src/components/botao/career/competitionApi.ts");
+expect(
+  !/de 3|\/ 3|Tentativa de recuperação|temporadas restantes|restantes antes/.test(seasonEnd),
+  "SeasonEndScreen: sem contador 'X de 3' nem chances restantes na UI",
+);
+expect(
+  !/\(\$\{|\/\$\{| de 3| temporadas restantes|falência/.test(
+    competitionApi.match(/const AVISO_DIRETORIA = \[[\s\S]*?\];/)?.[0] ?? "",
+  ),
+  "competitionApi: avisos da diretoria não expõem número de chances",
+);
+expect(
+  !competitionApi.includes("continua: false"),
+  "competitionApi: falta de dinheiro nunca encerra a carreira (continua sempre true)",
+);
+
+// 14. §4 — Dívida real: saldo pode ficar negativo no fim de temporada.
+expect(
+  !/iniciarNovaTemporada[\s\S]*?Math\.max\(0/.test(competitionApi.split("chegouAoPrimeiroLugar")[0] ?? ""),
+  "competitionApi: iniciarNovaTemporada permite saldo negativo (dívida)",
+);
+expect(
+  bj.includes('idempotencyKey: `manutencao:${perfil.user_id}:t${temporadaEncerrada}`'),
+  "BotaoGame: débito de manutenção idempotente no ledger",
+);
+
+// 15. Excluir conta = exclusão TOTAL (auth.users + domínio), com fallback.
+expect(
+  futebolSql.includes("public.excluir_conta_total()") &&
+    futebolSql.includes("DELETE FROM auth.users") &&
+    futebolSql.includes("DELETE FROM public.user_wallets") &&
+    futebolSql.includes("DELETE FROM public.bank_ledger") &&
+    futebolSql.includes("DELETE FROM public.cidadela_perfis") &&
+    futebolSql.includes("dono_user_id = NULL"),
+  "futebol.sql: RPC excluir_conta_total apaga auth.users, economia e perfis; clubes voltam ao universo",
+);
+expect(
+  apiLegado.includes("excluir_conta_total"),
+  "api.ts: excluirContaUsuario usa a RPC de exclusão total",
+);
+
+// 16. Namorada é conquistada, não dada: Valéria começa como conhecida e a
+// apresentação é um evento-gatilho (nunca mensagem automática a cada rodada).
+const personagens = ler("src/components/botao/career/rpg/personagens.ts");
+const eventos = ler("src/components/botao/career/rpg/eventos.ts");
+const rpgEngine = ler("src/components/botao/career/rpg/rpgEngine.ts");
+expect(
+  !personagens.match(/"npc-valeria": \{[\s\S]*?\},/)?.[0]?.includes('cargo: "Namorada"'),
+  "personagens: Valéria NÃO começa como namorada",
+);
+expect(
+  eventos.includes('id: "encontro-valeria"') && eventos.includes('id: "jantar-valeria"'),
+  "eventos: apresentação da Valéria é um evento-gatilho",
+);
+expect(
+  !rpgEngine.includes("Oi, amor! Soube que você assumiu o time"),
+  "rpgEngine: Valéria não é contato inicial automático",
+);
+expect(
+  rpgEngine.includes("encontro-valeria") && rpgEngine.includes("cargoValeria"),
+  "rpgEngine: gatilho da Valéria + rótulo dinâmico por relação",
+);
+
+// 17. Mensagens pós-partida por gatilho (médico) e torcida na Rede, não em DM.
+expect(
+  bj.includes("gatilhoMedico") && bj.includes("Reação da torcida → Rede pública"),
+  "BotaoGame: relatório médico por gatilho; reação da torcida vai para o feed",
+);
+
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);
