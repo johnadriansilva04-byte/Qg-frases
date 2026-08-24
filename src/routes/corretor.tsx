@@ -42,7 +42,7 @@ function Corretor() {
     recognition.onresult = (event: any) => {
       let textoTranscrito = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
+        if (event.results[i]?.isFinal && event.results[i][0]?.transcript) {
           textoTranscrito += event.results[i][0].transcript + ' ';
         }
       }
