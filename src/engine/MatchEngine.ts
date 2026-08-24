@@ -267,6 +267,11 @@ export class MatchEngine {
       this.minute += dt * this.minutesPerSecond;
     }
 
+    // Track pass hold duration for auto-marking
+    if (this.input.isPassHeld) {
+      (this.input as any).passHoldTime += dt;
+    }
+
     const owner = this.ball.owner;
     if (owner) this.possTicks[owner.side] += dt;
 
@@ -365,8 +370,10 @@ export class MatchEngine {
     const mv = this.input.move;
     // Move vector: x = right/left, y = forward/back
     // Convert to world space based on attack direction
-    const dx = mv.x * d;
-    const dz = mv.y * d;
+    // W (y>0) = forward toward goal = attack direction
+    // D (x>0) = right = perpendicular to attack (positive z)
+    const dx = mv.y * d;
+    const dz = mv.x;
 
     const wantsSprint = this.input.sprint && Math.hypot(mv.x, mv.y) > 0.1 && p.stamina > 2;
     let speed = this.maxSpeed(p) * (wantsSprint ? 1.28 : 1);
@@ -375,7 +382,26 @@ export class MatchEngine {
     if (wantsSprint) p.stamina = clamp(p.stamina - dt * (10 - p.data.attributes.stamina / 14), 0, 100);
     else p.stamina = clamp(p.stamina + dt * 3.5, 0, 100);
 
-    if (p.state === "slide") {
+    // Auto-marking when holding pass button
+    if (this.input.isPassHeld && (this.input as any).passHoldTime > 0.5) {
+      // Find nearest opponent to mark
+      let nearestOpponent: Sim | null = null;
+      let nearestDist = Infinity;
+      for (const o of this.players) {
+        if (o.side === p.side) continue;
+        const dist = Math.hypot(o.x - p.x, o.z - p.z);
+        if (dist < nearestDist && dist < 8) {
+          nearestDist = dist;
+          nearestOpponent = o;
+        }
+      }
+      if (nearestOpponent) {
+        // Move towards opponent to mark
+        const markDx = nearestOpponent.x - p.x;
+        const markDz = nearestOpponent.z - p.z;
+        this.drive(p, markDx, markDz, speed * 0.9, dt);
+      }
+    } else if (p.state === "slide") {
       this.slideStep(p, dt);
     } else {
       this.drive(p, dx, dz, Math.hypot(mv.x, mv.y) > 0.08 ? speed : 0, dt);
@@ -386,7 +412,14 @@ export class MatchEngine {
       if (this.freeze > 0) break;
       if (a === "pass" && this.ball.owner === p) this.doPass(p);
       else if (a === "shoot" && this.ball.owner === p) this.doShot(p);
-      else if (a === "tackle") this.startSlide(p);
+      else if (a === "tackle") {
+        if ((this.input as any).isDoubleTackle) {
+          // Double-tap tackle: more aggressive desarme
+          this.aggressiveTackle(p);
+        } else {
+          this.startSlide(p);
+        }
+      }
       else if (a === "request" && this.ball.owner && this.ball.owner.side === p.side && this.ball.owner !== p) {
         this.doRequestBall(p);
       }
@@ -433,11 +466,34 @@ export class MatchEngine {
       const pressure = this.players.some(
         (o) => o.side !== p.side && Math.hypot(o.x - p.x, o.z - p.z) < 2.6
       );
-      this.drive(p, goalX - p.x, -p.z * 0.35, speed * 0.92, dt);
+      
+      // Look for teammates ahead to pass to
+      let bestTeammate: Sim | null = null;
+      let bestScore = -Infinity;
+      for (const tm of this.players) {
+        if (tm.side !== p.side || tm === p || tm.isKeeper) continue;
+        const tmToGoal = Math.hypot(goalX - tm.x, 0 - tm.z);
+        const distToTM = Math.hypot(tm.x - p.x, tm.z - p.z);
+        // Prefer teammates closer to goal and not too far
+        if (tmToGoal < toGoal && distToTM < 25 && distToTM > 3) {
+          const score = (toGoal - tmToGoal) - distToTM * 0.3;
+          if (score > bestScore) {
+            bestScore = score;
+            bestTeammate = tm;
+          }
+        }
+      }
+      
+      if (bestTeammate && (pressure || toGoal > 18)) {
+        // Pass to teammate
+        this.drive(p, bestTeammate.x - p.x, bestTeammate.z - p.z, speed * 0.85, dt);
+      } else {
+        this.drive(p, goalX - p.x, -p.z * 0.35, speed * 0.92, dt);
+      }
       p.state = "run";
       if (p.actionCooldown <= 0) {
         if (toGoal < 22 && (p.data.attributes.shooting > 55 || toGoal < 14)) this.doShot(p);
-        else if (pressure || Math.random() < dt * 0.9) this.doPass(p);
+        else if (pressure || Math.random() < dt * 1.2) this.doPass(p);
       }
       return;
     }
@@ -539,6 +595,57 @@ export class MatchEngine {
     const uz = sp > 0.2 ? p.vz / sp : Math.cos(p.heading);
     p.vx = ux * 9;
     p.vz = uz * 9;
+  }
+
+  private aggressiveTackle(p: Sim) {
+    // More aggressive standing tackle - higher chance to win ball, higher foul risk
+    p.state = "slide";
+    p.stateTimer = 0.35;
+    p.actionCooldown = 0.8;
+    
+    // Look for nearest opponent with ball
+    let target: Sim | null = null;
+    let nearestDist = Infinity;
+    for (const o of this.players) {
+      if (o.side === p.side) continue;
+      const dist = Math.hypot(o.x - p.x, o.z - p.z);
+      if (dist < nearestDist && dist < 3) {
+        nearestDist = dist;
+        target = o;
+      }
+    }
+    
+    if (target) {
+      const dx = target.x - p.x;
+      const dz = target.z - p.z;
+      const len = Math.hypot(dx, dz) || 1;
+      p.vx = (dx / len) * 11;
+      p.vz = (dz / len) * 11;
+      
+      // Immediate ball contact check
+      if (this.ball.owner === target) {
+        const win = 0.5 + (p.data.attributes.defending - target.data.attributes.technique) / 150;
+        if (Math.random() < win) {
+          this.ball.owner = null;
+          this.ball.lastToucher = p;
+          this.ball.vel.set((dx / len) * 5, 0.8, (dz / len) * 5);
+          this.ball.kickLock = 0.1;
+          p.stats.tackles++;
+          p.stats.rating = clamp(p.stats.rating + 0.2, 0, 10);
+          this.emit({ type: "tackle", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
+          p.stateTimer = 0.1;
+        } else {
+          this.foul(p, target);
+        }
+      }
+    } else {
+      // No target, just lunge forward
+      const sp = Math.hypot(p.vx, p.vz) || 1;
+      const ux = sp > 0.2 ? p.vx / sp : Math.sin(p.heading);
+      const uz = sp > 0.2 ? p.vz / sp : Math.cos(p.heading);
+      p.vx = ux * 11;
+      p.vz = uz * 11;
+    }
   }
 
   private slideStep(p: Sim, dt: number) {
@@ -707,18 +814,29 @@ export class MatchEngine {
     const goalX = d * FIELD.halfLength;
     const dist = Math.hypot(goalX - p.x, -p.z);
     const acc = p.data.attributes.shooting;
-    const spread = (1 - acc / 100) * clamp(dist / 8, 0.6, 4) + 0.35;
-    const aimZ = clamp((Math.random() - 0.5) * 2 * spread, -6, 6);
+    
+    // Improved aiming: aim for corners based on shooting skill
+    const spread = (1 - acc / 100) * clamp(dist / 8, 0.4, 3) + 0.25;
+    const aimCorner = acc > 65 && Math.random() < 0.4;
+    const aimZ = aimCorner 
+      ? (Math.random() < 0.5 ? -4.5 : 4.5) + (Math.random() - 0.5) * spread
+      : clamp((Math.random() - 0.5) * 2 * spread, -5, 5);
+    
     const dx = goalX - p.x;
     const dz = aimZ - p.z;
     const len = Math.hypot(dx, dz) || 1;
-    const power = clamp(16 + dist * 0.75 + acc / 8, 18, 34);
+    
+    // Power based on distance and shooting attribute
+    const power = clamp(14 + dist * 0.7 + acc / 10, 16, 32);
+    
+    // Ball height - higher for closer shots, lower for power shots
+    const ballHeight = clamp(2.0 + dist * 0.05 + (aimCorner ? 0.8 : 0), 1.8, 4.5);
 
     this.ball.owner = null;
     this.ball.kickLock = 0.3;
     this.ball.lastToucher = p;
     this.ball.pos.y = 0.2;
-    this.ball.vel.set((dx / len) * power, clamp(2.2 + dist * 0.06, 2, 5.5), (dz / len) * power);
+    this.ball.vel.set((dx / len) * power, ballHeight, (dz / len) * power);
     p.state = "shoot";
     p.stateTimer = 0.3;
     p.actionCooldown = 0.7;

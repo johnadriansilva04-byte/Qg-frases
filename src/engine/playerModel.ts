@@ -150,7 +150,7 @@ export function createBallMesh(): THREE.Mesh {
   const tex = new THREE.CanvasTexture(canvas);
   
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.11, 24, 16),
+    new THREE.SphereGeometry(0.15, 24, 16),
     new THREE.MeshStandardMaterial({ 
       map: tex,
       color: 0xffffff,
