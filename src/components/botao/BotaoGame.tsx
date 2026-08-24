@@ -72,6 +72,7 @@ import {
   proximoJogoCopa,
   copaDisponivelNaRodada,
   advanceCopaBrasil,
+  resolverPenaltisCopa,
   avaliarFimTemporada,
   iniciarNovaTemporada,
   chegouAoPrimeiroLugar,
@@ -2793,10 +2794,14 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   // Brasileirão). Avança o chaveamento da copa e aplica efeitos de carreira.
   const finishCopaMatch = (r: MatchResult, gf: number, ga: number) => {
     if (!career?.copaBrasil || !currentCopaFix) return;
+    // Empate no tempo normal exige decisão (mata-mata): resolve pênaltis
+    // determinísticos ANTES de qualquer efeito — chaveamento, moral e SOV
+    // usam o MESMO resultado, e F5/replay não muda o desfecho.
+    const rFinal = resolverPenaltisCopa(r, currentCopaFix.id);
     const copa = advanceCopaBrasil(
       career.copaBrasil,
       currentCopaFix,
-      r,
+      rFinal,
       tour?.difficulty ?? difficulty,
     );
     // Marca a rodada-gatilho como consumida para evitar disparar a próxima fase
@@ -2815,10 +2820,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       novaSov -= 2;
       moral = Math.max(0, moral - 5);
     } else {
-      // Empate no tempo normal, vencedor nos pênaltis:
-      const userHome = r.homeId === userTeam.id;
-      const userPen = userHome ? (r.penHome ?? 0) : (r.penAway ?? 0);
-      const advPen = userHome ? (r.penAway ?? 0) : (r.penHome ?? 0);
+      // Empate no tempo normal, vencedor nos pênaltis (rFinal garante que
+      // penHome/penAway existem aqui — resolvidos de forma determinística).
+      const userHome = rFinal.homeId === userTeam.id;
+      const userPen = userHome ? (rFinal.penHome ?? 0) : (rFinal.penAway ?? 0);
+      const advPen = userHome ? (rFinal.penAway ?? 0) : (rFinal.penHome ?? 0);
       if (userPen > advPen) {
         novaSov += 2;
         moral = Math.min(100, moral + 2);
@@ -2893,6 +2899,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
 
     // Resultado da copa no Banco Central SOV (module 'career'). Delta puro
     // (pode ser negativo — 'penalty' aceita levar o saldo a negativo).
+    // Chave idempotente por fixture: F5/replay nunca cobra duas vezes (antes
+    // ia sem chave — a única transação da conta sem idempotência).
     if (deltaCopa !== 0 && perfil?.user_id) {
       void registrarTransacaoSov(
         perfil.user_id,
@@ -2904,6 +2912,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
           competicao: "copa-do-brasil",
           stage: currentCopaFix.stage,
           campeao: copa.finished && copa.champion === userTeam.id,
+          penaltis:
+            rFinal.penHome != null ? `${rFinal.penHome}x${rFinal.penAway}` : null,
+        },
+        {
+          sourceEvent: "partida",
+          idempotencyKey: `copa:${perfil.user_id}:t${career.temporada ?? 1}:${currentCopaFix.id}`,
         },
       );
     }
@@ -2919,6 +2933,26 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       );
     }
     persistCareer(novaCareer);
+    // Desfecho dos pênaltis (empate no tempo normal) para toast e fim de jogo.
+    const penUser =
+      gf === ga
+        ? rFinal.homeId === userTeam.id
+          ? (rFinal.penHome ?? 0)
+          : (rFinal.penAway ?? 0)
+        : null;
+    const penAdv =
+      gf === ga
+        ? rFinal.homeId === userTeam.id
+          ? (rFinal.penAway ?? 0)
+          : (rFinal.penHome ?? 0)
+        : null;
+    const avancouNosPenaltis = penUser != null && penAdv != null && penUser > penAdv;
+    const textoPenaltis =
+      penUser != null && penAdv != null
+        ? avancouNosPenaltis
+          ? `Avançou nos pênaltis (${penUser}x${penAdv}).`
+          : `Eliminado nos pênaltis (${penUser}x${penAdv}).`
+        : null;
     setToast(
       copa.finished && copa.champion === userTeam.id
         ? "CAMPEÃO DA COPA DO BRASIL!"
@@ -2926,7 +2960,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
           ? "Vitória na Copa do Brasil!"
           : gf < ga
             ? "Eliminado da Copa do Brasil."
-            : "Avançou nos pênaltis na Copa.",
+            : (textoPenaltis ?? "Empate na Copa do Brasil."),
     );
 
     // Tela de fim de jogo com estatísticas da copa (estilo esportivo).
@@ -2948,7 +2982,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       extra:
         copa.finished && copa.champion === userTeam.id
           ? "CAMPEÃO DA COPA DO BRASIL!"
-          : undefined,
+          : (textoPenaltis ?? undefined),
     });
     setMatchEndDestino("hub");
     setScreen("match-end");

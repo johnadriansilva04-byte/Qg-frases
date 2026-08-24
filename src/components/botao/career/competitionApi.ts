@@ -356,6 +356,44 @@ function vencedorCopa(r: MatchResult): string {
 }
 
 /**
+ * Mata-mata exige vencedor: se o jogo do usuário terminou empatado sem
+ * disputa de pênaltis registrada (o 2D e o 3D não têm minigame de pênaltis),
+ * decide por pênaltis simulados com a MESMA distribuição de simulateMatch
+ * (knockout). Determinístico por fixture+placar (F5/replay não muda o
+ * desfecho — senão um refresh podia trocar o eliminado).
+ */
+export function resolverPenaltisCopa(r: MatchResult, seed: string): MatchResult {
+  if (r.homeGoals !== r.awayGoals) return r;
+  if (r.penHome != null && r.penAway != null) return r;
+  let h = 2166136261;
+  const s = `pen:${seed}:${r.homeId}:${r.awayId}:${r.homeGoals}x${r.awayGoals}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  // Finalizador estilo murmur3: espalha bits antes de gerar (seeds vizinhas
+  // como "fix-1"/"fix-2" precisam dar desfechos independentes).
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  const rand = (salt: number) => {
+    h = Math.imul(h ^ salt, 2654435761) >>> 0;
+    h = (h ^ (h >>> 15)) >>> 0;
+    return (h % 1024) / 1024;
+  };
+  let ph = 0;
+  let pa = 0;
+  let n = 0;
+  while (ph === pa) {
+    ph = 3 + Math.floor(rand(++n) * 3);
+    pa = 3 + Math.floor(rand(++n) * 3);
+  }
+  return { ...r, penHome: ph, penAway: pa };
+}
+
+/**
  * Aplica o resultado do jogo de copa do usuário, simula o outro jogo da fase
  * (se houver) e avança o chaveamento. Retorna a CopaBrasilState atualizada.
  */

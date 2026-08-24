@@ -1,6 +1,6 @@
 import type { Difficulty, Tournament } from "./types";
 import { supabase } from "@/integrations/supabase/client";
-import { registrarTransacaoSov } from "@/lib/financial/sovApi";
+import { cacheSoberaniaInteiro, registrarTransacaoSov } from "@/lib/financial/sovApi";
 
 export type Progress = {
   titles: Record<Difficulty, number>;
@@ -270,7 +270,7 @@ export async function atualizarPontosSoberania(
         "[Pontos] ledger indisponível — SOV da partida NÃO confirmado; cache preservado.",
       );
     }
-    const novosPontos = saldoSov ?? (currentData.pontos_soberania || 0);
+    const novosPontos = saldoSov != null ? cacheSoberaniaInteiro(saldoSov) : (currentData.pontos_soberania || 0);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias = vitoria
       ? (currentData.partidas_vencidas || 0) + 1
@@ -341,7 +341,7 @@ export async function atualizarEstatisticasOnline(
         "[Estatísticas Online] ledger indisponível — SOV da partida NÃO confirmado; cache preservado.",
       );
     }
-    const novosPontos = saldoSov ?? (currentData.pontos_soberania || 0);
+    const novosPontos = saldoSov != null ? cacheSoberaniaInteiro(saldoSov) : (currentData.pontos_soberania || 0);
     const novasPartidas = (currentData.partidas_jogadas || 0) + 1;
     const novasVitorias =
       resultado === "vitoria"
@@ -395,7 +395,7 @@ export async function adicionarPontosVideo(userId: string, pontos: number = 5) {
 
     const { error } = await supabase
       .from("botao_usuarios")
-      .update({ pontos_soberania: saldoSov })
+      .update({ pontos_soberania: cacheSoberaniaInteiro(saldoSov) })
       .eq("user_id", userId);
 
     if (error) throw error;

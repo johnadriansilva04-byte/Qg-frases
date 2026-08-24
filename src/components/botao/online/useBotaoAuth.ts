@@ -9,6 +9,7 @@ import { buscarPerfil, cachePerfil, limparCache, sair, type Perfil } from "./aut
 import { decidirDestinoSessao } from "./sessaoRegras";
 import { alinharCacheSoberania, criarPerfilSeNaoExistir } from "@/lib/botao/api";
 import { bootstrapFinanceiro } from "@/lib/financial/sovBankApi";
+import { cacheSoberaniaInteiro } from "@/lib/financial/sovApi";
 
 export function useBotaoAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -96,7 +97,7 @@ export function useBotaoAuth() {
           if (!vivo) return;
           if (saldo != null && saldo !== p.pontos_soberania) {
             await alinharCacheSoberania(u.id, saldo);
-            p = { ...p, pontos_soberania: saldo };
+            p = { ...p, pontos_soberania: cacheSoberaniaInteiro(saldo) };
             cachePerfil(p);
           }
         }

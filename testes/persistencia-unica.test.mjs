@@ -544,5 +544,39 @@ expect(
   "LoadingScreens: seleção determinística no initializer, aleatória só pós-montagem",
 );
 
+// Cache pontos_soberania é INTEGER no banco; o saldo do ledger é decimal
+// (IOF/dividendos). Gravar decimal cru quebrava o PATCH inteiro com 400
+// (22P02) e derrubava as estatísticas da partida junto.
+const sovApiSrc = ler("src/lib/financial/sovApi.ts");
+const careerRemoteSrc = ler("src/components/botao/career/careerRemote.ts");
+const storageSrc = ler("src/components/botao/storage.ts");
+const botaoApiSrc = ler("src/lib/botao/api.ts");
+expect(
+  sovApiSrc.includes("export function cacheSoberaniaInteiro"),
+  "sovApi: cacheSoberaniaInteiro exportado (Math.max(0, Math.round))",
+);
+const escritasCacheCruas = [
+  ...careerRemoteSrc.matchAll(/pontos_soberania:\s*(?!cacheSoberaniaInteiro|50)([A-Za-z_$][\w$?.()]*)/g),
+  ...storageSrc.matchAll(/pontos_soberania:\s*(?!cacheSoberaniaInteiro|50)([A-Za-z_$][\w$?.()]*)/g),
+].filter((m) => !/Math\.round|cacheSoberaniaInteiro|novosPontos/.test(m[1]));
+expect(
+  escritasCacheCruas.length === 0,
+  `careerRemote/storage: nenhuma escrita crua de pontos_soberania (${escritasCacheCruas.map((m) => m[1]).join(",")})`,
+);
+expect(
+  botaoApiSrc.includes("cacheSoberaniaInteiro(saldoSov)") ||
+    botaoApiSrc.includes("cacheSoberaniaInteiro(saldo)"),
+  "api.ts: salvarResultado/bootstrap arredondam o cache antes de gravar",
+);
+const botaoGameSrc2 = ler("src/components/botao/BotaoGame.tsx");
+expect(
+  botaoGameSrc2.includes("idempotencyKey: `copa:${perfil.user_id}:t${career.temporada ?? 1}:${currentCopaFix.id}`"),
+  "BotaoGame: resultado da Copa com chave idempotente por fixture",
+);
+expect(
+  botaoGameSrc2.includes("resolverPenaltisCopa(r, currentCopaFix.id)"),
+  "BotaoGame: empate de mata-mata resolve pênaltis antes de efeitos/chaveamento",
+);
+
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);

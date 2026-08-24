@@ -27,6 +27,11 @@ CREATE POLICY "Chat escrita autenticada"
   ON cidadela_chat_messages FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
 
+-- Sem estes GRANTs as policies nem chegam a ser avaliadas: PostgREST devolvia
+-- 42501 "permission denied" e o Grupo do celular nunca abria em produção.
+GRANT SELECT ON cidadela_chat_messages TO anon, authenticated;
+GRANT INSERT ON cidadela_chat_messages TO authenticated;
+
 -- =========================================================
 -- 2. Missões Diárias
 -- =========================================================

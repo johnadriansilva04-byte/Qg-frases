@@ -41,6 +41,18 @@ function logErroRpc(nome: string, payload: Record<string, unknown>, erro: unknow
 }
 
 /**
+ * A coluna `botao_usuarios.pontos_soberania` é INTEGER (cache do leaderboard),
+ * mas o saldo do ledger é decimal (IOF 10%, dividendos, receitas fracionadas).
+ * Gravar o decimal cru quebrava o PATCH inteiro com 400
+ * ("invalid input syntax for type integer") — e derrubava junto as
+ * estatísticas da partida (gols/partidas) na mesma atualização.
+ * Regra: TODO cache de soberania passa por aqui antes de ir ao banco.
+ */
+export function cacheSoberaniaInteiro(valor: number): number {
+  return Math.max(0, Math.round(valor));
+}
+
+/**
  * Registra uma transação de soberania no bank_ledger (e ajusta o saldo).
  * Porta de entrada central: `sov_bank_registrar` (idempotência + teto de
  * emissão + origem rastreável). Retorna o saldo resultante — usado para

@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import {
   obterSaldoSov,
+  cacheSoberaniaInteiro,
   registrarTransacaoSov,
   type SovModule,
 } from "@/lib/financial/sovApi";
@@ -108,7 +109,7 @@ export async function saveCareerToSupabase(userId: string, c: CareerState): Prom
     await writeProgress(
       userId,
       { career: c },
-      { pontos_soberania: Math.max(0, c.coach.sov) },
+      { pontos_soberania: cacheSoberaniaInteiro(c.coach.sov) },
     );
   } catch (e) {
     console.error("[careerRemote] saveCareer error:", e);
@@ -234,7 +235,7 @@ export async function aplicarResultadoRemoto(
         },
         extraColumns: {
           // Cache do leaderboard: nunca negativo (a fonte de verdade é o ledger).
-          pontos_soberania: Math.max(0, novaSob),
+          pontos_soberania: cacheSoberaniaInteiro(novaSob),
           partidas_jogadas: ((row["partidas_jogadas"] as number | undefined) ?? 0) + 1,
           partidas_vencidas:
             ((row["partidas_vencidas"] as number | undefined) ?? 0) + (golsPro > golsContra ? 1 : 0),
@@ -339,7 +340,7 @@ export async function aplicarFimCampanhaRemoto(
       coach: { ...career.coach, titulos: novoTit },
     };
 
-    await writeProgress(uid, { career: nextCareer }, { pontos_soberania: novaSob });
+    await writeProgress(uid, { career: nextCareer }, { pontos_soberania: cacheSoberaniaInteiro(novaSob) });
 
     return { soberania: novaSob, titulos: novoTit };
   } catch (e) {
@@ -405,11 +406,12 @@ export async function aplicarApostaSoberania(
       }
     }
 
-    // Cache pontos_soberania: saldo do ledger; empate (delta 0) mantém o atual.
+    // Cache do leaderboard recebe o saldo do ledger (arredondado — INTEGER);
+    // empate (delta 0) mantém o atual.
     const novoSaldo = saldoLedger ?? atual;
     await (supabase as any)
       .from("botao_usuarios")
-      .update({ pontos_soberania: novoSaldo })
+      .update({ pontos_soberania: cacheSoberaniaInteiro(novoSaldo) })
       .eq("user_id", uid);
     return novoSaldo;
   } catch (e) {

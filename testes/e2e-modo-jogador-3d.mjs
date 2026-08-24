@@ -79,8 +79,16 @@ page.on("pageerror", (e) => {
 page.on("console", (m) => {
   if (m.type() === "error") console.log("⚠️ console.error:", m.text().slice(0, 200));
 });
-page.on("response", (r) => {
-  if (r.status() >= 400) console.log(`⚠️ HTTP ${r.status()} ${r.url().slice(0, 140)}`);
+page.on("response", async (r) => {
+  if (r.status() >= 400) {
+    let body = "";
+    try {
+      body = (await r.text()).slice(0, 300);
+    } catch {}
+    console.log(
+      `⚠️ HTTP ${r.status()} ${r.request().method()} ${r.url().slice(0, 140)} :: ${body}`,
+    );
+  }
 });
 
 try {

@@ -5,7 +5,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { bootstrapFinanceiro } from "@/lib/financial/sovBankApi";
-import { registrarTransacaoSov } from "@/lib/financial/sovApi";
+import { cacheSoberaniaInteiro, registrarTransacaoSov } from "@/lib/financial/sovApi";
 import { mergeProgressInSupabase } from "@/components/botao/storage";
 
 /**
@@ -203,7 +203,7 @@ export async function criarPerfilSeNaoExistir(
   const saldo = await bootstrapFinanceiro(userId);
   if (saldo != null && saldo !== data.pontos_soberania) {
     await alinharCacheSoberania(userId, saldo);
-    data.pontos_soberania = saldo;
+    data.pontos_soberania = cacheSoberaniaInteiro(saldo);
   }
 
   return data;
@@ -254,7 +254,10 @@ export async function salvarResultado(params: {
     .update({
       partidas_jogadas: params.usuario.partidas_jogadas + 1,
       partidas_vencidas: params.usuario.partidas_vencidas + (params.resultado === "v" ? 1 : 0),
-      pontos_soberania: saldoSov ?? params.usuario.pontos_soberania,
+      pontos_soberania:
+        saldoSov != null
+          ? cacheSoberaniaInteiro(saldoSov)
+          : params.usuario.pontos_soberania,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", params.usuario.user_id)
