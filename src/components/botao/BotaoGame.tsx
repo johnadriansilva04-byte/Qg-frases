@@ -4221,16 +4221,13 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   return (
     <Shell>
       {/* REMOVIDO: AdsterraSocialBar - causava disparos indevidos em cliques globais */}
-      {/* Loading ÚNICO com identidade estável: cobre a fase de auth
-          (carregando), o intervalo até a hidratação começar
-          (precisaHidratar — perfil reconhecido mas dados ainda não pedidos)
-          e a de hidratação/ações (loading) sem montar novamente (o que
-          reiniciava a barra e exibia DOIS splashs seguidos a cada F5). O
-          callback congela com useCallback para não re-disparar o rAF. */}
-      {(carregando || loading || precisaHidratar) && (
+      {/* Loading apenas ao entrar no jogo (loading=true). REMOVIDO de auth
+          (carregando) e hidratação inicial (precisaHidratar) para não mostrar
+          loading em F5 ou navegação normal. */}
+      {loading && (
         <LoadingScreen
-          pronto={loading ? loadingReady : !carregando && !precisaHidratar}
-          onCompleto={loading ? loadingOnComplete : noop}
+          pronto={loadingReady}
+          onCompleto={loadingOnComplete}
         />
       )}
       {/* A tela de fim de temporada só aparece DEPOIS que o usuário sair da

@@ -191,22 +191,10 @@ function CidadelaCompView() {
     console.log("Jogo em breve:", game);
   };
 
+  // REMOVIDO: Loading inicial da Cidadela (F5)
+  // Só mostra loading ao entrar em jogos específicos
   if (!hydrated) {
-    return (
-      <TrilhaLoadingScreen
-        titulo="Carregando Cidadela"
-        subtitulo="Sincronizando módulos de estratégia"
-        passos={[
-          "Limpando sessão anterior...",
-          "Preparando jogos...",
-          "Carregando conteúdo da Cidadela...",
-          "Pronto!",
-        ]}
-        categoria="COMUNIDADE"
-        duracao={2600}
-        onCompleto={() => setHydrated(true)}
-      />
-    );
+    setHydrated(true);
   }
 
   // §11-§13: link de convite de mesa — o convidado escolhe o clube e entra.
