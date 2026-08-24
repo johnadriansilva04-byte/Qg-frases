@@ -36,7 +36,15 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
       return;
     }
     try {
-      const engine = new MatchEngine(canvasRef.current, setup, {
+      // Ensure canvas has proper dimensions before initializing engine
+      const canvas = canvasRef.current;
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+      }
+      
+      const engine = new MatchEngine(canvas, setup, {
         onState: setLive,
         onEvent: (e) => onEvent?.(e),
         onFinish: (result) => {
@@ -123,8 +131,8 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
           </div>
         </div>
         
-        {/* Hidden canvas for initialization */}
-        <canvas ref={canvasRef} className="hidden" />
+        {/* Canvas for initialization - positioned behind intro */}
+        <canvas ref={canvasRef} className="absolute inset-0 -z-10" />
       </div>
     );
   }
