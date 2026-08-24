@@ -4350,9 +4350,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             userTeam={userTeam}
             career={career}
             onResult={(result) => {
-              // TODO: Processar o resultado do motor 3D e integrar com o sistema de carreira
-              console.log("Resultado 3D:", result);
-              setScreen("hub");
+              // Integrar resultado do motor 3D com o sistema de carreira
+              finishTournamentMatch(result);
             }}
             onBack={() => setScreen("hub")}
           />
