@@ -11,17 +11,19 @@
 
 import type { CareerState, CotaClube, PropriedadeClubes } from "./types";
 import type { Team } from "../data/teams";
+import { precoClube } from "./marketplaceClubes";
 
 /**
  * Preço base de uma cota de 1% de um clube (SOV).
- * Calculado com base no poder do clube (power) e prestigio.
+ * FONTE ÚNICA DE PREÇO: o valor de mercado do clube é `precoClube`
+ * (marketplaceClubes — power × multiplicador de divisão). A cota de 1% é
+ * 1/100 desse valor. Antes desta correção a fórmula local (power*10+prestígio
+ * por ponto) precificava o clube mais modesto em ~52.000 SOV — cerca de 250×
+ * o valor de mercado definido para a Cidadela — e tornava a trilha
+ * "Técnico → Proprietário" matematicamente inalcançável.
  */
 export function precoCotaClube(clube: Team): number {
-  // Fórmula: power * 10 + prestigio * 5
-  // Clubes mais fortes custam mais
-  const base = clube.power * 10;
-  const prestigio = clube.power >= 80 ? 50 : clube.power >= 60 ? 30 : 10;
-  return base + prestigio;
+  return precoClube(clube) / 100;
 }
 
 /**

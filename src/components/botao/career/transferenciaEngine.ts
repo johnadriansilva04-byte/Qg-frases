@@ -37,8 +37,22 @@ export type OfertaTransferencia = {
   /** Rodada gatilho (10 = meio, 19 = fim). */
   rodadaGatilho: number;
   temporada: number;
-  respondida: "pendente" | "aceita" | "recusada";
+  respondida: "pendente" | "aceita" | "recusada" | "expirada";
 };
+
+/**
+ * Clube nenhum espera resposta para sempre: quando uma proposta NOVA chega
+ * (ou a temporada vira), as pendentes antigas caducam — a diretoria contrata
+ * outro treinador. Sem isso, a área de Transferências acumulava propostas
+ * de várias temporadas como se todas estivessem de pé (badge "6" no hub).
+ */
+export function expirarOfertasPendentes(
+  ofertas: OfertaTransferencia[],
+): OfertaTransferencia[] {
+  return ofertas.map((o) =>
+    o.respondida === "pendente" ? { ...o, respondida: "expirada" as const } : o,
+  );
+}
 
 const RODADA_MEIO = 10;
 const RODADA_FIM = 19;
@@ -157,7 +171,9 @@ export function normalizarOfertasTransferencia(bruto: unknown): OfertaTransferen
       rodadaGatilho: Number.isFinite(Number(x.rodadaGatilho)) ? Number(x.rodadaGatilho) : RODADA_MEIO,
       temporada: Number.isFinite(Number(x.temporada)) ? Number(x.temporada) : 1,
       respondida:
-        x.respondida === "aceita" || x.respondida === "recusada" ? x.respondida : "pendente",
+        x.respondida === "aceita" || x.respondida === "recusada" || x.respondida === "expirada"
+          ? x.respondida
+          : "pendente",
     });
     if (saida.length >= 6) break;
   }

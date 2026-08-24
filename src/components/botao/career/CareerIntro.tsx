@@ -94,7 +94,7 @@ export function CareerIntro({ nomeJogador, onIniciar, onBack }: Props) {
         </button>
 
         <p className="mt-4 text-center text-xs text-slate-500">
-          Teto econômico: 200.000 SOV · Uma carreira, um personagem, um destino
+          Uma carreira, um personagem, um destino
         </p>
       </div>
 

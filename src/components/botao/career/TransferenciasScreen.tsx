@@ -131,7 +131,7 @@ export function TransferenciasScreen({ ofertas, onAceitar, onRecusar, onVoltar, 
                   }`}
                 >
                   {o.respondida === "aceita" ? <Check className="size-3.5" /> : <X className="size-3.5" />}
-                  {o.respondida === "aceita" ? "Aceita" : "Recusada"}
+                  {o.respondida === "aceita" ? "Aceita" : o.respondida === "expirada" ? "Expirada" : "Recusada"}
                 </span>
               </div>
             ))}

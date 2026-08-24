@@ -49,6 +49,18 @@ function enqueueProgressWrite(userId: string, operacao: () => Promise<void>): Pr
   }
 }
 
+/**
+ * Resolve quando TODAS as escritas enfileiradas do usuário aterrissaram no
+ * banco. Um F5/fechamento de aba com a fila pendente abandona as operações
+ * em voo — o JSONB fica algumas partidas ATRÁS da sessão (a hidratação
+ * seguinte lê um snapshot velho: rodadas "rejogadas", premiação perdida,
+ * promoção não aplicada). Quem precisa recarregar a página (E2E, logout)
+ * deve aguardar a fila antes.
+ */
+export function aguardarFilaDeEscrita(userId: string): Promise<void> {
+  return (writeQueues.get(userId) ?? Promise.resolve()).catch(() => {});
+}
+
 /** Atualiza o JSONB de campanha sem apagar chaves que outras telas acabaram de salvar. */
 export async function mergeProgressInSupabase(
   userId: string,

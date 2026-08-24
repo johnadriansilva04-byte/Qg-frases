@@ -52,6 +52,11 @@
 
 :root {
   --radius: 1rem;
+  /* Identidade CYBERPUNK da Cidadela (padrão do app inteiro). As variáveis
+     de fonte existem de verdade para var() resolver fora do futebol — o
+     módulo de futebol sobrescreve tudo dentro de .botao-root. */
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --background: oklch(0.16 0.045 285);
   --foreground: oklch(0.97 0.008 300);
   --surface: oklch(0.21 0.045 285);
@@ -142,17 +147,20 @@
   backdrop-filter: blur(16px);
 }
 
-/* ===================== Futebol de Botão — design system ===================== */
+/* ===================== Futebol de Botão — design system =====================
+ * Identidade ESPORTIVA exclusiva do módulo: as variáveis vivem em
+ * `.botao-root` (nunca em `:root`) para não vazar para a Cidadela — cada
+ * ambiente tem a sua própria identidade visual. */
 @theme inline {
-  --font-display: "Anton", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
   --color-felt: var(--felt);
   --color-felt-deep: var(--felt-deep);
   --color-gold: var(--gold);
 }
 
-:root {
+.botao-root {
   --radius: 0.5rem;
+  --font-display: "Anton", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
   --background: oklch(0.19 0.028 150);
   --foreground: oklch(0.96 0.012 95);
   --card: oklch(0.24 0.032 152);
@@ -177,6 +185,7 @@
   --gold: oklch(0.84 0.15 86);
   --shadow-table: 0 24px 60px -24px oklch(0 0 0 / 0.7);
   --gradient-felt: radial-gradient(120% 90% at 50% 0%, oklch(0.26 0.04 152), oklch(0.16 0.024 150));
+  color: var(--foreground);
 }
 
 .font-display {
@@ -388,7 +397,7 @@ button.panel:hover {
 /*  Premium sports-dashboard design system — Futebol de Botão    */
 /* ============================================================= */
 
-:root {
+.botao-root {
   --glass-card: color-mix(in oklab, var(--card) 86%, transparent);
   --glass-card-strong: color-mix(in oklab, var(--card) 94%, transparent);
   --ring-soft: oklch(1 0 0 / 8%);

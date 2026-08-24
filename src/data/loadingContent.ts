@@ -122,6 +122,20 @@ export function selecionarConteudo(categoria?: LoadingCategoria, quantidade = 1)
   return copia.slice(0, Math.max(1, quantidade));
 }
 
+/**
+ * Seleção DETERMINÍSTICA (primeiros N itens) para o primeiro render: o HTML
+ * do SSR e a hidratação do cliente precisam produzir o mesmo texto — usar
+ * Math.random no initializer causava mismatch de hidratação (React #418).
+ * A variedade volta depois da montagem, quando o componente randomiza.
+ */
+export function conteudoDeterministico(
+  categoria?: LoadingCategoria,
+  quantidade = 1,
+): IntroTexto[] {
+  const base = categoria ? LOADING_CONTENT[categoria] : Object.values(LOADING_CONTENT).flat();
+  return base.slice(0, Math.max(1, quantidade));
+}
+
 /** Quantas intros cabem confortavelmente numa duração (≈2.6s por texto). */
 export function introsPorDuracao(duracaoMs: number): number {
   return Math.max(1, Math.round(duracaoMs / 2600));

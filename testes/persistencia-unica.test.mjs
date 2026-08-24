@@ -476,5 +476,73 @@ const semSoberaniaUI = [
 ].every((f) => !/pontos de soberania|Apostar Soberania|label="Soberania"|>Soberania<\/p>/.test(ler(f)));
 expect(semSoberaniaUI, "nomenclatura: telas online/fim de temporada usam SOV, não 'Soberania'");
 
+// 27ª passada: pessoal × caixa × total da carteira (E2E 3ª temporada).
+// O ledger guarda o TOTAL (pessoal + caixa do clube) — atribuí-lo ao
+// coach.sov duplicava o caixa no bolso do treinador a cada F5/partida.
+expect(
+  careerRemote.includes("sov: coachSalvo.sov ?? saldoSov ?? u?.pontos_soberania ?? 0"),
+  "loadCareerFromSupabase: coach.sov vem do SNAPSHOT (nunca do total da carteira)",
+);
+expect(
+  !careerRemote.includes("sov: saldoSov ?? coachSalvo.sov"),
+  "loadCareerFromSupabase: ordem antiga (ledger→coach.sov) REMOVIDA",
+);
+expect(
+  !careerRemote.includes("career: { ...career, coach: { ...career.coach, sov: novaSob } }"),
+  "aplicarResultadoRemoto: NÃO grava o total da carteira como coach.sov no JSONB",
+);
+expect(
+  !careerRemote.includes("coach: { ...career.coach, sov: novaSob, titulos: novoTit }"),
+  "aplicarFimCampanhaRemoto: NÃO grava o total da carteira como coach.sov no JSONB",
+);
+// F5 seguro: a fila de escrita é drenável (F5 com fila pendente perde as
+// últimas partidas — a hidratação lia snapshot velho e a promoção morria).
+expect(
+  storage.includes("export function aguardarFilaDeEscrita"),
+  "storage: aguardarFilaDeEscrita exportada (dreno da fila antes de F5)",
+);
+expect(
+  /aguardarFila:\s*(async\s*)?\(\)\s*=>/.test(botaoGame) && botaoGame.includes("aguardarFilaDeEscrita"),
+  "BotaoGame: __e2e.aguardarFila expõe o dreno da fila de escrita",
+);
+// Saldo exibido: com carreira, "Seu SOV" é o pessoal do snapshot (o remoto
+// é o TOTAL pessoal+caixa e inflaria o valor exibido).
+expect(
+  botaoGame.includes("const saldoSov = career?.coach.sov ?? saldoSovRemoto ?? null"),
+  "BotaoGame: saldo exibido = pessoal do snapshot quando há carreira",
+);
+const celularHook = ler("src/hooks/useCelularCarreira.ts");
+expect(
+  celularHook.includes("const saldoSov = career?.coach.sov ?? saldoSovRemoto ?? null"),
+  "useCelularCarreira: saldo exibido = pessoal do snapshot quando há carreira",
+);
+
+// Chave de partida no ledger inclui a TEMPORADA: ids de fixture
+// (`liga-r5-2`) se repetem a cada temporada — sem o escopo, o ledger engole
+// a receita da 2ª temporada em diante como "duplicada" (drift UI × banco).
+expect(
+  botaoGame.includes("`t${career.temporada ?? 1}:${current.id}`"),
+  "BotaoGame: aplicarResultadoRemoto recebe partidaId com escopo de temporada",
+);
+expect(
+  botaoGame.includes("idempotencyKey: `partida:${perfil.user_id}:t${temporadaAtual}:${f.id}`"),
+  "BotaoGame: harness E2E registra receita com chave temporada+fixture",
+);
+
+// Telas de loading: primeiro render DETERMINÍSTICO (SSR = cliente) —
+// Math.random no initializer causava hydration mismatch (React #418).
+const loadingContent = ler("src/data/loadingContent.ts");
+const loadingScreen = ler("src/components/botao/career/LoadingScreen.tsx");
+const trilhaLoading = ler("src/components/trilha/TrilhaLoadingScreen.tsx");
+expect(
+  loadingContent.includes("export function conteudoDeterministico"),
+  "loadingContent: conteudoDeterministico exportado (1º render = SSR)",
+);
+expect(
+  loadingScreen.includes("conteudoDeterministico(categoria") &&
+    trilhaLoading.includes("conteudoDeterministico(categoria"),
+  "LoadingScreens: seleção determinística no initializer, aleatória só pós-montagem",
+);
+
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);

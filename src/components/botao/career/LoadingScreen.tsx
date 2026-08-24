@@ -5,6 +5,7 @@ import { ControlledMonetagButton } from "@/components/ControlledMonetagButton";
 import { sponsorArmado } from "@/lib/sponsorGate";
 import {
   selecionarConteudo,
+  conteudoDeterministico,
   introsPorDuracao,
   type IntroTexto,
   type LoadingCategoria,
@@ -50,10 +51,17 @@ export function LoadingScreen({
 }: LoadingScreenProps) {
   const [pct, setPct] = useState(0);
   const [introIdx, setIntroIdx] = useState(0);
-  // Seleciona a intro(s) UMA vez na montagem: nunca fica mudando a cada tick.
-  const [selecao] = useState<IntroTexto[]>(() =>
-    intros?.length ? intros : selecionarConteudo(categoria, introsPorDuracao(duracao)),
+  // Primeiro render DETERMINÍSTICO (idêntico ao SSR — Math.random aqui causava
+  // hydration mismatch React #418); a seleção aleatória acontece após montar.
+  const [selecao, setSelecao] = useState<IntroTexto[]>(() =>
+    intros?.length ? intros : conteudoDeterministico(categoria, introsPorDuracao(duracao)),
   );
+  useEffect(() => {
+    if (!intros?.length) {
+      setSelecao(selecionarConteudo(categoria, introsPorDuracao(duracao)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);

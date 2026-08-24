@@ -44,6 +44,13 @@ export function normalizarHistoria(bruta: unknown): HistoriaState {
 export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
   const base: CareerState = { ...EMPTY_CAREER, ...bruta };
   const fin = normalizarClubeFinancas(bruta.clubeCaixa, bruta.clubeExtrato);
+  // MIGRAÇÃO clube×treinador: carreiras antigas (sem clubeCaixa) tinham TODA
+  // a receita acumulada no coach.sov — que era, na prática, o caixa do clube.
+  // A migração move esse valor para o caixa e ZERA o pessoal: copiar para os
+  // dois lados DUPLICAVA o dinheiro no snapshot (o ledger/carteira tinha X e
+  // o snapshot passava a mostrar 2X — inconsistência permanente de saldo).
+  const migrandoCaixa =
+    bruta.clubeCaixa === undefined && (bruta.coach?.sov ?? 0) > 0;
   return {
     ...base,
     coach: {
@@ -52,9 +59,11 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
       nome: bruta.coach?.nome ?? "",
       // Dívida é estado válido: saldo negativo sobrevive à hidratação/F5
       // (piso defensivo contra JSONB corrompido, nunca zera a dívida real).
-      sov: Number.isFinite(bruta.coach?.sov)
-        ? Math.max(-999_999, Math.round(bruta.coach!.sov))
-        : 0,
+      sov: migrandoCaixa
+        ? 0
+        : Number.isFinite(bruta.coach?.sov)
+          ? Math.max(-999_999, Math.round(bruta.coach!.sov))
+          : 0,
       titulos: Number.isFinite(bruta.coach?.titulos) ? bruta.coach!.titulos : 0,
       campanhasJogadas: Number.isFinite(bruta.coach?.campanhasJogadas)
         ? bruta.coach!.campanhasJogadas
@@ -85,10 +94,8 @@ export function normalizarCareer(bruta: Partial<CareerState>): CareerState {
         : undefined,
     clubeOrigemId: typeof bruta.clubeOrigemId === "string" ? bruta.clubeOrigemId : undefined,
     // Caixa do clube: negativo é dívida válida (§10-§14); extrato saneado.
-    // MIGRAÇÃO: carreiras antigas (antes da separação clube×treinador) tinham
-    // a receita esportiva acumulada no coach.sov. Esse valor era, na prática,
-    // o caixa do clube — sem a migração, o clube "perderia" o patrimônio na
-    // hidratação e a manutenção da temporada passaria a quebrar.
+    // MIGRAÇÃO: o coach.sov antigo VIRA o caixa (movido, não copiado — o
+    // pessoal é zerado acima para não duplicar o dinheiro no snapshot).
     clubeCaixa: bruta.clubeCaixa === undefined && (bruta.coach?.sov ?? 0) > 0 ? bruta.coach!.sov! : fin.caixa,
     clubeExtrato: fin.extrato,
     // Ofertas de transferência (§6): saneadas; clube-assinado preservado.

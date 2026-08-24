@@ -36,6 +36,7 @@ import {
   saveTournamentToSupabase,
   adicionarPontosVideo,
   mutateProgressInSupabase,
+  aguardarFilaDeEscrita,
   reconciliarTrofeusCarreira,
   type Progress,
 } from "./storage";
@@ -81,6 +82,7 @@ import { gerarOfertasIniciais, type OfertaClube } from "./career/ofertasIniciais
 import {
   gerarOfertaTransferencia,
   responderOferta,
+  expirarOfertasPendentes,
   type OfertaTransferencia,
 } from "./career/transferenciaEngine";
 import {
@@ -435,6 +437,17 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   const perfilRef = useRef<Perfil | null>(null);
   const tourRef = useRef<Tournament | null>(null);
   const vereditoRef = useRef<VereditoTemporada | null>(null);
+  // Escritas do ledger em voo (fire-and-forget). Rastreadas para que o
+  // harness E2E (e qualquer F5 imediato) possa drenar antes de recarregar —
+  // sem isso a promise morre com a navegação e o snapshot fica à frente do
+  // ledger (dinheiro "fantasma" local).
+  const ledgerPendentesRef = useRef<Promise<unknown>[]>([]);
+  const rastrearLedger = (p: Promise<unknown>) => {
+    ledgerPendentesRef.current.push(p);
+    void p.finally(() => {
+      ledgerPendentesRef.current = ledgerPendentesRef.current.filter((x) => x !== p);
+    });
+  };
   const setVereditoRef = (v: VereditoTemporada | null) => {
     vereditoRef.current = v;
     setVeredito(v);
@@ -992,9 +1005,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     };
   }, [perfil?.user_id, career?.coach.sov]);
 
-  // Saldo exibido: remoto (autoritativo) quando disponível; senão o cache da
-  // carreira (atualizado localmente no instante da partida).
-  const saldoSov = saldoSovRemoto ?? career?.coach.sov ?? null;
+  // Saldo exibido ("Seu SOV" = dinheiro PESSOAL do treinador): com carreira
+  // ativa, o snapshot é a única fonte da divisão pessoal×caixa — o saldo
+  // remoto é o TOTAL da carteira (pessoal + caixa do clube) e inflaria o
+  // valor pessoal. Sem carreira, o remoto é o único saldo existente.
+  const saldoSov = career?.coach.sov ?? saldoSovRemoto ?? null;
 
   const handleLogout = async () => {
     if (emPartidaOnline) {
@@ -1139,8 +1154,15 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       return;
     }
 
-    persistCareer(novaCareer);
-    setCareer(novaCareer);
+    // O motor de cotas não toca no saldo (devolve o delta) — o débito foi
+    // confirmado pelo ledger, então o snapshot local aplica o MESMO valor
+    // (sem isso a carteira cobrava e a UI seguia mostrando o saldo antigo).
+    const careerComSaldo: CareerState = {
+      ...novaCareer,
+      coach: { ...novaCareer.coach, sov: Math.round((novaCareer.coach.sov ?? 0) + deltaSov) },
+    };
+    persistCareer(careerComSaldo);
+    setCareer(careerComSaldo);
     setToast(`Comprou ${porcentagem}% de ${clube.name} por ${custo.toFixed(0)} SOV!`);
 
     // 100% de participação = proprietário reconhecido por TODA a Cidadela
@@ -1226,8 +1248,14 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       return;
     }
 
-    persistCareer(novaCareer);
-    setCareer(novaCareer);
+    // Mesmo motivo da compra: o crédito confirmado pelo ledger precisa entrar
+    // no snapshot local no mesmo instante (consistência UI × banco).
+    const careerComSaldo: CareerState = {
+      ...novaCareer,
+      coach: { ...novaCareer.coach, sov: Math.round((novaCareer.coach.sov ?? 0) + deltaSov) },
+    };
+    persistCareer(careerComSaldo);
+    setCareer(careerComSaldo);
     setToast(`Vendeu ${porcentagem}% de ${clube.name} por ${valor.toFixed(0)} SOV!`);
 
     // Deixou de ter 100%: o clube volta a ficar sem dono na Cidadela.
@@ -1841,7 +1869,10 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       ) {
         novaCareer = {
           ...novaCareer,
-          ofertasTransferencia: [ofertaNova, ...(novaCareer.ofertasTransferencia ?? [])].slice(0, 6),
+          ofertasTransferencia: [
+            ofertaNova,
+            ...expirarOfertasPendentes(novaCareer.ofertasTransferencia ?? []),
+          ].slice(0, 6),
         };
       }
     }
@@ -1868,41 +1899,50 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
         };
         if (perfil?.user_id) {
           const chave = chaveSalarioLedger(perfil.user_id, temporadaAtual, novaCareer.rodadaAtual);
-          void (async () => {
-            const saida = await registrarTransacaoSov(
-              perfil.user_id!,
-              -salario,
-              "fee",
-              `Salário pago pelo clube (rodada ${novaCareer.rodadaAtual})`,
-              "career",
-              { rodada: novaCareer.rodadaAtual, tipo: "salario-saida" },
-              { sourceEvent: "salario", idempotencyKey: `${chave}:saida` },
-            );
-            if (saida !== null) {
-              await registrarTransacaoSov(
+          rastrearLedger(
+            (async () => {
+              const saida = await registrarTransacaoSov(
                 perfil.user_id!,
-                salario,
-                "reward",
-                `Salário do treinador (rodada ${novaCareer.rodadaAtual})`,
+                -salario,
+                "fee",
+                `Salário pago pelo clube (rodada ${novaCareer.rodadaAtual})`,
                 "career",
-                { rodada: novaCareer.rodadaAtual, tipo: "salario-entrada" },
-                { sourceEvent: "salario", idempotencyKey: `${chave}:entrada` },
+                { rodada: novaCareer.rodadaAtual, tipo: "salario-saida" },
+                { sourceEvent: "salario", idempotencyKey: `${chave}:saida` },
               );
-            }
-          })();
+              if (saida !== null) {
+                await registrarTransacaoSov(
+                  perfil.user_id!,
+                  salario,
+                  "reward",
+                  `Salário do treinador (rodada ${novaCareer.rodadaAtual})`,
+                  "career",
+                  { rodada: novaCareer.rodadaAtual, tipo: "salario-entrada" },
+                  { sourceEvent: "salario", idempotencyKey: `${chave}:entrada` },
+                );
+              }
+            })(),
+          );
         }
       }
     }
     // Delta da partida no ledger (idempotente por fixture) — receita do clube.
     if (perfil?.user_id && receita !== 0) {
-      void registrarTransacaoSov(
-        perfil.user_id,
-        receita,
-        "reward",
-        `Receita do clube — partida ${gf}x${ga}`,
-        "career",
-        { golsPro: gf, golsContra: ga, rodada: novaCareer.rodadaAtual },
-        { sourceEvent: "partida", idempotencyKey: `partida:${perfil.user_id}:${f.id}` },
+      rastrearLedger(
+        registrarTransacaoSov(
+          perfil.user_id,
+          receita,
+          "reward",
+          `Receita do clube — partida ${gf}x${ga}`,
+          "career",
+          { golsPro: gf, golsContra: ga, rodada: novaCareer.rodadaAtual },
+          {
+            sourceEvent: "partida",
+            // Mesmo motivo do fluxo real: a temporada entra na chave porque o
+            // id do fixture se repete a cada temporada nova.
+            idempotencyKey: `partida:${perfil.user_id}:t${temporadaAtual}:${f.id}`,
+          },
+        ),
       );
     }
     // Torcida migra com a rodada inteira (zero-sum).
@@ -1973,17 +2013,19 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
         careerRef.current = novaCareer;
         tourRef.current = ligaFinal;
         if (perfil?.user_id) {
-          void registrarTransacaoSov(
-            perfil.user_id,
-            premio,
-            "reward",
-            `Premiação da temporada ${temporadaAtual}`,
-            "career",
-            { temporada: temporadaAtual },
-            {
-              sourceEvent: "premiacao_temporada",
-              idempotencyKey: `premio:${perfil.user_id}:t${temporadaAtual}`,
-            },
+          rastrearLedger(
+            registrarTransacaoSov(
+              perfil.user_id,
+              premio,
+              "reward",
+              `Premiação da temporada ${temporadaAtual}`,
+              "career",
+              { temporada: temporadaAtual },
+              {
+                sourceEvent: "premiacao_temporada",
+                idempotencyKey: `premio:${perfil.user_id}:t${temporadaAtual}`,
+              },
+            ),
           );
         }
         const v = avaliarFimTemporada(
@@ -2011,6 +2053,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       identidadeBotao: handleIdentidadeBotao,
       aceitarTransferencia: handleAceitarTransferencia,
       recusarTransferencia: handleRecusarTransferencia,
+      // F5 seguro: drena a fila de escrita E as escritas do ledger em voo
+      // antes de recarregar (sem isso o JSONB/ledger ficam atrás da sessão).
+      aguardarFila: async () => {
+        if (perfil?.user_id) await aguardarFilaDeEscrita(perfil.user_id);
+        await Promise.allSettled([...ledgerPendentesRef.current]);
+      },
       setScreen,
     };
   });
@@ -2090,17 +2138,19 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     // indisponível, o avanço NÃO é bloqueado: a dívida fica no snapshot local
     // e é realinhada na próxima hidratação.
     if (perfil?.user_id && custoManutencao > 0) {
-      void registrarTransacaoSov(
-        perfil.user_id,
-        -custoManutencao,
-        "penalty",
-        `Manutenção do clube — fim da temporada ${temporadaEncerrada}`,
-        "career",
-        { temporada: temporadaEncerrada, divisao },
-        {
-          sourceEvent: "manutencao_temporada",
-          idempotencyKey: `manutencao:${perfil.user_id}:t${temporadaEncerrada}`,
-        },
+      rastrearLedger(
+        registrarTransacaoSov(
+          perfil.user_id,
+          -custoManutencao,
+          "penalty",
+          `Manutenção do clube — fim da temporada ${temporadaEncerrada}`,
+          "career",
+          { temporada: temporadaEncerrada, divisao },
+          {
+            sourceEvent: "manutencao_temporada",
+            idempotencyKey: `manutencao:${perfil.user_id}:t${temporadaEncerrada}`,
+          },
+        ),
       );
     }
     // Contador interno de inadimplência (oculto do jogador): pagou → zera;
@@ -2171,6 +2221,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       divisao: divisaoFinal,
       ligas,
       composicoes: composicoesFinais,
+      // Virou a temporada: propostas não respondidas caducam (a diretoria
+      // contrata outro treinador — ninguém espera uma resposta para sempre).
+      ofertasTransferencia: expirarOfertasPendentes(career.ofertasTransferencia ?? []),
       // §6: mudança de clube consumida — o caixa da NOVA temporada é do novo
       // clube (zera: o caixa do clube anterior fica para trás, não migra).
       proximoClubeId: undefined,
@@ -3267,9 +3320,10 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
         // §14: caixa do clube separado do dinheiro pessoal.
         clubeCaixa: caixaClube,
         clubeExtrato: extratoClube,
-        // §6: nova oferta de transferência entra na lista persistida.
+        // §6: nova oferta de transferência entra na lista persistida — e as
+        // pendentes antigas caducam (clube nenhum espera resposta para sempre).
         ofertasTransferencia: ofertaParaPersistir
-          ? [ofertaParaPersistir, ...(career.ofertasTransferencia ?? [])].slice(0, 6)
+          ? [ofertaParaPersistir, ...expirarOfertasPendentes(career.ofertasTransferencia ?? [])].slice(0, 6)
           : (career.ofertasTransferencia ?? []),
         coach: {
           ...career.coach,
@@ -3581,7 +3635,16 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
         if (isUserFixture) {
           const lastChoice = career.ultimasEscolhas[career.ultimasEscolhas.length - 1] ?? null;
           // partidaId → crédito/débito da partida idempotente no ledger (§19).
-          aplicarResultadoRemoto(gf, ga, lastChoice, current.id).catch(() => {});
+          // A chave inclui a TEMPORADA: ids de fixture (`liga-r5-2`) se repetem
+          // a cada temporada — sem o escopo, o ledger engolia a receita da
+          // 2ª temporada em diante como "duplicada" e a carteira parava de
+          // crescer enquanto o snapshot subia (drift UI × banco).
+          aplicarResultadoRemoto(
+            gf,
+            ga,
+            lastChoice,
+            `t${career.temporada ?? 1}:${current.id}`,
+          ).catch(() => {});
           void registrarEventoMissao("botao_partida_carreira");
           if (gf > ga) void registrarEventoMissao("botao_vitoria_carreira");
           // GRUPO CIDADELA (§6): NPCs comentam o resultado — o grupo parece vivo.
@@ -3910,6 +3973,19 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   if (screen === "career-menu") {
     return (
       <Shell>
+        {/* O veredito de fim de temporada também cobre o menu da carreira —
+            sem isso, quem navegava para cá após a última partida perdia a
+            tela de encerramento (ela só renderizava sobre o hub). */}
+        {veredito && career?.ligas && (
+          <SeasonEndScreen
+            resumo={resumoTemporada(career.ligas, userTeam.id)}
+            veredito={veredito}
+            temporada={career.temporada ?? 1}
+            userTeam={userTeam}
+            onContinuar={startNextSeason}
+            onReiniciar={gameOverReset}
+          />
+        )}
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}

@@ -65,8 +65,11 @@ export function useCelularCarreira(userId: string | null, perfil?: Perfil | null
     };
   }, [userId, career?.coach.sov]);
 
-  // Remoto autoritativo quando disponível; cache da carreira como espelho.
-  const saldoSov = saldoSovRemoto ?? career?.coach.sov ?? null;
+  // "Seu SOV" = dinheiro PESSOAL: com carreira, o snapshot é a fonte da
+  // divisão pessoal×caixa (o remoto é o TOTAL da carteira — pessoal +
+  // caixa do clube — e inflaria o valor pessoal). Sem carreira, o remoto
+  // é o único saldo existente.
+  const saldoSov = career?.coach.sov ?? saldoSovRemoto ?? null;
 
   const persist = (c: CareerState) => {
     setCareer(c);

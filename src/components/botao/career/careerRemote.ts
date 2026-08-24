@@ -88,10 +88,12 @@ export async function loadCareerFromSupabase(
         cidade: coachSalvo.cidade?.trim() || coachFallback.cidade?.trim() || "",
         bio: coachSalvo.bio?.trim() || coachFallback.bio?.trim() || "",
         nome: nomeCoach,
-        // Ledger primeiro (autoritativo). Na falha dele, o snapshot da carreira
-        // (JSONB) vence o cache pontos_soberania — o cache é clampado em 0 e
-        // apagaria uma dívida real (saldo negativo) do snapshot.
-        sov: saldoSov ?? coachSalvo.sov ?? u?.pontos_soberania ?? 0,
+        // Pós-separação CLUBE×TREINADOR, o ledger guarda o TOTAL (pessoal +
+        // caixa do clube) — atribuí-lo ao coach.sov DUPLICAVA o caixa no
+        // bolso do treinador a cada F5. O snapshot JSONB é a única fonte da
+        // divisão pessoal×caixa; o saldo do ledger e o cache ficam como
+        // fallback para carreiras sem snapshot.
+        sov: coachSalvo.sov ?? saldoSov ?? u?.pontos_soberania ?? 0,
       },
     };
   } catch (e) {
@@ -205,15 +207,18 @@ export async function aplicarResultadoRemoto(
         : undefined,
     );
 
-    // Sincroniza contadores + saldo autoritativo na carreira FRESCA (leitura
-    // dentro da fila serializada — o snapshot local da partida já foi
-    // persistido pelo chamador e NÃO é reconstruído aqui: moral/bônus/bolsa/
-    // conversas ficam intactos).
+    // Sincroniza contadores na carreira FRESCA (leitura dentro da fila
+    // serializada — o snapshot local da partida já foi persistido pelo
+    // chamador e NÃO é reconstruído aqui: moral/bônus/bolsa/conversas ficam
+    // intactos). O coach.sov do JSONB NÃO é tocado: o saldo do ledger é o
+    // TOTAL (pessoal + caixa do clube) e gravá-lo como dinheiro pessoal
+    // duplicava o caixa a cada partida (o F5 revelava a inflação).
     let resultado: { soberania: number; moralTime: number; titulos: number } | null = null;
     await mutateProgressInSupabase(uid, (prog, row) => {
       const career = (prog["career"] ?? EMPTY_CAREER) as CareerState;
-      // Dívida é estado válido: sem o saldo do ledger, o fallback local pode
-      // ficar negativo (nunca é zerado artificialmente).
+      // Saldo TOTAL da carteira (autoritativo no ledger) — usado só para o
+      // cache do leaderboard e para o retorno (saldo online), nunca para o
+      // coach.sov do snapshot.
       const novaSob =
         saldoSov ??
         ((row["pontos_soberania"] as number | undefined) ?? career.coach.sov ?? 0) + delta;
@@ -226,7 +231,6 @@ export async function aplicarResultadoRemoto(
         patch: {
           gols_feitos: ((prog["gols_feitos"] as number | undefined) ?? 0) + golsPro,
           gols_sofridos: ((prog["gols_sofridos"] as number | undefined) ?? 0) + golsContra,
-          career: { ...career, coach: { ...career.coach, sov: novaSob } },
         },
         extraColumns: {
           // Cache do leaderboard: nunca negativo (a fonte de verdade é o ledger).
@@ -329,7 +333,10 @@ export async function aplicarFimCampanhaRemoto(
       moralTime: 65,
       ultimasEscolhas: [],
       ultimaRodadaProcessada: -1,
-      coach: { ...career.coach, sov: novaSob, titulos: novoTit },
+      // coach.sov do snapshot preservado: novaSob é o TOTAL da carteira
+      // (pessoal + caixa) — gravá-lo aqui inflava o bolso do treinador com
+      // o caixa do clube a cada fim de temporada.
+      coach: { ...career.coach, titulos: novoTit },
     };
 
     await writeProgress(uid, { career: nextCareer }, { pontos_soberania: novaSob });
