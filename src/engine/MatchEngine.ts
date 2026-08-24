@@ -369,13 +369,14 @@ export class MatchEngine {
     const d = this.dir(p.side);
     const mv = this.input.move;
     // Move vector: x = right/left, y = forward/back
-    // Rotated mapping: W=right, D=forward, S=left, A=backward
-    // W (y>0) → right (positive Z)
-    // D (x>0) → forward (attack direction on X axis)
-    // S (y<0) → left (negative Z)
-    // A (x<0) → backward (opposite attack direction on X axis)
-    const dx = mv.x * d;
-    const dz = mv.y;
+    // Standard WASD mapping:
+    // W (y>0) = forward toward goal = attack direction on X axis
+    // S (y<0) = backward toward own goal = opposite attack direction on X axis
+    // A (x<0) = left = negative Z
+    // D (x>0) = right = positive Z
+    // Invert Z for camera perspective
+    const dx = mv.y * d;
+    const dz = -mv.x;
 
     const wantsSprint = this.input.sprint && Math.hypot(mv.x, mv.y) > 0.1 && p.stamina > 2;
     let speed = this.maxSpeed(p) * (wantsSprint ? 1.28 : 1);
