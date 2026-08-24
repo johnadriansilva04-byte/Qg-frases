@@ -5,7 +5,6 @@ import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { ConviteMesaScreen } from "@/components/botao/online/ConviteMesaScreen";
-import { LoadingScreen } from "@/components/botao/career/LoadingScreen";
 import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 import { TourContextual, type PassoTour } from "@/components/cidadela/TourContextual";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
@@ -179,7 +178,13 @@ function CidadelaCompView() {
   const closeModal = () => setActiveModal(null);
 
   const handleGameSelect = (game: Game) => {
-    if (game === "botao" || game === "trilha") {
+    // Futebol entra DIRETO na tela principal do jogo — a verificação de sessão
+    // e o auto-login acontecem dentro do BotaoGame (sem loading duplicado).
+    if (game === "botao") {
+      setActiveGame("botao");
+      return;
+    }
+    if (game === "trilha") {
       setLoadingGame(game);
       return;
     }
@@ -256,26 +261,6 @@ function CidadelaCompView() {
         perfil={perfilCidadela}
         nomeJogador={perfil?.nome}
         onEscolher={handleEscolherProfissao}
-      />
-    );
-  }
-
-  if (loadingGame === "botao") {
-    return (
-      <LoadingScreen
-        passos={[
-          "Abrindo o Estádio do Campus...",
-          "Sincronizando sua conta com o Supabase...",
-          "Inicializando IA Comentarista...",
-          "Preparando o Campeonato do Campus...",
-          "Pronto!",
-        ]}
-        categoria="MASTER_LIGA"
-        duracao={2600}
-        onCompleto={() => {
-          setLoadingGame(null);
-          setActiveGame("botao");
-        }}
       />
     );
   }

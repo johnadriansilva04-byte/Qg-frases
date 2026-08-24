@@ -2978,7 +2978,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     }
 
     if (t.phase === "grupos") {
-      const fx = t.groupFixtures.find((x) => x.id === current.id)!;
+      const fx = t.groupFixtures.find((x) => x.id === current.id);
+      if (!fx) return; // fixture não pertence à liga (ex.: copa roteada errado)
       applyResult(t, fx, r);
 
       // Força efetiva (qualidade + torcida + forma) alimenta a simulação
@@ -3050,7 +3051,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       }
     } else {
       const stage = t.knockout[t.knockout.length - 1]!;
-      const fx = stage.fixtures.find((x) => x.id === current.id)!;
+      const fx = stage.fixtures.find((x) => x.id === current.id);
+      if (!fx) return; // fixture não pertence a esta fase
       fx.played = true;
       fx.result = r;
 
@@ -4315,6 +4317,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             ligas={career?.ligas}
             onPlay={playNext}
             onPlay3D={(fixture) => {
+              // Mesmo roteamento do playNext 2D: fixture da Copa precisa marcar
+              // currentCopaFix, senão finishTournamentMatch não o encontra na liga.
+              const copaFix = career?.copaBrasil
+                ? proximoJogoCopa(career.copaBrasil, userTeam.id)
+                : null;
+              setCurrentCopaFix(copaFix && copaFix.id === fixture.id ? copaFix : null);
               setCurrent(fixture);
               setScreen("match3d");
             }}

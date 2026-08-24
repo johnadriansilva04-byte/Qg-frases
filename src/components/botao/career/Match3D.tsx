@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Match3DView } from "@/components/match3d/Match3DView";
-import type { MatchResult, MatchSetup } from "@/engine/types";
-import type { Fixture, Team } from "../types";
-import { teamByIdSync } from "../data/teams";
+import type { MatchSetup } from "@/engine/types";
+import type { Fixture, MatchResult } from "../types";
+import { teamByIdSync, type Team } from "../data/teams";
 import type { CareerState } from "./types";
 
 interface Props {
@@ -32,7 +32,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
       home: {
         id: homeTeam.id,
         name: homeTeam.name,
-        shortName: homeTeam.shortName,
+        shortName: homeTeam.short,
         formation: "4-4-2",
         colors: { primary: homeTeam.primary ?? "#ff0000", secondary: homeTeam.secondary ?? "#ffffff" },
         players: generateMockPlayers(homeTeam, "home"),
@@ -40,7 +40,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
       away: {
         id: awayTeam.id,
         name: awayTeam.name,
-        shortName: awayTeam.shortName,
+        shortName: awayTeam.short,
         formation: "4-4-2",
         colors: { primary: awayTeam.primary ?? "#0000ff", secondary: awayTeam.secondary ?? "#ffffff" },
         players: generateMockPlayers(awayTeam, "away"),
@@ -63,7 +63,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="fixed inset-0 z-40 bg-background">
       <button
         type="button"
         onClick={onBack}
@@ -74,8 +74,13 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
       <Match3DView
         setup={setup}
         onFinish={(result) => {
-          // Processar o resultado e devolver ao sistema principal
-          onResult(result);
+          // Converte o resultado do motor 3D para o contrato da carreira.
+          onResult({
+            homeId: fixture.homeId,
+            awayId: fixture.awayId,
+            homeGoals: result.score.home,
+            awayGoals: result.score.away,
+          });
         }}
       />
     </div>

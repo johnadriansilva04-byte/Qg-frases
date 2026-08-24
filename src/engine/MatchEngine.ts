@@ -74,10 +74,10 @@ export class MatchEngine {
   private shots = { home: 0, away: 0 };
   private events: MatchEvent[] = [];
   private minutesPerHalf: number;
+  private realSecondsPerHalf: number;
   private minutesPerSecond: number;
   private quality: "low" | "high";
   private resizeObs: ResizeObserver | null = null;
-  private lastEvent: any;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -101,14 +101,14 @@ export class MatchEngine {
     this.events = [];
     this.score = { home: 0, away: 0 };
     this.minute = 0;
-    this.minutesPerHalf = setup.minutesPerHalf;
-    this.realSecondsPerHalf = setup.realSecondsPerHalf;
+    this.minutesPerHalf = setup.minutesPerHalf ?? 45;
+    this.realSecondsPerHalf = setup.realSecondsPerHalf ?? 120;
+    this.minutesPerSecond = this.minutesPerHalf / this.realSecondsPerHalf;
     this.running = false;
     this.finished = false;
     this.raf = 0;
     this.last = 0;
     this.freeze = 0;
-    this.lastEvent = null;
 
     const mobile = Math.min(window.innerWidth, window.innerHeight) < 700;
     this.quality = mobile ? "low" : "high";
@@ -749,6 +749,7 @@ export class MatchEngine {
     if (defenders.length < 2) return false;
     
     const secondLastDefender = defenders[1];
+    if (!secondLastDefender) return false;
     const offsideLine = secondLastDefender.x;
     
     // Check if any attacking player is offside
