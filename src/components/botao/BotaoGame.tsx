@@ -4315,7 +4315,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             ligas={career?.ligas}
             onPlay={playNext}
             onPlay3D={(fixture) => {
+              console.log("[BotaoGame] onPlay3D called with fixture:", fixture);
               setCurrent(fixture);
+              console.log("[BotaoGame] Setting screen to match3d");
               setScreen("match3d");
             }}
             onExit={() => setScreen("menu")}
