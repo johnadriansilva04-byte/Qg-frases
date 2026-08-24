@@ -1,3 +1,46 @@
+## E2E temporadas: economia parava na 2ª temporada + React #418 + compra de clube (2026-08-24, 27ª passada)
+
+E2E longo do campeonato offline (uma conta, T18→T23) + auditoria financeira
+rigorosa. Três bugs reais encontrados jogando e corrigidos na causa:
+
+- **ECONOMIA PARAVA NA 2ª TEMPORADA (o "campeonato offline quebra")**: ids de
+  fixture são `liga-r{rodada}-{idx}` (seasonEngine) — IDÊNTICOS toda temporada.
+  A chave idempotente do ledger era `partida:{uid}:{fixture}` → a receita da
+  partida era registrada UMA vez na vida; da 2ª temporada em diante o ledger
+  devolvia `duplicated` e a carteira parava de crescer enquanto o snapshot
+  subia (drift UI × banco). Fix: chave com escopo de temporada
+  (`t{temporada}:{fixture}`) no fluxo real (`aplicarResultadoRemoto`) e no
+  harness E2E. Guarda estrutural no persistencia-unica. Padrão proibido:
+  chave idempotente de dinheiro sem a temporada quando o id base se repete
+  por temporada.
+- **React #418 (hydration mismatch de texto, 12 passadas pendente)**:
+  LoadingScreen e TrilhaLoadingScreen sorteavam o texto com `Math.random` no
+  initializer do useState → SSR e cliente escolhiam textos diferentes. Fix:
+  `conteudoDeterministico` (loadingContent.ts) no primeiro render; a seleção
+  aleatória acontece em useEffect pós-montagem. Reproduzir #418: só no build
+  SSR de produção E logado E reload dentro do futebol (a TrilhaLoadingScreen
+  só monta nesse caminho); dev mode com login mostra o texto exato do
+  mismatch no stack.
+- **Compra/venda de cota de clube**: débito/crédito confirmado pelo ledger
+  ANTES de persistir o snapshot; falha/saldo insuficiente aborta com toast
+  ("Compra não concluída — saldo insuficiente."). `normalizarCareer` não
+  herda mais coach.sov antigo para clubeCaixa (migração inflava o total).
+- **Invariante econômica provada**: `user_wallets.balance == coach.sov +
+  clubeCaixa` ao fim de CADA sessão (verificado via REST após 5 temporadas:
+  2768.40 == 2768.4). Manutenção 1x/temporada (chave `manutencao:{uid}:t{n}`),
+  salário par interno (líquido zero), premiação 100% no caixa do clube.
+- **Conta E2E oficial desta auditoria**: openhands.rookie.e2e@gmail.com
+  (senha via env E2E_PASSWORD, nunca no repo). UMA conta só — continuar
+  nela, nunca criar outra.
+- **Harness**: `__e2e.aguardarFila()` (drena fila de escrita + ledger
+  pendentes) — chamar ANTES de F5/fechar o browser nos E2Es, senão as
+  escritas do ledger morrem com o processo e viram drift falso.
+- **Verificação**: E2E temporadas 0 falhas (5 temporadas, transições,
+  promoção/rebaixamento, SeasonEndScreen, sem textos que entregam regras);
+  E2E compra de clube 0 falhas; guardas 99/99; jiti (clube-financas,
+  promocao-rebaixamento, evolucao-botoes, transferencias, marketplace,
+  onboarding, sessao-antiga, historia) OK; tsc 0; build OK.
+
 ## Campeonato Online v2: link direto, bots, 50 SOV, aposta real (2026-08-23, 26ª passada)
 
 Auditoria E2E do Campeonato Online/Amistoso + sincronização de dados.
