@@ -262,15 +262,9 @@ export function CareerHub({
             onPlay();
           }}
           onJogador={() => {
-            console.log("[CareerHub] onJogador called");
-            console.log("[CareerHub] proximoJogo:", proximoJogo);
-            console.log("[CareerHub] onPlay3D exists:", !!onPlay3D);
             setMostrarModalModo(false);
             if (proximoJogo?.fixture && onPlay3D) {
-              console.log("[CareerHub] Calling onPlay3D with fixture:", proximoJogo.fixture);
               onPlay3D(proximoJogo.fixture);
-            } else {
-              console.error("[CareerHub] Cannot call onPlay3D - missing fixture or onPlay3D");
             }
           }}
           onClose={() => setMostrarModalModo(false)}

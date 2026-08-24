@@ -21,46 +21,37 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
   const [setup, setSetup] = useState<MatchSetup | null>(null);
 
   useEffect(() => {
-    console.log("[Match3D] Component mounted");
-    try {
-      // Converter dados do sistema existente para o formato do motor 3D
-      console.log("[Match3D] Getting teams:", fixture.homeId, fixture.awayId);
-      const homeTeam = teamByIdSync(fixture.homeId);
-      const awayTeam = teamByIdSync(fixture.awayId);
-      console.log("[Match3D] Teams retrieved:", homeTeam, awayTeam);
+    // Converter dados do sistema existente para o formato do motor 3D
+    const homeTeam = teamByIdSync(fixture.homeId);
+    const awayTeam = teamByIdSync(fixture.awayId);
 
-      const matchSetup: MatchSetup = {
-        matchId: fixture.id,
-        competition: career?.divisao ?? "serie-c",
-        stadium: "Estádio Municipal", // Placeholder - pode vir do sistema
-        home: {
-          id: homeTeam.id,
-          name: homeTeam.name,
-          shortName: homeTeam.shortName,
-          formation: "4-4-2",
-          colors: { primary: homeTeam.primary ?? "#ff0000", secondary: homeTeam.secondary ?? "#ffffff" },
-          players: generateMockPlayers(homeTeam, "home"),
-        },
-        away: {
-          id: awayTeam.id,
-          name: awayTeam.name,
-          shortName: awayTeam.shortName,
-          formation: "4-4-2",
-          colors: { primary: awayTeam.primary ?? "#0000ff", secondary: awayTeam.secondary ?? "#ffffff" },
-          players: generateMockPlayers(awayTeam, "away"),
-        },
-        controlledSide: fixture.homeId === userTeam.id ? "home" : "away",
-        controlledPlayerId: fixture.homeId === userTeam.id ? homeTeam.id + "_player_10" : awayTeam.id + "_player_10",
-        minutesPerHalf: 45,
-        realSecondsPerHalf: 120,
-      };
+    const matchSetup: MatchSetup = {
+      matchId: fixture.id,
+      competition: career?.divisao ?? "serie-c",
+      stadium: "Estádio Municipal",
+      home: {
+        id: homeTeam.id,
+        name: homeTeam.name,
+        shortName: homeTeam.shortName,
+        formation: "4-4-2",
+        colors: { primary: homeTeam.primary ?? "#ff0000", secondary: homeTeam.secondary ?? "#ffffff" },
+        players: generateMockPlayers(homeTeam, "home"),
+      },
+      away: {
+        id: awayTeam.id,
+        name: awayTeam.name,
+        shortName: awayTeam.shortName,
+        formation: "4-4-2",
+        colors: { primary: awayTeam.primary ?? "#0000ff", secondary: awayTeam.secondary ?? "#ffffff" },
+        players: generateMockPlayers(awayTeam, "away"),
+      },
+      controlledSide: fixture.homeId === userTeam.id ? "home" : "away",
+      controlledPlayerId: fixture.homeId === userTeam.id ? homeTeam.id + "_player_10" : awayTeam.id + "_player_10",
+      minutesPerHalf: 45,
+      realSecondsPerHalf: 120,
+    };
 
-      console.log("[Match3D] MatchSetup created:", matchSetup);
-      setSetup(matchSetup);
-    } catch (error) {
-      console.error("[Match3D] Error in useEffect:", error);
-      console.error("[Match3D] Error stack:", error instanceof Error ? error.stack : "No stack");
-    }
+    setSetup(matchSetup);
   }, [fixture, userTeam, career]);
 
   if (!setup) {
