@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Calendar, ChevronRight, Coins, Trophy, Building2, ArrowLeftRight } from "lucide-react";
 import { TeamBadge } from "../components/TeamPicker";
 import type { Team } from "../data/teams";
@@ -6,6 +6,7 @@ import { nextUserFixture, sortTable } from "../tournament";
 import type { Fixture, Tournament } from "../types";
 import { NewsPortal } from "./NewsPortal";
 import { SovereigntyPanel } from "./SovereigntyPanel";
+import { ModoJogoModal } from "./ModoJogoModal";
 import { salarioDa } from "./clubeFinancas";
 import {
   CUSTO_MANUTENCAO,
@@ -26,6 +27,7 @@ interface CareerHubProps {
   career: CareerState | null;
   ligas?: LigasTemporada | undefined;
   onPlay: () => void;
+  onPlay3D?: () => void;
   onExit: () => void;
   /** Abre a tela dedicada de Classificação Completa (área própria, fora do hub). */
   onOpenClassificacao: () => void;
@@ -52,6 +54,7 @@ export function CareerHub({
   career,
   ligas,
   onPlay,
+  onPlay3D,
   onExit,
   onOpenClassificacao,
   onOpenCalendario,
@@ -60,6 +63,7 @@ export function CareerHub({
   onOpenTransferencias,
   ofertasPendentes = 0,
 }: CareerHubProps) {
+  const [mostrarModalModo, setMostrarModalModo] = useState(false);
   const next = useMemo(() => nextUserFixture(tour), [tour]);
   const copaBrasil = career?.copaBrasil ?? gerarCopaBrasil(userTeam, tour.difficulty);
   const copaFixPend = copaBrasil ? proximoJogoCopa(copaBrasil, userTeam.id) : null;
@@ -118,7 +122,11 @@ export function CareerHub({
                 <span className="font-display text-2xl text-muted-foreground">×</span>
                 <TeamBadge team={resolveTeam(userFixture.awayId, userTeam)} size="md" />
               </div>
-              <button data-testid="entrar-em-campo" onClick={onPlay} className="btn-primary px-5 py-2.5 text-sm">
+              <button
+                data-testid="entrar-em-campo"
+                onClick={() => setMostrarModalModo(true)}
+                className="btn-primary px-5 py-2.5 text-sm"
+              >
                 Entrar em campo
               </button>
             </div>
@@ -246,6 +254,20 @@ export function CareerHub({
           <ZoneLegend />
         </div>
       </div>
+
+      {mostrarModalModo && (
+        <ModoJogoModal
+          onTecnico={() => {
+            setMostrarModalModo(false);
+            onPlay();
+          }}
+          onJogador={() => {
+            setMostrarModalModo(false);
+            onPlay3D?.();
+          }}
+          onClose={() => setMostrarModalModo(false)}
+        />
+      )}
     </div>
   );
 }

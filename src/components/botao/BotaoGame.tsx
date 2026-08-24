@@ -159,6 +159,7 @@ import { CareerMenu } from "./career/CareerMenu";
 import { PropriedadeScreen } from "./career/PropriedadeScreen";
 import { TransferenciasScreen } from "./career/TransferenciasScreen";
 import { LoadingScreen } from "./career/LoadingScreen";
+import { Match3D } from "./career/Match3D";
 import { AIService } from "./ai/AIService";
 import { relatorioMedico, redesSociaisRodada } from "./ai/aiContent";
 import { tocarSom } from "@/lib/notificacao";
@@ -263,7 +264,8 @@ type Screen =
   | "transferencias"
   | "tournament-match"
   | "match-end"
-  | "trophies";
+  | "trophies"
+  | "match3d";
 
 interface BotaoGameProps {
   onBack?: () => void;
@@ -4315,6 +4317,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             career={career}
             ligas={career?.ligas}
             onPlay={playNext}
+            onPlay3D={() => setScreen("match3d")}
             onExit={() => setScreen("menu")}
             onOpenClassificacao={() => setScreen("classificacao")}
             onOpenCalendario={() => setScreen("calendario")}
@@ -4334,6 +4337,20 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             currentDivisao={career?.divisao ?? "serie-c"}
             ligas={career?.ligas}
             copaBrasil={career?.copaBrasil ?? null}
+            onBack={() => setScreen("hub")}
+          />
+        )}
+
+        {screen === "match3d" && tour && userFixture && (
+          <Match3D
+            fixture={userFixture}
+            userTeam={userTeam}
+            career={career}
+            onResult={(result) => {
+              // TODO: Processar o resultado do motor 3D e integrar com o sistema de carreira
+              console.log("Resultado 3D:", result);
+              setScreen("hub");
+            }}
             onBack={() => setScreen("hub")}
           />
         )}
