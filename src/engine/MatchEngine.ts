@@ -370,8 +370,11 @@ export class MatchEngine {
     const mv = this.input.move;
     // Move vector: x = right/left, y = forward/back
     // Convert to world space based on attack direction
-    // W (y>0) = forward toward goal = attack direction
-    // D (x>0) = right = perpendicular to attack (positive z)
+    // W (y>0) = forward toward goal = attack direction on X axis
+    // S (y<0) = backward toward own goal = opposite attack direction on X axis
+    // A (x<0) = left = negative Z (absolute, camera-relative)
+    // D (x>0) = right = positive Z (absolute, camera-relative)
+    // Left/right are absolute in world space, don't flip with attack direction
     const dx = mv.y * d;
     const dz = mv.x;
 
