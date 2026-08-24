@@ -42,7 +42,7 @@ export function PainelMundo({ perfil }: Props) {
 
   const dataISO = new Date().toISOString().slice(0, 10);
   const evento =
-    world && world.eventos_ativos.length > 0
+    world && world.eventos_ativos && world.eventos_ativos.length > 0
       ? world.eventos_ativos[0]!
       : eventoDaSemana(dataISO);
   const efeito = perfil
