@@ -16,7 +16,7 @@ export const FIELD = {
 const LINE_Y = 0.02;
 
 function lineMaterial() {
-  return new THREE.LineBasicMaterial({ color: 0xf2f7f2, transparent: true, opacity: 0.9 });
+  return new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
 }
 
 function addPath(group: THREE.Group, pts: [number, number][], close = false) {
@@ -50,36 +50,44 @@ function addDot(group: THREE.Group, cx: number, cz: number) {
 function buildGoal(sign: number): THREE.Group {
   const g = new THREE.Group();
   const { halfLength, goalHalfWidth: gw, goalHeight: gh } = FIELD;
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const postGeo = new THREE.CylinderGeometry(0.09, 0.09, gh, 8);
+  const mat = new THREE.MeshStandardMaterial({ 
+    color: 0xffffff, 
+    metalness: 0.3, 
+    roughness: 0.2 
+  });
+  const postGeo = new THREE.CylinderGeometry(0.09, 0.09, gh, 16);
   for (const z of [-gw, gw]) {
     const post = new THREE.Mesh(postGeo, mat);
     post.position.set(sign * halfLength, gh / 2, z);
+    post.castShadow = true;
+    post.receiveShadow = true;
     g.add(post);
   }
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, gw * 2, 8), mat);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, gw * 2, 16), mat);
   bar.rotation.x = Math.PI / 2;
   bar.position.set(sign * halfLength, gh, 0);
+  bar.castShadow = true;
+  bar.receiveShadow = true;
   g.add(bar);
 
   // Net (back + sides + top) as cheap transparent grids.
   const netMat = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.15,
     side: THREE.DoubleSide,
     wireframe: true,
   });
   const depth = 2;
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(gw * 2, gh, 12, 6), netMat);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(gw * 2, gh, 16, 8), netMat);
   back.position.set(sign * (halfLength + depth), gh / 2, 0);
   g.add(back);
-  const top = new THREE.Mesh(new THREE.PlaneGeometry(gw * 2, depth, 12, 3), netMat);
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(gw * 2, depth, 16, 4), netMat);
   top.rotation.x = -Math.PI / 2;
   top.position.set(sign * (halfLength + depth / 2), gh, 0);
   g.add(top);
   for (const z of [-gw, gw]) {
-    const side = new THREE.Mesh(new THREE.PlaneGeometry(depth, gh, 3, 6), netMat);
+    const side = new THREE.Mesh(new THREE.PlaneGeometry(depth, gh, 4, 8), netMat);
     side.rotation.y = Math.PI / 2;
     side.position.set(sign * (halfLength + depth / 2), gh / 2, z);
     g.add(side);
@@ -91,28 +99,53 @@ function buildGoal(sign: number): THREE.Group {
 export function buildField(scene: THREE.Scene, quality: "low" | "high") {
   const { halfLength: L, halfWidth: W } = FIELD;
 
-  scene.background = new THREE.Color(0x0a1420);
-  scene.fog = new THREE.Fog(0x0a1420, 90, 190);
+  // Dramatic sunset/stadium lighting
+  const skyColor = new THREE.Color(0x1a2a3a);
+  const groundColor = new THREE.Color(0x1a3d2e);
+  scene.background = skyColor;
+  scene.fog = new THREE.FogExp2(skyColor, 0.008);
 
-  // Grass with mowed stripes baked into a tiny canvas texture.
+  // Enhanced grass texture with more detail
   const c = document.createElement("canvas");
-  c.width = 16;
-  c.height = 16;
+  c.width = 64;
+  c.height = 64;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#2f7d43";
-  ctx.fillRect(0, 0, 16, 16);
-  ctx.fillStyle = "#2a7139";
-  ctx.fillRect(0, 0, 8, 16);
+  
+  // Base grass color
+  ctx.fillStyle = "#2d8a4e";
+  ctx.fillRect(0, 0, 64, 64);
+  
+  // Mowed stripes pattern
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = i % 2 === 0 ? "#267a44" : "#349658";
+    ctx.fillRect(i * 8, 0, 8, 64);
+  }
+  
+  // Add some noise/texture
+  for (let i = 0; i < 200; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? "#3da866" : "#1f6a3a";
+    ctx.fillRect(Math.random() * 64, Math.random() * 64, 2, 2);
+  }
+  
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(14, 1);
+  tex.repeat.set(28, 16);
   tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipMapLinearFilter;
+  tex.anisotropy = quality === "high" ? 4 : 1;
 
+  const grassMat = new THREE.MeshStandardMaterial({
+    map: tex,
+    roughness: 0.8,
+    metalness: 0.0,
+  });
+  
   const grass = new THREE.Mesh(
-    new THREE.PlaneGeometry((L + 6) * 2, (W + 6) * 2),
-    new THREE.MeshLambertMaterial({ map: tex })
+    new THREE.PlaneGeometry((L + 6) * 2, (W + 6) * 2, 32, 32),
+    grassMat
   );
   grass.rotation.x = -Math.PI / 2;
+  grass.receiveShadow = true;
   scene.add(grass);
 
   const lines = new THREE.Group();
@@ -172,19 +205,31 @@ export function buildField(scene: THREE.Scene, quality: "low" | "high") {
   scene.add(buildGoal(-1));
 
   // Corner flags
-  const flagMat = new THREE.MeshLambertMaterial({ color: 0xffd23f });
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.5, roughness: 0.3 });
+  const flagMat = new THREE.MeshStandardMaterial({ color: 0xff4444, metalness: 0.1, roughness: 0.8 });
   for (const s of [-1, 1])
     for (const z of [-1, 1]) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), flagMat);
-      pole.position.set(s * L, 0.75, z * W);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.8, 8), poleMat);
+      pole.position.set(s * L, 0.9, z * W);
+      pole.castShadow = true;
       scene.add(pole);
+      
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.4), flagMat);
+      flag.position.set(s * L + 0.15, 1.6, z * W);
+      flag.rotation.y = s > 0 ? Math.PI / 4 : -Math.PI / 4;
+      scene.add(flag);
     }
 
-  // Simple stands so the camera never sees the void.
-  const standMat = new THREE.MeshLambertMaterial({ color: 0x121e2c });
+  // Enhanced stadium stands with lighting
+  const standMat = new THREE.MeshStandardMaterial({ 
+    color: 0x1e3a5f, 
+    metalness: 0.1, 
+    roughness: 0.9 
+  });
   const mk = (w: number, d: number, x: number, z: number) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 8, d), standMat);
-    m.position.set(x, 4, z);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 12, d, 4, 1, 4), standMat);
+    m.position.set(x, 6, z);
+    m.receiveShadow = true;
     scene.add(m);
   };
   mk((L + 16) * 2, 12, 0, W + 14);
@@ -192,18 +237,35 @@ export function buildField(scene: THREE.Scene, quality: "low" | "high") {
   mk(12, (W + 8) * 2, L + 14, 0);
   mk(12, (W + 8) * 2, -(L + 14), 0);
 
-  scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x2b4a2f, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.25);
-  sun.position.set(40, 70, 30);
+  // Enhanced lighting setup
+  const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2d5a27, 0.6);
+  scene.add(hemiLight);
+  
+  // Main sun light with warmer color
+  const sun = new THREE.DirectionalLight(0xfff5e6, 1.5);
+  sun.position.set(50, 80, 40);
+  
   if (quality === "high") {
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    const cam = sun.shadow.camera as THREE.OrthographicCamera;
-    cam.left = -70;
-    cam.right = 70;
-    cam.top = 50;
-    cam.bottom = -50;
-    cam.far = 200;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 200;
+    sun.shadow.camera.left = -80;
+    sun.shadow.camera.right = 80;
+    sun.shadow.camera.top = 60;
+    sun.shadow.camera.bottom = -60;
+    sun.shadow.bias = -0.0001;
+    sun.shadow.normalBias = 0.02;
   }
   scene.add(sun);
+  
+  // Rim light for dramatic effect
+  const rimLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+  rimLight.position.set(-30, 20, -50);
+  scene.add(rimLight);
+  
+  // Fill light
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.2);
+  fillLight.position.set(-20, 30, 20);
+  scene.add(fillLight);
 }

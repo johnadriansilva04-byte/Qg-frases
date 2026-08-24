@@ -5,6 +5,8 @@ import type { MatchEvent, MatchLiveState, MatchResult, MatchSetup } from "@/engi
 import { VirtualStick } from "./VirtualStick";
 import { ActionPad } from "./ActionPad";
 
+type MatchState = "intro" | "playing" | "finished";
+
 interface Props {
   setup: MatchSetup;
   /** Called once when the match ends — hand this straight to the main system. */
@@ -21,26 +23,42 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
   const engineRef = useRef<MatchEngine | null>(null);
   const [live, setLive] = useState<MatchLiveState | null>(null);
   const [touch, setTouch] = useState(false);
+  const [matchState, setMatchState] = useState<MatchState>("intro");
+  const [finalResult, setFinalResult] = useState<MatchResult | null>(null);
 
   useEffect(() => {
     setTouch(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
+  const startMatch = () => {
+    if (!canvasRef.current) {
+      console.error("Canvas ref is null");
+      return;
+    }
+    try {
+      const engine = new MatchEngine(canvasRef.current, setup, {
+        onState: setLive,
+        onEvent: (e) => onEvent?.(e),
+        onFinish: (result) => {
+          setFinalResult(result);
+          setMatchState("finished");
+        },
+      });
+      engineRef.current = engine;
+      engine.start();
+      setMatchState("playing");
+    } catch (error) {
+      console.error("Error starting match:", error);
+    }
+  };
+
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const engine = new MatchEngine(canvasRef.current, setup, {
-      onState: setLive,
-      onEvent: (e) => onEvent?.(e),
-      onFinish,
-    });
-    engineRef.current = engine;
-    engine.start();
+    if (matchState !== "playing") return;
     return () => {
-      engine.dispose();
+      engineRef.current?.dispose();
       engineRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setup.matchId]);
+  }, [matchState]);
 
   const controlled =
     (setup.controlledSide === "home" ? setup.home : setup.away).players.find(
@@ -48,6 +66,131 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
     ) ?? null;
 
   const act = (a: EngineAction) => engineRef.current?.input.press(a);
+
+  if (matchState === "intro") {
+    return (
+      <div className="relative h-full w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6">
+          {/* Match Info */}
+          <div className="mb-8 text-center">
+            <h2 className="mb-2 text-2xl font-bold text-white/90">{setup.competition}</h2>
+            <p className="text-sm text-white/60">{setup.stadium || "Estádio Municipal"}</p>
+          </div>
+
+          {/* Teams */}
+          <div className="mb-8 flex items-center gap-8">
+            <div className="text-center">
+              <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-full bg-white/10 text-4xl">
+                ⚽
+              </div>
+              <h3 className="text-xl font-bold text-white">{setup.home.name}</h3>
+              <p className="text-sm text-white/60">{setup.home.shortName}</p>
+            </div>
+            
+            <div className="text-3xl font-black text-white/40">VS</div>
+            
+            <div className="text-center">
+              <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-full bg-white/10 text-4xl">
+                ⚽
+              </div>
+              <h3 className="text-xl font-bold text-white">{setup.away.name}</h3>
+              <p className="text-sm text-white/60">{setup.away.shortName}</p>
+            </div>
+          </div>
+
+          {/* Player Info */}
+          <div className="mb-8 rounded-lg border border-white/10 bg-white/5 px-6 py-4 text-center">
+            <p className="text-sm text-white/60">Você controla</p>
+            <p className="text-lg font-bold text-white">
+              #{controlled?.number} {controlled?.name}
+            </p>
+            <p className="text-sm text-white/60">{controlled?.role}</p>
+          </div>
+
+          {/* Start Button */}
+          <button
+            type="button"
+            onClick={startMatch}
+            className="rounded-full bg-accent px-8 py-3 text-lg font-bold text-white shadow-lg shadow-accent/30 transition-all hover:scale-105 hover:bg-accent/90"
+          >
+            INICIAR PARTIDA
+          </button>
+
+          {/* Controls Hint */}
+          <div className="mt-6 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/60">
+            <p className="font-semibold text-white/80">Controles:</p>
+            <p>WASD mover · SHIFT sprint · ESPAÇO passe · ENTER chute · E pedir bola</p>
+          </div>
+        </div>
+        
+        {/* Hidden canvas for initialization */}
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+    );
+  }
+
+  if (matchState === "finished" && finalResult) {
+    return (
+      <div className="relative h-full w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6">
+          {/* Result */}
+          <div className="mb-8 text-center">
+            <h2 className="mb-4 text-3xl font-bold text-white">FIM DE JOGO</h2>
+            
+            <div className="mb-6 flex items-center gap-8">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-white">{setup.home.name}</h3>
+                <p className="text-5xl font-black text-accent">{finalResult.score.home}</p>
+              </div>
+              
+              <div className="text-2xl font-black text-white/40">-</div>
+              
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-white">{setup.away.name}</h3>
+                <p className="text-5xl font-black text-accent">{finalResult.score.away}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/5 px-6 py-4">
+              <p className="text-lg font-bold text-white">
+                {finalResult.outcome === "draw" ? "EMPATE" : 
+                 finalResult.outcome === "home" ? setup.home.name + " VENCEU" : 
+                 setup.away.name + " VENCEU"}
+              </p>
+            </div>
+          </div>
+
+          {/* Player Stats */}
+          <div className="mb-8 rounded-lg border border-white/10 bg-white/5 px-6 py-4">
+            <h3 className="mb-3 text-sm font-semibold text-white/80">Suas Estatísticas</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-2xl font-bold text-accent">{finalResult.controlledPlayer.goals}</p>
+                <p className="text-xs text-white/60">Gols</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-accent">{finalResult.controlledPlayer.passes}</p>
+                <p className="text-xs text-white/60">Passes</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-accent">{finalResult.controlledPlayer.rating.toFixed(1)}</p>
+                <p className="text-xs text-white/60">Nota</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Continue Button */}
+          <button
+            type="button"
+            onClick={() => onFinish(finalResult)}
+            className="rounded-full bg-accent px-8 py-3 text-lg font-bold text-white shadow-lg shadow-accent/30 transition-all hover:scale-105 hover:bg-accent/90"
+          >
+            CONTINUAR
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-background">
@@ -93,7 +236,7 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
       {/* Desktop key hints */}
       {!touch && (
         <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-hud-line bg-hud/70 px-4 py-1.5 text-[11px] text-muted-foreground backdrop-blur-md">
-          WASD mover · SHIFT sprint · ESPAÇO passe · ENTER chute · BACKSPACE carrinho
+          WASD mover · SHIFT sprint · ESPAÇO passe · ENTER chute · E pedir bola · BACKSPACE carrinho
         </div>
       )}
 

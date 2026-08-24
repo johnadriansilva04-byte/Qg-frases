@@ -76,6 +76,7 @@ export type MatchEventType =
   | "out"
   | "corner"
   | "goalkick"
+  | "penalty"
   | "halftime"
   | "fulltime";
 

@@ -95,8 +95,11 @@ export class MatchEngine {
       antialias: !mobile,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.3 : 1.8));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.3 : 2));
     this.renderer.shadowMap.enabled = this.quality === "high";
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
 
     this.camera = new THREE.PerspectiveCamera(mobile ? 62 : 55, 16 / 9, 0.5, 400);
     this.camera.position.set(0, 14, -26);
@@ -337,9 +340,10 @@ export class MatchEngine {
     const actions = this.input.consume();
     const d = this.dir(p.side);
     const mv = this.input.move;
-    // Move vector is expressed in "attacking" space so it matches the camera.
-    const dx = mv.y * d;
-    const dz = -mv.x * d;
+    // Move vector: x = right/left, y = forward/back
+    // Convert to world space based on attack direction
+    const dx = mv.x * d;
+    const dz = mv.y * d;
 
     const wantsSprint = this.input.sprint && Math.hypot(mv.x, mv.y) > 0.1 && p.stamina > 2;
     let speed = this.maxSpeed(p) * (wantsSprint ? 1.28 : 1);
@@ -359,7 +363,10 @@ export class MatchEngine {
       if (this.freeze > 0) break;
       if (a === "pass" && this.ball.owner === p) this.doPass(p);
       else if (a === "shoot" && this.ball.owner === p) this.doShot(p);
-      else if (a === "tackle" && p.state !== "slide" && p.actionCooldown <= 0) this.startSlide(p);
+      else if (a === "tackle") this.startSlide(p);
+      else if (a === "request" && this.ball.owner && this.ball.owner.side === p.side && this.ball.owner !== p) {
+        this.doRequestBall(p);
+      }
     }
   }
 
@@ -578,6 +585,36 @@ export class MatchEngine {
     this.freeze = 0.5;
   }
 
+  private doRequestBall(requester: Sim) {
+    const owner = this.ball.owner;
+    if (!owner || owner.side !== requester.side || owner === requester) return;
+    
+    // Calculate pass direction from owner to requester
+    const dx = requester.x - owner.x;
+    const dz = requester.z - owner.z;
+    const dist = Math.hypot(dx, dz);
+    
+    if (dist > 35) return; // Too far
+    
+    const power = Math.min(dist * 0.35 + 8, 18);
+    const angle = Math.atan2(dx, dz);
+    
+    this.ball.owner = null;
+    this.ball.lastToucher = owner;
+    this.ball.vel.set(Math.sin(angle) * power, 1.5, Math.cos(angle) * power);
+    this.ball.kickLock = 0.2;
+    
+    owner.stats.passes++;
+    this.emit({
+      type: "pass",
+      minute: this.mm(),
+      side: owner.side,
+      playerId: owner.data.id,
+      playerName: owner.data.name,
+      detail: `para ${requester.data.name}`,
+    });
+  }
+
   private bestPassTarget(p: Sim) {
     const d = this.dir(p.side);
     let best: Sim | null = null;
@@ -671,6 +708,50 @@ export class MatchEngine {
 
   // ---------------------------------------------------------------- ball
 
+  private checkOffside(): boolean {
+    const b = this.ball;
+    const L = FIELD.halfLength;
+    const last = b.lastToucher;
+    
+    if (!last) return false;
+    
+    // Find the second-last defender (last defender is usually the keeper)
+    const defenders = this.players.filter(p => p.side !== last.side && !p.isKeeper);
+    defenders.sort((a, b) => {
+      const distA = Math.abs(a.x - (last.side === "home" ? -L : L));
+      const distB = Math.abs(b.x - (last.side === "home" ? -L : L));
+      return distA - distB;
+    });
+    
+    if (defenders.length < 2) return false;
+    
+    const secondLastDefender = defenders[1];
+    const offsideLine = secondLastDefender.x;
+    
+    // Check if any attacking player is offside
+    for (const p of this.players) {
+      if (p.side === last.side && p !== last && !p.isKeeper) {
+        const attackerInOffsidePosition = (last.side === "home" && p.x > offsideLine) || 
+                                           (last.side === "away" && p.x < offsideLine);
+        
+        if (attackerInOffsidePosition && Math.hypot(p.x - b.pos.x, p.z - b.pos.z) < 3) {
+          // Player is involved in play while offside
+          this.emit({
+            type: "foul",
+            minute: this.mm(),
+            side: last.side,
+            playerId: p.data.id,
+            playerName: p.data.name,
+            detail: "impedimento",
+          });
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
   private updateBall(dt: number) {
     const b = this.ball;
     if (b.kickLock > 0) b.kickLock -= dt;
@@ -690,28 +771,34 @@ export class MatchEngine {
       return;
     }
 
-    // Physics
-    b.vel.y -= 18 * dt;
+    // Physics - improved ball physics
+    b.vel.y -= 22 * dt; // Stronger gravity
     b.pos.addScaledVector(b.vel, dt);
     if (b.pos.y <= 0.11) {
       b.pos.y = 0.11;
-      if (b.vel.y < 0) b.vel.y = -b.vel.y * 0.45;
-      if (Math.abs(b.vel.y) < 0.6) b.vel.y = 0;
-      const fr = 1 - 0.9 * dt;
+      if (b.vel.y < 0) b.vel.y = -b.vel.y * 0.55; // Better bounce
+      if (Math.abs(b.vel.y) < 0.4) b.vel.y = 0;
+      const fr = 1 - 1.2 * dt; // More realistic friction
       b.vel.x *= fr;
       b.vel.z *= fr;
     } else {
-      const air = 1 - 0.15 * dt;
+      const air = 1 - 0.08 * dt; // Less air resistance
       b.vel.x *= air;
       b.vel.z *= air;
     }
-    if (Math.hypot(b.vel.x, b.vel.z) < 0.15) {
+    if (Math.hypot(b.vel.x, b.vel.z) < 0.1) {
       b.vel.x = 0;
       b.vel.z = 0;
     }
 
     this.postCollision();
     if (this.checkGoal()) return;
+    if (this.checkOffside()) {
+      // Offside detected - give ball to defending team
+      const defendingSide = this.ball.lastToucher?.side === "home" ? "away" : "home";
+      this.restart(this.ball.pos.x, this.ball.pos.z, defendingSide, "foul", "impedimento");
+      return;
+    }
     this.checkOut();
 
     // Possession pickup
@@ -810,7 +897,14 @@ export class MatchEngine {
     } else if (Math.abs(b.pos.x) > L) {
       const attackingSide = last?.side ?? "home";
       const towardsOpponentGoal = Math.sign(b.pos.x) === this.dir(attackingSide);
-      if (towardsOpponentGoal) {
+      
+      // Check for penalty (ball out in goal area)
+      const inGoalArea = Math.abs(b.pos.z) < FIELD.goalHalfWidth + 2;
+      
+      if (inGoalArea && !towardsOpponentGoal) {
+        // Penalty for the attacking team
+        this.restart(Math.sign(b.pos.x) * (L - FIELD.penaltySpot), 0, other, "penalty", "pênalti");
+      } else if (towardsOpponentGoal) {
         // corner for the attacking team
         this.restart(Math.sign(b.pos.x) * (L - 0.5), Math.sign(b.pos.z || 1) * (W - 0.5), attackingSide, "corner", "escanteio");
       } else {
@@ -902,18 +996,32 @@ export class MatchEngine {
     const me = this.players.find((p) => p.isControlled);
     if (!me) return;
     const d = this.dir(me.side);
-    const focusX = lerp(me.x, this.ball.pos.x, 0.35);
-    const focusZ = lerp(me.z, this.ball.pos.z, 0.35);
+    
+    // Dynamic camera that follows ball more aggressively during attacks
+    const ballDist = Math.hypot(me.x - this.ball.pos.x, me.z - this.ball.pos.z);
+    const ballInFront = (this.ball.pos.x - me.x) * d > 0;
+    
+    // Focus point: blend between player and ball based on possession
+    const focusBlend = ballInFront ? 0.6 : 0.3;
+    const focusX = lerp(me.x, this.ball.pos.x, focusBlend);
+    const focusZ = lerp(me.z, this.ball.pos.z, focusBlend);
 
-    const back = 17;
-    const height = 11;
+    // Dynamic distance based on game situation - CLOSER to player
+    const back = ballInFront && ballDist < 15 ? 10 : 14;
+    const height = ballInFront ? 9 : 7;
+    
     this.camTarget.set(focusX - d * back, height, focusZ);
-    this.camTarget.x = clamp(this.camTarget.x, -FIELD.halfLength - 16, FIELD.halfLength + 16);
-    this.camTarget.z = clamp(this.camTarget.z, -FIELD.halfWidth - 8, FIELD.halfWidth + 8);
-    const k = clamp(4.5 * dt, 0, 1);
+    this.camTarget.x = clamp(this.camTarget.x, -FIELD.halfLength - 20, FIELD.halfLength + 20);
+    this.camTarget.z = clamp(this.camTarget.z, -FIELD.halfWidth - 10, FIELD.halfWidth + 10);
+    
+    // Smoother camera movement
+    const k = clamp(3 * dt, 0, 1);
     this.camera.position.lerp(this.camTarget, k);
-    if (this.camera.position.y < 3) this.camera.position.y = 3;
-    this.camLook.lerp(new THREE.Vector3(focusX + d * 6, 1, focusZ), k);
+    if (this.camera.position.y < 4) this.camera.position.y = 4;
+    
+    // Look ahead in attack direction
+    const lookAhead = ballInFront ? 6 : 3;
+    this.camLook.lerp(new THREE.Vector3(focusX + d * lookAhead, 1.2, focusZ), k);
     this.camera.lookAt(this.camLook);
   }
 

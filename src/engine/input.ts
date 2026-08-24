@@ -9,8 +9,9 @@
  *   ENTER    <-> B              -> shoot
  *   SHIFT    <-> Y              -> sprint
  *   BACKSPACE<-> A              -> slide tackle
+ *   E        <-> Y              -> request ball
  */
-export type EngineAction = "pass" | "shoot" | "tackle";
+export type EngineAction = "pass" | "shoot" | "tackle" | "request";
 
 export class InputSystem {
   /** Normalized move vector: x = right, y = forward (attack direction). */
@@ -33,7 +34,7 @@ export class InputSystem {
     const down = (e: Event) => {
       const ev = e as KeyboardEvent;
       const k = ev.key.toLowerCase();
-      if (["w", "a", "s", "d", " ", "enter", "backspace", "shift", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k))
+      if (["w", "a", "s", "d", " ", "enter", "backspace", "shift", "e", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k))
         ev.preventDefault();
       if (ev.repeat) return;
       this.keys.add(k);
@@ -41,6 +42,7 @@ export class InputSystem {
       if (k === " ") this.press("pass");
       if (k === "enter") this.press("shoot");
       if (k === "backspace") this.press("tackle");
+      if (k === "e") this.press("request");
       this.syncKeys();
     };
     const up = (e: Event) => {

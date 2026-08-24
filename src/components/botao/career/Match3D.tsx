@@ -34,7 +34,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
         name: homeTeam.name,
         shortName: homeTeam.shortName,
         formation: "4-4-2",
-        colors: { primary: homeTeam.colors[0] ?? "#ff0000", secondary: homeTeam.colors[1] ?? "#ffffff" },
+        colors: { primary: homeTeam.primary ?? "#ff0000", secondary: homeTeam.secondary ?? "#ffffff" },
         players: generateMockPlayers(homeTeam, "home"),
       },
       away: {
@@ -42,7 +42,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
         name: awayTeam.name,
         shortName: awayTeam.shortName,
         formation: "4-4-2",
-        colors: { primary: awayTeam.colors[0] ?? "#0000ff", secondary: awayTeam.colors[1] ?? "#ffffff" },
+        colors: { primary: awayTeam.primary ?? "#0000ff", secondary: awayTeam.secondary ?? "#ffffff" },
         players: generateMockPlayers(awayTeam, "away"),
       },
       controlledSide: fixture.homeId === userTeam.id ? "home" : "away",
