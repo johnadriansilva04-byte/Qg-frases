@@ -31,32 +31,41 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
   }, []);
 
   const startMatch = () => {
+    console.log("[Match3DView] startMatch called");
     if (!canvasRef.current) {
-      console.error("Canvas ref is null");
+      console.error("[Match3DView] Canvas ref is null");
       return;
     }
     try {
       // Ensure canvas has proper dimensions before initializing engine
       const canvas = canvasRef.current;
       const parent = canvas.parentElement;
+      console.log("[Match3DView] Canvas dimensions:", canvas.width, canvas.height);
+      console.log("[Match3DView] Parent dimensions:", parent?.clientWidth, parent?.clientHeight);
       if (parent) {
         canvas.width = parent.clientWidth;
         canvas.height = parent.clientHeight;
+        console.log("[Match3DView] Canvas dimensions set to:", canvas.width, canvas.height);
       }
       
+      console.log("[Match3DView] Creating MatchEngine...");
       const engine = new MatchEngine(canvas, setup, {
         onState: setLive,
         onEvent: (e) => onEvent?.(e),
         onFinish: (result) => {
+          console.log("[Match3DView] Match finished:", result);
           setFinalResult(result);
           setMatchState("finished");
         },
       });
       engineRef.current = engine;
+      console.log("[Match3DView] Starting engine...");
       engine.start();
+      console.log("[Match3DView] Engine started, setting state to playing");
       setMatchState("playing");
     } catch (error) {
-      console.error("Error starting match:", error);
+      console.error("[Match3DView] Error starting match:", error);
+      console.error("[Match3DView] Error stack:", error instanceof Error ? error.stack : "No stack");
     }
   };
 

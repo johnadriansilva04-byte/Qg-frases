@@ -77,24 +77,54 @@ export class MatchEngine {
   private minutesPerSecond: number;
   private quality: "low" | "high";
   private resizeObs: ResizeObserver | null = null;
+  private lastEvent: any;
 
   constructor(
     private canvas: HTMLCanvasElement,
     private setup: MatchSetup,
     private cb: EngineCallbacks = {}
   ) {
-    this.minutesPerHalf = setup.minutesPerHalf ?? 45;
-    this.minutesPerSecond = this.minutesPerHalf / (setup.realSecondsPerHalf ?? 120);
-    if (setup.initialScore) this.score = { ...setup.initialScore };
+    console.log("[MatchEngine] Constructor called");
+    this.canvas = canvas;
+    this.setup = setup;
+    this.cb = cb;
+    console.log("[MatchEngine] Creating scene...");
+    this.scene = new THREE.Scene();
+    console.log("[MatchEngine] Creating camera...");
+    this.camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.5, 400);
+    console.log("[MatchEngine] Creating ball mesh...");
+    this.ball = {
+      mesh: createBallMesh(),
+      pos: new THREE.Vector3(0, 0.11, 0),
+      vel: new THREE.Vector3(0, 0, 0),
+      owner: null,
+      lastToucher: null,
+      kickLock: 0,
+    };
+    this.players = [];
+    this.events = [];
+    this.score = { home: 0, away: 0 };
+    this.minute = 0;
+    this.minutesPerHalf = setup.minutesPerHalf;
+    this.realSecondsPerHalf = setup.realSecondsPerHalf;
+    this.running = false;
+    this.finished = false;
+    this.raf = 0;
+    this.last = 0;
+    this.freeze = 0;
+    this.lastEvent = null;
 
     const mobile = Math.min(window.innerWidth, window.innerHeight) < 700;
     this.quality = mobile ? "low" : "high";
+    console.log("[MatchEngine] Quality:", this.quality, "Mobile:", mobile);
 
+    console.log("[MatchEngine] Creating WebGLRenderer...");
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: !mobile,
       powerPreference: "high-performance",
     });
+    console.log("[MatchEngine] WebGLRenderer created");
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.3 : 2));
     this.renderer.shadowMap.enabled = this.quality === "high";
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -104,11 +134,15 @@ export class MatchEngine {
     this.camera = new THREE.PerspectiveCamera(mobile ? 62 : 55, 16 / 9, 0.5, 400);
     this.camera.position.set(0, 14, -26);
 
+    console.log("[MatchEngine] Building field...");
     buildField(this.scene, this.quality);
+    console.log("[MatchEngine] Field built");
     this.scene.add(this.ball.mesh);
 
+    console.log("[MatchEngine] Spawning teams...");
     this.spawnTeam(setup.home, "home");
     this.spawnTeam(setup.away, "away");
+    console.log("[MatchEngine] Teams spawned");
 
     this.input.attachKeyboard(window);
     this.handleResize();
@@ -120,6 +154,7 @@ export class MatchEngine {
 
     this.resetPositions("home");
     this.emit({ type: "kickoff", minute: 0, detail: `${setup.home.name} x ${setup.away.name}` });
+    console.log("[MatchEngine] Constructor completed");
   }
 
   // ---------------------------------------------------------------- setup
