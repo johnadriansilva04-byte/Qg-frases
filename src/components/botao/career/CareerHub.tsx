@@ -27,7 +27,7 @@ interface CareerHubProps {
   career: CareerState | null;
   ligas?: LigasTemporada | undefined;
   onPlay: () => void;
-  onPlay3D?: () => void;
+  onPlay3D?: (fixture: Fixture) => void;
   onExit: () => void;
   /** Abre a tela dedicada de Classificação Completa (área própria, fora do hub). */
   onOpenClassificacao: () => void;
@@ -263,7 +263,9 @@ export function CareerHub({
           }}
           onJogador={() => {
             setMostrarModalModo(false);
-            onPlay3D?.();
+            if (proximoJogo?.fixture && onPlay3D) {
+              onPlay3D(proximoJogo.fixture);
+            }
           }}
           onClose={() => setMostrarModalModo(false)}
         />

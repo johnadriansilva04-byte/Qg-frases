@@ -4317,7 +4317,10 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             career={career}
             ligas={career?.ligas}
             onPlay={playNext}
-            onPlay3D={() => setScreen("match3d")}
+            onPlay3D={(fixture) => {
+              setCurrent(fixture);
+              setScreen("match3d");
+            }}
             onExit={() => setScreen("menu")}
             onOpenClassificacao={() => setScreen("classificacao")}
             onOpenCalendario={() => setScreen("calendario")}
@@ -4341,9 +4344,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
           />
         )}
 
-        {screen === "match3d" && tour && userFixture && (
+        {screen === "match3d" && tour && current && (
           <Match3D
-            fixture={userFixture}
+            fixture={current}
             userTeam={userTeam}
             career={career}
             onResult={(result) => {
