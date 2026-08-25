@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { FIELD, buildField } from "./field";
 import { formationSlots } from "./formations";
 import { InputSystem } from "./input";
-import { createBallMesh, createPlayerRig, createPlayerRigWithFallback, type PlayerRig } from "./playerModel";
+import { createBallMesh, createPlayerRig, createPlayerRigFBX, createPlayerRigWithFallback, type PlayerRig } from "./playerModel";
 import { playerModelCache, FBX_PATHS } from "./playerModelCache";
 import type {
   MatchEvent,
@@ -36,8 +36,8 @@ interface Sim {
   actionCooldown: number;
   stats: MatchPlayerStats;
   // Propriedades para sistema de animações FBX
-  currentAnimation?: string;
-  currentAction?: THREE.AnimationAction;
+  currentAnimation?: string | undefined;
+  currentAction?: THREE.AnimationAction | undefined;
 }
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -186,8 +186,40 @@ export class MatchEngine {
     try {
       await playerModelCache.loadModel(FBX_PATHS.BASE_MODEL, animationMap);
       console.log("[MatchEngine.preloadModels] ✓ Preload de modelos FBX concluído com sucesso");
+      this.upgradeRigsToFBX();
     } catch (error) {
       console.error("[MatchEngine.preloadModels] ✗ Erro no preload:", error);
+    }
+  }
+
+  /**
+   * Os times nascem procedurais (o spawn é síncrono e o FBX de 50MB chega
+   * depois). Quando o preload termina, troca cada rig procedural pelo FBX
+   * preservando posição/rotação — quem já tinha FBX (cache quente) é ignorado.
+   */
+  private upgradeRigsToFBX() {
+    let upgraded = 0;
+    for (const p of this.players) {
+      if (p.rig.mixer) continue;
+      const colors = this.setup[p.side].colors;
+      const rig = createPlayerRigFBX(colors.primary, colors.secondary, p.isControlled, p.isKeeper);
+      if (!rig) continue;
+      rig.group.position.copy(p.rig.group.position);
+      rig.group.rotation.copy(p.rig.group.rotation);
+      if (this.quality === "high") rig.group.traverse((o) => (o.castShadow = true));
+      this.scene.remove(p.rig.group);
+      // Geometrias procedurais são por-rig (materiais de pele são compartilhados — não tocar).
+      p.rig.group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.geometry) m.geometry.dispose();
+      });
+      this.scene.add(rig.group);
+      p.rig = rig;
+      p.currentAnimation = undefined;
+      upgraded++;
+    }
+    if (upgraded > 0) {
+      console.log(`[MatchEngine] ✓ ${upgraded} jogadores atualizados para modelos FBX`);
     }
   }
 
@@ -474,9 +506,9 @@ export class MatchEngine {
     // Barra de força: segurar ESPAÇO/ENTER (ou X/B no toque) com a bola
     // carrega; soltar executa. Toque rápido = carga mínima (passe curto).
     if (this.ball.owner === p && this.freeze <= 0) {
-      const want: "pass" | "shoot" | null = this.input.shootHeld
+      const want: "pass" | "shoot" | null = this.input.isShootHeld
         ? "shoot"
-        : this.input.passHeld
+        : this.input.isPassHeld
           ? "pass"
           : null;
       if (want) {
@@ -500,8 +532,11 @@ export class MatchEngine {
 
     for (const a of actions) {
       if (this.freeze > 0) break;
-      if (a === "pass" && this.ball.owner === p) this.doPass(p);
-      else if (a === "shoot" && this.ball.owner === p) this.doShot(p);
+      // Botão ainda segurado → o press vira CARGA (a execução acontece no
+      // release, com a força acumulada). Toque rápido cai aqui com a flag já
+      // solta e dispara na hora, como antes.
+      if (a === "pass" && this.ball.owner === p && !this.input.isPassHeld) this.doPass(p);
+      else if (a === "shoot" && this.ball.owner === p && !this.input.isShootHeld) this.doShot(p);
       else if (a === "tackle") {
         if ((this.input as any).isDoubleTackle) {
           // Double-tap tackle: more aggressive desarme
@@ -1179,6 +1214,40 @@ export class MatchEngine {
 
   // ---------------------------------------------------------------- visuals
 
+  /** Barra de força 3D (sprite canvas) que flutua sobre o jogador controlado. */
+  private createPowerBar() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 16;
+    const ctx = canvas.getContext("2d")!;
+    const tex = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
+    );
+    sprite.scale.set(1.6, 0.2, 1);
+    sprite.visible = false;
+    this.scene.add(sprite);
+    this.powerBar = { sprite, ctx, tex };
+  }
+
+  private updatePowerBar(p: Sim | undefined) {
+    if (!this.powerBar) return;
+    const { sprite, ctx, tex } = this.powerBar;
+    if (!p || !this.charging) {
+      sprite.visible = false;
+      return;
+    }
+    sprite.visible = true;
+    sprite.position.set(p.x, 2.1, p.z);
+    ctx.clearRect(0, 0, 128, 16);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(0, 0, 128, 16);
+    const c = this.charge;
+    ctx.fillStyle = c < 0.3 ? "#4ade80" : c < 0.6 ? "#facc15" : c < 0.85 ? "#fb923c" : "#ef4444";
+    ctx.fillRect(2, 2, 124 * c, 12);
+    tex.needsUpdate = true;
+  }
+
   private updateAnimation(dt: number) {
     for (const p of this.players) {
       const sp = Math.hypot(p.vx, p.vz);
@@ -1246,12 +1315,19 @@ export class MatchEngine {
     rig.mixer.update(dt);
 
     // Mapeia estado do jogo para animação FBX
-    const animationName = this.mapStateToAnimation(p.state, p);
+    const animationName = this.mapStateToAnimation(p.state);
 
     // Troca animação se necessário
-    if (animationName && animationName !== p.currentAnimation) {
-      this.playAnimation(rig, animationName, p.state === "sprint" ? 1.3 : 1.0);
+    if (animationName !== p.currentAnimation) {
+      this.playAnimation(rig, animationName);
       p.currentAnimation = animationName;
+    }
+
+    // A corrida acompanha a velocidade real: parado vira jog leve no lugar
+    // (não existe clip de idle nos assets), correr/sprint acelera o clip.
+    if (p.currentAnimation === "run" && rig.currentAction) {
+      const sp = Math.hypot(p.vx, p.vz);
+      rig.currentAction.timeScale = clamp(sp / 4.5, 0.12, 1.4);
     }
 
     // Anima marker se existir
@@ -1259,33 +1335,25 @@ export class MatchEngine {
   }
 
   /**
-   * Mapeia estado do jogador para nome da animação FBX
+   * Mapeia estado do jogador para nome da animação FBX.
+   * Só existem 3 clips (run/save/trip); todo o resto usa "run" com
+   * timeScale modulado pela velocidade real — nunca T-pose nem corrida parada.
    */
-  private mapStateToAnimation(state: PlayerState, p: Sim): string | null {
+  private mapStateToAnimation(state: PlayerState): string {
     switch (state) {
-      case "run":
-      case "sprint":
-        return "run";
       case "save":
         return "save";
       case "slide":
-        return "trip"; // Usa trip como fallback para slide
-      case "idle":
-      case "pass":
-      case "shoot":
-      case "recover":
-      case "celebrate":
-        // Para estados sem animação específica ainda, retorna null (mantém idle)
-        return null;
+        return "trip";
       default:
-        return null;
+        return "run";
     }
   }
 
   /**
    * Toca uma animação no mixer com blending suave
    */
-  private playAnimation(rig: PlayerRig, name: string, speed: number = 1.0): void {
+  private playAnimation(rig: PlayerRig, name: string): void {
     if (!rig.mixer || !rig.fbxRig) return;
 
     const clip = rig.fbxRig.animations.get(name);
@@ -1302,8 +1370,14 @@ export class MatchEngine {
     // Fade in nova animação
     const action = rig.mixer.clipAction(clip);
     action.reset();
+    if (name === "save" || name === "trip") {
+      // One-shots: tocam uma vez e congelam no frame final até o estado mudar
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+    } else {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+    }
     action.fadeIn(0.2);
-    action.timeScale = speed;
     action.play();
 
     rig.currentAction = action;
@@ -1427,6 +1501,25 @@ export class MatchEngine {
     window.removeEventListener("resize", this.handleResize);
     const w = window as unknown as { __engine3d?: MatchEngine };
     if (w.__engine3d === this) delete w.__engine3d;
+    // Rigs FBX: geometria/textura são COMPARTILHADAS com o playerModelCache —
+    // dispose aqui quebraria a próxima partida. Só saem da cena os materiais
+    // clonados por jogador e a geometria própria do marker.
+    for (const p of this.players) {
+      if (!p.rig.fbxRig) continue;
+      p.rig.group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.userData["ownGeometry"]) m.geometry?.dispose();
+        const disposeMat = (mat: THREE.Material | undefined) => {
+          if (mat?.userData["ownMaterial"]) mat.dispose();
+        };
+        const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(mat)) mat.forEach(disposeMat);
+        else disposeMat(mat);
+      });
+      p.rig.mixer?.stopAllAction();
+      p.rig.mixer?.uncacheRoot(p.rig.group);
+      this.scene.remove(p.rig.group);
+    }
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();

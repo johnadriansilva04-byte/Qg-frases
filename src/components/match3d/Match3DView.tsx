@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MatchEngine } from "@/engine/MatchEngine";
+import { playerModelCache, FBX_PATHS } from "@/engine/playerModelCache";
 import type { EngineAction } from "@/engine/input";
 import type { MatchEvent, MatchLiveState, MatchResult, MatchSetup } from "@/engine/types";
 import { VirtualStick } from "./VirtualStick";
@@ -26,18 +27,45 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
   const [matchState, setMatchState] = useState<MatchState>("intro");
   const [finalResult, setFinalResult] = useState<MatchResult | null>(null);
   const [erroInicio, setErroInicio] = useState<string | null>(null);
+  const [carregandoModelos, setCarregandoModelos] = useState(false);
+  const modelosPromiseRef = useRef<Promise<unknown> | null>(null);
 
   useEffect(() => {
     setTouch(window.matchMedia("(pointer: coarse)").matches);
+    // Preload dos modelos FBX já na intro: quando o usuário clica INICIAR,
+    // na maioria dos casos os jogadores já nascem com o modelo 3D real.
+    // O MatchEngine tem upgrade-in-place como rede de segurança.
+    modelosPromiseRef.current = playerModelCache
+      .loadModel(
+        FBX_PATHS.BASE_MODEL,
+        new Map<string, string>([
+          ["run", FBX_PATHS.ANIMATIONS.run],
+          ["save", FBX_PATHS.ANIMATIONS.save],
+          ["trip", FBX_PATHS.ANIMATIONS.trip],
+        ])
+      )
+      .catch((err: unknown) => {
+        console.warn("[Match3DView] Preload FBX falhou — partida usará modelos procedurais:", err);
+      });
   }, []);
 
-  const startMatch = () => {
+  const startMatch = async () => {
     if (!canvasRef.current || engineRef.current) {
       if (!canvasRef.current) console.error("Canvas ref is null");
       return;
     }
     try {
       setErroInicio(null);
+      // Aguarda o preload (teto de 20s — modelo de 50MB em conexão lenta).
+      // Timeout/erro NÃO bloqueia: nasce procedural e o engine faz upgrade.
+      if (!playerModelCache.isLoaded(FBX_PATHS.BASE_MODEL) && modelosPromiseRef.current) {
+        setCarregandoModelos(true);
+        await Promise.race([
+          modelosPromiseRef.current,
+          new Promise((r) => setTimeout(r, 20000)),
+        ]).catch(() => {});
+        setCarregandoModelos(false);
+      }
       const canvas = canvasRef.current;
       const parent = canvas.parentElement;
       if (parent) {
@@ -131,9 +159,10 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
           <button
             type="button"
             onClick={startMatch}
-            className="rounded-full bg-accent px-8 py-3 text-lg font-bold text-white shadow-lg shadow-accent/30 transition-all hover:scale-105 hover:bg-accent/90"
+            disabled={carregandoModelos}
+            className="rounded-full bg-accent px-8 py-3 text-lg font-bold text-white shadow-lg shadow-accent/30 transition-all hover:scale-105 hover:bg-accent/90 disabled:opacity-60"
           >
-            INICIAR PARTIDA
+            {carregandoModelos ? "CARREGANDO JOGADORES 3D..." : "INICIAR PARTIDA"}
           </button>
 
           {erroInicio && (

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 /**
  * Sistema de cache e carregamento de modelos FBX para jogadores.
@@ -80,11 +81,13 @@ class PlayerModelCache {
     cacheKey: string
   ): Promise<void> {
     try {
+      console.log(`[PlayerModelCache] Carregando modelo base: ${modelPath}`);
       const FBXLoader = await this.getFBXLoader();
       const loader = new FBXLoader();
 
       // Carrega modelo base
       const baseModel = await loader.loadAsync(modelPath);
+      console.log(`[PlayerModelCache] Modelo base baixado e parseado: ${modelPath}`);
 
       // Normaliza escala e orientação
       this.normalizeModel(baseModel);
@@ -120,9 +123,11 @@ class PlayerModelCache {
         error: false,
       });
 
-      console.log(`Modelo carregado: ${modelPath} com ${baseAnimations.size} animações`);
+      console.log(
+        `[PlayerModelCache] ✓ Modelo carregado: ${modelPath} com ${baseAnimations.size} animações (${Array.from(baseAnimations.keys()).join(", ") || "nenhuma"})`
+      );
     } catch (error) {
-      console.error(`Erro ao carregar modelo ${modelPath}:`, error);
+      console.error(`[PlayerModelCache] ✗ Erro ao carregar modelo ${modelPath}:`, error);
       this.cache.set(cacheKey, {
         baseModel: new THREE.Group(),
         baseAnimations: new Map(),
@@ -137,19 +142,23 @@ class PlayerModelCache {
    * Normaliza o modelo para escala e orientação consistentes
    */
   private normalizeModel(model: THREE.Group): void {
-    // Ajuste de escala baseado no modelo Ch38
-    model.scale.set(0.01, 0.01, 0.01);
-
-    // Centraliza o modelo
+    // Mixamo exporta em centímetros (~178 de altura) — escala para metros.
+    // IMPORTANTE: medir ANTES de escalar. Em SkinnedMesh, o Box3 de
+    // setFromObject usa o bounding box skinned (calculado com os bones, que já
+    // carregam a escala do root) e aplica matrixWorld por cima — medir depois
+    // da escala aplica 0.01 DUAS vezes e zera os offsets.
+    model.updateWorldMatrix(false, true);
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
-    model.position.sub(center);
 
-    // Ajusta altura para que o pé fique no Y=0
-    model.position.y = -box.min.y * 0.01;
+    const escala = 0.01;
+    model.scale.set(escala, escala, escala);
+    model.rotation.y = Math.PI; // facing +Z
 
-    // Rotação padrão para facing +Z
-    model.rotation.y = Math.PI;
+    // position é aplicada no espaço do pai (metros, após escala) e DEPOIS da
+    // rotação do conteúdo local: ponto final = position + R(π)·escala·p, logo
+    // os offsets de centro em x/z entram positivos e o pé (min.y) negativo.
+    model.position.set(center.x * escala, -box.min.y * escala, center.z * escala);
   }
 
   /**
@@ -171,26 +180,34 @@ class PlayerModelCache {
     const cached = this.cache.get(cacheKey);
 
     if (!cached || !cached.loaded || cached.error) {
-      console.warn(`Modelo ${modelPath} não disponível para clonagem`);
+      console.warn(`[PlayerModelCache] Modelo ${modelPath} não disponível para clonagem`);
       return null;
     }
 
-    // Clona o modelo base com skeleton e skinning
-    const clonedGroup = cached.baseModel.clone(true);
-    const mixer = new THREE.AnimationMixer(clonedGroup);
+    // SkinnedMesh NÃO sobrevive a Object3D.clone() (os bones do clone continuam
+    // apontando para o esqueleto original — o modelo fica travado na bind pose).
+    // SkeletonUtils.clone re-vincula esqueleto e skinning corretamente.
+    const inner = skeletonClone(cached.baseModel) as THREE.Group;
+
+    // Wrapper externo: o MatchEngine sobrescreve position/rotation.y do group a
+    // cada frame; a normalização (escala/offset/rotação) fica protegida no inner.
+    const wrapper = new THREE.Group();
+    wrapper.add(inner);
+
+    const mixer = new THREE.AnimationMixer(inner);
 
     // Aplica cores do time
-    this.applyTeamColors(clonedGroup, primaryColor, secondaryColor, isKeeper);
+    this.applyTeamColors(inner, primaryColor, secondaryColor, isKeeper);
 
-    // Adiciona marker se controlado
+    // Adiciona marker se controlado (no wrapper — fica no chão, fora da escala do modelo)
     let marker: THREE.Mesh | undefined;
     if (isControlled) {
       marker = this.createControlMarker();
-      clonedGroup.add(marker);
+      wrapper.add(marker);
     }
 
     return {
-      group: clonedGroup,
+      group: wrapper,
       mixer,
       animations: new Map(cached.baseAnimations),
       marker,
@@ -210,25 +227,21 @@ class PlayerModelCache {
     const secondary = new THREE.Color(isKeeper ? "#1b1b1b" : secondaryColor);
 
     group.traverse((object) => {
-      if (object instanceof THREE.Mesh && object.material) {
-        const material = object.material as THREE.MeshStandardMaterial;
+      if (!(object instanceof THREE.Mesh) || !object.material) return;
+      const meshName = object.name.toLowerCase();
+      let target: THREE.Color | null = null;
+      if (meshName.includes("shirt")) target = primary;
+      else if (meshName.includes("shorts") || meshName.includes("socks")) target = secondary;
+      else if (meshName.includes("shoes")) target = secondary.clone().multiplyScalar(0.35);
+      if (!target) return; // corpo/cabelo/etc: mantém a textura original
 
-        // Preserva texturas existentes, modifica apenas a cor base
-        if (material.map) {
-          // Tem textura - mantém e apenas ajusta tint se necessário
-          material.color.setHex(0xffffff);
-        } else {
-          // Sem textura - aplica cor sólida
-          // Heurística: materiais com nome contendo "shirt", "body", "torso" -> primary
-          // "shorts", "pants", "legs" -> secondary
-          const name = material.name?.toLowerCase() || "";
-          if (name.includes("shirt") || name.includes("body") || name.includes("torso")) {
-            material.color.copy(primary);
-          } else if (name.includes("short") || name.includes("pant") || name.includes("leg")) {
-            material.color.copy(secondary);
-          }
-        }
-      }
+      // O material é COMPARTILHADO entre os meshes do modelo, com o cache e
+      // com os outros clones: clonar antes de pintar, senão todos os
+      // jogadores ficariam com a cor do último time processado.
+      const material = (object.material as THREE.MeshStandardMaterial).clone();
+      material.color.copy(target);
+      material.userData["ownMaterial"] = true;
+      object.material = material;
     });
   }
 
@@ -262,6 +275,12 @@ class PlayerModelCache {
     innerMarker.rotation.x = -Math.PI / 2;
     innerMarker.position.y = 0.06;
     marker.add(innerMarker);
+
+    // Geometria/material próprios (não vêm do cache) — seguros para dispose.
+    for (const m of [marker, innerMarker]) {
+      m.userData["ownGeometry"] = true;
+      (m.material as THREE.Material).userData["ownMaterial"] = true;
+    }
 
     return marker;
   }

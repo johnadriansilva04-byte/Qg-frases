@@ -35,7 +35,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
         shortName: homeTeam.short,
         formation: "4-4-2",
         colors: { primary: homeTeam.primary ?? "#ff0000", secondary: homeTeam.secondary ?? "#ffffff" },
-        players: generateMockPlayers(homeTeam, "home"),
+        players: generateMockPlayers(homeTeam),
       },
       away: {
         id: awayTeam.id,
@@ -43,7 +43,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
         shortName: awayTeam.short,
         formation: "4-4-2",
         colors: { primary: awayTeam.primary ?? "#0000ff", secondary: awayTeam.secondary ?? "#ffffff" },
-        players: generateMockPlayers(awayTeam, "away"),
+        players: generateMockPlayers(awayTeam),
       },
       controlledSide: fixture.homeId === userTeam.id ? "home" : "away",
       controlledPlayerId: fixture.homeId === userTeam.id ? homeTeam.id + "_player_10" : awayTeam.id + "_player_10",
@@ -87,25 +87,55 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
   );
 }
 
+const NOMES = [
+  "Rafael", "Thiago", "Lucas", "Gabriel", "Matheus", "Pedro", "Caio", "Bruno",
+  "André", "Felipe", "Diego", "Rodrigo", "Vinícius", "Gustavo", "Leandro",
+  "Fábio", "Marcelo", "Renato", "Igor", "Daniel", "Eduardo", "Fernando",
+];
+const SOBRENOMES = [
+  "Silva", "Santos", "Souza", "Lima", "Costa", "Rocha", "Alves", "Ribeiro",
+  "Carvalho", "Ferreira", "Martins", "Barbosa", "Cardoso", "Teixeira",
+];
+
+/** Hash determinístico (FNV-1a) — mesma semente, mesmo elenco, em todo F5. */
+function hashStr(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
 /**
- * Gera jogadores fictícios para o motor 3D.
- * TODO: Integrar com o sistema real de jogadores quando existir.
+ * Gera o elenco de um clube para o motor 3D de forma DETERMINÍSTICA:
+ * derivada do id/power reais do time (a força do clube da carreira define o
+ * nível dos jogadores), com variação por hash — nunca aleatório (o elenco
+ * não pode mudar entre telas nem entre F5). Quando existir um sistema de
+ * jogadores nomeados por clube, esta função deve ser substituída por ele.
  */
-function generateMockPlayers(team: Team, side: "home" | "away") {
+function generateMockPlayers(team: Team) {
   const roles: Array<"GK" | "DF" | "MF" | "FW"> = ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "MF", "FW", "FW"];
-  return roles.map((role, idx) => ({
-    id: `${team.id}_player_${idx}`,
-    name: `Jogador ${idx + 1}`,
-    number: idx + 1,
-    role,
-    attributes: {
-      pace: 50 + Math.floor(Math.random() * 40),
-      shooting: 40 + Math.floor(Math.random() * 50),
-      passing: 40 + Math.floor(Math.random() * 50),
-      defending: 40 + Math.floor(Math.random() * 50),
-      physical: 40 + Math.floor(Math.random() * 50),
-      technique: 40 + Math.floor(Math.random() * 50),
-      stamina: 70 + Math.floor(Math.random() * 30),
-    },
-  }));
+  // power do clube (28-88) → nível base dos atributos do elenco (30-80)
+  const base = 30 + Math.round(((team.power - 28) / 60) * 50);
+  return roles.map((role, idx) => {
+    const h = hashStr(`${team.id}:${idx}`);
+    const variacao = (attr: number) => ((h >>> (attr * 4)) % 21) - 10; // -10..+10 por atributo
+    const attr = (v: number) => Math.max(25, Math.min(95, base + v));
+    return {
+      id: `${team.id}_player_${idx}`,
+      name: `${NOMES[h % NOMES.length]} ${SOBRENOMES[(h >>> 8) % SOBRENOMES.length]}`,
+      number: idx + 1,
+      role,
+      attributes: {
+        pace: attr(variacao(0) + (role === "FW" ? 8 : role === "GK" ? -6 : 0)),
+        shooting: attr(variacao(1) + (role === "FW" ? 10 : role === "MF" ? 2 : -8)),
+        passing: attr(variacao(2) + (role === "MF" ? 8 : role === "GK" ? -4 : 0)),
+        defending: attr(variacao(3) + (role === "DF" ? 10 : role === "GK" ? 6 : -8)),
+        physical: attr(variacao(4) + (role === "DF" ? 6 : 0)),
+        technique: attr(variacao(5) + (role === "MF" ? 6 : role === "FW" ? 4 : 0)),
+        stamina: attr(variacao(6) + 15),
+      },
+    };
+  });
 }

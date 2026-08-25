@@ -21,8 +21,9 @@ export class InputSystem {
   private sprintTouch = false;
   /** Queued one-shot actions, consumed by the engine each tick. */
   private queue: EngineAction[] = [];
-  /** Track held pass button for auto-marking. */
-  private passHeld = false;
+  /** Track held pass/shoot buttons (barra de força + auto-marking). */
+  private passHeldState = false;
+  private shootHeldState = false;
   private passHoldTime = 0;
   /** Track tackle button presses for double-tap desarme. */
   private lastTackleTime = 0;
@@ -37,7 +38,11 @@ export class InputSystem {
   }
 
   get isPassHeld() {
-    return this.passHeld;
+    return this.passHeldState;
+  }
+
+  get isShootHeld() {
+    return this.shootHeldState;
   }
 
   get passHoldDuration() {
@@ -59,13 +64,18 @@ export class InputSystem {
       this.keys.add(k);
       if (k === "shift") this.sprintKey = true;
       if (k === " ") {
-        if (!this.passHeld) {
+        if (!this.passHeldState) {
           this.press("pass");
-          this.passHeld = true;
+          this.passHeldState = true;
           this.passHoldTime = 0;
         }
       }
-      if (k === "enter") this.press("shoot");
+      if (k === "enter") {
+        if (!this.shootHeldState) {
+          this.press("shoot");
+          this.shootHeldState = true;
+        }
+      }
       if (k === "backspace") this.press("tackle");
       if (k === "e") this.press("request");
       this.syncKeys();
@@ -75,16 +85,17 @@ export class InputSystem {
       this.keys.delete(k);
       if (k === "shift") this.sprintKey = false;
       if (k === " ") {
-        this.passHeld = false;
+        this.passHeldState = false;
         this.passHoldTime = 0;
       }
+      if (k === "enter") this.shootHeldState = false;
       this.syncKeys();
     };
     const blur = () => {
       this.keys.clear();
       this.sprintKey = false;
-      this.heldPass = false;
-      this.heldShoot = false;
+      this.passHeldState = false;
+      this.shootHeldState = false;
       this.syncKeys();
     };
     target.addEventListener("keydown", down);
@@ -110,8 +121,12 @@ export class InputSystem {
 
   /** Segurar/soltar passe ou chute (botões X/B do mobile). */
   setTouchHold(action: "pass" | "shoot", active: boolean) {
-    if (action === "pass") this.heldPass = active;
-    else this.heldShoot = active;
+    if (action === "pass") {
+      this.passHeldState = active;
+      if (!active) this.passHoldTime = 0;
+    } else {
+      this.shootHeldState = active;
+    }
   }
 
   /** Same entry point used by keyboard and by the mobile A/X/B buttons. */
@@ -150,7 +165,7 @@ export class InputSystem {
     this.detach = null;
     this.keys.clear();
     this.queue = [];
-    this.heldPass = false;
-    this.heldShoot = false;
+    this.passHeldState = false;
+    this.shootHeldState = false;
   }
 }
