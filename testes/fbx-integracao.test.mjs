@@ -69,7 +69,23 @@ ok(/\.clone\(\);\s*\n\s*material\.color\.copy\(target\)/.test(cache), "applyTeam
 ok(!/Math\.random/.test(match3d), "Match3D não usa Math.random (elenco estável no F5)");
 ok(/team\.power/.test(match3d), "elenco 3D deriva do power real do clube");
 
-// 8. Arquivos FBX reais em public
+// 8. Controles/locomoção (regressões corrigidas — não reintroduzir)
+ok(/export function inputParaVetor/.test(engine), "conversão input→vetor é função pura exportada (testável)");
+ok(/dz: mv\.x \* d/.test(engine), "lateral escala por d (A/D consistentes com a câmera nos 2 tempos)");
+ok(!/const dz = -mv\.x/.test(engine), "dz = -mv.x proibido (invertia A/D no 1º tempo)");
+ok(!/rotation\.y = Math\.PI/.test(cache), "rotation.y=π proibido no modelo (Ch38 olha +Z nativamente — π = correr de ré)");
+ok(/speed === 0 && Math\.hypot\(p\.vx, p\.vz\) < 0\.25/.test(engine), "drive zera velocidade residual (sem drift quando idle)");
+ok(/action\.paused = true/.test(engine) && /0\.253/.test(engine), "idle congela no frame ereto medido (nunca corrida em câmera lenta)");
+ok(!/timeScale = clamp\(sp \/ 4\.5, 0\.12/.test(engine), "timeScale mínimo 0.12 proibido (falso slow motion)");
+
+// 9. Goleiro: defesa por alcance espacial, dive como evento, bola nunca atravessa
+ok(/eta < 0\.45/.test(engine), "dive dispara por ETA da bola (não por perseguição)");
+ok(/nasMaos = distBall < 1\.9/.test(engine), "zona das mãos = captura determinística");
+ok(/espalmada/.test(engine), "anel externo sem captura → bola DESVIADA (não atravessa)");
+ok(/p\.state === "save" && p\.stateTimer <= 0/.test(engine), "fim do mergulho → recover");
+ok(!/p\.state = "save";\s*\n\s*\} else/.test(engine) || !/drive\(p, b\.x - p\.x[\s\S]{0,60}p\.state = "save"/.test(engine), "save não é estado de perseguição (dive não toca correndo)");
+
+// 10. Arquivos FBX reais em public
 for (const f of ["Ch38_nonPBR.fbx", "Fast Run.fbx", "Goalkeeper Diving Save.fbx", "Soccer Trip.fbx"]) {
   const p = join(root, "public", f);
   ok(existsSync(p) && statSync(p).size > 100_000, `public/${f} existe e não está vazio`);

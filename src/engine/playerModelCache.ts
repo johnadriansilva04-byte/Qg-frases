@@ -153,12 +153,16 @@ class PlayerModelCache {
 
     const escala = 0.01;
     model.scale.set(escala, escala, escala);
-    model.rotation.y = Math.PI; // facing +Z
+    // SEM rotação: o Ch38 olha +Z nativamente (prova: mixamorig5LeftToeBase
+    // fica em z=+10.2, à frente do tornozelo em z=-3.6). O engine alinha
+    // group.rotation.y = heading = atan2(vx, vz), que assume frente=+Z —
+    // rotacionar π aqui deixava o boneco correndo de ré.
+    model.rotation.y = 0;
 
-    // position é aplicada no espaço do pai (metros, após escala) e DEPOIS da
-    // rotação do conteúdo local: ponto final = position + R(π)·escala·p, logo
-    // os offsets de centro em x/z entram positivos e o pé (min.y) negativo.
-    model.position.set(center.x * escala, -box.min.y * escala, center.z * escala);
+    // position é aplicada no espaço do pai (metros) ANTES da escala do
+    // conteúdo local: ponto final = position + escala·p, logo os offsets
+    // de centro entram negativos e o pé (min.y) sobe para y=0.
+    model.position.set(-center.x * escala, -box.min.y * escala, -center.z * escala);
   }
 
   /**

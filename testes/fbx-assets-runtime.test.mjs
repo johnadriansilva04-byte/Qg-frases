@@ -64,11 +64,19 @@ const rawBox = new Box3().setFromObject(base);
 const rawCenter = rawBox.getCenter(new (Object.getPrototypeOf(rawBox.min).constructor)());
 const ESCALA = 0.01;
 base.scale.set(ESCALA, ESCALA, ESCALA);
-base.rotation.y = Math.PI;
-base.position.set(rawCenter.x * ESCALA, -rawBox.min.y * ESCALA, rawCenter.z * ESCALA);
+base.rotation.y = 0; // Ch38 olha +Z nativamente (prova: LeftToeBase à frente em +Z)
+base.position.set(-rawCenter.x * ESCALA, -rawBox.min.y * ESCALA, -rawCenter.z * ESCALA);
 const alturaM = (rawBox.max.y - rawBox.min.y) * ESCALA;
 ok(alturaM > 1.5 && alturaM < 2.1, `altura normalizada ≈ humanoide (${alturaM.toFixed(2)}m)`);
 ok(Math.abs(-rawBox.min.y * ESCALA - base.position.y) < 1e-9, "offset de pé-no-chão aplicado");
+
+// Orientação nativa: os dedos do pé ficam À FRENTE (+Z) do tornozelo.
+const bone = (n) => { let b; base.traverse((o) => { if (o.name === n) b = o; }); return b; };
+const v1 = new (Object.getPrototypeOf(rawBox.min).constructor)();
+const v2 = new (Object.getPrototypeOf(rawBox.min).constructor)();
+bone("mixamorig5LeftFoot").getWorldPosition(v1);
+bone("mixamorig5LeftToeBase").getWorldPosition(v2);
+ok(v2.z > v1.z + 0.05, `modelo olha +Z nativamente (toe.z=${v2.z.toFixed(3)} > ankle.z=${v1.z.toFixed(3)}) — heading=atan2(vx,vz) alinha sem rotação extra`);
 
 // Clone SkeletonUtils + wrapper (mesma forma do cloneRig)
 const inner = SkeletonUtils.clone(base);
@@ -77,7 +85,7 @@ const wrapper = new Group();
 wrapper.add(inner);
 wrapper.position.set(5, 0, -3);
 wrapper.rotation.y = 1.2;
-ok(Math.abs(inner.rotation.y - Math.PI) < 1e-9 || true, "rotação do inner preservada");
+ok(Math.abs(inner.rotation.y) < 1e-9, "inner sem rotação (frente +Z nativa — nunca π, senão corre de ré)");
 const innerWorldScale = inner.getWorldScale?.(new (await import("three")).Vector3());
 ok(Math.abs(innerWorldScale.x - 0.01) < 1e-6, "escala 0.01 sobrevive dentro do wrapper");
 

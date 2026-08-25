@@ -43,6 +43,18 @@ interface Sim {
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/**
+ * Input → vetor no mundo, derivado da CÂMERA (ela fica atrás do jogador
+ * olhando para d·X): frente da tela = d·X, direita da tela = d·Z
+ * (right = forward × up = (d,0,0)×(0,1,0) = (0,0,d)). Sem o `d` no eixo
+ * lateral, A/D invertiam no 1º tempo e "desinvertiam" no 2º.
+ *   W (y>0) → +d·X (frente)   S (y<0) → −d·X (trás)
+ *   D (x>0) → +d·Z (direita)  A (x<0) → −d·Z (esquerda)
+ */
+export function inputParaVetor(mv: { x: number; y: number }, d: 1 | -1): { dx: number; dz: number } {
+  return { dx: mv.y * d, dz: mv.x * d };
+}
+
 export interface EngineCallbacks {
   onEvent?: (e: MatchEvent) => void;
   onState?: (s: MatchLiveState) => void;
@@ -269,9 +281,9 @@ export class MatchEngine {
   }
 
   /** +1 means this side attacks towards +x. */
-  private dir(side: TeamSide) {
-    const homeDir = this.half === 1 ? 1 : -1;
-    return side === "home" ? homeDir : -homeDir;
+  private dir(side: TeamSide): 1 | -1 {
+    const homeDir: 1 | -1 = this.half === 1 ? 1 : -1;
+    return side === "home" ? homeDir : homeDir === 1 ? -1 : 1;
   }
 
   private slotWorld(p: Sim, ballX: number) {
@@ -429,6 +441,12 @@ export class MatchEngine {
     const accel = p.state === "slide" ? 2 : 14;
     p.vx = lerp(p.vx, tx, clamp(accel * dt, 0, 1));
     p.vz = lerp(p.vz, tz, clamp(accel * dt, 0, 1));
+    // Sem alvo, o lerp converge assintoticamente e nunca zera — a velocidade
+    // residual mantinha a animação de corrida viva (falso slow motion).
+    if (speed === 0 && Math.hypot(p.vx, p.vz) < 0.25) {
+      p.vx = 0;
+      p.vz = 0;
+    }
   }
 
   private separate() {
@@ -458,15 +476,7 @@ export class MatchEngine {
     const actions = this.input.consume();
     const d = this.dir(p.side);
     const mv = this.input.move;
-    // Move vector: x = right/left, y = forward/back
-    // Standard WASD mapping:
-    // W (y>0) = forward toward goal = attack direction on X axis
-    // S (y<0) = backward toward own goal = opposite attack direction on X axis
-    // A (x<0) = left = negative Z
-    // D (x>0) = right = positive Z
-    // Invert Z for camera perspective
-    const dx = mv.y * d;
-    const dz = -mv.x;
+    const { dx, dz } = inputParaVetor(mv, d);
 
     const wantsSprint = this.input.sprint && Math.hypot(mv.x, mv.y) > 0.1 && p.stamina > 2;
     let speed = this.maxSpeed(p) * (wantsSprint ? 1.28 : 1);
@@ -687,25 +697,69 @@ export class MatchEngine {
     }
 
     const distBall = Math.hypot(p.x - b.x, p.z - b.z);
-    if (insideBox && distBall < 9 && (!this.ball.owner || this.ball.owner.side !== p.side)) {
+    const bolaLivre = !this.ball.owner || this.ball.owner.side !== p.side;
+    const bolaVindoAoGol = this.ball.vel.x * d < -2; // vel.x com sinal de −d = indo ao gol do keeper
+    const speedBola = this.ball.vel.length();
+
+    // Dive: dispara quando a bola livre está chegando no alcance — nunca como
+    // "estado de perseguição" (antes o dive tocava em loop enquanto corria).
+    if (p.state !== "save" && p.state !== "recover" && p.actionCooldown <= 0 && bolaLivre) {
+      const eta = speedBola > 1 ? distBall / speedBola : Infinity;
+      if (distBall < 4.2 && b.y < 3.0 && (eta < 0.45 || (distBall < 2.5 && bolaVindoAoGol))) {
+        p.state = "save";
+        p.stateTimer = 0.65;
+        // Impulso do mergulho na direção da bola (lateral se ela vem aberta).
+        const dirZ = Math.abs(b.z - p.z) > 0.4 ? Math.sign(b.z - p.z) : 0;
+        p.vx = (b.x - p.x) * 1.6;
+        p.vz = dirZ * 6.5;
+        p.heading = Math.atan2(b.x - p.x, b.z - p.z);
+        // Força o re-disparo do one-shot (o clip pode já ser "save" vindo de
+        // um recover recente — sem resetar, o segundo mergulho não anima).
+        p.currentAnimation = undefined;
+      }
+    }
+
+    if (p.state === "save" || p.state === "recover") {
+      // Durante o mergulho o corpo segue o impulso; recover fica parado.
+      if (p.state === "recover") this.drive(p, 0, 0, 0, dt);
+    } else if (insideBox && distBall < 9 && bolaLivre) {
       this.drive(p, b.x - p.x, b.z - p.z, this.maxSpeed(p) * 0.95, dt);
-      p.state = "save";
+      p.state = "run";
     } else {
       this.drive(p, targetX - p.x, targetZ - p.z, this.maxSpeed(p) * 0.7, dt);
       p.state = Math.hypot(p.vx, p.vz) < 0.4 ? "idle" : "run";
     }
 
-    // Save attempt
-    if (distBall < 2.3 && b.y < 2.6 && !this.ball.owner) {
-      const skill = 0.45 + p.data.attributes.defending / 250;
-      if (Math.random() < skill) {
+    // Interação bola×goleiro por ALCANCE ESPACIAL (não sorteio por frame):
+    // zona das mãos = captura certa; anel externo = defesa com skill e, mesmo
+    // na falha, a bola é DESVIADA — nunca atravessa o goleiro impune.
+    if (bolaLivre && !this.ball.owner) {
+      const nasMaos = distBall < 1.9 && b.y < 2.4;
+      const noAlcance = distBall < 3.0 && b.y < 3.0 && p.state === "save";
+      if (nasMaos || (noAlcance && Math.random() < 0.45 + p.data.attributes.defending / 250)) {
         this.ball.owner = p;
         this.ball.lastToucher = p;
+        this.ball.vel.set(0, 0, 0);
         p.stats.touches++;
         p.stats.rating = clamp(p.stats.rating + 0.25, 0, 10);
         p.actionCooldown = 0.9;
+        p.state = "recover";
+        p.stateTimer = 0.5;
         this.emit({ type: "save", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
+      } else if (noAlcance) {
+        // Espana/defende com o corpo: rebate a bola para fora com perda.
+        this.ball.lastToucher = p;
+        this.ball.vel.x = -this.ball.vel.x * 0.35;
+        this.ball.vel.z += Math.sign(b.z - p.z || 1) * 3;
+        this.ball.vel.y = Math.max(this.ball.vel.y, 2.5);
+        p.actionCooldown = 0.6;
+        this.emit({ type: "save", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name, detail: "espalmada" });
       }
+    }
+    // Fim do mergulho → recuperação → jogo normal.
+    if (p.state === "save" && p.stateTimer <= 0) {
+      p.state = "recover";
+      p.stateTimer = 0.5;
     }
   }
 
@@ -1323,11 +1377,26 @@ export class MatchEngine {
       p.currentAnimation = animationName;
     }
 
-    // A corrida acompanha a velocidade real: parado vira jog leve no lugar
-    // (não existe clip de idle nos assets), correr/sprint acelera o clip.
+    // A corrida acompanha a velocidade real (correr/sprint acelera o clip).
+    // Parado NÃO é slow motion: os assets não têm clip de idle (provado: os
+    // embutidos do modelo base são T-pose), então a passada termina no frame
+    // mais ereto do ciclo (t≈0.253s: pés juntos, medido no arquivo real) e a
+    // action PAUSA ali — boneco efetivamente parado, de pé.
     if (p.currentAnimation === "run" && rig.currentAction) {
       const sp = Math.hypot(p.vx, p.vz);
-      rig.currentAction.timeScale = clamp(sp / 4.5, 0.12, 1.4);
+      const action = rig.currentAction;
+      if (sp < 0.35) {
+        const dur = action.getClip().duration;
+        const tm = action.time % dur;
+        if (Math.abs(tm - 0.253) < 0.06) {
+          action.paused = true;
+        } else if (!action.paused) {
+          action.timeScale = 1.2; // termina a passada rápido, sem camera lenta
+        }
+      } else {
+        action.paused = false;
+        action.timeScale = clamp(sp / 4.5, 0.35, 1.4);
+      }
     }
 
     // Anima marker se existir
@@ -1342,6 +1411,10 @@ export class MatchEngine {
   private mapStateToAnimation(state: PlayerState): string {
     switch (state) {
       case "save":
+        return "save";
+      case "recover":
+        // Após o mergulho, o goleiro continua no clip de defesa (a parte de
+        // levantamento) em vez de cortar direto para a corrida.
         return "save";
       case "slide":
         return "trip";
