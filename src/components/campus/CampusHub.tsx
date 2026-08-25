@@ -11,6 +11,7 @@ import {
   Lock,
   Sparkles,
   TrendingUp,
+  BrainCircuit,
 } from "lucide-react";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 import { salvareEstadoCidadelaHelper, salvareSovHelper } from "./campusHelpers";
@@ -28,6 +29,7 @@ import {
 import type { Atividade, EstudanteState } from "./types";
 import { CURSOS } from "./types";
 import { SovBankApp } from "@/components/financial/SovBankApp";
+import { IQTestComponent } from "./desenvolvimento-brio/teste-qi";
 
 const TRACO_LABEL: Record<string, string> = {
   diligente: "Diligente",
@@ -58,6 +60,7 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
   const [ultimoDesfecho, setUltimoDesfecho] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [sovBankAberto, setSovBankAberto] = useState(false);
+  const [iqTestAberto, setIqTestAberto] = useState(false);
 
   const estudando = perfil?.profissao_atual === "estudante";
   const estado: EstudanteState = useMemo(() => {
@@ -245,6 +248,16 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
               <p className="text-sm text-muted-foreground">Livro-caixa central da Cidadela.</p>
             </div>
           </button>
+          <button
+            onClick={() => setIqTestAberto(true)}
+            className="flex items-center gap-3 rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-4 transition hover:border-emerald-500 hover:bg-emerald-500/20"
+          >
+            <BrainCircuit className="h-5 w-5 text-emerald-500" />
+            <div>
+              <p className="font-bold text-foreground">Desenvolvimento do Brio</p>
+              <p className="text-sm text-muted-foreground">Teste de QI procedural.</p>
+            </div>
+          </button>
           <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-surface/30 p-4 opacity-60">
             <Lock className="h-5 w-5 text-muted-foreground" />
             <div>
@@ -300,6 +313,25 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
             </div>
             <div className="p-4">
               <SovBankApp userId={userId} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {iqTestAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-6xl rounded-2xl border border-emerald-500/50 bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <h2 className="text-lg font-black text-foreground">Desenvolvimento do Brio - Teste de QI</h2>
+              <button
+                onClick={() => setIqTestAberto(false)}
+                className="rounded-lg border border-border/50 p-2 text-muted-foreground transition hover:bg-muted"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-4">
+              <IQTestComponent showSolution={true} />
             </div>
           </div>
         </div>
