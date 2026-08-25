@@ -148,9 +148,9 @@ try {
   await sleep(1000);
   await clicarTexto(page, "button", "JOGADOR");
   await sleep(4000);
-  ok(/INICIAR PARTIDA/i.test(await texto(page)), "intro 3D carregou");
+  ok(/INICIAR DISPUTA/i.test(await texto(page)), "intro 3D carregou (disputa de cobranças)");
 
-  await clicarTexto(page, "button", "INICIAR PARTIDA");
+  await clicarTexto(page, "button", "INICIAR DISPUTA");
   await sleep(4000);
 
   const engineOk = await page.evaluate(() => !!window.__engine3d);
@@ -163,165 +163,66 @@ try {
   const s0 = await page.evaluate(() => {
     const e = window.__engine3d;
     const me = e.players.find((p) => p.isControlled);
-    return { me: !!me, ball: !!e.ball, camY: e.camera.position.y };
+    const gk = e.players.find((p) => p.isKeeper);
+    return { total: e.players.length, me: !!me, gk: !!gk, camY: e.camera.position.y, phase: e.phase };
   });
-  ok(s0.me, "jogador controlado existe");
-  ok(s0.ball, "bola existe");
-  ok(s0.camY >= 1.6 && s0.camY <= 8, `câmera em altura de jogador (${s0.camY.toFixed(2)})`);
+  ok(s0.total === 2, `só 2 atores em campo — cobrador + goleiro (${s0.total})`);
+  ok(s0.me, "cobrador controlado existe");
+  ok(s0.gk, "goleiro existe");
+  ok(s0.camY >= 1.6 && s0.camY <= 8, `câmera atrás da bola (${s0.camY.toFixed(2)}m de altura)`);
+  ok(s0.phase === "aim", `disputa abre aguardando o swipe (phase=${s0.phase})`);
 
-  await sleep(1500);
-  const m1 = await page.evaluate(() => window.__engine3d.minute);
-  await sleep(1500);
-  const m2 = await page.evaluate(() => window.__engine3d.minute);
-  ok(m2 > m1, `relógio avançando (${m1.toFixed(1)} → ${m2.toFixed(1)})`);
-
-  const olhar = await page.evaluate(() => {
-    const e = window.__engine3d;
-    const me = e.players.find((p) => p.isControlled);
-    e.ball.owner = null;
-    e.ball.pos.set(me.x + 5, 0.11, me.z + 3);
-    const antes = me.heading;
-    return new Promise((res) => setTimeout(() => res({ antes, depois: me.heading }), 400));
+  // 15 cobranças via SWIPE REAL de mouse sobre o canvas (o mesmo caminho de
+  // pointer events do dedo no celular), alternando os cantos.
+  const box = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
   });
-  ok(Math.abs(olhar.depois - olhar.antes) > 0.01, `jogador girou suavemente para a bola (${olhar.antes.toFixed(2)} → ${olhar.depois.toFixed(2)})`);
-
-  // Carga de passe: a partida da IA segue rolando (gol/freeze podem zerar o
-  // estado no meio da leitura) — tenta até 4×, observando a CONDIÇÃO de
-  // sucesso a cada frame em vez de esperar uma janela fixa.
-  const cargaFinal = await page.evaluate(
-    () =>
-      new Promise((res) => {
-        const e = window.__engine3d;
-        const me = e.players.find((p) => p.isControlled);
-        let tentativa = 0;
-        const tentar = () => {
-          tentativa++;
-          e.ball.owner = me;
-          e.freeze = 0;
-          me.actionCooldown = 0;
-          e.input.setTouchHold("pass", true);
-          const ini = Date.now();
+  const indices = [];
+  let bolaMoveu = 0;
+  for (let i = 1; i <= 15; i++) {
+    await page.waitForFunction(() => window.__engine3d?.phase === "aim", { timeout: 20000 });
+    const antes = await page.evaluate(() => ({ idx: window.__engine3d.shotIndex, gols: window.__engine3d.playerGoals }));
+    ok(antes.idx === i, `contador na cobrança ${i}/15 (nunca pula nem duplica)`);
+    const sx = box.x + box.w / 2;
+    const sy = box.y + box.h * 0.72;
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    await page.mouse.move(sx + (i % 2 === 0 ? 150 : -150), sy - box.h * 0.35, { steps: 8 });
+    await page.mouse.up();
+    // a bola TEM que sair do lugar durante o voo
+    const voo = await page.evaluate(
+      () =>
+        new Promise((res) => {
+          const e = window.__engine3d;
+          const t0 = Date.now();
           const poll = setInterval(() => {
-            if (e.freeze > 0 || me.actionCooldown > 0 || e.ball.owner !== me) {
-              // estado interrompido pela partida — reforça e segue observando
-              e.ball.owner = me;
-              e.freeze = 0;
-              me.actionCooldown = 0;
-            }
-            if (e.charging === "pass" && e.charge > 0.05) {
+            const v = e.ball.vel.length();
+            if (v > 3 || e.phase !== "flight") {
               clearInterval(poll);
-              res({
-                charging: e.charging,
-                charge: e.charge,
-                barraVisivel: e.powerBar?.sprite.visible,
-                hudCharge: document.body.innerHTML.includes("Força"),
-              });
-            } else if (Date.now() - ini > 2500) {
+              res({ v, phase: e.phase });
+            } else if (Date.now() - t0 > 3000) {
               clearInterval(poll);
-              if (tentativa < 4) tentar();
-              else
-                res({
-                  charging: e.charging,
-                  charge: e.charge,
-                  barraVisivel: e.powerBar?.sprite.visible,
-                  hudCharge: document.body.innerHTML.includes("Força"),
-                });
+              res({ v, phase: e.phase });
             }
-          }, 50);
-        };
-        tentar();
-      }),
-  );
-  ok(cargaFinal.charging === "pass", "carga de passe ativa");
-  ok(cargaFinal.charge > 0, `barra carregando (${cargaFinal.charge.toFixed(2)})`);
-  ok(cargaFinal.barraVisivel === true, "barra 3D visível acima da cabeça");
-  // O HUD React pode não ter re-renderizado ainda — verifica a barra 3D (que é
-  // síncrona com o engine) como proxy da funcionalidade de carga.
-  ok(cargaFinal.barraVisivel || cargaFinal.hudCharge, "barra de força visível (3D ou HUD)");
-
-  const passe = await page.evaluate(() => {
-    const e = window.__engine3d;
-    const me = e.players.find((p) => p.isControlled);
-    e.input.setTouchHold("pass", false);
-    return new Promise((res) =>
-      setTimeout(() => res({ passes: me.stats.passes, owner: e.ball.owner === me }), 300),
+          }, 40);
+        }),
     );
-  });
-  ok(passe.passes >= 1, `passe executado (${passe.passes})`);
-  ok(!passe.owner, "bola saiu do jogador");
+    if (voo.v > 3) bolaMoveu++;
+    indices.push(antes.idx);
+  }
+  ok(bolaMoveu === 15, `bola saiu do chão nas 15 cobranças (${bolaMoveu}/15)`);
+  ok(indices.every((v, i) => v === i + 1), "contador 1→15 íntegro, sem pular nem duplicar");
 
-  // Chute: mesmo padrão da carga — observa o sucesso frame a frame (até 4×).
-  const chuteFinal = await page.evaluate(
-    () =>
-      new Promise((res) => {
-        const e = window.__engine3d;
-        const me = e.players.find((p) => p.isControlled);
-        const shotsInicial = me.stats.shots;
-        let tentativa = 0;
-        const tentar = () => {
-          tentativa++;
-          e.ball.owner = me;
-          e.freeze = 0;
-          me.actionCooldown = 0;
-          e.input.setTouchHold("shoot", true);
-          const ini = Date.now();
-          const poll = setInterval(() => {
-            if (e.freeze > 0 || me.actionCooldown > 0 || e.ball.owner !== me) {
-              if (me.stats.shots <= shotsInicial) {
-                e.ball.owner = me;
-                e.freeze = 0;
-                me.actionCooldown = 0;
-              }
-            }
-            // carregou → solta para executar o chute
-            if (e.charging === "shoot" && e.charge > 0.3) {
-              e.input.setTouchHold("shoot", false);
-            }
-            if (me.stats.shots > shotsInicial) {
-              clearInterval(poll);
-              e.input.setTouchHold("shoot", false);
-              setTimeout(
-                () => res({ shots: me.stats.shots, owner: e.ball.owner === me }),
-                200,
-              );
-            } else if (Date.now() - ini > 2500) {
-              clearInterval(poll);
-              e.input.setTouchHold("shoot", false);
-              if (tentativa < 4) tentar();
-              else res({ shots: me.stats.shots, owner: e.ball.owner === me });
-            }
-          }, 50);
-        };
-        tentar();
-      }),
-  );
-  ok(chuteFinal.shots >= 1, `chute executado (${chuteFinal.shots})`);
-  // A velocidade é capturada 200ms após o chute — a bola pode já ter sido
-  // freada pela física ou pega por outro jogador. O que importa é que o
-  // chute foi registrado (shots>=1) e a bola saiu do jogador.
-  ok(!chuteFinal.owner, "bola saiu do jogador após o chute");
-
-  const fisica = await page.evaluate(() => {
+  // A 15ª cobrança encerra a disputa sozinha → tela de fim de jogo.
+  await page.waitForFunction(() => window.__engine3d?.phase === "finished", { timeout: 20000 });
+  const fim = await page.evaluate(() => {
     const e = window.__engine3d;
-    // Zera a IA para não interferir: remove todos os jogadores exceto o controlado
-    const me = e.players.find((p) => p.isControlled);
-    e.players = [me];
-    e.ball.owner = null;
-    e.ball.vel.set(15, 0, 0);
-    e.ball.pos.set(0, 0.11, 0);
-    const v0 = e.ball.vel.length();
-    return new Promise((res) =>
-      setTimeout(() => {
-        const v1 = e.ball.vel.length();
-        setTimeout(() => res({ v0, v1, v2: e.ball.vel.length() }), 500);
-      }, 500),
-    );
+    return { score: { ...e.score }, playerGoals: e.playerGoals, opp: e.opponentGoals, shots: e.opponentShots };
   });
-  ok(fisica.v1 < fisica.v0 && fisica.v2 < fisica.v1, `desaceleração progressiva (${fisica.v0.toFixed(1)} → ${fisica.v1.toFixed(1)} → ${fisica.v2.toFixed(1)})`);
-  ok(fisica.v1 > 0, "bola não parou instantaneamente");
-
-  await clicarTexto(page, "button", "Encerrar");
-  await sleep(1500);
+  ok(fim.shots === 15, `adversário também cobrou 15 (${fim.shots}/15)`);
+  ok(fim.score.home + fim.score.away === fim.playerGoals + fim.opp, "placar = soma dos gols da disputa");
+  await sleep(1200);
   ok(/FIM DE JOGO/i.test(await texto(page)), "tela de fim de jogo 3D");
   await clicarTexto(page, "button", "CONTINUAR");
   await sleep(5000);

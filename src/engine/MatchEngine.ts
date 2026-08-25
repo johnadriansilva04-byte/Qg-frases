@@ -1,9 +1,22 @@
 import * as THREE from "three";
-import { FIELD, buildField } from "./field";
-import { formationSlots } from "./formations";
-import { InputSystem } from "./input";
-import { createBallMesh, createPlayerRig, createPlayerRigFBX, createPlayerRigWithFallback, type PlayerRig } from "./playerModel";
+import { buildField, FIELD } from "./field";
+import { createBallMesh, createPlayerRigWithFallback, type PlayerRig } from "./playerModel";
 import { playerModelCache, FBX_PATHS } from "./playerModelCache";
+import { InputSystem } from "./input";
+import {
+  TOTAL_COBRANCAS,
+  DESFECHO_ROTULO,
+  tipoDaCobranca,
+  distanciaDaCobranca,
+  swipeParaChute,
+  alcanceGoleiro,
+  escolherMergulhoGoleiro,
+  calcularDesfecho,
+  resolverCobrancaAdversaria,
+  type ChuteParams,
+  type Desfecho,
+  type SwipeInput,
+} from "./cobrancas";
 import type {
   MatchEvent,
   MatchLiveState,
@@ -11,49 +24,8 @@ import type {
   MatchPlayerStats,
   MatchResult,
   MatchSetup,
-  MatchTeamInput,
   TeamSide,
 } from "./types";
-
-type PlayerState = "idle" | "run" | "sprint" | "pass" | "shoot" | "slide" | "recover" | "celebrate" | "save";
-
-interface Sim {
-  data: MatchPlayerInput;
-  side: TeamSide;
-  rig: PlayerRig;
-  x: number;
-  z: number;
-  vx: number;
-  vz: number;
-  heading: number;
-  state: PlayerState;
-  stateTimer: number;
-  stamina: number;
-  isControlled: boolean;
-  isKeeper: boolean;
-  slot: { nx: number; nz: number };
-  animPhase: number;
-  actionCooldown: number;
-  stats: MatchPlayerStats;
-  // Propriedades para sistema de animações FBX
-  currentAnimation?: string | undefined;
-  currentAction?: THREE.AnimationAction | undefined;
-}
-
-const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-/**
- * Input → vetor no mundo, derivado da CÂMERA (ela fica atrás do jogador
- * olhando para d·X): frente da tela = d·X, direita da tela = d·Z
- * (right = forward × up = (d,0,0)×(0,1,0) = (0,0,d)). Sem o `d` no eixo
- * lateral, A/D invertiam no 1º tempo e "desinvertiam" no 2º.
- *   W (y>0) → +d·X (frente)   S (y<0) → −d·X (trás)
- *   D (x>0) → +d·Z (direita)  A (x<0) → −d·Z (esquerda)
- */
-export function inputParaVetor(mv: { x: number; y: number }, d: 1 | -1): { dx: number; dz: number } {
-  return { dx: mv.y * d, dz: mv.x * d };
-}
 
 export interface EngineCallbacks {
   onEvent?: (e: MatchEvent) => void;
@@ -61,78 +33,107 @@ export interface EngineCallbacks {
   onFinish?: (r: MatchResult) => void;
 }
 
+type Fase = "aim" | "flight" | "outcome" | "finished";
+type EstadoAtor = "idle" | "run" | "save" | "recover" | "celebrate";
+
+/** Ator da disputa: só existem DOIS — o cobrador (controlado) e o goleiro. */
+interface Ator {
+  rig: PlayerRig;
+  data: MatchPlayerInput;
+  side: TeamSide;
+  x: number;
+  z: number;
+  heading: number;
+  state: EstadoAtor;
+  stateTimer: number;
+  isKeeper: boolean;
+  isControlled: boolean;
+  saves: number;
+  currentAnimation?: string | undefined;
+}
+
+interface CobrancaEmVoo {
+  chute: ChuteParams;
+  keeperZ: number;
+  alcance: number;
+  desfecho: Desfecho;
+  tFlight: number;
+  resolvido: boolean;
+}
+
+const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/**
+ * MOTOR DA DISPUTA DE COBRANÇAS (pênaltis + faltas).
+ *
+ * Escopo cirúrgico: a partida NÃO é mais futebol em tempo real. O jogador
+ * executa 15 cobranças por SWIPE (direção + força + elevação); o adversário
+ * tem 15 cobranças resolvidas deterministicamente (nunca exibidas). O
+ * contrato público (MatchSetup → MatchResult, mesma classe/callbacks) é
+ * preservado — carreira, SOV e persistência não foram tocados.
+ *
+ * Reutilizados do motor anterior: campo/estádio (buildField), bola
+ * (createBallMesh + física de gravidade/quique), rigs FBX com fallback
+ * procedural (createPlayerRigWithFallback + playerModelCache), o clip de
+ * defesa do goleiro e a regra de alcance espacial da defesa.
+ *
+ * Removidos do fluxo (não fazem mais parte do jogo): corrida, movimentação
+ * livre, carrinho, desarme, contato físico, IA de linha, posse, drible,
+ * passes, marcação, tática, impedimento, laterais/escanteios.
+ */
 export class MatchEngine {
   readonly input = new InputSystem();
 
-  private renderer: THREE.WebGLRenderer;
-  private scene = new THREE.Scene();
+  private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
-  private players: Sim[] = [];
-  private ball = {
-    pos: new THREE.Vector3(0, 0.11, 0),
-    vel: new THREE.Vector3(),
-    mesh: createBallMesh(),
-    owner: null as Sim | null,
-    lastToucher: null as Sim | null,
-    kickLock: 0,
-  };
+  private renderer: THREE.WebGLRenderer;
+  private quality: "low" | "high";
 
-  private raf = 0;
-  private last = 0;
-  private stateAcc = 0;
+  private ball: { mesh: THREE.Mesh; pos: THREE.Vector3; vel: THREE.Vector3 };
+  private keeper!: Ator;
+  private taker!: Ator;
+  /** Exposto para ferramentas de depuração/E2E (os DOIS atores da disputa). */
+  readonly players: Ator[] = [];
+
+  private events: MatchEvent[] = [];
+  private score = { home: 0, away: 0 };
+
+  // ---- Estado da disputa ----
+  private phase: Fase = "aim";
+  private shotIndex = 1; // 1..TOTAL_COBRANCAS (cobrança atual do jogador)
+  private playerGoals = 0;
+  private opponentShots = 0;
+  private opponentGoals = 0;
+  private advResults: Desfecho[] = [];
+  private voo: CobrancaEmVoo | null = null;
+  private outcomeTimer = 0;
+  private lastOutcome: string | undefined;
+  private opponentFeed: string | undefined;
+
   private running = false;
   private finished = false;
-  private freeze = 0;
-  private minute = 0;
-  private half: 1 | 2 = 1;
-  private score = { home: 0, away: 0 };
-  private possTicks = { home: 0, away: 0 };
-  private shots = { home: 0, away: 0 };
-  private events: MatchEvent[] = [];
-  private minutesPerHalf: number;
-  private realSecondsPerHalf: number;
-  private minutesPerSecond: number;
-  private quality: "low" | "high";
+  private raf = 0;
+  private last = 0;
   private resizeObs: ResizeObserver | null = null;
-  /** Carga do chute/passe (barra de força): tipo segurado + valor 0..1. */
-  private charging: "pass" | "shoot" | null = null;
-  private charge = 0;
-  private powerBar: {
-    sprite: THREE.Sprite;
-    ctx: CanvasRenderingContext2D;
-    tex: THREE.CanvasTexture;
-  } | null = null;
+
+  /** Linha discreta de dica de trajetória (visível só durante o arraste). */
+  private aimLine: THREE.Line;
+  private aimLineGeo: THREE.BufferGeometry;
+
+  private readonly goalX = -FIELD.halfLength; // gol atacado (sempre -x)
 
   constructor(
     private canvas: HTMLCanvasElement,
     private setup: MatchSetup,
     private cb: EngineCallbacks = {}
   ) {
-    this.canvas = canvas;
-    this.setup = setup;
-    this.cb = cb;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.5, 400);
     this.ball = {
       mesh: createBallMesh(),
       pos: new THREE.Vector3(0, 0.11, 0),
       vel: new THREE.Vector3(0, 0, 0),
-      owner: null,
-      lastToucher: null,
-      kickLock: 0,
     };
-    this.players = [];
-    this.events = [];
-    this.score = { home: 0, away: 0 };
-    this.minute = 0;
-    this.minutesPerHalf = setup.minutesPerHalf ?? 45;
-    this.realSecondsPerHalf = setup.realSecondsPerHalf ?? 120;
-    this.minutesPerSecond = this.minutesPerHalf / this.realSecondsPerHalf;
-    this.running = false;
-    this.finished = false;
-    this.raf = 0;
-    this.last = 0;
-    this.freeze = 0;
 
     const mobile = Math.min(window.innerWidth, window.innerHeight) < 700;
     this.quality = mobile ? "low" : "high";
@@ -149,21 +150,41 @@ export class MatchEngine {
     this.renderer.toneMappingExposure = 1.2;
 
     this.camera = new THREE.PerspectiveCamera(mobile ? 62 : 55, 16 / 9, 0.5, 400);
-    this.camera.position.set(0, 14, -26);
 
     buildField(this.scene, this.quality);
     this.scene.add(this.ball.mesh);
-    this.createPowerBar();
 
-    // Preload modelos FBX de forma assíncrona (não bloqueia a inicialização)
+    // Dica de trajetória (linha discreta bola → alvo previsto).
+    this.aimLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(),
+      new THREE.Vector3(),
+    ]);
+    this.aimLine = new THREE.Line(
+      this.aimLineGeo,
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 })
+    );
+    this.aimLine.visible = false;
+    this.scene.add(this.aimLine);
+
+    // Preload dos modelos FBX (upgrade-in-place quando chegar).
     this.preloadModels().catch((err: unknown) => {
-      console.warn("Falha no preload de modelos FBX, usando fallback procedural:", err);
+      console.warn("[MatchEngine] Preload FBX falhou — rigs procedurais:", err);
     });
 
-    this.spawnTeam(setup.home, "home");
-    this.spawnTeam(setup.away, "away");
+    this.spawnAtores();
 
-    this.input.attachKeyboard(window);
+    // Resultados do adversário: pré-computados e DETERMINÍSTICOS (matchId +
+    // índice) — F5 nunca transforma nem duplica uma cobrança.
+    const atk = this.mediaAttr(this.timeAdversario().players, "shooting", (p) => p.role === "FW");
+    const gkDef = this.timeControlado().players[0]?.attributes.defending ?? 60;
+    this.advResults = Array.from({ length: TOTAL_COBRANCAS }, (_, i) =>
+      resolverCobrancaAdversaria(setup.matchId, i + 1, atk, gkDef)
+    );
+
+    // Swipe: dedo OU mouse sobre o canvas; soltar = cobrar.
+    this.input.attachSwipe(canvas);
+    this.input.onSwipeEnd = (s) => this.executarCobranca(s);
+
     this.handleResize();
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObs = new ResizeObserver(() => this.handleResize());
@@ -174,1397 +195,569 @@ export class MatchEngine {
     // Gancho de teste/depuração: expõe o motor no window (sem custo em prod).
     (window as unknown as { __engine3d?: MatchEngine }).__engine3d = this;
 
-    this.resetPositions("home");
-    this.emit({ type: "kickoff", minute: 0, detail: `${setup.home.name} x ${setup.away.name}` });
+    this.setupCobranca();
+    this.emit({
+      type: "kickoff",
+      minute: 0,
+      detail: `${setup.home.name} x ${setup.away.name} — disputa de cobranças`,
+    });
   }
 
   // ---------------------------------------------------------------- setup
 
-  /**
-   * Preload assíncrono dos modelos FBX e animações
-   */
+  private timeControlado() {
+    return this.setup.controlledSide === "home" ? this.setup.home : this.setup.away;
+  }
+
+  private timeAdversario() {
+    return this.setup.controlledSide === "home" ? this.setup.away : this.setup.home;
+  }
+
+  private mediaAttr(
+    players: MatchPlayerInput[],
+    attr: keyof MatchPlayerInput["attributes"],
+    filtro?: (p: MatchPlayerInput) => boolean
+  ): number {
+    const lista = filtro ? players.filter(filtro) : players;
+    const base = lista.length ? lista : players;
+    if (!base.length) return 60;
+    return base.reduce((s, p) => s + p.attributes[attr], 0) / base.length;
+  }
+
+  private spawnAtores() {
+    const meu = this.timeControlado();
+    const adv = this.timeAdversario();
+    const cobradorData =
+      meu.players.find((p) => p.id === this.setup.controlledPlayerId) ??
+      meu.players[meu.players.length - 1]!;
+    const goleiroData = adv.players[0]!; // primeiro do elenco é o goleiro
+
+    const rigTaker = createPlayerRigWithFallback(meu.colors.primary, meu.colors.secondary, true, false);
+    const rigKeeper = createPlayerRigWithFallback(adv.colors.primary, adv.colors.secondary, false, true);
+
+    this.taker = {
+      rig: rigTaker,
+      data: cobradorData,
+      side: this.setup.controlledSide,
+      x: 0,
+      z: 0,
+      heading: -Math.PI / 2,
+      state: "idle",
+      stateTimer: 0,
+      isKeeper: false,
+      isControlled: true,
+      saves: 0,
+    };
+    this.keeper = {
+      rig: rigKeeper,
+      data: goleiroData,
+      side: this.setup.controlledSide === "home" ? "away" : "home",
+      x: this.goalX + 0.7,
+      z: 0,
+      heading: Math.PI / 2,
+      state: "idle",
+      stateTimer: 0,
+      isKeeper: true,
+      isControlled: false,
+      saves: 0,
+    };
+    this.players.push(this.taker, this.keeper);
+    this.scene.add(rigTaker.group, rigKeeper.group);
+  }
+
   private async preloadModels(): Promise<void> {
     console.log("[MatchEngine.preloadModels] Iniciando preload de modelos FBX...");
-    console.log("[MatchEngine.preloadModels] Caminho do modelo:", FBX_PATHS.BASE_MODEL);
-
     const animationMap = new Map<string, string>([
       ["run", FBX_PATHS.ANIMATIONS.run],
       ["save", FBX_PATHS.ANIMATIONS.save],
       ["trip", FBX_PATHS.ANIMATIONS.trip],
     ]);
-
-    console.log("[MatchEngine.preloadModels] Animações a carregar:", Array.from(animationMap.entries()));
-
-    try {
-      await playerModelCache.loadModel(FBX_PATHS.BASE_MODEL, animationMap);
-      console.log("[MatchEngine.preloadModels] ✓ Preload de modelos FBX concluído com sucesso");
-      this.upgradeRigsToFBX();
-    } catch (error) {
-      console.error("[MatchEngine.preloadModels] ✗ Erro no preload:", error);
-    }
+    await playerModelCache.loadModel(FBX_PATHS.BASE_MODEL, animationMap);
+    console.log("[MatchEngine.preloadModels] ✓ Preload concluído");
+    this.upgradeRigsToFBX();
   }
 
   /**
-   * Os times nascem procedurais (o spawn é síncrono e o FBX de 50MB chega
-   * depois). Quando o preload termina, troca cada rig procedural pelo FBX
-   * preservando posição/rotação — quem já tinha FBX (cache quente) é ignorado.
+   * Troca rigs procedurais pelos FBX no meio da partida, preservando
+   * posição/rotação — os dois atores ganham o modelo real assim que o
+   * download de 50MB termina.
    */
   private upgradeRigsToFBX() {
-    let upgraded = 0;
-    for (const p of this.players) {
-      if (p.rig.mixer) continue;
-      const colors = this.setup[p.side].colors;
-      const rig = createPlayerRigFBX(colors.primary, colors.secondary, p.isControlled, p.isKeeper);
-      if (!rig) continue;
-      rig.group.position.copy(p.rig.group.position);
-      rig.group.rotation.copy(p.rig.group.rotation);
-      if (this.quality === "high") rig.group.traverse((o) => (o.castShadow = true));
-      this.scene.remove(p.rig.group);
-      // Geometrias procedurais são por-rig (materiais de pele são compartilhados — não tocar).
-      p.rig.group.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.geometry) m.geometry.dispose();
-      });
-      this.scene.add(rig.group);
-      p.rig = rig;
-      p.currentAnimation = undefined;
-      upgraded++;
-    }
-    if (upgraded > 0) {
-      console.log(`[MatchEngine] ✓ ${upgraded} jogadores atualizados para modelos FBX`);
+    for (const a of this.players) {
+      if (a.rig.fbxRig) continue;
+      const cores = a.isControlled ? this.timeControlado().colors : this.timeAdversario().colors;
+      const novo = createPlayerRigWithFallback(cores.primary, cores.secondary, a.isControlled, a.isKeeper);
+      if (!novo.fbxRig) continue;
+      novo.group.position.copy(a.rig.group.position);
+      novo.group.rotation.copy(a.rig.group.rotation);
+      this.scene.remove(a.rig.group);
+      this.scene.add(novo.group);
+      a.rig = novo;
     }
   }
 
-  private spawnTeam(team: MatchTeamInput, side: TeamSide) {
-    const slots = formationSlots(team.formation);
-    team.players.slice(0, 11).forEach((p, i) => {
-      const slot = slots[i] ?? slots[10]!;
-      const isKeeper = i === 0 || p.role === "GK";
-      const isControlled = side === this.setup.controlledSide && p.id === this.setup.controlledPlayerId;
-      // Tenta usar FBX primeiro, com fallback para procedural
-      const rig = createPlayerRigWithFallback(team.colors.primary, team.colors.secondary, isControlled, isKeeper);
-      if (this.quality === "high") rig.group.traverse((o) => (o.castShadow = true));
-      this.scene.add(rig.group);
-      this.players.push({
-        data: p,
-        side,
-        rig,
-        x: 0,
-        z: 0,
-        vx: 0,
-        vz: 0,
-        heading: 0,
-        state: "idle",
-        stateTimer: 0,
-        stamina: 100,
-        isControlled,
-        isKeeper,
-        slot: { nx: slot.nx, nz: slot.nz },
-        animPhase: Math.random() * 6,
-        actionCooldown: 0,
-        stats: {
-          playerId: p.id,
-          name: p.name,
-          side,
-          goals: 0,
-          shots: 0,
-          passes: 0,
-          passesCompleted: 0,
-          tackles: 0,
-          fouls: 0,
-          touches: 0,
-          distanceKm: 0,
-          rating: 6,
-        },
-      });
-    });
-  }
+  /** Posiciona bola, cobrador, goleiro e câmera para a cobrança atual. */
+  private setupCobranca() {
+    const dist = distanciaDaCobranca(this.shotIndex);
+    const bolaX = this.goalX + dist;
 
-  /** +1 means this side attacks towards +x. */
-  private dir(side: TeamSide): 1 | -1 {
-    const homeDir: 1 | -1 = this.half === 1 ? 1 : -1;
-    return side === "home" ? homeDir : homeDir === 1 ? -1 : 1;
-  }
-
-  private slotWorld(p: Sim, ballX: number) {
-    const d = this.dir(p.side);
-    const shift = clamp(ballX * d * 0.35, -14, 16);
-    const x = d * (p.slot.nx * 44) + d * shift;
-    const z = p.slot.nz * 28;
-    return { x: clamp(x, -FIELD.halfLength + 2, FIELD.halfLength - 2), z: clamp(z, -31, 31) };
-  }
-
-  private resetPositions(kickoffSide: TeamSide) {
-    this.ball.pos.set(0, 0.11, 0);
+    this.ball.pos.set(bolaX, 0.11, 0);
     this.ball.vel.set(0, 0, 0);
-    this.ball.owner = null;
-    this.ball.kickLock = 0;
-    for (const p of this.players) {
-      const s = this.slotWorld(p, 0);
-      const d = this.dir(p.side);
-      // Keep everyone in their own half for the kickoff.
-      p.x = p.isKeeper ? d * -(FIELD.halfLength - 1.2) : Math.min(s.x * d, -2) * d;
-      p.z = s.z;
-      p.vx = p.vz = 0;
-      p.state = "idle";
-      p.stateTimer = 0;
-      p.heading = d > 0 ? 0 : Math.PI;
-      p.rig.group.position.set(p.x, 0, p.z);
-    }
-    const starter = this.players.find((p) => p.side === kickoffSide && p.data.role === "FW") ??
-      this.players.find((p) => p.side === kickoffSide && !p.isKeeper)!;
-    starter.x = -0.6 * this.dir(kickoffSide);
-    starter.z = 0.4;
-    this.ball.owner = starter;
-    this.ball.lastToucher = starter;
-    this.freeze = 0.6;
+    this.ball.mesh.position.copy(this.ball.pos);
+
+    this.keeper.x = this.goalX + 0.7;
+    this.keeper.z = 0;
+    this.keeper.heading = Math.PI / 2;
+    this.keeper.state = "idle";
+    this.keeper.stateTimer = 0;
+
+    this.taker.x = bolaX + 2.4;
+    this.taker.z = 1.2;
+    this.taker.heading = -Math.PI / 2;
+    this.taker.state = "idle";
+    this.taker.stateTimer = 0;
+
+    this.voo = null;
+    this.phase = "aim";
+    this.lastOutcome = undefined;
+    this.opponentFeed = undefined;
+    this.aimLine.visible = false;
+
+    // Câmera atrás da bola, voltada para o gol (profundidade de campo).
+    this.camera.position.set(bolaX + 7.5, 3.1, 2.6);
+    this.camera.lookAt(this.goalX, 1.5, 0);
   }
 
   // ---------------------------------------------------------------- loop
 
   start() {
-    if (this.running || this.finished) return;
+    if (this.running) return;
     this.running = true;
     this.last = performance.now();
-    const tick = (now: number) => {
-      this.raf = requestAnimationFrame(tick);
-      const dt = Math.min((now - this.last) / 1000, 0.05);
-      this.last = now;
-      if (this.running) this.update(dt);
+    const loop = (t: number) => {
+      if (!this.running) return;
+      const dt = Math.min(0.05, (t - this.last) / 1000);
+      this.last = t;
+      this.step(dt);
       this.renderer.render(this.scene, this.camera);
+      this.raf = requestAnimationFrame(loop);
     };
-    this.raf = requestAnimationFrame(tick);
+    this.raf = requestAnimationFrame(loop);
   }
 
-  pause() {
-    this.running = false;
-    this.pushState();
-  }
-
-  resume() {
-    if (this.finished) return;
-    this.running = true;
-    this.last = performance.now();
-    this.pushState();
-  }
-
-  private update(dt: number) {
-    if (this.freeze > 0) {
-      this.freeze -= dt;
-      this.input.consume();
-    } else {
-      this.minute += dt * this.minutesPerSecond;
-    }
-
-    // Track pass hold duration for auto-marking
-    if (this.input.isPassHeld) {
-      (this.input as any).passHoldTime += dt;
-    }
-
-    const owner = this.ball.owner;
-    if (owner) this.possTicks[owner.side] += dt;
-
-    for (const p of this.players) {
-      if (p.isControlled) this.updateControlled(p, dt);
-      else this.updateAI(p, dt);
-      this.integrate(p, dt);
-    }
-    this.separate();
-    this.updateBall(dt);
-    this.updateAnimation(dt);
-    this.updateCamera(dt);
-    this.updatePowerBar(this.players.find((p) => p.isControlled));
-
-    // Half / full time
-    if (this.half === 1 && this.minute >= this.minutesPerHalf) {
-      this.half = 2;
-      this.minute = this.minutesPerHalf;
-      this.emit({ type: "halftime", minute: Math.round(this.minute) });
-      this.resetPositions("away");
-    } else if (this.half === 2 && this.minute >= this.minutesPerHalf * 2) {
-      this.finish(false);
-      return;
-    }
-
-    this.stateAcc += dt;
-    if (this.stateAcc > 0.2) {
-      this.stateAcc = 0;
-      this.pushState();
-    }
-  }
-
-  // ---------------------------------------------------------------- movement
-
-  private maxSpeed(p: Sim) {
-    const base = 4.8 + (p.data.attributes.pace / 100) * 3.2;
-    const tired = p.stamina < 25 ? 0.82 : 1;
-    return base * tired;
-  }
-
-  private integrate(p: Sim, dt: number) {
-    p.x += p.vx * dt;
-    p.z += p.vz * dt;
-    p.x = clamp(p.x, -FIELD.halfLength - 2, FIELD.halfLength + 2);
-    p.z = clamp(p.z, -FIELD.halfWidth - 2, FIELD.halfWidth + 2);
-    const sp = Math.hypot(p.vx, p.vz);
-    p.stats.distanceKm += (sp * dt) / 1000;
-    // Orientação do corpo: com a bola, olha para a direção do movimento;
-    // sem a bola, acompanha a bola automaticamente. A rotação é SEMPRE
-    // suave (menor arco) — nunca gira instantaneamente.
-    let alvo = p.heading;
-    if (this.ball.owner === p) {
-      if (sp > 0.4) alvo = Math.atan2(p.vx, p.vz);
-    } else {
-      alvo = Math.atan2(this.ball.pos.x - p.x, this.ball.pos.z - p.z);
-    }
-    let diff = alvo - p.heading;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-    p.heading += diff * clamp(9 * dt, 0, 1);
-    p.rig.group.position.set(p.x, 0, p.z);
-    p.rig.group.rotation.y = p.heading;
-    if (p.stateTimer > 0) {
-      p.stateTimer -= dt;
-      if (p.stateTimer <= 0 && (p.state === "slide" || p.state === "recover")) p.state = "idle";
-    }
-    if (p.actionCooldown > 0) p.actionCooldown -= dt;
-  }
-
-  private drive(p: Sim, dx: number, dz: number, speed: number, dt: number) {
-    const len = Math.hypot(dx, dz);
-    let tx = 0;
-    let tz = 0;
-    if (len > 0.001) {
-      tx = (dx / len) * speed;
-      tz = (dz / len) * speed;
-    }
-    const accel = p.state === "slide" ? 2 : 14;
-    p.vx = lerp(p.vx, tx, clamp(accel * dt, 0, 1));
-    p.vz = lerp(p.vz, tz, clamp(accel * dt, 0, 1));
-    // Sem alvo, o lerp converge assintoticamente e nunca zera — a velocidade
-    // residual mantinha a animação de corrida viva (falso slow motion).
-    if (speed === 0 && Math.hypot(p.vx, p.vz) < 0.25) {
-      p.vx = 0;
-      p.vz = 0;
-    }
-  }
-
-  private separate() {
-    for (let i = 0; i < this.players.length; i++) {
-      for (let j = i + 1; j < this.players.length; j++) {
-        const a = this.players[i]!;
-        const b = this.players[j]!;
-        const dx = b.x - a.x;
-        const dz = b.z - a.z;
-        const d2 = dx * dx + dz * dz;
-        if (d2 > 0.64 || d2 < 1e-6) continue;
-        const d = Math.sqrt(d2);
-        const push = (0.8 - d) / 2;
-        const ux = dx / d;
-        const uz = dz / d;
-        a.x -= ux * push;
-        a.z -= uz * push;
-        b.x += ux * push;
-        b.z += uz * push;
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------- controlled player
-
-  private updateControlled(p: Sim, dt: number) {
-    const actions = this.input.consume();
-    const d = this.dir(p.side);
-    const mv = this.input.move;
-    const { dx, dz } = inputParaVetor(mv, d);
-
-    const wantsSprint = this.input.sprint && Math.hypot(mv.x, mv.y) > 0.1 && p.stamina > 2;
-    let speed = this.maxSpeed(p) * (wantsSprint ? 1.28 : 1);
-    if (p.state === "slide") speed = 0;
-    // Carregando o chute/passe o jogador desacelera (referência: FIFA/UFL).
-    if (this.charging) speed *= 0.55;
-
-    if (wantsSprint) p.stamina = clamp(p.stamina - dt * (10 - p.data.attributes.stamina / 14), 0, 100);
-    else p.stamina = clamp(p.stamina + dt * 3.5, 0, 100);
-
-    // Auto-marking when holding pass button
-    if (this.input.isPassHeld && (this.input as any).passHoldTime > 0.5) {
-      // Find nearest opponent to mark
-      let nearestOpponent: Sim | null = null;
-      let nearestDist = Infinity;
-      for (const o of this.players) {
-        if (o.side === p.side) continue;
-        const dist = Math.hypot(o.x - p.x, o.z - p.z);
-        if (dist < nearestDist && dist < 8) {
-          nearestDist = dist;
-          nearestOpponent = o;
+  private step(dt: number) {
+    for (const a of this.players) {
+      if (a.stateTimer > 0) {
+        a.stateTimer -= dt;
+        if (a.stateTimer <= 0 && (a.state === "save" || a.state === "recover" || a.state === "run")) {
+          a.state = "idle";
         }
       }
-      if (nearestOpponent) {
-        // Move towards opponent to mark
-        const markDx = nearestOpponent.x - p.x;
-        const markDz = nearestOpponent.z - p.z;
-        this.drive(p, markDx, markDz, speed * 0.9, dt);
-      }
-    } else if (p.state === "slide") {
-      this.slideStep(p, dt);
-    } else {
-      this.drive(p, dx, dz, Math.hypot(mv.x, mv.y) > 0.08 ? speed : 0, dt);
-      p.state = Math.hypot(p.vx, p.vz) < 0.5 ? "idle" : wantsSprint ? "sprint" : "run";
     }
 
-    // Barra de força: segurar ESPAÇO/ENTER (ou X/B no toque) com a bola
-    // carrega; soltar executa. Toque rápido = carga mínima (passe curto).
-    if (this.ball.owner === p && this.freeze <= 0) {
-      const want: "pass" | "shoot" | null = this.input.isShootHeld
-        ? "shoot"
-        : this.input.isPassHeld
-          ? "pass"
-          : null;
-      if (want) {
-        if (this.charging !== want) {
-          this.charging = want;
-          this.charge = 0;
-        }
-        this.charge = clamp(this.charge + dt / 1.1, 0, 1);
-      } else if (this.charging) {
-        const c = Math.max(this.charge, 0.12);
-        if (this.charging === "pass") this.doPass(p, c);
-        else this.doShot(p, c);
-        this.charging = null;
-        this.charge = 0;
-      }
-    } else if (this.charging) {
-      // Perdeu a bola no meio da carga — cancela sem chutar.
-      this.charging = null;
-      this.charge = 0;
-    }
-
-    for (const a of actions) {
-      if (this.freeze > 0) break;
-      // Botão ainda segurado → o press vira CARGA (a execução acontece no
-      // release, com a força acumulada). Toque rápido cai aqui com a flag já
-      // solta e dispara na hora, como antes.
-      if (a === "pass" && this.ball.owner === p && !this.input.isPassHeld) this.doPass(p);
-      else if (a === "shoot" && this.ball.owner === p && !this.input.isShootHeld) this.doShot(p);
-      else if (a === "tackle") {
-        if ((this.input as any).isDoubleTackle) {
-          // Double-tap tackle: more aggressive desarme
-          this.aggressiveTackle(p);
-        } else {
-          this.startSlide(p);
+    if (this.phase === "aim") this.updateAim();
+    else if (this.phase === "flight") this.updateFlight(dt);
+    else if (this.phase === "outcome") {
+      this.outcomeTimer -= dt;
+      this.updateBallFisica(dt); // bola rola/assenta durante o resultado
+      if (this.outcomeTimer <= 0) {
+        if (this.shotIndex >= TOTAL_COBRANCAS) this.finish(false);
+        else {
+          this.shotIndex++;
+          this.setupCobranca();
         }
       }
-      else if (a === "request" && this.ball.owner && this.ball.owner.side === p.side && this.ball.owner !== p) {
-        this.doRequestBall(p);
-      }
     }
+
+    this.updateAtores(dt);
+    this.emitState();
   }
 
-  // ---------------------------------------------------------------- AI
+  // ---------------------------------------------------------------- aim
 
-  private nearestBall(side?: TeamSide) {
-    let best: Sim | null = null;
-    let bd = Infinity;
-    for (const p of this.players) {
-      if (side && p.side !== side) continue;
-      if (p.isKeeper) continue;
-      const d = Math.hypot(p.x - this.ball.pos.x, p.z - this.ball.pos.z);
-      if (d < bd) {
-        bd = d;
-        best = p;
-      }
+  private updateAim() {
+    const drag = this.input.swipeDrag;
+    if (!drag.active) {
+      this.aimLine.visible = false;
+      return;
     }
-    return best;
+    // Prévia do chute com o arraste atual (dica discreta, sem mira complexa).
+    const preview = swipeParaChute(
+      {
+        dx: drag.cx - drag.sx,
+        dy: drag.cy - drag.sy,
+        dtMs: Math.max(16, performance.now() - drag.t0),
+      },
+      tipoDaCobranca(this.shotIndex),
+      this.taker.data.attributes.shooting
+    );
+    const pts = this.aimLineGeo.attributes["position"] as THREE.BufferAttribute;
+    pts.setXYZ(0, this.ball.pos.x, this.ball.pos.y, this.ball.pos.z);
+    pts.setXYZ(1, this.goalX, clamp(preview.alvoY, 0.2, 3.6), clamp(preview.alvoZ, -4.4, 4.4));
+    pts.needsUpdate = true;
+    this.aimLine.visible = true;
   }
 
-  private updateAI(p: Sim, dt: number) {
-    p.stamina = clamp(p.stamina + dt * 2, 0, 100);
-    if (p.state === "slide") {
-      this.slideStep(p, dt);
-      return;
-    }
-    if (p.isKeeper) return this.updateKeeper(p, dt);
+  // ---------------------------------------------------------------- cobrança
 
-    const b = this.ball.pos;
-    const d = this.dir(p.side);
-    const owner = this.ball.owner;
-    const slot = this.slotWorld(p, b.x);
-    const distBall = Math.hypot(p.x - b.x, p.z - b.z);
-    const chaser = this.nearestBall(p.side);
-    const speed = this.maxSpeed(p);
+  /** Entrada do swipe (dedo/mouse) — também usada pelo gancho de depuração. */
+  executarCobranca(swipe: SwipeInput) {
+    if (this.phase !== "aim" || this.finished) return;
+    const tipo = tipoDaCobranca(this.shotIndex);
+    const chute = swipeParaChute(swipe, tipo, this.taker.data.attributes.shooting);
+    const keeperZ = escolherMergulhoGoleiro(`${this.setup.matchId}:${this.shotIndex}`);
+    const alcance = alcanceGoleiro(this.keeper.data.attributes.defending, chute.forca);
+    const desfecho = calcularDesfecho(
+      { z: chute.alvoZ, y: chute.alvoY },
+      chute.forca,
+      keeperZ,
+      alcance,
+      FIELD.goalHalfWidth,
+      FIELD.goalHeight
+    );
 
-    if (owner === p) {
-      // Carrying the ball: drive at goal, then decide pass or shot.
-      const goalX = d * FIELD.halfLength;
-      const toGoal = Math.hypot(goalX - p.x, 0 - p.z);
-      const pressure = this.players.some(
-        (o) => o.side !== p.side && Math.hypot(o.x - p.x, o.z - p.z) < 2.6
-      );
-      
-      // Look for teammates ahead to pass to
-      let bestTeammate: Sim | null = null;
-      let bestScore = -Infinity;
-      for (const tm of this.players) {
-        if (tm.side !== p.side || tm === p || tm.isKeeper) continue;
-        const tmToGoal = Math.hypot(goalX - tm.x, 0 - tm.z);
-        const distToTM = Math.hypot(tm.x - p.x, tm.z - p.z);
-        // Prefer teammates closer to goal and not too far
-        if (tmToGoal < toGoal && distToTM < 25 && distToTM > 3) {
-          const score = (toGoal - tmToGoal) - distToTM * 0.3;
-          if (score > bestScore) {
-            bestScore = score;
-            bestTeammate = tm;
-          }
-        }
-      }
-      
-      if (bestTeammate && (pressure || toGoal > 18)) {
-        // Pass to teammate
-        this.drive(p, bestTeammate.x - p.x, bestTeammate.z - p.z, speed * 0.85, dt);
-      } else {
-        this.drive(p, goalX - p.x, -p.z * 0.35, speed * 0.92, dt);
-      }
-      p.state = "run";
-      if (p.actionCooldown <= 0) {
-        if (toGoal < 22 && (p.data.attributes.shooting > 55 || toGoal < 14)) this.doShot(p);
-        else if (pressure || Math.random() < dt * 1.2) this.doPass(p);
-      }
-      return;
-    }
+    // Balística: velocidade exata para atingir o alvo no plano do gol.
+    const dist = Math.abs(this.ball.pos.x - this.goalX);
+    const velHoriz = 13 + chute.forca * 17; // 13..30 m/s
+    const T = clamp(dist / velHoriz, 0.45, 1.7);
+    const g = 22;
+    this.ball.vel.set(
+      (this.goalX - this.ball.pos.x) / T,
+      (chute.alvoY - this.ball.pos.y + 0.5 * g * T * T) / T,
+      (chute.alvoZ - this.ball.pos.z) / T
+    );
 
-    const teamHasBall = owner ? owner.side === p.side : false;
+    // Goleiro reage: mergulho no canto sorteado (determinístico).
+    this.keeper.state = "save";
+    this.keeper.stateTimer = 1.2;
+    this.keeper.heading = Math.atan2(this.ball.pos.x - this.keeper.x, chute.alvoZ - this.keeper.z);
 
-    if (!owner) {
-      // Loose ball: closest player of each team contests it.
-      if (p === chaser && distBall < 30) {
-        this.drive(p, b.x - p.x, b.z - p.z, speed, dt);
-        p.state = distBall > 6 ? "sprint" : "run";
-        return;
-      }
-    } else if (!teamHasBall) {
-      // Defending
-      if (p === chaser && distBall < 26) {
-        this.drive(p, owner.x - p.x, owner.z - p.z, speed, dt);
-        p.state = "sprint";
-        if (distBall < 1.6 && p.actionCooldown <= 0 && Math.random() < dt * 2.5) this.startSlide(p);
-        return;
-      }
-      // Mark the nearest opponent in your zone, otherwise hold a covering line.
-      let mark: Sim | null = null;
-      let md = 12;
-      for (const o of this.players) {
-        if (o.side === p.side || o.isKeeper) continue;
-        const dd = Math.hypot(o.x - slot.x, o.z - slot.z);
-        if (dd < md) {
-          md = dd;
-          mark = o;
-        }
-      }
-      const tx = mark ? lerp(mark.x, slot.x, 0.35) - d * 1.2 : slot.x - d * 4;
-      const tz = mark ? lerp(mark.z, slot.z, 0.35) : slot.z;
-      this.drive(p, tx - p.x, tz - p.z, speed * 0.8, dt);
-      p.state = Math.hypot(p.vx, p.vz) < 0.5 ? "idle" : "run";
-      return;
-    } else {
-      // Attacking without the ball: offer support / make runs.
-      const supportX = clamp(lerp(slot.x, b.x + d * 9, 0.5), -FIELD.halfLength + 6, FIELD.halfLength - 6);
-      const supportZ = lerp(slot.z, b.z, 0.25);
-      this.drive(p, supportX - p.x, supportZ - p.z, speed * 0.78, dt);
-      p.state = Math.hypot(p.vx, p.vz) < 0.5 ? "idle" : "run";
-      return;
-    }
+    // Cobrador: pequena arrancada de cobrança.
+    this.taker.state = "run";
+    this.taker.stateTimer = 0.5;
 
-    this.drive(p, slot.x - p.x, slot.z - p.z, speed * 0.7, dt);
-    p.state = Math.hypot(p.vx, p.vz) < 0.5 ? "idle" : "run";
-  }
+    this.voo = { chute, keeperZ, alcance, desfecho, tFlight: 0, resolvido: false };
+    this.phase = "flight";
+    this.aimLine.visible = false;
 
-  private updateKeeper(p: Sim, dt: number) {
-    const d = this.dir(p.side);
-    const b = this.ball.pos;
-    const goalX = d * -(FIELD.halfLength - 0.8);
-    const insideBox = d < 0 ? b.x > FIELD.halfLength - 20 : b.x < -FIELD.halfLength + 20;
-    const targetZ = clamp(b.z * 0.55, -5, 5);
-    let targetX = goalX;
-    if (insideBox) targetX = goalX + d * Math.min(6, Math.abs(b.x - goalX) * 0.35);
-
-    if (this.ball.owner === p) {
-      // Play it out quickly.
-      p.state = "idle";
-      this.drive(p, 0, 0, 0, dt);
-      if (p.actionCooldown <= 0) this.doPass(p, 0.8, true);
-      return;
-    }
-
-    const distBall = Math.hypot(p.x - b.x, p.z - b.z);
-    const bolaLivre = !this.ball.owner || this.ball.owner.side !== p.side;
-    const bolaVindoAoGol = this.ball.vel.x * d < -2; // vel.x com sinal de −d = indo ao gol do keeper
-    const speedBola = this.ball.vel.length();
-
-    // Dive: dispara quando a bola livre está chegando no alcance — nunca como
-    // "estado de perseguição" (antes o dive tocava em loop enquanto corria).
-    if (p.state !== "save" && p.state !== "recover" && p.actionCooldown <= 0 && bolaLivre) {
-      const eta = speedBola > 1 ? distBall / speedBola : Infinity;
-      if (distBall < 4.2 && b.y < 3.0 && (eta < 0.45 || (distBall < 2.5 && bolaVindoAoGol))) {
-        p.state = "save";
-        p.stateTimer = 0.65;
-        // Impulso do mergulho na direção da bola (lateral se ela vem aberta).
-        const dirZ = Math.abs(b.z - p.z) > 0.4 ? Math.sign(b.z - p.z) : 0;
-        p.vx = (b.x - p.x) * 1.6;
-        p.vz = dirZ * 6.5;
-        p.heading = Math.atan2(b.x - p.x, b.z - p.z);
-        // Força o re-disparo do one-shot (o clip pode já ser "save" vindo de
-        // um recover recente — sem resetar, o segundo mergulho não anima).
-        p.currentAnimation = undefined;
-      }
-    }
-
-    if (p.state === "save" || p.state === "recover") {
-      // Durante o mergulho o corpo segue o impulso; recover fica parado.
-      if (p.state === "recover") this.drive(p, 0, 0, 0, dt);
-    } else if (insideBox && distBall < 9 && bolaLivre) {
-      this.drive(p, b.x - p.x, b.z - p.z, this.maxSpeed(p) * 0.95, dt);
-      p.state = "run";
-    } else {
-      this.drive(p, targetX - p.x, targetZ - p.z, this.maxSpeed(p) * 0.7, dt);
-      p.state = Math.hypot(p.vx, p.vz) < 0.4 ? "idle" : "run";
-    }
-
-    // Interação bola×goleiro por ALCANCE ESPACIAL (não sorteio por frame):
-    // zona das mãos = captura certa; anel externo = defesa com skill e, mesmo
-    // na falha, a bola é DESVIADA — nunca atravessa o goleiro impune.
-    if (bolaLivre && !this.ball.owner) {
-      const nasMaos = distBall < 1.9 && b.y < 2.4;
-      const noAlcance = distBall < 3.0 && b.y < 3.0 && p.state === "save";
-      if (nasMaos || (noAlcance && Math.random() < 0.45 + p.data.attributes.defending / 250)) {
-        this.ball.owner = p;
-        this.ball.lastToucher = p;
-        this.ball.vel.set(0, 0, 0);
-        p.stats.touches++;
-        p.stats.rating = clamp(p.stats.rating + 0.25, 0, 10);
-        p.actionCooldown = 0.9;
-        p.state = "recover";
-        p.stateTimer = 0.5;
-        this.emit({ type: "save", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
-      } else if (noAlcance) {
-        // Espana/defende com o corpo: rebate a bola para fora com perda.
-        this.ball.lastToucher = p;
-        this.ball.vel.x = -this.ball.vel.x * 0.35;
-        this.ball.vel.z += Math.sign(b.z - p.z || 1) * 3;
-        this.ball.vel.y = Math.max(this.ball.vel.y, 2.5);
-        p.actionCooldown = 0.6;
-        this.emit({ type: "save", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name, detail: "espalmada" });
-      }
-    }
-    // Fim do mergulho → recuperação → jogo normal.
-    if (p.state === "save" && p.stateTimer <= 0) {
-      p.state = "recover";
-      p.stateTimer = 0.5;
-    }
-  }
-
-  // ---------------------------------------------------------------- actions
-
-  private startSlide(p: Sim) {
-    p.state = "slide";
-    p.stateTimer = 0.55;
-    p.actionCooldown = 1.4;
-    const sp = Math.hypot(p.vx, p.vz) || 1;
-    const ux = sp > 0.2 ? p.vx / sp : Math.sin(p.heading);
-    const uz = sp > 0.2 ? p.vz / sp : Math.cos(p.heading);
-    p.vx = ux * 9;
-    p.vz = uz * 9;
-  }
-
-  private aggressiveTackle(p: Sim) {
-    // More aggressive standing tackle - higher chance to win ball, higher foul risk
-    p.state = "slide";
-    p.stateTimer = 0.35;
-    p.actionCooldown = 0.8;
-    
-    // Look for nearest opponent with ball
-    let target: Sim | null = null;
-    let nearestDist = Infinity;
-    for (const o of this.players) {
-      if (o.side === p.side) continue;
-      const dist = Math.hypot(o.x - p.x, o.z - p.z);
-      if (dist < nearestDist && dist < 3) {
-        nearestDist = dist;
-        target = o;
-      }
-    }
-    
-    if (target) {
-      const dx = target.x - p.x;
-      const dz = target.z - p.z;
-      const len = Math.hypot(dx, dz) || 1;
-      p.vx = (dx / len) * 11;
-      p.vz = (dz / len) * 11;
-      
-      // Immediate ball contact check
-      if (this.ball.owner === target) {
-        const win = 0.5 + (p.data.attributes.defending - target.data.attributes.technique) / 150;
-        if (Math.random() < win) {
-          this.ball.owner = null;
-          this.ball.lastToucher = p;
-          this.ball.vel.set((dx / len) * 5, 0.8, (dz / len) * 5);
-          this.ball.kickLock = 0.1;
-          p.stats.tackles++;
-          p.stats.rating = clamp(p.stats.rating + 0.2, 0, 10);
-          this.emit({ type: "tackle", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
-          p.stateTimer = 0.1;
-        } else {
-          this.foul(p, target);
-        }
-      }
-    } else {
-      // No target, just lunge forward
-      const sp = Math.hypot(p.vx, p.vz) || 1;
-      const ux = sp > 0.2 ? p.vx / sp : Math.sin(p.heading);
-      const uz = sp > 0.2 ? p.vz / sp : Math.cos(p.heading);
-      p.vx = ux * 11;
-      p.vz = uz * 11;
-    }
-  }
-
-  private slideStep(p: Sim, dt: number) {
-    p.vx *= 1 - 2.2 * dt;
-    p.vz *= 1 - 2.2 * dt;
-    if (p.stateTimer <= 0) {
-      p.state = "recover";
-      p.stateTimer = 0.45;
-      return;
-    }
-    // Ball contact
-    const db = Math.hypot(p.x - this.ball.pos.x, p.z - this.ball.pos.z);
-    if (db < 1.5 && this.ball.pos.y < 1) {
-      const carrier = this.ball.owner;
-      if (carrier && carrier.side !== p.side) {
-        const win = 0.35 + (p.data.attributes.defending - carrier.data.attributes.technique) / 200;
-        if (Math.random() < win) {
-          this.ball.owner = null;
-          this.ball.lastToucher = p;
-          this.ball.vel.set(Math.sin(p.heading) * 6, 1.2, Math.cos(p.heading) * 6);
-          this.ball.kickLock = 0.15;
-          p.stats.tackles++;
-          p.stats.rating = clamp(p.stats.rating + 0.15, 0, 10);
-          this.emit({ type: "tackle", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
-          p.stateTimer = 0.15;
-        } else {
-          this.foul(p, carrier);
-        }
-      } else if (!carrier) {
-        this.ball.owner = null;
-        this.ball.vel.set(Math.sin(p.heading) * 8, 1, Math.cos(p.heading) * 8);
-        this.ball.lastToucher = p;
-        this.ball.kickLock = 0.2;
-        p.stats.tackles++;
-        p.stateTimer = 0.15;
-      }
-      return;
-    }
-    // Player contact without ball = foul
-    for (const o of this.players) {
-      if (o.side === p.side) continue;
-      if (Math.hypot(o.x - p.x, o.z - p.z) < 1) {
-        this.foul(p, o);
-        return;
-      }
-    }
-  }
-
-  private foul(offender: Sim, victim: Sim) {
-    offender.stats.fouls++;
-    offender.stats.rating = clamp(offender.stats.rating - 0.2, 0, 10);
-    offender.state = "recover";
-    offender.stateTimer = 1;
-    offender.vx = offender.vz = 0;
     this.emit({
-      type: "foul",
+      type: "penalty",
       minute: this.mm(),
-      side: offender.side,
-      playerId: offender.data.id,
-      playerName: offender.data.name,
-      detail: `falta sobre ${victim.data.name}`,
-    });
-    this.ball.pos.set(clamp(victim.x, -50, 50), 0.11, clamp(victim.z, -32, 32));
-    this.ball.vel.set(0, 0, 0);
-    this.ball.owner = victim;
-    this.ball.lastToucher = victim;
-    this.freeze = 0.5;
-  }
-
-  private doRequestBall(requester: Sim) {
-    const owner = this.ball.owner;
-    if (!owner || owner.side !== requester.side || owner === requester) return;
-    
-    // Calculate pass direction from owner to requester
-    const dx = requester.x - owner.x;
-    const dz = requester.z - owner.z;
-    const dist = Math.hypot(dx, dz);
-    
-    if (dist > 35) return; // Too far
-    
-    const power = Math.min(dist * 0.35 + 8, 18);
-    const angle = Math.atan2(dx, dz);
-    
-    this.ball.owner = null;
-    this.ball.lastToucher = owner;
-    this.ball.vel.set(Math.sin(angle) * power, 1.5, Math.cos(angle) * power);
-    this.ball.kickLock = 0.2;
-    
-    owner.stats.passes++;
-    this.emit({
-      type: "pass",
-      minute: this.mm(),
-      side: owner.side,
-      playerId: owner.data.id,
-      playerName: owner.data.name,
-      detail: `para ${requester.data.name}`,
+      side: this.setup.controlledSide,
+      playerId: this.taker.data.id,
+      playerName: this.taker.data.name,
+      detail: `${tipo} ${this.shotIndex}/${TOTAL_COBRANCAS}`,
     });
   }
 
-  private bestPassTarget(p: Sim) {
-    const d = this.dir(p.side);
-    let best: Sim | null = null;
-    let bestScore = -Infinity;
-    for (const t of this.players) {
-      if (t === p || t.side !== p.side) continue;
-      const dx = t.x - p.x;
-      const dz = t.z - p.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 3 || dist > 42) continue;
-      const forward = (dx * d) / Math.max(dist, 1);
-      let openness = 6;
-      for (const o of this.players) {
-        if (o.side === p.side) continue;
-        const od = Math.hypot(o.x - t.x, o.z - t.z);
-        openness = Math.min(openness, od);
-      }
-      const facing = Math.sin(p.heading) * (dx / dist) + Math.cos(p.heading) * (dz / dist);
-      const score = forward * 4 + openness * 1.2 - dist * 0.12 + facing * 2 + (t.isKeeper ? -6 : 0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = t;
-      }
-    }
-    return best;
+  /** Gancho de depuração/E2E: executa uma cobrança como se fosse um swipe. */
+  debugCobrar(dx: number, dy: number, dtMs = 300) {
+    this.executarCobranca({ dx, dy, dtMs });
   }
 
-  private doPass(p: Sim, charge = 0.4, longKick = false) {
-    const target = this.bestPassTarget(p);
-    if (!target) return;
-    const lead = 0.25;
-    const tx = target.x + target.vx * lead;
-    const tz = target.z + target.vz * lead;
-    const dx = tx - p.x;
-    const dz = tz - p.z;
-    const dist = Math.hypot(dx, dz);
-    const acc = (p.data.attributes.passing + p.data.attributes.technique) / 2;
-    const err = ((100 - acc) / 100) * (dist / 22);
-    const ang = Math.atan2(dx, dz) + (Math.random() - 0.5) * err * 0.5;
-    // Passe rasteiro e controlado: a força vem da barra de carga
-    // (0-30% curto, 30-60% médio, 60-100% forte/longo).
-    const power = clamp(6 + charge * 20 + (longKick ? 6 : 0), 6, longKick ? 34 : 27);
-    const loft = longKick || charge > 0.62 ? 3.2 + charge * 2.2 : 0.9;
+  private updateFlight(dt: number) {
+    const voo = this.voo;
+    if (!voo) return;
+    voo.tFlight += dt;
 
-    this.ball.owner = null;
-    this.ball.kickLock = 0.28;
-    this.ball.lastToucher = p;
-    this.ball.pos.y = 0.15;
-    this.ball.vel.set(Math.sin(ang) * power, loft, Math.cos(ang) * power);
-    p.state = "pass";
-    p.stateTimer = 0.25;
-    p.actionCooldown = 0.45;
-    p.stats.passes++;
-    p.stats.touches++;
-    this.pendingPass = { from: p, to: target };
-    this.emit({
-      type: "pass",
-      minute: this.mm(),
-      side: p.side,
-      playerId: p.data.id,
-      playerName: p.data.name,
-      detail: `para ${target.data.name}`,
-    });
-  }
+    // Goleiro vai ao canto do mergulho.
+    this.keeper.z = lerp(this.keeper.z, voo.keeperZ, clamp(6 * dt, 0, 1));
 
-  private pendingPass: { from: Sim; to: Sim } | null = null;
+    this.updateBallFisica(dt);
 
-  private doShot(p: Sim, charge = 0.5) {
-    const d = this.dir(p.side);
-    const goalX = d * FIELD.halfLength;
-    const dist = Math.hypot(goalX - p.x, -p.z);
-    const acc = p.data.attributes.shooting;
-    
-    // Improved aiming: aim for corners based on shooting skill
-    const spread = (1 - acc / 100) * clamp(dist / 8, 0.4, 3) + 0.25;
-    const aimCorner = acc > 65 && Math.random() < 0.4;
-    const aimZ = aimCorner 
-      ? (Math.random() < 0.5 ? -4.5 : 4.5) + (Math.random() - 0.5) * spread
-      : clamp((Math.random() - 0.5) * 2 * spread, -5, 5);
-    
-    const dx = goalX - p.x;
-    const dz = aimZ - p.z;
-    const len = Math.hypot(dx, dz) || 1;
-    
-    // Power based on distance and shooting attribute
-    const power = clamp(14 + dist * 0.7 + acc / 10, 16, 32);
-    
-    // Ball height - higher for closer shots, lower for power shots
-    const ballHeight = clamp(2.0 + dist * 0.05 + (aimCorner ? 0.8 : 0), 1.8, 4.5);
-
-    this.ball.owner = null;
-    this.ball.kickLock = 0.3;
-    this.ball.lastToucher = p;
-    this.ball.pos.y = 0.2;
-    this.ball.vel.set((dx / len) * power, ballHeight, (dz / len) * power);
-    p.state = "shoot";
-    p.stateTimer = 0.3;
-    p.actionCooldown = 0.7;
-    p.stats.shots++;
-    p.stats.touches++;
-    this.shots[p.side]++;
-    this.pendingPass = null;
-    this.emit({ type: "shot", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
-  }
-
-  // ---------------------------------------------------------------- ball
-
-  private checkOffside(): boolean {
     const b = this.ball;
-    const L = FIELD.halfLength;
-    const last = b.lastToucher;
-    
-    if (!last) return false;
-    
-    // Find the second-last defender (last defender is usually the keeper)
-    const defenders = this.players.filter(p => p.side !== last.side && !p.isKeeper);
-    defenders.sort((a, b) => {
-      const distA = Math.abs(a.x - (last.side === "home" ? -L : L));
-      const distB = Math.abs(b.x - (last.side === "home" ? -L : L));
-      return distA - distB;
-    });
-    
-    if (defenders.length < 2) return false;
-    
-    const secondLastDefender = defenders[1];
-    if (!secondLastDefender) return false;
-    const offsideLine = secondLastDefender.x;
-    
-    // Check if any attacking player is offside
-    for (const p of this.players) {
-      if (p.side === last.side && p !== last && !p.isKeeper) {
-        const attackerInOffsidePosition = (last.side === "home" && p.x > offsideLine) || 
-                                           (last.side === "away" && p.x < offsideLine);
-        
-        if (attackerInOffsidePosition && Math.hypot(p.x - b.pos.x, p.z - b.pos.z) < 3) {
-          // Player is involved in play while offside
-          this.emit({
-            type: "foul",
-            minute: this.mm(),
-            side: last.side,
-            playerId: p.data.id,
-            playerName: p.data.name,
-            detail: "impedimento",
-          });
-          return true;
-        }
-      }
-    }
-    
-    return false;
-  }
+    const keeperPlaneX = this.keeper.x;
 
-  private updateBall(dt: number) {
-    const b = this.ball;
-    if (b.kickLock > 0) b.kickLock -= dt;
-
-    if (b.owner) {
-      const o = b.owner;
-      const ahead = o.state === "idle" ? 0.45 : 0.75;
-      const tx = o.x + Math.sin(o.heading) * ahead;
-      const tz = o.z + Math.cos(o.heading) * ahead;
-      b.pos.x = lerp(b.pos.x, tx, clamp(14 * dt, 0, 1));
-      b.pos.z = lerp(b.pos.z, tz, clamp(14 * dt, 0, 1));
-      b.pos.y = 0.11;
+    // 1) Defesa: bola chega ao alcance do goleiro mergulhado.
+    if (!voo.resolvido && voo.desfecho === "save" && b.pos.x <= keeperPlaneX + 0.9) {
+      b.pos.x = keeperPlaneX + 0.55;
+      b.pos.z = lerp(b.pos.z, this.keeper.z, 0.7);
       b.vel.set(0, 0, 0);
-      b.mesh.position.copy(b.pos);
-      b.mesh.rotation.x -= Math.hypot(o.vx, o.vz) * dt * 3;
-      this.checkGoal();
+      this.keeper.saves++;
+      this.resolver("save");
       return;
     }
 
-    // Physics - rolamento realista: gravidade, quique amortecido e atrito
-    // progressivo do gramado (a bola NUNCA para de forma abrupta).
-    b.vel.y -= 22 * dt; // Stronger gravity
+    // 2) Cruzamento da linha do gol.
+    if (!voo.resolvido && b.pos.x <= this.goalX) {
+      if (voo.desfecho === "goal") {
+        b.pos.x = this.goalX - 0.9; // rede
+        b.vel.multiplyScalar(0.12);
+        this.resolver("goal");
+      } else if (voo.desfecho === "post") {
+        b.pos.x = this.goalX + 0.3;
+        b.vel.x *= -0.45;
+        b.vel.z += Math.sign(voo.chute.alvoZ || 1) * 2.5;
+        b.vel.y = Math.max(b.vel.y, 1.5);
+        this.resolver("post");
+      } else {
+        this.resolver("out"); // bola segue para fora
+      }
+      return;
+    }
+
+    // 3) Segurança: nunca deixar a bola "presa" no ar.
+    if (!voo.resolvido && voo.tFlight > 3) this.resolver("out");
+  }
+
+  /** Física da bola em voo/quique — mesma receita do motor anterior. */
+  private updateBallFisica(dt: number) {
+    const b = this.ball;
+    if (b.vel.lengthSq() < 1e-6) return;
+    b.vel.y -= 22 * dt;
     b.pos.addScaledVector(b.vel, dt);
     if (b.pos.y <= 0.11) {
       b.pos.y = 0.11;
-      if (b.vel.y < 0) b.vel.y = -b.vel.y * 0.45; // quique amortecido
+      if (b.vel.y < 0) b.vel.y = -b.vel.y * 0.45;
       if (Math.abs(b.vel.y) < 0.5) b.vel.y = 0;
-      // Atrito do gramado: perda de velocidade progressiva (~0.85/s) —
-      // passe fraco rola pouco, passe forte percorre distância maior.
       const fr = 1 - 0.85 * dt;
       b.vel.x *= fr;
       b.vel.z *= fr;
     } else {
-      const air = 1 - 0.1 * dt; // resistência do ar
+      const air = 1 - 0.1 * dt;
       b.vel.x *= air;
       b.vel.z *= air;
     }
-    if (Math.hypot(b.vel.x, b.vel.z) < 0.15) {
+    if (Math.hypot(b.vel.x, b.vel.z) < 0.15 && b.pos.y <= 0.11) {
       b.vel.x = 0;
       b.vel.z = 0;
     }
-
-    this.postCollision();
-    if (this.checkGoal()) return;
-    if (this.checkOffside()) {
-      // Offside detected - give ball to defending team
-      const defendingSide = this.ball.lastToucher?.side === "home" ? "away" : "home";
-      this.restart(this.ball.pos.x, this.ball.pos.z, defendingSide, "foul", "impedimento");
-      return;
-    }
-    this.checkOut();
-
-    // Possession pickup
-    if (b.kickLock <= 0 && b.pos.y < 0.9) {
-      let best: Sim | null = null;
-      let bd = 1.15;
-      for (const p of this.players) {
-        if (p.state === "recover") continue;
-        const d = Math.hypot(p.x - b.pos.x, p.z - b.pos.z);
-        if (d < bd) {
-          bd = d;
-          best = p;
-        }
-      }
-      if (best) {
-        const speed = Math.hypot(b.vel.x, b.vel.z);
-        const control = 0.35 + best.data.attributes.technique / 160;
-        if (speed < 12 || Math.random() < control) {
-          if (this.pendingPass && this.pendingPass.to === best && this.pendingPass.from.side === best.side)
-            this.pendingPass.from.stats.passesCompleted++;
-          this.pendingPass = null;
-          b.owner = best;
-          b.lastToucher = best;
-          best.stats.touches++;
-        } else {
-          // Deflection
-          b.vel.multiplyScalar(-0.4);
-          b.kickLock = 0.2;
-        }
-      }
-    }
-
     b.mesh.position.copy(b.pos);
     b.mesh.rotation.x -= b.vel.z * dt * 2;
     b.mesh.rotation.z += b.vel.x * dt * 2;
   }
 
-  private postCollision() {
-    const b = this.ball;
-    const L = FIELD.halfLength;
-    for (const s of [-1, 1]) {
-      if (Math.abs(b.pos.x - s * L) < 0.35 && b.pos.y < FIELD.goalHeight + 0.2) {
-        for (const z of [-FIELD.goalHalfWidth, FIELD.goalHalfWidth]) {
-          if (Math.abs(b.pos.z - z) < 0.24) {
-            b.vel.x *= -0.6;
-            b.vel.z = (b.pos.z - z) * 6;
-            b.pos.x = s * L - s * 0.36;
-            this.emit({ type: "out", minute: this.mm(), detail: "na trave!" });
-            return;
-          }
-        }
-        if (Math.abs(b.pos.z) < FIELD.goalHalfWidth && Math.abs(b.pos.y - FIELD.goalHeight) < 0.2 && b.vel.y > 0) {
-          b.vel.y *= -0.5;
-        }
-      }
+  /** Registra o desfecho, revela a cobrança do adversário e pausa. */
+  private resolver(desfecho: Desfecho) {
+    if (!this.voo || this.voo.resolvido) return;
+    this.voo.resolvido = true;
+
+    if (desfecho === "goal") {
+      this.playerGoals++;
+      this.score[this.setup.controlledSide]++;
+      this.taker.state = "celebrate";
+      this.taker.stateTimer = 1.4;
     }
-  }
+    this.lastOutcome = DESFECHO_ROTULO[desfecho];
 
-  private checkGoal(): boolean {
-    const b = this.ball;
-    const L = FIELD.halfLength;
-    if (Math.abs(b.pos.x) < L + 0.1) return false;
-    if (Math.abs(b.pos.z) > FIELD.goalHalfWidth || b.pos.y > FIELD.goalHeight) return false;
-
-    const scoringSide: TeamSide = b.pos.x > 0 ? (this.dir("home") > 0 ? "home" : "away") : this.dir("home") > 0 ? "away" : "home";
-    this.score[scoringSide]++;
-    const scorer = b.lastToucher && b.lastToucher.side === scoringSide ? b.lastToucher : null;
-    if (scorer) {
-      scorer.stats.goals++;
-      scorer.stats.rating = clamp(scorer.stats.rating + 1.2, 0, 10);
-      scorer.state = "celebrate";
-      scorer.stateTimer = 1.5;
-    }
-    this.emit({
-      type: "goal",
-      minute: this.mm(),
-      side: scoringSide,
-      ...(scorer ? { playerId: scorer.data.id, playerName: scorer.data.name } : {}),
-      detail: `${this.score.home} x ${this.score.away}`,
-    });
-    this.resetPositions(scoringSide === "home" ? "away" : "home");
-    this.freeze = 1.4;
-    return true;
-  }
-
-  private checkOut() {
-    const b = this.ball;
-    const L = FIELD.halfLength;
-    const W = FIELD.halfWidth;
-    const last = b.lastToucher;
-    const other: TeamSide = last ? (last.side === "home" ? "away" : "home") : "home";
-
-    if (Math.abs(b.pos.z) > W) {
-      const z = Math.sign(b.pos.z) * (W - 0.2);
-      this.restart(clamp(b.pos.x, -L + 2, L - 2), z, other, "out", "lateral");
-    } else if (Math.abs(b.pos.x) > L) {
-      const attackingSide = last?.side ?? "home";
-      const towardsOpponentGoal = Math.sign(b.pos.x) === this.dir(attackingSide);
-      
-      // Check for penalty (ball out in goal area)
-      const inGoalArea = Math.abs(b.pos.z) < FIELD.goalHalfWidth + 2;
-      
-      if (inGoalArea && !towardsOpponentGoal) {
-        // Penalty for the attacking team
-        this.restart(Math.sign(b.pos.x) * (L - FIELD.penaltySpot), 0, other, "penalty", "pênalti");
-      } else if (towardsOpponentGoal) {
-        // corner for the attacking team
-        this.restart(Math.sign(b.pos.x) * (L - 0.5), Math.sign(b.pos.z || 1) * (W - 0.5), attackingSide, "corner", "escanteio");
-      } else {
-        this.restart(Math.sign(b.pos.x) * (L - 6), 0, other, "goalkick", "tiro de meta");
-      }
-    }
-  }
-
-  private restart(x: number, z: number, side: TeamSide, type: MatchEvent["type"], detail: string) {
-    this.ball.pos.set(x, 0.11, z);
-    this.ball.vel.set(0, 0, 0);
-    let best: Sim | null = null;
-    let bd = Infinity;
-    for (const p of this.players) {
-      if (p.side !== side) continue;
-      if (type === "goalkick" && !p.isKeeper) continue;
-      const d = Math.hypot(p.x - x, p.z - z);
-      if (d < bd) {
-        bd = d;
-        best = p;
-      }
-    }
-    if (best) {
-      best.x = x - 0.6;
-      best.z = z;
-      best.vx = best.vz = 0;
-      this.ball.owner = best;
-      this.ball.lastToucher = best;
-    }
-    this.ball.kickLock = 0.2;
-    this.freeze = 0.4;
-    this.emit({ type, minute: this.mm(), side, detail });
-  }
-
-  // ---------------------------------------------------------------- visuals
-
-  /** Barra de força 3D (sprite canvas) que flutua sobre o jogador controlado. */
-  private createPowerBar() {
-    const canvas = document.createElement("canvas");
-    canvas.width = 128;
-    canvas.height = 16;
-    const ctx = canvas.getContext("2d")!;
-    const tex = new THREE.CanvasTexture(canvas);
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
-    );
-    sprite.scale.set(1.6, 0.2, 1);
-    sprite.visible = false;
-    this.scene.add(sprite);
-    this.powerBar = { sprite, ctx, tex };
-  }
-
-  private updatePowerBar(p: Sim | undefined) {
-    if (!this.powerBar) return;
-    const { sprite, ctx, tex } = this.powerBar;
-    if (!p || !this.charging) {
-      sprite.visible = false;
-      return;
-    }
-    sprite.visible = true;
-    sprite.position.set(p.x, 2.1, p.z);
-    ctx.clearRect(0, 0, 128, 16);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
-    ctx.fillRect(0, 0, 128, 16);
-    const c = this.charge;
-    ctx.fillStyle = c < 0.3 ? "#4ade80" : c < 0.6 ? "#facc15" : c < 0.85 ? "#fb923c" : "#ef4444";
-    ctx.fillRect(2, 2, 124 * c, 12);
-    tex.needsUpdate = true;
-  }
-
-  private updateAnimation(dt: number) {
-    for (const p of this.players) {
-      const sp = Math.hypot(p.vx, p.vz);
-      const rig = p.rig;
-
-      // Se tem mixer (modelo FBX), usa sistema de animações
-      if (rig.mixer) {
-        this.updateFBXAnimation(p, dt);
-        continue;
-      }
-
-      // Fallback para animação procedural
-      if (p.state === "slide") {
-        rig.group.rotation.x = -1.15;
-        rig.group.position.y = 0.1;
-        rig.legL.rotation.x = 0.5;
-        rig.legR.rotation.x = -0.3;
-        continue;
-      }
-      rig.group.rotation.x = 0;
-      rig.group.position.y = 0;
-      if (p.state === "celebrate") {
-        p.animPhase += dt * 10;
-        rig.armL.rotation.x = -2.4;
-        rig.armR.rotation.x = -2.4;
-        rig.group.position.y = Math.abs(Math.sin(p.animPhase)) * 0.25;
-        continue;
-      }
-      if (p.state === "pass" || p.state === "shoot") {
-        rig.legR.rotation.x = -1.1;
-        rig.legL.rotation.x = 0.3;
-        rig.armL.rotation.x = 0.6;
-        rig.armR.rotation.x = -0.6;
-        continue;
-      }
-      if (p.state === "recover") {
-        rig.legL.rotation.x = 0.2;
-        rig.legR.rotation.x = -0.2;
-        rig.group.position.y = -0.25;
-        continue;
-      }
-      if (p.state === "save") {
-        rig.armL.rotation.x = -1.8;
-        rig.armR.rotation.x = -1.8;
-      } else {
-        rig.armL.rotation.x = Math.sin(p.animPhase) * 0.5 * clamp(sp / 6, 0, 1);
-        rig.armR.rotation.x = -rig.armL.rotation.x;
-      }
-      p.animPhase += dt * (2 + sp * 1.6);
-      const amp = clamp(sp / 5, 0, 1) * (p.state === "sprint" ? 1.1 : 0.85);
-      rig.legL.rotation.x = Math.sin(p.animPhase) * amp;
-      rig.legR.rotation.x = -Math.sin(p.animPhase) * amp;
-      if (rig.marker) rig.marker.rotation.z += dt;
-    }
-  }
-
-  /**
-   * Atualiza animações para modelos FBX usando AnimationMixer
-   */
-  private updateFBXAnimation(p: Sim, dt: number): void {
-    const rig = p.rig;
-    if (!rig.mixer || !rig.fbxRig) return;
-
-    // Atualiza o mixer
-    rig.mixer.update(dt);
-
-    // Mapeia estado do jogo para animação FBX
-    const animationName = this.mapStateToAnimation(p.state);
-
-    // Troca animação se necessário
-    if (animationName !== p.currentAnimation) {
-      this.playAnimation(rig, animationName);
-      p.currentAnimation = animationName;
-    }
-
-    // A corrida acompanha a velocidade real (correr/sprint acelera o clip).
-    // Parado NÃO é slow motion: os assets não têm clip de idle (provado: os
-    // embutidos do modelo base são T-pose), então a passada termina no frame
-    // mais ereto do ciclo (t≈0.253s: pés juntos, medido no arquivo real) e a
-    // action PAUSA ali — boneco efetivamente parado, de pé.
-    if (p.currentAnimation === "run" && rig.currentAction) {
-      const sp = Math.hypot(p.vx, p.vz);
-      const action = rig.currentAction;
-      if (sp < 0.35) {
-        const dur = action.getClip().duration;
-        const tm = action.time % dur;
-        if (Math.abs(tm - 0.253) < 0.06) {
-          action.paused = true;
-        } else if (!action.paused) {
-          action.timeScale = 1.2; // termina a passada rápido, sem camera lenta
-        }
-      } else {
-        action.paused = false;
-        action.timeScale = clamp(sp / 4.5, 0.35, 1.4);
-      }
-    }
-
-    // Anima marker se existir
-    if (rig.marker) rig.marker.rotation.z += dt;
-  }
-
-  /**
-   * Mapeia estado do jogador para nome da animação FBX.
-   * Só existem 3 clips (run/save/trip); todo o resto usa "run" com
-   * timeScale modulado pela velocidade real — nunca T-pose nem corrida parada.
-   */
-  private mapStateToAnimation(state: PlayerState): string {
-    switch (state) {
-      case "save":
-        return "save";
-      case "recover":
-        // Após o mergulho, o goleiro continua no clip de defesa (a parte de
-        // levantamento) em vez de cortar direto para a corrida.
-        return "save";
-      case "slide":
-        return "trip";
-      default:
-        return "run";
-    }
-  }
-
-  /**
-   * Toca uma animação no mixer com blending suave
-   */
-  private playAnimation(rig: PlayerRig, name: string): void {
-    if (!rig.mixer || !rig.fbxRig) return;
-
-    const clip = rig.fbxRig.animations.get(name);
-    if (!clip) {
-      console.warn(`Animação ${name} não encontrada`);
-      return;
-    }
-
-    // Fade out animação atual
-    if (rig.currentAction) {
-      rig.currentAction.fadeOut(0.2);
-    }
-
-    // Fade in nova animação
-    const action = rig.mixer.clipAction(clip);
-    action.reset();
-    if (name === "save" || name === "trip") {
-      // One-shots: tocam uma vez e congelam no frame final até o estado mudar
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
+    const minute = this.mm();
+    const side = this.setup.controlledSide;
+    if (desfecho === "goal") {
+      this.emit({
+        type: "goal",
+        minute,
+        side,
+        playerId: this.taker.data.id,
+        playerName: this.taker.data.name,
+        detail: `${this.shotIndex}/${TOTAL_COBRANCAS}`,
+      });
+    } else if (desfecho === "save") {
+      this.emit({
+        type: "save",
+        minute,
+        side: this.keeper.side,
+        playerId: this.keeper.data.id,
+        playerName: this.keeper.data.name,
+        detail: `${this.shotIndex}/${TOTAL_COBRANCAS}`,
+      });
     } else {
-      action.setLoop(THREE.LoopRepeat, Infinity);
+      this.emit({
+        type: "out",
+        minute,
+        side,
+        playerId: this.taker.data.id,
+        playerName: this.taker.data.name,
+        detail: desfecho === "post" ? "na trave" : "para fora",
+      });
     }
-    action.fadeIn(0.2);
-    action.play();
 
-    rig.currentAction = action;
+    // Cobrança do adversário: resultado revelado sem exibição da execução.
+    const adv = this.advResults[this.opponentShots];
+    if (adv !== undefined) {
+      this.opponentShots++;
+      const advSide: TeamSide = side === "home" ? "away" : "home";
+      if (adv === "goal") {
+        this.opponentGoals++;
+        this.score[advSide]++;
+      }
+      this.opponentFeed = `ADV ${this.opponentShots}/${TOTAL_COBRANCAS} — ${DESFECHO_ROTULO[adv]}`;
+      this.emit({
+        type: adv === "goal" ? "goal" : adv === "save" ? "save" : "out",
+        minute,
+        side: advSide,
+        detail: `cobrança ${this.opponentShots}/${TOTAL_COBRANCAS} (${DESFECHO_ROTULO[adv]})`,
+      });
+    }
+
+    this.phase = "outcome";
+    this.outcomeTimer = 1.7;
   }
 
-  private camTarget = new THREE.Vector3();
-  private camLook = new THREE.Vector3();
+  // ---------------------------------------------------------------- atores
 
-  private updateCamera(dt: number) {
-    const me = this.players.find((p) => p.isControlled);
-    if (!me) return;
-    const d = this.dir(me.side);
+  private updateAtores(dt: number) {
+    for (const a of this.players) {
+      const g = a.rig.group;
+      g.position.set(a.x, 0, a.z);
+      // Giro suave até o heading (menor arco).
+      let diff = a.heading - g.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      g.rotation.y += diff * clamp(9 * dt, 0, 1);
 
-    // Câmera estilo "modo jogador" (FIFA Player Career / UFL / eFootball):
-    // atrás do atleta, na altura da cabeça/tronco, orbitando suavemente.
-    // A bola influencia o enquadramento: quanto mais longe, mais a câmera
-    // abre; quanto mais perto, mais ela fecha.
-    const ballDist = Math.hypot(me.x - this.ball.pos.x, me.z - this.ball.pos.z);
-    const blend = clamp(0.18 + ballDist * 0.02, 0.18, 0.5);
-    const focusX = lerp(me.x, this.ball.pos.x, blend);
-    const focusZ = lerp(me.z, this.ball.pos.z, blend);
-    const back = clamp(5.2 + ballDist * 0.24, 5.2, 12.5);
-    const height = clamp(2.4 + ballDist * 0.11, 2.4, 6.8);
-
-    this.camTarget.set(focusX - d * back, height, focusZ);
-    this.camTarget.x = clamp(this.camTarget.x, -FIELD.halfLength - 20, FIELD.halfLength + 20);
-    this.camTarget.z = clamp(this.camTarget.z, -FIELD.halfWidth - 10, FIELD.halfWidth + 10);
-
-    // Suavização alta — sem movimentos bruscos.
-    const k = clamp(2.6 * dt, 0, 1);
-    this.camera.position.lerp(this.camTarget, k);
-    if (this.camera.position.y < 1.6) this.camera.position.y = 1.6;
-
-    this.camLook.lerp(new THREE.Vector3(focusX + d * 2.5, 1.5, focusZ), k);
-    this.camera.lookAt(this.camLook);
+      this.animarAtor(a, dt);
+    }
   }
 
-  private handleResize = () => {
-    const parent = this.canvas.parentElement;
-    const w = parent?.clientWidth || window.innerWidth;
-    const h = parent?.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / Math.max(h, 1);
-    this.camera.fov = w / h < 1 ? 72 : w / h < 1.6 ? 62 : 55;
-    this.camera.updateProjectionMatrix();
-  };
+  /** Animação mínima: goleiro mergulha (clip save / queda lateral no
+   *  procedural); cobrador faz a arrancada (clip run / balanço de pernas). */
+  private animarAtor(a: Ator, dt: number) {
+    const rig = a.rig;
+    if (rig.mixer) rig.mixer.update(dt);
 
-  // ---------------------------------------------------------------- reporting
+    if (rig.fbxRig) {
+      const quer = a.state === "save" || a.state === "recover" ? "save" : "run";
+      if (a.currentAnimation !== quer) {
+        const clip = rig.fbxRig.animations.get(quer);
+        if (clip && rig.mixer) {
+          rig.currentAction?.fadeOut(0.15);
+          const action = rig.mixer.clipAction(clip);
+          action.reset();
+          if (quer === "save") {
+            action.setLoop(THREE.LoopOnce, 1);
+            action.clampWhenFinished = true;
+          } else {
+            action.setLoop(THREE.LoopRepeat, Infinity);
+          }
+          action.fadeIn(0.15).play();
+          rig.currentAction = action;
+          a.currentAnimation = quer;
+        }
+      }
+      // Idle sem clip próprio: congela no frame ereto medido do ciclo de
+      // corrida (t≈0.253s) — nunca T-pose, nunca corrida em câmera lenta.
+      if (a.currentAnimation === "run" && rig.currentAction) {
+        const action = rig.currentAction;
+        if (a.state === "idle") {
+          const dur = action.getClip().duration;
+          const tm = action.time % dur;
+          if (Math.abs(tm - 0.253) < 0.06) action.paused = true;
+          else if (!action.paused) action.timeScale = 1.2;
+        } else {
+          action.paused = false;
+          action.timeScale = 1.4;
+        }
+      }
+      return;
+    }
+
+    // Fallback procedural: mergulho = tomba o corpo para o lado do canto.
+    if (a.isKeeper) {
+      const alvo = a.state === "save" ? -Math.sign(this.voo?.keeperZ ?? 0) * 0.95 : 0;
+      rig.group.rotation.z = lerp(rig.group.rotation.z, alvo, clamp(8 * dt, 0, 1));
+    } else if (a.state === "run") {
+      const t = performance.now() / 1000;
+      rig.legL.rotation.x = Math.sin(t * 14) * 0.6;
+      rig.legR.rotation.x = -Math.sin(t * 14) * 0.6;
+    } else {
+      rig.legL.rotation.x = lerp(rig.legL.rotation.x, 0, clamp(8 * dt, 0, 1));
+      rig.legR.rotation.x = lerp(rig.legR.rotation.x, 0, clamp(8 * dt, 0, 1));
+    }
+  }
+
+  // ---------------------------------------------------------------- estado/resultado
 
   private mm() {
-    return Math.min(Math.round(this.minute), this.minutesPerHalf * 2);
+    return Math.min(90, this.shotIndex * 6);
   }
 
   private emit(e: MatchEvent) {
     this.events.push(e);
     this.cb.onEvent?.(e);
-    this.lastEvent = e;
   }
 
-  private lastEvent: MatchEvent | undefined;
-
-  private pushState() {
-    const total = this.possTicks.home + this.possTicks.away || 1;
-    const me = this.players.find((p) => p.isControlled);
-    this.cb.onState?.({
+  private emitState() {
+    const s: MatchLiveState = {
       minute: this.mm(),
-      half: this.half,
+      half: 1,
       score: { ...this.score },
-      possession: {
-        home: Math.round((this.possTicks.home / total) * 100),
-        away: Math.round((this.possTicks.away / total) * 100),
-      },
-      possessionSide: this.ball.owner ? this.ball.owner.side : null,
-      stamina: me ? Math.round(me.stamina) : 100,
-      charge: this.charging ? this.charge : 0,
-      ...(this.lastEvent ? { lastEvent: this.lastEvent } : {}),
-      running: this.running,
-    });
+      possession: { home: 50, away: 50 },
+      possessionSide: null,
+      stamina: 100,
+      charge: this.phase === "aim" ? this.input.swipePower : 0,
+      lastEvent: this.events[this.events.length - 1],
+      running: this.running && !this.finished,
+      shotIndex: this.shotIndex,
+      shotsTotal: TOTAL_COBRANCAS,
+      playerGoals: this.playerGoals,
+      opponentShots: this.opponentShots,
+      opponentGoals: this.opponentGoals,
+      phase: this.phase,
+      tipo: tipoDaCobranca(this.shotIndex),
+      lastOutcome: this.lastOutcome,
+      opponentFeed: this.opponentFeed,
+    };
+    this.cb.onState?.(s);
   }
 
-  /** Builds the standardized result handed back to the main game system. */
-  buildResult(aborted: boolean): MatchResult {
-    const total = this.possTicks.home + this.possTicks.away || 1;
-    const players = this.players.map((p) => ({
-      ...p.stats,
-      distanceKm: Math.round(p.stats.distanceKm * 100) / 100,
-      rating: Math.round(clamp(p.stats.rating, 1, 10) * 10) / 10,
-    }));
-    const me = this.players.find((p) => p.isControlled)!;
+  private buildStats(a: Ator, goals: number, shots: number): MatchPlayerStats {
+    return {
+      playerId: a.data.id,
+      name: a.data.name,
+      side: a.side,
+      goals,
+      shots,
+      passes: 0,
+      passesCompleted: 0,
+      tackles: 0,
+      fouls: 0,
+      touches: a.isKeeper ? a.saves : shots,
+      distanceKm: 0,
+      rating: clamp(6 + goals * 0.25 + (a.isKeeper ? a.saves * 0.3 : 0), 0, 10),
+    };
+  }
+
+  private buildResult(aborted: boolean): MatchResult {
+    const outcome: MatchResult["outcome"] =
+      this.score.home > this.score.away ? "home" : this.score.home < this.score.away ? "away" : "draw";
+    // Empate: permanece empate — resolverDesempate() (cobrancas.ts) é o
+    // ponto de entrada da futura morte súbita.
     return {
       matchId: this.setup.matchId,
       score: { ...this.score },
-      possession: {
-        home: Math.round((this.possTicks.home / total) * 100),
-        away: Math.round((this.possTicks.away / total) * 100),
-      },
-      shots: { ...this.shots },
+      possession: { home: 50, away: 50 },
+      shots: { home: TOTAL_COBRANCAS, away: TOTAL_COBRANCAS },
       events: [...this.events],
-      players,
-      controlledPlayer: players.find((p) => p.playerId === me.data.id)!,
-      outcome: this.score.home === this.score.away ? "draw" : this.score.home > this.score.away ? "home" : "away",
+      players: [
+        this.buildStats(this.taker, this.playerGoals, TOTAL_COBRANCAS),
+        this.buildStats(this.keeper, 0, 0),
+      ],
+      controlledPlayer: this.buildStats(this.taker, this.playerGoals, TOTAL_COBRANCAS),
+      outcome,
       finishedAt: new Date().toISOString(),
       aborted,
     };
   }
 
-  /** Ends the match and hands the result back. */
   finish(aborted: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.phase = "finished";
     this.running = false;
-    if (!aborted) this.emit({ type: "fulltime", minute: this.mm(), detail: `${this.score.home} x ${this.score.away}` });
+    if (!aborted) {
+      this.emit({ type: "fulltime", minute: 90, detail: `${this.score.home} x ${this.score.away}` });
+    }
     this.cb.onFinish?.(this.buildResult(aborted));
   }
+
+  private handleResize = () => {
+    const parent = this.canvas.parentElement;
+    const w = parent ? parent.clientWidth : window.innerWidth;
+    const h = parent ? parent.clientHeight : window.innerHeight;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h, false);
+  };
 
   dispose() {
     cancelAnimationFrame(this.raf);
@@ -1575,23 +768,24 @@ export class MatchEngine {
     const w = window as unknown as { __engine3d?: MatchEngine };
     if (w.__engine3d === this) delete w.__engine3d;
     // Rigs FBX: geometria/textura são COMPARTILHADAS com o playerModelCache —
-    // dispose aqui quebraria a próxima partida. Só saem da cena os materiais
-    // clonados por jogador e a geometria própria do marker.
-    for (const p of this.players) {
-      if (!p.rig.fbxRig) continue;
-      p.rig.group.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.userData["ownGeometry"]) m.geometry?.dispose();
-        const disposeMat = (mat: THREE.Material | undefined) => {
-          if (mat?.userData["ownMaterial"]) mat.dispose();
-        };
-        const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(mat)) mat.forEach(disposeMat);
-        else disposeMat(mat);
-      });
-      p.rig.mixer?.stopAllAction();
-      p.rig.mixer?.uncacheRoot(p.rig.group);
-      this.scene.remove(p.rig.group);
+    // dispose aqui quebraria a próxima partida. Só saem os materiais clonados
+    // por ator e geometrias próprias.
+    for (const a of this.players) {
+      if (a.rig.fbxRig) {
+        a.rig.group.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (m.userData["ownGeometry"]) m.geometry?.dispose();
+          const disposeMat = (mat: THREE.Material | undefined) => {
+            if (mat?.userData["ownMaterial"]) mat.dispose();
+          };
+          const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+          if (Array.isArray(mat)) mat.forEach(disposeMat);
+          else disposeMat(mat);
+        });
+        a.rig.mixer?.stopAllAction();
+        a.rig.mixer?.uncacheRoot(a.rig.group);
+      }
+      this.scene.remove(a.rig.group);
     }
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -1600,8 +794,6 @@ export class MatchEngine {
       if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
       else mat?.dispose();
     });
-    this.powerBar?.tex.dispose();
-    this.powerBar = null;
     this.renderer.dispose();
   }
 }

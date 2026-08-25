@@ -129,6 +129,23 @@ export interface MatchLiveState {
   stamina: number;
   /** Carga atual da barra de força (0 = escondida). */
   charge: number;
-  lastEvent?: MatchEvent;
+  lastEvent?: MatchEvent | undefined;
   running: boolean;
+
+  // ---- Disputa de cobranças (pênaltis/faltas) ----
+  /** Cobrança atual do jogador, 1..shotsTotal. */
+  shotIndex?: number;
+  /** Total de cobranças por lado (15). */
+  shotsTotal?: number;
+  playerGoals?: number;
+  opponentShots?: number;
+  opponentGoals?: number;
+  /** "aim" aguardando swipe · "flight" bola voando · "outcome" resultado · "finished" fim. */
+  phase?: "aim" | "flight" | "outcome" | "finished";
+  /** Tipo da cobrança atual. */
+  tipo?: "penalti" | "falta";
+  /** Rótulo do último desfecho ("GOL" | "DEFESA" | "PARA FORA" | "TRAVE"). */
+  lastOutcome?: string | undefined;
+  /** Resultado revelado da cobrança do adversário nesta rodada. */
+  opponentFeed?: string | undefined;
 }

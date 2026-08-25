@@ -163,59 +163,39 @@ try {
   await sleep(1000);
   ok(await clicarTexto(page, "button", "JOGADOR"), "modo JOGADOR (3D) escolhido");
   await sleep(4000);
-  await esperarTexto(page, /INICIAR PARTIDA/i, 15000);
-  await clicarTexto(page, "button", "INICIAR PARTIDA");
+  await esperarTexto(page, /INICIAR DISPUTA/i, 15000);
+  await clicarTexto(page, "button", "INICIAR DISPUTA");
   await sleep(4000);
-  ok(await page.evaluate(() => !!window.__engine3d), "engine 3D em campo");
+  ok(await page.evaluate(() => !!window.__engine3d), "engine 3D em campo (disputa de cobranças)");
 
-  // Placar controlado 2×0: injeta a bola atrás da linha do gol adversário
-  // (detecção real do engine: |x| > halfLength, |z| < goalHalfWidth,
-  // y < goalHeight). Loop assíncrono — cede o rAF entre as injeções.
+  // Disputa de cobranças: executa as 15 via o gancho de depuração (mesmo
+  // caminho do swipe — swipeParaChute → voo → desfecho). Canto alternado.
   const placar = await page.evaluate(
     () =>
       new Promise((res) => {
         const e = window.__engine3d;
         const me = e.players.find((p) => p.isControlled);
-        const lado = me.side; // "home" | "away"
-        const d = e.dir(lado); // direção de ataque do jogador controlado
-        let gols = 0;
-        const injetar = () => {
-          if (gols >= 2) {
-            res({ lado, score: { ...e.score } });
+        const lado = me.side;
+        let n = 0;
+        const cobrar = () => {
+          if (n >= 15 || e.phase === "finished") {
+            res({ lado, score: { ...e.score }, playerGoals: e.playerGoals });
             return;
           }
-          // Bola já cruzando a linha do gol que o jogador ataca.
-          e.ball.owner = null;
-          e.ball.lastToucher = me;
-          e.ball.pos.set(d * 53.2, 0.11, 0);
-          e.ball.vel.set(d * 20, 0, 0);
-          const alvo = e.score[lado] + 1;
-          const t0 = Date.now();
-          const poll = setInterval(() => {
-            if (e.score[lado] >= alvo) {
-              clearInterval(poll);
-              gols++;
-              // espera o freeze do kickoff assentar antes do próximo gol
-              setTimeout(injetar, 2000);
-            } else if (Date.now() - t0 > 3000) {
-              clearInterval(poll);
-              injetar(); // o goleiro defendeu — tenta de novo
-            } else if (e.freeze <= 0) {
-              // reforça a trajetória enquanto o engine processa
-              e.ball.owner = null;
-              e.ball.lastToucher = me;
-              e.ball.pos.set(d * 53.2, 0.11, 0);
-              e.ball.vel.set(d * 20, 0, 0);
-            }
-          }, 120);
+          if (e.phase === "aim") {
+            n++;
+            e.debugCobrar(n % 2 === 0 ? 200 : -200, -260, 280);
+          }
+          setTimeout(cobrar, 150);
         };
-        injetar();
+        cobrar();
       }),
   );
   console.log("placar 3D:", JSON.stringify(placar));
-  ok((placar.score[placar.lado] ?? 0) >= 1, `gol registrado pelo engine (${JSON.stringify(placar.score)})`);
+  ok(placar.playerGoals >= 1, `cobranças registradas pelo engine (${JSON.stringify(placar.score)})`);
 
-  await clicarTexto(page, "button", "Encerrar");
+  // Espera o fim natural (15/15) e sai pela tela de fim de jogo.
+  await page.waitForFunction(() => window.__engine3d?.phase === "finished", { timeout: 60000 });
   await sleep(1500);
   ok(/FIM DE JOGO/i.test(await texto(page)), "tela de fim de jogo 3D");
   await clicarTexto(page, "button", "CONTINUAR");

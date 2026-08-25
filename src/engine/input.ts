@@ -33,6 +33,64 @@ export class InputSystem {
   private stick = { x: 0, y: 0 };
   private detach: (() => void) | null = null;
 
+  // ---- Swipe (modo disputa de cobranças): toque OU mouse sobre o canvas ----
+  /** Arraste em andamento (para a dica de trajetória), em px de tela. */
+  readonly swipeDrag = { active: false, sx: 0, sy: 0, cx: 0, cy: 0, t0: 0 };
+  /** Chamado uma vez ao SOLTAR o gesto (swipe válido). */
+  onSwipeEnd: ((s: { dx: number; dy: number; dtMs: number }) => void) | null = null;
+  private detachSwipe: (() => void) | null = null;
+
+  /** Toque + arrastar + soltar (pointer events cobrem dedo e mouse). */
+  attachSwipe(el: HTMLElement) {
+    const down = (e: Event) => {
+      const ev = e as PointerEvent;
+      if (this.swipeDrag.active) return;
+      this.swipeDrag.active = true;
+      this.swipeDrag.sx = this.swipeDrag.cx = ev.clientX;
+      this.swipeDrag.sy = this.swipeDrag.cy = ev.clientY;
+      this.swipeDrag.t0 = performance.now();
+      el.setPointerCapture?.(ev.pointerId);
+      ev.preventDefault();
+    };
+    const move = (e: Event) => {
+      if (!this.swipeDrag.active) return;
+      const ev = e as PointerEvent;
+      this.swipeDrag.cx = ev.clientX;
+      this.swipeDrag.cy = ev.clientY;
+      ev.preventDefault();
+    };
+    const up = (e: Event) => {
+      if (!this.swipeDrag.active) return;
+      const ev = e as PointerEvent;
+      const dx = ev.clientX - this.swipeDrag.sx;
+      const dy = ev.clientY - this.swipeDrag.sy;
+      const dtMs = Math.max(16, performance.now() - this.swipeDrag.t0);
+      this.swipeDrag.active = false;
+      // Toque sem arraste (tap) não é cobrança.
+      if (Math.hypot(dx, dy) >= 24) this.onSwipeEnd?.({ dx, dy, dtMs });
+    };
+    const cancel = () => {
+      this.swipeDrag.active = false;
+    };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", cancel);
+    this.detachSwipe = () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", cancel);
+    };
+  }
+
+  /** Potência do arraste em andamento (0..1) — alimenta a barra de força. */
+  get swipePower(): number {
+    if (!this.swipeDrag.active) return 0;
+    const len = Math.hypot(this.swipeDrag.cx - this.swipeDrag.sx, this.swipeDrag.cy - this.swipeDrag.sy);
+    return Math.min(1, len / 340);
+  }
+
   get sprint() {
     return this.sprintKey || this.sprintTouch;
   }
@@ -163,6 +221,10 @@ export class InputSystem {
   dispose() {
     this.detach?.();
     this.detach = null;
+    this.detachSwipe?.();
+    this.detachSwipe = null;
+    this.swipeDrag.active = false;
+    this.onSwipeEnd = null;
     this.keys.clear();
     this.queue = [];
     this.passHeldState = false;
