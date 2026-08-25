@@ -160,14 +160,23 @@ export class MatchEngine {
    * Preload assíncrono dos modelos FBX e animações
    */
   private async preloadModels(): Promise<void> {
+    console.log("[MatchEngine.preloadModels] Iniciando preload de modelos FBX...");
+    console.log("[MatchEngine.preloadModels] Caminho do modelo:", FBX_PATHS.BASE_MODEL);
+
     const animationMap = new Map<string, string>([
       ["run", FBX_PATHS.ANIMATIONS.run],
       ["save", FBX_PATHS.ANIMATIONS.save],
       ["trip", FBX_PATHS.ANIMATIONS.trip],
     ]);
 
-    await playerModelCache.loadModel(FBX_PATHS.BASE_MODEL, animationMap);
-    console.log("Preload de modelos FBX concluído");
+    console.log("[MatchEngine.preloadModels] Animações a carregar:", Array.from(animationMap.entries()));
+
+    try {
+      await playerModelCache.loadModel(FBX_PATHS.BASE_MODEL, animationMap);
+      console.log("[MatchEngine.preloadModels] ✓ Preload de modelos FBX concluído com sucesso");
+    } catch (error) {
+      console.error("[MatchEngine.preloadModels] ✗ Erro no preload:", error);
+    }
   }
 
   private spawnTeam(team: MatchTeamInput, side: TeamSide) {

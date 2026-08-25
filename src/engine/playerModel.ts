@@ -233,14 +233,18 @@ export function createPlayerRigWithFallback(
 ): PlayerRig {
   // Tenta FBX primeiro se habilitado
   if (useFBX) {
+    console.log("[createPlayerRigWithFallback] Tentando usar FBX...");
     const fbxRig = createPlayerRigFBX(primary, secondary, isControlled, isKeeper);
     if (fbxRig) {
-      console.log("Usando modelo FBX para jogador");
+      console.log("[createPlayerRigWithFallback] ✓ Modelo FBX carregado com sucesso");
       return fbxRig;
     }
-    console.log("FBX não disponível, usando fallback procedural");
+    console.log("[createPlayerRigWithFallback] ✗ FBX não disponível, usando fallback procedural");
+  } else {
+    console.log("[createPlayerRigWithFallback] FBX desabilitado, usando procedural");
   }
 
   // Fallback para o modelo procedural
+  console.log("[createPlayerRigWithFallback] Criando modelo procedural");
   return createPlayerRig(primary, secondary, isControlled, isKeeper);
 }
