@@ -21,9 +21,12 @@ export class InputSystem {
   private sprintTouch = false;
   /** Queued one-shot actions, consumed by the engine each tick. */
   private queue: EngineAction[] = [];
-  /** Botões de ação segurados (carregar força do passe/chute). */
-  private heldPass = false;
-  private heldShoot = false;
+  /** Track held pass button for auto-marking. */
+  private passHeld = false;
+  private passHoldTime = 0;
+  /** Track tackle button presses for double-tap desarme. */
+  private lastTackleTime = 0;
+  private tacklePressCount = 0;
 
   private keys = new Set<string>();
   private stick = { x: 0, y: 0 };
@@ -33,12 +36,17 @@ export class InputSystem {
     return this.sprintKey || this.sprintTouch;
   }
 
-  get passHeld() {
-    return this.heldPass;
+  get isPassHeld() {
+    return this.passHeld;
   }
 
-  get shootHeld() {
-    return this.heldShoot;
+  get passHoldDuration() {
+    return this.passHoldTime;
+  }
+
+  get isDoubleTackle() {
+    const now = performance.now() / 1000;
+    return this.tacklePressCount >= 2 && (now - this.lastTackleTime) < 0.4;
   }
 
   attachKeyboard(target: Window | HTMLElement = window) {
@@ -50,8 +58,14 @@ export class InputSystem {
       if (ev.repeat) return;
       this.keys.add(k);
       if (k === "shift") this.sprintKey = true;
-      if (k === " ") this.heldPass = true;
-      if (k === "enter") this.heldShoot = true;
+      if (k === " ") {
+        if (!this.passHeld) {
+          this.press("pass");
+          this.passHeld = true;
+          this.passHoldTime = 0;
+        }
+      }
+      if (k === "enter") this.press("shoot");
       if (k === "backspace") this.press("tackle");
       if (k === "e") this.press("request");
       this.syncKeys();
@@ -60,8 +74,10 @@ export class InputSystem {
       const k = (e as KeyboardEvent).key.toLowerCase();
       this.keys.delete(k);
       if (k === "shift") this.sprintKey = false;
-      if (k === " ") this.heldPass = false;
-      if (k === "enter") this.heldShoot = false;
+      if (k === " ") {
+        this.passHeld = false;
+        this.passHoldTime = 0;
+      }
       this.syncKeys();
     };
     const blur = () => {
