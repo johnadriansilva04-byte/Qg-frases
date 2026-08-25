@@ -105,11 +105,15 @@ export async function loadCareerFromSupabase(
 
 export async function saveCareerToSupabase(userId: string, c: CareerState): Promise<void> {
   try {
-    // Salva o snapshot completo no JSONB E atualiza pontos_soberania real
+    // Salva o snapshot completo no JSONB E atualiza pontos_soberania real.
+    // O cache do leaderboard é o TOTAL (pessoal + caixa do clube) — gravar só
+    // o coach.sov aqui DERRUBAVA o cache de 5147 → 288 a cada save, e os
+    // módulos que leem o cache (leaderboard, bootstrap da sessão) passavam a
+    // exibir o dinheiro do clube como se fosse pessoal (incoerência global).
     await writeProgress(
       userId,
       { career: c },
-      { pontos_soberania: cacheSoberaniaInteiro(c.coach.sov) },
+      { pontos_soberania: cacheSoberaniaInteiro((c.coach.sov ?? 0) + (c.clubeCaixa ?? 0)) },
     );
   } catch (e) {
     console.error("[careerRemote] saveCareer error:", e);
@@ -184,13 +188,25 @@ export async function aplicarResultadoRemoto(
   partidaId?: string,
   /** Módulo de origem no ledger: 'career' (liga) ou 'online' (mesa). */
   modulo: SovModule = "career",
+  /** Valor EXATO que o snapshot aplicou ao caixa do clube nesta partida
+   *  (receita esportiva na escala da divisão, com bônus de escolha). Quando
+   *  informado, o ledger registra ESTE valor — sem ele o ledger gravava o
+   *  delta cru (3/1/0) enquanto o snapshot somava receita×mult (36/12/0 na
+   *  série A): a carteira ficava 12× atrás do caixa a cada vitória e a
+   *  invariante `wallet == coach.sov + clubeCaixa` quebrava (drift
+   *  permanente — o caixa do clube virava dinheiro fantasma no snapshot). */
+  valorDelta?: number,
 ): Promise<{ soberania: number; moralTime: number; titulos: number } | null> {
   try {
     const { data: sess } = await supabase.auth.getUser();
     const uid = sess?.user?.id;
     if (!uid) return null;
 
-    const { delta } = computeSovereigntyDelta(golsPro, golsContra, ultimaEscolha);
+    const { delta: deltaRegra } = computeSovereigntyDelta(golsPro, golsContra, ultimaEscolha);
+    const delta =
+      typeof valorDelta === "number" && Number.isFinite(valorDelta)
+        ? Math.round(valorDelta)
+        : deltaRegra;
 
     // Fonte de verdade: Banco Central SOV. A chave por partida impede crédito
     // duplicado em reprocessamento/F5/retry. Este é o ÚNICO escritor do delta
@@ -263,6 +279,12 @@ export async function aplicarFimCampanhaRemoto(
     /** Chaves da temporada encerrada — tornam o bônus idempotente no ledger. */
     temporada?: number;
     divisao?: string;
+    /** Valor EXATO que o snapshot aplicou ao caixa do clube como premiação
+     *  (`premiacaoDa` — escala da divisão por posição). Sem ele o ledger
+     *  pagava a tabela antiga (vice=15/terceiro=10/quarto=5/fora=0) enquanto
+     *  o snapshot somava outra (série A: vice=180, top4=120, resto=60) —
+     *  drift permanente carteira × caixa. */
+    valorBonus?: number;
   },
 ): Promise<{ soberania: number; titulos: number } | null> {
   try {
@@ -289,7 +311,10 @@ export async function aplicarFimCampanhaRemoto(
             ? 50
             : 0
         : 0;
-    const totalBonus = bonusPos + bonusDif;
+    const totalBonus =
+      typeof opcoes?.valorBonus === "number" && Number.isFinite(opcoes.valorBonus)
+        ? Math.round(opcoes.valorBonus)
+        : bonusPos + bonusDif;
 
     // Fonte de verdade: Banco Central SOV — bônus de posição final ('career').
     // Chave por temporada+divisão: o encerramento NÃO paga duas vezes (§19).

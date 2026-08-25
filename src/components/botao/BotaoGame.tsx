@@ -62,7 +62,6 @@ import type { Perfil } from "./online/auth";
 import { CoachSetup } from "./career/CoachSetup";
 import { ProfileSetup } from "./career/ProfileSetup";
 import { ChoiceModal } from "./career/ChoiceModal";
-import { SubornoStory } from "./career/SubornoStory";
 import { ClassificacaoScreen } from "./career/ClassificacaoScreen";
 import { EconomiaScreen } from "./career/EconomiaScreen";
 import { CalendarView } from "./career/CalendarView";
@@ -153,8 +152,13 @@ import {
   patrimonioParticipacoes,
   podeComprarCota,
   eProprietario,
+  participacaoAtual,
 } from "./career/propriedadeEngine";
-import { registrarDonoClube, liberarDonoClube } from "@/lib/cidadela/clubesPropriedade";
+import {
+  registrarDonoClube,
+  liberarDonoClube,
+  comprarClubeAnunciado,
+} from "@/lib/cidadela/clubesPropriedade";
 import { CareerHub } from "./career/CareerHub";
 import { CareerMenu } from "./career/CareerMenu";
 import { PropriedadeScreen } from "./career/PropriedadeScreen";
@@ -183,13 +187,6 @@ import {
   pagarDividendos,
   venderAtivo,
 } from "./career/bolsaEngine";
-import {
-  SUBORNO_INICIAL,
-  deveOfertarSuborno,
-  iniciarOferta,
-  avancarSuborno,
-  type SubornoEscolha,
-} from "./career/subornoEngine";
 import {
   EMPTY_CAREER,
   loadCareer,
@@ -751,6 +748,10 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   };
 
   const persistTournament = (t: Tournament | null) => {
+    // Refs sincronizadas na hora: escritores concorrentes (fila de conversas,
+    // bloco IA pós-jogo) leem as refs — esperar o re-render abria janela em
+    // que um snapshot VELHO era regravado por cima do resultado da partida.
+    tourRef.current = t;
     setTour(t);
     if (t) saveTournament(t);
     else deleteTournamentLocal();
@@ -762,6 +763,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   };
 
   const persistCareer = (c: CareerState | null) => {
+    careerRef.current = c;
     setCareer(c);
     if (c) saveCareer(c);
     else deleteCareer();
@@ -1313,6 +1315,45 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     setCareer(novaCareer);
   };
 
+  /** Compra na VITRINE pública: a RPC move o SOV no ledger e a posse na mesma
+   *  transação; aqui só espelhamos a participação no snapshot pelo preço
+   *  ANUNCIADO (não o preço de tabela das cotas — o ledger cobrou o anúncio). */
+  const handleComprarClubeVitrine = async (clube: Team, preco: number) => {
+    if (!career || !perfil?.user_id) return;
+    const erro = await comprarClubeAnunciado(clube.id);
+    if (erro) {
+      setToast(erro);
+      return;
+    }
+    const falta = Math.max(0, 100 - participacaoAtual(career, clube.id));
+    const { career: comCotas } = comprarCota(career, clube, falta);
+    const novaCareer: CareerState = {
+      ...comCotas,
+      coach: { ...comCotas.coach, sov: Math.round((comCotas.coach.sov ?? 0) - preco) },
+    };
+    persistCareer(novaCareer);
+    setCareer(novaCareer);
+    setToast(`Você é o novo dono do ${clube.name}! (-${Math.round(preco)} SOV)`);
+    enfileirarConversas([
+      {
+        id: `vitrine-compra-${clube.id}-${Date.now()}`,
+        tipo: "evento",
+        nome: "Cartório da Cidadela",
+        avatar: "📜",
+        cargo: "Transferência de posse",
+        naoLida: true,
+        mensagens: [
+          {
+            id: `vitrine-compra-m-${Date.now()}`,
+            texto: `Escritura registrada: o ${clube.name} agora é SEU. A venda foi liquidada em SOV no Banco Central e o clube já aparece no seu nome para toda a Cidadela.`,
+            remetente: "outro",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+    ]);
+  };
+
   const handleAssistirVideo = async (): Promise<boolean> => {
     if (!perfil?.user_id) {
       setToast("Faça login para ganhar pontos assistindo vídeos.");
@@ -1363,7 +1404,22 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     // Patrocinador: valida a meta da partida no modo carreira também.
     if (career?.desafioPatrocinador) {
       const rDesafio = aplicarDesafioPatrocinador(career, gf, ga, true);
-      persistCareer(rDesafio.estado);
+      // O prêmio é receita DO CLUBE (mesma regra da partida de liga) — antes o
+      // ledger creditava e o snapshot NÃO somava no caixa: a carteira ficava à
+      // frente do snapshot e a invariante wallet == pessoal + caixa quebrava.
+      let estadoDesafio = rDesafio.estado;
+      if (rDesafio.ganhou > 0) {
+        const rPat = registrarReceitaClube(
+          estadoDesafio.clubeCaixa ?? 0,
+          estadoDesafio.clubeExtrato ?? [],
+          rDesafio.ganhou,
+          `Patrocínio — desafio cumprido (amistoso)`,
+          estadoDesafio.rodadaAtual,
+          estadoDesafio.temporada ?? 1,
+        );
+        estadoDesafio = { ...estadoDesafio, clubeCaixa: rPat.caixa, clubeExtrato: rPat.extrato };
+      }
+      persistCareer(estadoDesafio);
       // Recompensa do patrocinador no Banco Central SOV (idempotente por desafio).
       if (rDesafio.ganhou > 0 && perfil?.user_id) {
         void registrarTransacaoSov(
@@ -1656,16 +1712,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   };
 
   // Prepara o próximo evento de escolha/narrativa entre partidas (se houver).
-  // Ordem de prioridade: suborno > narrativa dinâmica > choice event.
+  // Ordem de prioridade: narrativa dinâmica > choice event.
   const preparaEscolha = (c: CareerState, faseAtual: string): CareerState => {
     let next = c;
-    // Enredo de suborno (narrativa paralela). Tem prioridade e pode disparar em
-    // momentos específicos da campanha (fase de grupos, semi/final).
-    const sub = next.suborno ?? SUBORNO_INICIAL;
-    if (deveOfertarSuborno(sub, faseAtual) && !sub.nodeAtual) {
-      next = { ...next, suborno: iniciarOferta(sub) };
-    }
-    if (next.suborno?.nodeAtual) return next;
     // História dinâmica no celular (2-4/mês): gera se ainda não há uma ativa.
     if (!next.narrativa?.cenaAtual) {
       const rodada = next.rodadaAtual;
@@ -1702,7 +1751,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     if (!tour || !career) return;
     // Sanção de W.O. pendente: a partida sequer é disputada — registra derrota
     // por W.O. automaticamente (1x0 a favor do adversário) e segue o campeonato.
-    // (Mensagens do celular — suborno/narrativa/evento — NÃO bloqueiam a entrada
+    // (Mensagens do celular — narrativa/evento — NÃO bloqueiam a entrada
     //  em campo: o jogador as resolve no módulo Celular, independente da partida.)
     if (career.woProximaPartida) {
       aplicarWO();
@@ -2232,7 +2281,6 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       proximoClubeId: undefined,
       copaBrasil: copa,
       narrativa: NARRATIVA_INICIAL,
-      suborno: undefined,
       desafioPatrocinador: gerarDesafioPatrocinador(0),
       conversas: [],
       // Caixa do clube paga a manutenção (pode ficar negativo = dívida do
@@ -2299,55 +2347,6 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     setToast("Carreira reiniciada após falência. Recomece do zero.");
   };
 
-  const aplicarSuborno = (escolha: SubornoEscolha) => {
-    if (!career) return;
-    const subAtual = career.suborno ?? SUBORNO_INICIAL;
-    const { state: novoSub, efeitos, finalizado } = avancarSuborno(subAtual, escolha);
-    const novo: CareerState = {
-      ...career,
-      suborno: novoSub,
-      bonusProximaPartida: career.bonusProximaPartida + (efeitos.bonusPoder ?? 0),
-      moralTime: Math.max(0, Math.min(100, career.moralTime + (efeitos.moral ?? 0))),
-    };
-    // Suborno move SOV: registra no Banco Central (module 'rpg') ANTES de persistir.
-    if (efeitos.sov && perfil?.user_id) {
-      void registrarTransacaoSov(
-        perfil.user_id,
-        efeitos.sov,
-        efeitos.sov >= 0 ? "reward" : "penalty",
-        `Suborno: escolha "${escolha}" — efeito de SOV`,
-        "rpg",
-        { subornoEscolha: escolha, node: novoSub.nodeAtual },
-      );
-    }
-    persistCareer(novo);
-    setCareer(novo);
-    // Se a cena resolveu o capítulo, gera manchete narrativa do desfecho.
-    if (finalizado && novoSub.desfecho) {
-      const manchete =
-        novoSub.desfecho === "caiu_em_armadilha"
-          ? "Treinador cai em esquema de suborno na final"
-          : novoSub.desfecho === "denuncia"
-            ? "Treinador denuncia propina e vira símbolo da integridade"
-            : novoSub.desfecho === "jogar_duplo"
-              ? "Operação dupla do treinador desbarata esquema"
-              : novoSub.desfecho === "aceitou"
-                ? "Sombras rondam o banco após resultados suspeitos"
-                : "Treinador recusa propina e mantém nome limpo";
-      const comManchete = addHeadlines(novo, [
-        {
-          id: `suborno-${Date.now()}`,
-          manchete,
-          tag: "polemica",
-          rodada: 99,
-        },
-      ]);
-      persistCareer(comManchete);
-      setCareer(comManchete);
-    }
-    // Não vai direto para a partida - espera o usuário clicar em "Continuar" no SubornoStory
-  };
-
   const aplicarEscolha = (choice: Choice) => {
     if (!career) return;
     const bonusPoder = career.bonusProximaPartida + (choice.bonusPoder ?? 0);
@@ -2355,7 +2354,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     let sov = career.coach.sov;
     // Penalty imediata (não aplica bônus/penal condicional aqui — vai no finish)
     if (choice.penaltyPontos && choice.penaltyPontos < 0) sov += choice.penaltyPontos;
-    // Impacto financeiro imediato (venda de botão, suborno aceito, multa…).
+    // Impacto financeiro imediato (venda de botão, multa…).
     if (choice.impactoFinanceiro) sov += choice.impactoFinanceiro;
 
     // Sanções pendentes para a próxima partida real (W.O. / desfalque / perda de pts).
@@ -3177,6 +3176,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       if (classificouAgora) receita += POINTS.CLASSIFICOU_MATA;
       // Escala da divisão aplicada sobre a receita esportiva da partida.
       receita = receitaDa(career.divisao, receita);
+      // Receita ESPORTIVA da partida isolada da premiação de fim de temporada:
+      // cada uma tem escritor próprio no ledger (chave da partida × chave de
+      // fim de campanha) e os VALORES precisam bater com o snapshot — senão a
+      // carteira divergia do caixa do clube a cada partida (dinheiro fantasma).
+      const receitaPartida = receita;
+      let premiacaoTemporada = 0;
 
       // Fim de campanha: premiação por posição final (caixa do clube) —
       // tabela de pontos corridos: a posição é a da TABELA, não do mata-mata.
@@ -3184,7 +3189,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       if (t.phase === "fim") {
         const tabelaFinal = sortTable(t.groups[0]?.table ?? []);
         const posicaoFim = Math.max(1, tabelaFinal.findIndex((row) => row.teamId === t.userTeamId) + 1);
-        receita += premiacaoDa(career.divisao, posicaoFim, bonusCampeao(t.difficulty));
+        premiacaoTemporada = premiacaoDa(career.divisao, posicaoFim, bonusCampeao(t.difficulty));
+        receita += premiacaoTemporada;
         if (t.champion === t.userTeamId) {
           novoTitulos += 1;
           manchetesFim.push(`CAMPEÃO! ${career.coach.apelido || career.coach.nome} é herói eterno`);
@@ -3255,7 +3261,6 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
         jogadosNessaRodada,
         fixDoUsuario,
         {
-          subornoAtivo: !!career.suborno?.nodeAtual,
           posicaoUsuario,
           totalTimes: tabelaOrdenada.length,
         },
@@ -3682,6 +3687,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             ga,
             lastChoice,
             `t${career.temporada ?? 1}:${current.id}`,
+            "career",
+            // Mesmo valor que entrou no caixa do clube no snapshot — o ledger
+            // registra a receita REAL da partida (antes gravava o delta cru
+            // 3/1/0 e a carteira divergia do caixa 12× por vitória na série A).
+            receitaPartida,
           ).catch(() => {});
           void registrarEventoMissao("botao_partida_carreira");
           if (gf > ga) void registrarEventoMissao("botao_vitoria_carreira");
@@ -3719,6 +3729,10 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
             careerAtual: novaCareer,
             temporada: novaCareer.temporada,
             divisao: novaCareer.divisao,
+            // Mesmo valor que entrou no caixa do clube no snapshot
+            // (`premiacaoDa`) — antes o ledger pagava a tabela antiga
+            // (vice=15/terceiro=10/quarto=5/fora=0) e divergia do snapshot.
+            valorBonus: premiacaoTemporada,
           }).catch(() => {});
         }
         // As manchetes da rodada já foram persistidas no snapshot da carreira
@@ -4091,6 +4105,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
           onVenderCota={handleVenderCota}
           onDonoServidor={handleDonoServidor}
           onPerdeuClube={handlePerdeuClube}
+          onComprarClubeVitrine={handleComprarClubeVitrine}
         />
       </Shell>
     );
@@ -4114,19 +4129,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   }
 
   /* ---------- prioridade do celular oficial (§15) ---------- */
-  // Decisão prioritária (suborno > narrativa > choice) renderizada no celular
+  // Decisão prioritária (narrativa > choice) renderizada no celular
   // FIXO, único celular do jogo (§15). Calculada antes das telas de jogo.
   let prioridadeCelular: React.ReactNode = null;
   try {
-    if (career?.suborno && (career.suborno.nodeAtual || career.suborno.desfecho)) {
-      prioridadeCelular = (
-        <SubornoStory
-          state={career.suborno}
-          onAvancar={aplicarSuborno}
-          onFechar={() => setScreen("hub")}
-        />
-      );
-    } else if (career?.narrativa?.cenaAtual) {
+    if (career?.narrativa?.cenaAtual) {
       const cena = cenaDaNarrativa(career.narrativa);
       if (cena) {
         prioridadeCelular = (

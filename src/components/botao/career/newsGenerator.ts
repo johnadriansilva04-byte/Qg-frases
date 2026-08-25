@@ -221,15 +221,6 @@ const T_MATA = [
   "{T} focado, diz {coach}",
 ];
 
-const T_SUBORNO = [
-  "Imprensa investiga reunião suspeita envolvendo comissão do {T}",
-  "Boato: estranho é visto no estacionamento após jogo do {T}",
-  "Coluna do dia: 'algo cheira mal no futebol de botão'",
-  "Diretoria do {T} nega qualquer irregularidade",
-  "Rumor: envelope misterioso circula no {T}",
-  "{T} envolvido em polêmica de suborno",
-];
-
 const T_GOLEADA = [
   "GOLEADA! {W} destrói adversário",
   "{coachW}: 'Melhor jogo da temporada'",
@@ -269,7 +260,7 @@ export function gerarManchetesDaRodada(
   rodadaTexto: string,
   fixturesJogados: Fixture[],
   fixtureDoUsuario: Fixture | undefined,
-  contexto?: { subornoAtivo?: boolean; posicaoUsuario?: number; totalTimes?: number },
+  contexto?: { posicaoUsuario?: number; totalTimes?: number },
 ): Headline[] {
   const news: Headline[] = [];
   const rodadaNum = tour.groupFixtures.filter((f) => f.played).length;
@@ -384,17 +375,6 @@ export function gerarManchetesDaRodada(
       }),
       subtitulo: `${stage} · ${userTeamName}`,
       tag: "seu-time",
-      rodada: rodadaNum,
-    });
-  }
-
-  // 5. narrativa paralela de suborno (boatos) enquanto o enredo está ativo
-  if (contexto?.subornoAtivo && Math.random() < 0.5) {
-    news.push({
-      id: nextId(),
-      manchete: fill(pick(T_SUBORNO), { T: userTeamName }),
-      subtitulo: "Rumores · imprensa fareja polêmica",
-      tag: "polemica",
       rodada: rodadaNum,
     });
   }

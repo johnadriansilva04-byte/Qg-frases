@@ -128,3 +128,60 @@ export async function responderPropostaClube(
   }
   return null;
 }
+
+/* ------------------------- Vitrine pública ------------------------- */
+
+export type ClubeAVenda = {
+  clubeId: string;
+  nome: string;
+  preco: number;
+  donoUserId: string;
+  donoNome: string | null;
+};
+
+/** Anuncia o clube do usuário na vitrine (preço > 0) ou retira (null/0). */
+export async function anunciarVendaClube(
+  clubeId: string,
+  preco: number | null,
+): Promise<string | null> {
+  const { error } = await supabase.rpc("cidadela_anunciar_venda_clube", {
+    p_clube_id: clubeId,
+    p_preco: preco && preco > 0 ? Math.floor(preco) : null,
+  });
+  if (error) {
+    logErro("cidadela_anunciar_venda_clube", error);
+    return error.message ?? "Não foi possível anunciar a venda.";
+  }
+  return null;
+}
+
+/** Lista pública da vitrine (toda a Cidadela vê). null = erro. */
+export async function listarClubesAVenda(): Promise<ClubeAVenda[] | null> {
+  const { data, error } = await supabase.rpc("cidadela_listar_clubes_a_venda");
+  if (error || !Array.isArray(data)) {
+    logErro("cidadela_listar_clubes_a_venda", error);
+    return null;
+  }
+  return data.map((r) => ({
+    clubeId: r.clube_id,
+    nome: r.nome,
+    preco: Number(r.preco),
+    donoUserId: r.dono_user_id,
+    donoNome: r.dono_nome,
+  }));
+}
+
+/**
+ * Compra atômica na vitrine: o SOV nasce no ledger (RPC) e a posse move na
+ * mesma transação. Retorna mensagem de erro legível ou null em sucesso.
+ */
+export async function comprarClubeAnunciado(clubeId: string): Promise<string | null> {
+  const { error } = await supabase.rpc("cidadela_comprar_clube_anunciado", {
+    p_clube_id: clubeId,
+  });
+  if (error) {
+    logErro("cidadela_comprar_clube_anunciado", error);
+    return error.message ?? "Não foi possível concluir a compra.";
+  }
+  return null;
+}

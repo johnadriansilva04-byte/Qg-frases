@@ -48,6 +48,17 @@ migração é aplicada **manualmente** colando o conteúdo do arquivo no
     **Depende de `futebol.sql`, `sov_financial_system.sql` e `sov_bank.sql`.**
     Sem ela: salas 9+ não criam, bots não preenchem e a regra dos 50 SOV não
     é imposta pelo servidor (o frontend degrada com mensagem clara).
+13. `clubes_venda.sql` — **Vitrine pública de clubes** (2026-08-24):
+    `botao_times.em_venda` + `preco_venda` e as RPCs
+    `cidadela_anunciar_venda_clube` (só o dono; preço NULL/0 retira),
+    `cidadela_listar_clubes_a_venda` (vitrine visível para todo autenticado)
+    e `cidadela_comprar_clube_anunciado` (atômica: débito do comprador +
+    crédito do vendedor no ledger, posse transferida, vitrine limpa e a
+    participação do vendedor removida do JSONB dele — senão ele seguia
+    recebendo dividendos de clube vendido). **Depende de `futebol.sql`
+    (botao_times.dono_user_id) e `sov_financial_system.sql`
+    (record_transaction).** Sem ela, a vitrine de clubes simplesmente não
+    existe no servidor (a UI mostra lista vazia).
 
 ## Como verificar se o SOV BANK está operacional
 

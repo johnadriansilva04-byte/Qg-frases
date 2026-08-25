@@ -22,8 +22,11 @@ import {
   listarPropostasClubes,
   enviarPropostaClube,
   responderPropostaClube,
+  anunciarVendaClube,
+  listarClubesAVenda,
   type DonoClube,
   type PropostaClube,
+  type ClubeAVenda,
 } from "@/lib/cidadela/clubesPropriedade";
 import { listarMembrosGrupo, type MembroGrupo } from "@/lib/cidadela/grupoCidadao";
 
@@ -40,6 +43,10 @@ type Props = {
   /** O usuário vendeu o clube via proposta aceita (SOV já movido no ledger
    *  pela RPC) — o chamador zera a participação local SEM nova transação. */
   onPerdeuClube?: ((clubeId: string) => void) | undefined;
+  /** Compra de clube ANUNCIADO na vitrine pública: o chamador executa a RPC
+   *  (ledger + posse atômicos) e aplica a participação no snapshot pelo
+   *  preço anunciado. */
+  onComprarClubeVitrine?: ((clube: Team, preco: number) => Promise<void>) | undefined;
 };
 
 export function PropriedadeScreen({
@@ -50,6 +57,7 @@ export function PropriedadeScreen({
   onVenderCota,
   onDonoServidor,
   onPerdeuClube,
+  onComprarClubeVitrine,
 }: Props) {
   const [clubeSelecionado, setClubeSelecionado] = useState<Team | null>(null);
   const [modo, setModo] = useState<"comprar" | "vender" | null>(null);
@@ -65,6 +73,11 @@ export function PropriedadeScreen({
   const [propValor, setPropValor] = useState(100);
   const [propMsg, setPropMsg] = useState<string | null>(null);
   const [propEnviando, setPropEnviando] = useState(false);
+  // Vitrine pública de clubes à venda (toda a Cidadela vê e compra).
+  const [vitrine, setVitrine] = useState<ClubeAVenda[] | null>(null);
+  const [precoAnuncio, setPrecoAnuncio] = useState<Record<string, string>>({});
+  const [vitrineMsg, setVitrineMsg] = useState<string | null>(null);
+  const [vitrineBusy, setVitrineBusy] = useState<string | null>(null);
 
   const clubesProprietario = listarClubesProprietario(career);
   const patrimonioTotal = patrimonioParticipacoes(career);
@@ -74,16 +87,33 @@ export function PropriedadeScreen({
     if (!userId) return;
     let vivo = true;
     void (async () => {
-      const [mapa, lista] = await Promise.all([mapaDonosClubes(), listarPropostasClubes()]);
+      const [mapa, lista, vit] = await Promise.all([
+        mapaDonosClubes(),
+        listarPropostasClubes(),
+        listarClubesAVenda(),
+      ]);
       if (!vivo) return;
       setDonos(mapa);
       setPropostas(lista);
-      // Aquisição via proposta aceita: o servidor já me reconhece como dono,
-      // sincroniza a carreira (uma vez por clube — o chamador é idempotente).
-      if (mapa && onDonoServidor) {
-        for (const [clubeId, dono] of mapa) {
-          if (dono.donoUserId === userId && participacaoAtual(career, clubeId) < 100) {
-            onDonoServidor(clubeId);
+      setVitrine(vit);
+      if (mapa) {
+        // Aquisição via proposta aceita: o servidor já me reconhece como dono,
+        // sincroniza a carreira (uma vez por clube — o chamador é idempotente).
+        if (onDonoServidor) {
+          for (const [clubeId, dono] of mapa) {
+            if (dono.donoUserId === userId && participacaoAtual(career, clubeId) < 100) {
+              onDonoServidor(clubeId);
+            }
+          }
+        }
+        // Vendido na vitrine por outra sessão: o mapa já aponta outro dono
+        // mas o snapshot local ainda marca 100% — zera sem nova transação.
+        if (onPerdeuClube) {
+          for (const p of clubesProprietario) {
+            if (p.participacao >= 100) {
+              const dono = mapa.get(p.clubeId);
+              if (dono && dono.donoUserId !== userId) onPerdeuClube(p.clubeId);
+            }
           }
         }
       }
@@ -93,6 +123,46 @@ export function PropriedadeScreen({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  const recarregarVitrine = async () => {
+    const [mapa, vit] = await Promise.all([mapaDonosClubes(), listarClubesAVenda()]);
+    setDonos(mapa);
+    setVitrine(vit);
+  };
+
+  const handleAnunciar = async (clube: Team) => {
+    const bruto = (precoAnuncio[clube.id] ?? "").replace(",", ".");
+    const preco = bruto ? Number(bruto) : precoClubeInteiro(clube);
+    if (!Number.isFinite(preco) || preco <= 0) {
+      setVitrineMsg("Defina um preço de venda válido (maior que zero).");
+      return;
+    }
+    setVitrineBusy(clube.id);
+    setVitrineMsg(null);
+    const erro = await anunciarVendaClube(clube.id, preco);
+    setVitrineMsg(erro ?? `${clube.name} anunciado na vitrine por ${Math.floor(preco)} SOV.`);
+    await recarregarVitrine();
+    setVitrineBusy(null);
+  };
+
+  const handleRetirarVenda = async (clube: Team) => {
+    setVitrineBusy(clube.id);
+    setVitrineMsg(null);
+    const erro = await anunciarVendaClube(clube.id, null);
+    setVitrineMsg(erro ?? `${clube.name} retirado da vitrine.`);
+    await recarregarVitrine();
+    setVitrineBusy(null);
+  };
+
+  const handleComprarVitrine = async (item: ClubeAVenda) => {
+    const clube = TEAMS.find((t) => t.id === item.clubeId);
+    if (!clube || !onComprarClubeVitrine) return;
+    setVitrineBusy(item.clubeId);
+    setVitrineMsg(null);
+    await onComprarClubeVitrine(clube, item.preco);
+    await recarregarVitrine();
+    setVitrineBusy(null);
+  };
 
   // Lista de cidadãos só é necessária para contratar treinador.
   useEffect(() => {
@@ -260,6 +330,17 @@ export function PropriedadeScreen({
                           {rotuloDono(clube)}
                         </p>
                       )}
+                      {(() => {
+                        const anuncio = vitrine?.find((v) => v.clubeId === prop.clubeId);
+                        if (anuncio) {
+                          return (
+                            <p className="mt-1 text-xs font-bold text-emerald-300">
+                              🏷️ À venda na vitrine por {anuncio.preco.toFixed(0)} SOV
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                     <button
                       onClick={() => handleVender(clube)}
@@ -268,11 +349,104 @@ export function PropriedadeScreen({
                       Vender
                     </button>
                   </div>
+                  {/* Vitrine pública: só o dono (100%) anuncia. O preço padrão
+                      é o valor de mercado do clube (editável). */}
+                  {userId && eDono && (
+                    <div className="mt-3 flex items-center gap-2 border-t border-slate-700/60 pt-3">
+                      {vitrine?.some((v) => v.clubeId === prop.clubeId) ? (
+                        <button
+                          onClick={() => void handleRetirarVenda(clube)}
+                          disabled={vitrineBusy === prop.clubeId}
+                          className="rounded-lg bg-rose-700/80 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-600 disabled:opacity-50"
+                        >
+                          Retirar da vitrine
+                        </button>
+                      ) : (
+                        <>
+                          <input
+                            type="number"
+                            min={1}
+                            inputMode="numeric"
+                            placeholder={precoClubeInteiro(clube).toFixed(0)}
+                            value={precoAnuncio[prop.clubeId] ?? ""}
+                            onChange={(e) =>
+                              setPrecoAnuncio((prev) => ({ ...prev, [prop.clubeId]: e.target.value }))
+                            }
+                            className="w-24 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-xs text-white"
+                          />
+                          <button
+                            onClick={() => void handleAnunciar(clube)}
+                            disabled={vitrineBusy === prop.clubeId}
+                            data-testid={`anunciar-${prop.clubeId}`}
+                            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-500 disabled:opacity-50"
+                          >
+                            Anunciar venda
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
+      )}
+
+      {/* VITRINE — clubes à venda por outros jogadores (compra em 1 clique,
+          SOV no ledger + posse transferida na mesma transação). */}
+      {userId && vitrine && vitrine.length > 0 && (
+        <div className="mb-8 rounded-xl border border-emerald-600/40 bg-emerald-600/5 p-4">
+          <h3 className="mb-1 flex items-center gap-2 font-display text-lg text-emerald-300">
+            🏷️ Clubes à venda
+          </h3>
+          <p className="mb-4 text-xs text-slate-400">
+            Anúncios de proprietários da Cidadela — a compra é imediata e o clube vira seu.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {vitrine.map((item) => {
+              const clube = TEAMS.find((t) => t.id === item.clubeId);
+              const meuAnuncio = item.donoUserId === userId;
+              return (
+                <div
+                  key={item.clubeId}
+                  data-testid={`vitrine-${item.clubeId}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-bold">{item.nome}</p>
+                    <p className="text-xs text-slate-400">
+                      Dono: {item.donoNome ?? "cidadão"}
+                      {clube ? ` · Power ${clube.power}` : ""}
+                    </p>
+                    <p className="mt-1 text-sm font-black text-emerald-300">
+                      {item.preco.toFixed(0)} SOV
+                    </p>
+                  </div>
+                  {meuAnuncio ? (
+                    <span className="rounded-lg bg-amber-600/20 px-3 py-1.5 text-xs font-bold text-amber-300">
+                      Seu anúncio
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => void handleComprarVitrine(item)}
+                      disabled={vitrineBusy === item.clubeId || !onComprarClubeVitrine}
+                      data-testid={`comprar-vitrine-${item.clubeId}`}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-500 disabled:opacity-40"
+                    >
+                      Comprar clube
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {vitrineMsg && (
+        <p className="mb-4 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-200">
+          {vitrineMsg}
+        </p>
       )}
 
       {/* Negociações entre jogadores — vale para TODA a Cidadela. Enviar

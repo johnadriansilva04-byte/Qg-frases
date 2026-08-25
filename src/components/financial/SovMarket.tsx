@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Coins, ScrollText, ShoppingCart, Store } from "lucide-react";
+import { Building2, Coins, ScrollText, ShoppingCart, Store } from "lucide-react";
 import {
   carregarInventario,
   carregarOfertasMarketplace,
@@ -9,6 +9,11 @@ import {
   type OfertaCidadela,
 } from "@/lib/cidadela/pracinhaCore";
 import { obterSaldoSov } from "@/lib/financial/sovApi";
+import {
+  comprarClubeAnunciado,
+  listarClubesAVenda,
+  type ClubeAVenda,
+} from "@/lib/cidadela/clubesPropriedade";
 
 interface SovMarketProps {
   userId: string | null;
@@ -18,6 +23,7 @@ interface SovMarketProps {
 export function SovMarket({ userId, compact = false }: SovMarketProps) {
   const [inventario, setInventario] = useState<InventarioCidadela[]>([]);
   const [ofertas, setOfertas] = useState<OfertaCidadela[]>([]);
+  const [clubesAVenda, setClubesAVenda] = useState<ClubeAVenda[]>([]);
   const [saldo, setSaldo] = useState(0);
   const [itemSelecionado, setItemSelecionado] = useState("");
   const [preco, setPreco] = useState("5");
@@ -31,13 +37,15 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
       return;
     }
     setCarregando(true);
-    const [inv, ofs, saldoAtual] = await Promise.all([
+    const [inv, ofs, saldoAtual, vitrine] = await Promise.all([
       carregarInventario(userId),
       carregarOfertasMarketplace(),
       obterSaldoSov(userId),
+      listarClubesAVenda(),
     ]);
     setInventario(inv);
     setOfertas(ofs);
+    setClubesAVenda(vitrine ?? []);
     // Leitura honesta: só atualiza quando a RPC devolve número — nunca
     // sobrescreve o saldo com 0 numa falha (estado falso).
     if (saldoAtual !== null) setSaldo(saldoAtual);
@@ -64,6 +72,23 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
       await carregarTudo();
     } else {
       setFeedback("Não foi possível publicar a oferta.");
+    }
+    setAguardando(null);
+  };
+
+  const comprarClube = async (item: ClubeAVenda) => {
+    if (saldo < item.preco) {
+      setFeedback("Saldo SOV insuficiente para comprar este clube.");
+      return;
+    }
+    setAguardando(`clube-${item.clubeId}`);
+    setFeedback(null);
+    const erro = await comprarClubeAnunciado(item.clubeId);
+    if (erro) {
+      setFeedback(erro);
+    } else {
+      setFeedback(`Você é o novo dono do ${item.nome}! A escritura já está no seu nome.`);
+      await carregarTudo();
     }
     setAguardando(null);
   };
@@ -187,6 +212,55 @@ export function SovMarket({ userId, compact = false }: SovMarketProps) {
           </button>
         </div>
       </section>
+
+      {/* Clubes à venda: vitrine pública de proprietários da Cidadela. A
+          compra é atômica (SOV no ledger + escritura no seu nome). */}
+      {clubesAVenda.length > 0 && (
+        <section className="mb-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Building2 className="size-4 text-amber-300" />
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+              Clubes à venda
+            </p>
+          </div>
+          <div className="space-y-2">
+            {clubesAVenda.map((item) => {
+              const propria = item.donoUserId === userId;
+              return (
+                <div
+                  key={item.clubeId}
+                  data-testid={`mercado-clube-${item.clubeId}`}
+                  className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">{item.nome}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Proprietário: {propria ? "você" : (item.donoNome ?? "cidadão")}
+                      </p>
+                    </div>
+                    {propria ? (
+                      <span className="rounded-xl bg-amber-400/15 px-3 py-2 text-xs font-black text-amber-300">
+                        Seu anúncio
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => comprarClube(item)}
+                        disabled={aguardando !== null}
+                        className="rounded-xl bg-emerald-400 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-40"
+                      >
+                        {aguardando === `clube-${item.clubeId}`
+                          ? "Comprando..."
+                          : `${item.preco.toFixed(0)} SOV`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="mb-3 flex items-center gap-2">

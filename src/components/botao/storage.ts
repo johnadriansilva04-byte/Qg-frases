@@ -67,6 +67,12 @@ export async function mergeProgressInSupabase(
   patch: ProgressPatch,
   extraColumns?: Record<string, unknown>,
 ): Promise<void> {
+  if (typeof window !== "undefined" && (window as any).__debugWrites) {
+    const c = (patch as Record<string, unknown>)["career"] as { rodadaAtual?: number } | undefined;
+    console.log(
+      `[writeq] merge keys=${Object.keys(patch).join(",")} rodada=${c?.rodadaAtual ?? "-"} cols=${Object.keys(extraColumns ?? {}).join(",")}\n${new Error().stack?.split("\n").slice(2, 7).join(" | ")}`,
+    );
+  }
   await enqueueProgressWrite(userId, async () => {
     const { data, error } = await supabase
       .from("botao_usuarios")
@@ -101,6 +107,11 @@ export async function mutateProgressInSupabase(
   userId: string,
   mutator: (prog: Record<string, unknown>, row: Record<string, unknown>) => ProgressMutation | null,
 ): Promise<void> {
+  if (typeof window !== "undefined" && (window as any).__debugWrites) {
+    console.log(
+      `[writeq] mutate\n${new Error().stack?.split("\n").slice(2, 7).join(" | ")}`,
+    );
+  }
   await enqueueProgressWrite(userId, async () => {
     const { data, error } = await supabase
       .from("botao_usuarios")
@@ -124,7 +135,13 @@ export async function mutateProgressInSupabase(
 
 export async function saveProgressToSupabase(userId: string, p: Progress) {
   try {
-    const { tournament: _tournament, ...patch } = p;
+    // `career` vive no MESMO JSONB (progresso_caminpanha) mas é escrita por
+    // saveCareerToSupabase. O estado `progress` em memória carrega uma CÓPIA
+    // VELHA da carreira (a hidratação espalha o JSONB inteiro no Progress) —
+    // regravá-la aqui sobrescrevia o resultado da partida recém-persistido
+    // (classificação/rodada voltavam no F5). career e tournament NUNCA saem
+    // daqui.
+    const { tournament: _tournament, career: _career, ...patch } = p as Progress & { career?: unknown };
     await mergeProgressInSupabase(userId, patch);
   } catch (error) {
     console.error("Erro ao salvar progresso no Supabase:", error);
@@ -141,7 +158,11 @@ export async function loadProgressFromSupabase(userId: string): Promise<Progress
 
     if (error || !data?.progresso_caminpanha) return EMPTY;
 
-    return { ...EMPTY, ...(data.progresso_caminpanha as Progress) };
+    // career NÃO entra no estado Progress (quem precisa lê via
+    // loadCareerFromSupabase) — senão cópias velhas da carreira circulam no
+    // estado e voltam ao banco em qualquer save de progresso.
+    const { career: _career, ...resto } = data.progresso_caminpanha as Progress & { career?: unknown };
+    return { ...EMPTY, ...resto };
   } catch (error) {
     console.error("Erro ao carregar progresso do Supabase:", error);
     return EMPTY;

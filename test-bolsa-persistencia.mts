@@ -39,6 +39,11 @@ function careerBase(): CareerState {
   return {
     ...EMPTY_CAREER,
     coach: { ...EMPTY_CAREER.coach, nome: "Auditor", sov: 1000 },
+    // Forma pós-separação CLUBE×TREINADOR: sem clubeCaixa o normalizador
+    // migra o coach.sov para o caixa do clube (comportamento legado correto,
+    // mas não é o que este teste mede).
+    clubeCaixa: 0,
+    clubeExtrato: [],
   };
 }
 

@@ -44,14 +44,12 @@ const { CelularConversas } = await import(
   "./src/components/botao/career/CelularConversas.tsx"
 );
 const { CelularFixo } = await import("./src/components/CelularFixo.tsx");
-const { SubornoStory } = await import("./src/components/botao/career/SubornoStory.tsx");
 const { NarrativeModal } = await import("./src/components/botao/career/NarrativeModal.tsx");
 const { ChoiceModal } = await import("./src/components/botao/career/ChoiceModal.tsx");
 const { EMPTY_CAREER } = await import("./src/components/botao/career/careerStorage.ts");
 const { garantirContatosRpg } = await import("./src/components/botao/career/rpg/rpgEngine.ts");
 const { createLeague } = await import("./src/components/botao/tournament.ts");
 const { TEAMS, createCustomTeam } = await import("./src/components/botao/data/teams.ts");
-const { SUBORNO_INICIAL } = await import("./src/components/botao/career/subornoEngine.ts");
 const { gerarNarrativa, cenaDaNarrativa } = await import(
   "./src/components/botao/career/narrativeEngine.ts"
 );
@@ -134,26 +132,9 @@ render(
   }),
 );
 
-// 4) Prioridades do celular (suborno / narrativa / choice).
-const careerSuborno = { ...career, suborno: SUBORNO_INICIAL };
+// 4) Prioridades do celular (narrativa / choice).
 const narrativa = gerarNarrativa(career);
 const cena = cenaDaNarrativa(narrativa);
-render(
-  "SubornoStory (prioridade)",
-  React.createElement(SubornoStory, {
-    state: SUBORNO_INICIAL,
-    onAvancar: () => {},
-    onFechar: () => {},
-  }),
-);
-render(
-  "SubornoStory nodeAtual=aprox1 (REPRO #130)",
-  React.createElement(SubornoStory, {
-    state: { ...SUBORNO_INICIAL, oferta: 1, nodeAtual: "aprox1" },
-    onAvancar: () => {},
-    onFechar: () => {},
-  }),
-);
 if (cena) {
   render(
     "NarrativeModal (prioridade)",
@@ -176,19 +157,22 @@ render(
 );
 
 // 5) CelularFixo com prioridade — caminho real do crash (§15).
-render(
-  "CelularFixo + prioridade suborno",
-  React.createElement(CelularFixo, {
-    userId: null,
-    nomeJogador: "Treinador Teste",
-    conversas: careerSuborno.conversas,
-    prioridade: React.createElement(SubornoStory, {
-      state: SUBORNO_INICIAL,
-      onAvancar: () => {},
-      onFechar: () => {},
+if (cena) {
+  render(
+    "CelularFixo + prioridade narrativa",
+    React.createElement(CelularFixo, {
+      userId: null,
+      nomeJogador: "Treinador Teste",
+      conversas: career.conversas,
+      prioridade: React.createElement(NarrativeModal, {
+        state: narrativa,
+        cena,
+        onAvancar: () => {},
+        onBack: () => {},
+      }),
     }),
-  }),
-);
+  );
+}
 
 console.log(falhas === 0 ? "\n== 0 falhas ==" : `\n== ${falhas} FALHAS ==`);
 process.exit(falhas === 0 ? 0 : 1);

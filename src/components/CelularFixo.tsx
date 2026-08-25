@@ -26,7 +26,7 @@ type Props = {
   onRegistrarPosicao?:
     | ((posicao: import("./botao/career/historia/types").PosicaoFinal) => void)
     | undefined;
-  /** Conteúdo prioritário (ex.: decisão de suborno/narrativa/choice) renderizado
+  /** Conteúdo prioritário (ex.: decisão de narrativa/choice) renderizado
    *  no celular oficial quando aberto — substitui a lista de conversas. */
   prioridade?: React.ReactNode | undefined;
   /** Quantidade de mensagens não lidas (badge da notificação). */
@@ -166,7 +166,7 @@ export function CelularFixo({
         )}
 
         {prioridade ? (
-          // Decisão prioritária (ex.: suborno/narrativa/choice) — auto-gerencia
+          // Decisão prioritária (ex.: narrativa/choice) — auto-gerencia
           // seu próprio "fechar"; quando resolvida o BotaoGame recalcula a
           // prop e a lista de conversas volta a ser o destino.
           <div className="h-full">{prioridade}</div>

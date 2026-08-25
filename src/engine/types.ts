@@ -127,6 +127,8 @@ export interface MatchLiveState {
   possession: { home: number; away: number };
   possessionSide: TeamSide | null;
   stamina: number;
+  /** Carga atual da barra de força (0 = escondida). */
+  charge: number;
   lastEvent?: MatchEvent;
   running: boolean;
 }

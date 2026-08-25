@@ -1421,6 +1421,30 @@ export type Database = {
           dono_nome: string | null;
         }[];
       };
+      cidadela_anunciar_venda_clube: {
+        Args: { p_clube_id: string; p_preco?: number | null };
+        Returns: { clube_id: string; em_venda: boolean; preco?: number };
+      };
+      cidadela_listar_clubes_a_venda: {
+        Args: Record<string, never>;
+        Returns: {
+          clube_id: string;
+          nome: string;
+          preco: number;
+          dono_user_id: string;
+          dono_nome: string | null;
+        }[];
+      };
+      cidadela_comprar_clube_anunciado: {
+        Args: { p_clube_id: string };
+        Returns: {
+          clube_id: string;
+          nome: string;
+          preco: number;
+          de: string;
+          para: string;
+        };
+      };
       cidadela_enviar_proposta_clube: {
         Args: { p_para: string; p_clube_id: string; p_tipo: string; p_valor?: number };
         Returns: string;

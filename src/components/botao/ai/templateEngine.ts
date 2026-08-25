@@ -41,9 +41,6 @@ const FALLBACK: Record<PromptType, Record<string, string[]>> = {
     empate: [
       "EMPATOU! {coach} sai de campo com aquela cara de quem não entendeu se é bom ou ruim. Patético!",
     ],
-    suborno: [
-      "Olha o detalhe: dizem que rolou envelope no vestiário do {T}. Coincidência? Eu duvido!",
-    ],
     crise: [
       "Crise financeira no {T}? Se {coach} não vencer logo, a diretoria vai vender até o botão goleador!",
     ],
@@ -79,8 +76,6 @@ const FALLBACK: Record<PromptType, Record<string, string[]>> = {
   },
   noticia: {
     escandalo: ["Vazou! Bastidores do {T} em ebulição após reunião secreta da diretoria com empresário"],
-    suborno: ["Imprensa apura: esquema de propina ronda o {T} e {coach} é citado nos bastidores"],
-    crise: ["Crise no {T}: salário atrasado e torcida cobra cabeça de {coach}"],
     geral: ["Futebol de Botão: {coach} no comando do {T} nesta rodada"],
   },
   pracinha: {

@@ -126,7 +126,13 @@ export function EconomiaScreen({ career, userId, onComprar, onVender, onAbrirMer
             <Wallet className="size-4" /> SOV Bank
           </p>
           <p className="mt-2 font-display text-2xl">{fmtSOV(bankSaldo)} SOV</p>
-          <p className="text-xs text-muted-foreground">Saldo líquido disponível</p>
+          <p className="text-xs text-muted-foreground">
+            Saldo líquido total (pessoal + caixa do clube)
+          </p>
+          <p className="mt-1 text-[10px] text-muted-foreground/70">
+            Pessoal: {fmtSOV(bankSaldo - (career.clubeCaixa ?? 0))} SOV · Caixa do clube:{" "}
+            {fmtSOV(career.clubeCaixa ?? 0)} SOV
+          </p>
         </div>
         <div className="sovereignty-panel p-4">
           <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-sky-300">

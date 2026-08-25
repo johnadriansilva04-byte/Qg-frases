@@ -974,7 +974,7 @@ END; $$;
 -- GRANTS PARA AS RPCs
 -- ============================================================================
 
-GRANT EXECUTE ON FUNCTION public.criar_mesa_futebol(TEXT)                       TO authenticated;
+GRANT EXECUTE ON FUNCTION public.criar_mesa_futebol(TEXT, TIMESTAMPTZ, NUMERIC) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.entrar_mesa_futebol(TEXT, TEXT)                TO authenticated;
 GRANT EXECUTE ON FUNCTION public.registrar_jogada_mesa(TEXT, JSONB, BOOLEAN)    TO authenticated;
 GRANT EXECUTE ON FUNCTION public.registrar_gol_mesa(TEXT, UUID)                 TO authenticated;

@@ -280,8 +280,6 @@ export type CareerState = {
   /** Comparação das divisões na próxima temporada (para recriar ligas após
    * promoção/rebaixamento). */
   composicoes?: import("./seasonEngine").ComposicoesDivisoes | undefined;
-  // Enredo de suborno (narrativa paralela). Veja subornoEngine.ts.
-  suborno?: import("./subornoEngine").SubornoState | undefined;
   // Histórias dinâmicas no celular (suspense/drama). Veja narrativeEngine.ts.
   narrativa?: import("./narrativeEngine").NarrativaState | undefined;
   // Copa do Brasil jogável, paralela ao Brasileirão (pontos corridos).
@@ -294,7 +292,7 @@ export type CareerState = {
   temporada: number;
   // Desafio de patrocinador ativo (mensagem no celular com meta → soberania).
   desafioPatrocinador?: DesafioPatrocinador | null | undefined;
-  // Conversas do celular (patrocinador, namorada, suborno, etc.)
+  // Conversas do celular (patrocinador, namorada, NPCs, etc.)
   conversas: ConversaCelular[];
   // Sanções de decisões pendentes a aplicar na próxima partida real.
   // wo=true força derrota por W.O. (sem jogar); desfalqueBotao remove N botões;

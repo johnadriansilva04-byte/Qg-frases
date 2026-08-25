@@ -9,7 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-import { garantirCarteira } from "@/lib/financial/sovApi";
+import { garantirCarteira, obterSaldoSov } from "@/lib/financial/sovApi";
 
 export type ExtratoItem = {
   id: string;
@@ -133,10 +133,15 @@ export async function bonusCadastro(userId: string): Promise<number | null> {
  */
 export async function bootstrapFinanceiro(userId: string): Promise<number | null> {
   if (!userId) return null;
-  const saldo = await bonusCadastro(userId);
+  // Garante carteira + bônus idempotente. ATENÇÃO: o `balance` retornado pela
+  // RPC de bônus é o saldo NA HORA do lançamento original (em retry
+  // idempotente vem congelado — ex.: 50 do cadastro), NÃO o saldo atual.
+  // O alinhamento do cache usa a leitura autoritativa do ledger.
+  await bonusCadastro(userId);
+  const saldo = await obterSaldoSov(userId);
   if (saldo != null) return saldo;
-  // Bônus indisponível (migração pendente/erro real): ao menos garante que a
-  // carteira exista para o restante do jogo. Erro continua erro (null).
+  // Leitura indisponível (migração pendente/erro real): ao menos garante que
+  // a carteira exista para o restante do jogo. Erro continua erro (null).
   await garantirCarteira(userId);
   return null;
 }

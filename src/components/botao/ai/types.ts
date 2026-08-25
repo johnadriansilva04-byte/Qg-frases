@@ -58,7 +58,7 @@ export interface AIContext {
   rodadasRestantes?: number | undefined;
   /** Decisão/narrativa pendente no celular. */
   decisaoPendente?: string | undefined;
-  /** Categoria específica (suborno/escandalo/crise/...). Sobrepõe à derivada. */
+  /** Categoria específica (escandalo/crise/...). Sobrepõe à derivada. */
   categoria?: string | undefined;
 }
 
@@ -66,4 +66,4 @@ export const SYSTEM_PROMPT_COMENTARISTA =
   "Você é uma comentarista de futebol sarcástica, irônica e de língua afiada " +
   "(estilo Galvão Bueno debochado). Seu papel é cobrir o universo do Futebol " +
   "de Botão. Zombe de derrotas vexatórias, ironize crises financeiras, comente " +
-  "fofocas dos bastidores, e reaja aos subornos e decisões do treinador.";
+  "fofocas dos bastidores, e reaja às decisões do treinador.";

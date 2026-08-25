@@ -25,6 +25,7 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
   const [touch, setTouch] = useState(false);
   const [matchState, setMatchState] = useState<MatchState>("intro");
   const [finalResult, setFinalResult] = useState<MatchResult | null>(null);
+  const [erroInicio, setErroInicio] = useState<string | null>(null);
 
   useEffect(() => {
     setTouch(window.matchMedia("(pointer: coarse)").matches);
@@ -36,6 +37,7 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
       return;
     }
     try {
+      setErroInicio(null);
       const canvas = canvasRef.current;
       const parent = canvas.parentElement;
       if (parent) {
@@ -55,7 +57,13 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
       engine.start();
       setMatchState("playing");
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : "";
       console.error("Error starting match:", error);
+      // Falha visível (WebGL indisponível, GPU bloqueada...) — nunca um
+      // clique que "não faz nada". O usuário pode tentar de novo ou voltar.
+      (window as unknown as { __ultimoErro3d?: string }).__ultimoErro3d = `${msg}\n${stack ?? ""}`;
+      setErroInicio(msg);
     }
   };
 
@@ -127,6 +135,18 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
           >
             INICIAR PARTIDA
           </button>
+
+          {erroInicio && (
+            <div className="mt-4 max-w-md rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-center">
+              <p className="text-sm font-semibold text-red-300">
+                Não foi possível iniciar a partida 3D neste navegador.
+              </p>
+              <p className="mt-1 break-words text-xs text-red-200/70">{erroInicio}</p>
+              <p className="mt-1 text-xs text-white/50">
+                Ative a aceleração de hardware/WebGL ou jogue no modo Técnico.
+              </p>
+            </div>
+          )}
 
           {/* Controls Hint */}
           <div className="mt-6 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/60">
@@ -237,7 +257,32 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
           {/* Desktop key hints */}
           {!touch && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-hud-line bg-hud/70 px-4 py-1.5 text-[11px] text-muted-foreground backdrop-blur-md">
-              WASD mover · SHIFT sprint · ESPAÇO passe · ENTER chute · E pedir bola · BACKSPACE carrinho
+              WASD mover · SHIFT sprint · segure ESPAÇO passe · segure ENTER chute · E pedir bola · BACKSPACE carrinho
+            </div>
+          )}
+
+          {/* Barra de força (DOM — espelha a barra 3D acima da cabeça) */}
+          {(live?.charge ?? 0) > 0 && (
+            <div className="pointer-events-none absolute bottom-16 left-1/2 w-56 -translate-x-1/2">
+              <div className="h-2.5 overflow-hidden rounded-full border border-hud-line bg-hud/80 backdrop-blur-md">
+                <div
+                  className="h-full rounded-full transition-[width] duration-75"
+                  style={{
+                    width: `${Math.round((live?.charge ?? 0) * 100)}%`,
+                    backgroundColor:
+                      (live?.charge ?? 0) < 0.3
+                        ? "#4ade80"
+                        : (live?.charge ?? 0) < 0.6
+                          ? "#facc15"
+                          : (live?.charge ?? 0) < 0.85
+                            ? "#fb923c"
+                            : "#ef4444",
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-center text-[10px] font-semibold uppercase tracking-wider text-white/70">
+                Força
+              </p>
             </div>
           )}
 
@@ -248,7 +293,11 @@ export function Match3DView({ setup, onFinish, onEvent }: Props) {
                 <VirtualStick onChange={(x, y) => engineRef.current?.input.setStick(x, y)} />
               </div>
               <div className="absolute bottom-5 right-4">
-                <ActionPad onAction={act} onSprint={(a) => engineRef.current?.input.setTouchSprint(a)} />
+                <ActionPad
+                  onAction={act}
+                  onSprint={(a) => engineRef.current?.input.setTouchSprint(a)}
+                  onHold={(a, on) => engineRef.current?.input.setTouchHold(a, on)}
+                />
               </div>
             </>
           )}

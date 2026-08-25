@@ -175,16 +175,28 @@ export function SovBankApp({
             ))}
         </div>
 
-        <p className="mt-4 text-[10px] uppercase tracking-widest text-slate-400">SOV Bank · Saldo líquido</p>
+        <p className="mt-4 text-[10px] uppercase tracking-widest text-slate-400">
+          SOV Bank · Saldo total (pessoal + caixa do clube)
+        </p>
         <p className="text-3xl font-black text-white">
           {saldo === null ? "—" : formatarSov(saldo)}{" "}
           <span className="text-sm font-bold text-amber-200">{SOV_BANK.MOEDA_NOME}</span>
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Disponível:{" "}
+          Pessoal disponível:{" "}
           <span className="font-bold text-slate-200">
-            {saldo === null ? "—" : `${formatarSov(saldo)} ${SOV_BANK.MOEDA}`}
+            {saldo === null
+              ? "—"
+              : `${formatarSov(clube ? saldo - clube.caixa : saldo)} ${SOV_BANK.MOEDA}`}
           </span>
+          {clube && (
+            <>
+              {" · "}Caixa do clube:{" "}
+              <span className="font-bold text-sky-300">
+                {formatarSov(clube.caixa)} {SOV_BANK.MOEDA}
+              </span>
+            </>
+          )}
         </p>
         {/* SOV Invest: a segunda carteira do MESMO jogador (investimentos). */}
         <div className="mt-3 flex items-center justify-between rounded-xl border border-sky-400/20 bg-sky-400/5 px-3 py-2">
@@ -198,14 +210,19 @@ export function SovBankApp({
         <p className="mt-1 text-[10px] text-slate-500">
           Dividendos e investimentos caem no SOV Invest. Retirada Invest → Bank: IOF 10%.
         </p>
-        {/* Perfil pessoal × Perfil do clube (§3): dois mundos separados. */}
+        {/* Perfil pessoal × Perfil do clube (§3): dois mundos separados.
+            A carteira (user_wallets.balance) é o TOTAL = pessoal + caixa do
+            clube — mostrar o total como "pessoal" contava o dinheiro do clube
+            duas vezes (uma no pessoal, outra no caixa). */}
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 px-3 py-2">
             <p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-amber-200">
               <UserRound className="size-3" /> Perfil Pessoal
             </p>
             <p className="mt-1 text-sm font-black text-white">
-              {saldo === null ? "—" : formatarSov(saldo)}
+              {saldo === null
+                ? "—"
+                : formatarSov(clube ? saldo - clube.caixa : saldo)}
             </p>
           </div>
           {clube && (

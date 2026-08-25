@@ -59,7 +59,7 @@ async function clicarTexto(page, seletor, txt, exato = false) {
 const browser = await puppeteer.launch({
   executablePath: "/usr/bin/chromium",
   // headed sob Xvfb: o headless deste chromium não tem WebGL; headed + SwiftShader sim
-  headless: false,
+  headless: true,
   args: [
     "--no-sandbox",
     "--disable-dev-shm-usage",

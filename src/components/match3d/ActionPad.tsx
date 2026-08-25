@@ -3,13 +3,21 @@ import type { EngineAction } from "@/engine/input";
 interface Props {
   onAction: (a: EngineAction) => void;
   onSprint: (active: boolean) => void;
+  /** Segurar/soltar passe (X) e chute (B) — carrega a barra de força. */
+  onHold: (a: "pass" | "shoot", active: boolean) => void;
 }
 
 const btn =
   "flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-hud-line bg-hud/70 text-lg font-bold text-foreground backdrop-blur-sm active:scale-95 active:bg-accent/40 transition";
 
 /** Mobile buttons wired to the exact same actions as the keyboard keys. */
-export function ActionPad({ onAction, onSprint }: Props) {
+export function ActionPad({ onAction, onSprint, onHold }: Props) {
+  const holdProps = (a: "pass" | "shoot") => ({
+    onPointerDown: () => onHold(a, true),
+    onPointerUp: () => onHold(a, false),
+    onPointerCancel: () => onHold(a, false),
+    onPointerLeave: () => onHold(a, false),
+  });
   return (
     <div className="relative h-40 w-40 select-none">
       {/* A = carrinho (BACKSPACE) */}
@@ -21,21 +29,21 @@ export function ActionPad({ onAction, onSprint }: Props) {
       >
         A
       </button>
-      {/* X = passe (ESPAÇO) */}
+      {/* X = passe (ESPAÇO) — segurar carrega a força */}
       <button
         type="button"
         aria-label="Passe"
         className={`${btn} absolute left-0 top-1/2 -translate-y-1/2`}
-        onPointerDown={() => onAction("pass")}
+        {...holdProps("pass")}
       >
         X
       </button>
-      {/* B = chute (ENTER) */}
+      {/* B = chute (ENTER) — segurar carrega a força */}
       <button
         type="button"
         aria-label="Chute"
         className={`${btn} absolute right-0 top-1/2 -translate-y-1/2`}
-        onPointerDown={() => onAction("shoot")}
+        {...holdProps("shoot")}
       >
         B
       </button>

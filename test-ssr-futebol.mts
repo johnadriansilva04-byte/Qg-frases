@@ -2,7 +2,7 @@
 /**
  * test-ssr-futebol.mts — render SSR de TODAS as telas do Futebol com carreira
  * completamente carregada (campos que só existem em contas reais: ligas, bolsa,
- * torcida, suborno, narrativa, história). React #130 = element type inválido.
+ * torcida, narrativa, história). React #130 = element type inválido.
  */
 import * as React from "react";
 import { renderToString } from "react-dom/server";
@@ -49,7 +49,6 @@ const { EMPTY_CAREER } = await import("./src/components/botao/career/careerStora
 const { garantirContatosRpg } = await import("./src/components/botao/career/rpg/rpgEngine.ts");
 const { createLeague, applyResult, buildKnockout } = await import("./src/components/botao/tournament.ts");
 const { TEAMS, createCustomTeam } = await import("./src/components/botao/data/teams.ts");
-const { SUBORNO_INICIAL, iniciarOferta } = await import("./src/components/botao/career/subornoEngine.ts");
 const { gerarNarrativa } = await import("./src/components/botao/career/narrativeEngine.ts");
 const { CHOICE_EVENTS } = await import("./src/components/botao/career/choicesEngine.ts");
 const { gerarDesafioPatrocinador } = await import("./src/components/botao/career/patrocinadorEngine.ts");
@@ -91,7 +90,6 @@ const career = {
   ...base,
   titulo: "Carreira cheia",
   copaBrasil: gerarCopaBrasil(userTeam, tour.difficulty),
-  suborno: iniciarOferta(SUBORNO_INICIAL) ?? SUBORNO_INICIAL,
   narrativa: gerarNarrativa(base),
   eventoPendenteId: CHOICE_EVENTS[0]!.id,
   desafioPatrocinador: gerarDesafioPatrocinador(base),

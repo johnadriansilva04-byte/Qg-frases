@@ -78,6 +78,14 @@ export class MatchEngine {
   private minutesPerSecond: number;
   private quality: "low" | "high";
   private resizeObs: ResizeObserver | null = null;
+  /** Carga do chute/passe (barra de força): tipo segurado + valor 0..1. */
+  private charging: "pass" | "shoot" | null = null;
+  private charge = 0;
+  private powerBar: {
+    sprite: THREE.Sprite;
+    ctx: CanvasRenderingContext2D;
+    tex: THREE.CanvasTexture;
+  } | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -129,6 +137,7 @@ export class MatchEngine {
 
     buildField(this.scene, this.quality);
     this.scene.add(this.ball.mesh);
+    this.createPowerBar();
 
     this.spawnTeam(setup.home, "home");
     this.spawnTeam(setup.away, "away");
@@ -141,11 +150,51 @@ export class MatchEngine {
     }
     window.addEventListener("resize", this.handleResize);
 
+    // Gancho de teste/depuração: expõe o motor no window (sem custo em prod).
+    (window as unknown as { __engine3d?: MatchEngine }).__engine3d = this;
+
     this.resetPositions("home");
     this.emit({ type: "kickoff", minute: 0, detail: `${setup.home.name} x ${setup.away.name}` });
   }
 
   // ---------------------------------------------------------------- setup
+
+  /** Barra de força 3D: sprite sempre de frente para a câmera, acima da
+   * cabeça do jogador controlado. Só aparece enquanto carrega. */
+  private createPowerBar() {
+    const cnv = document.createElement("canvas");
+    cnv.width = 96;
+    cnv.height = 12;
+    const ctx = cnv.getContext("2d");
+    if (!ctx) return;
+    const tex = new THREE.CanvasTexture(cnv);
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.9, 0.24, 1);
+    sprite.visible = false;
+    sprite.renderOrder = 999;
+    this.scene.add(sprite);
+    this.powerBar = { sprite, ctx, tex };
+  }
+
+  private updatePowerBar(me: Sim | undefined) {
+    const bar = this.powerBar;
+    if (!bar) return;
+    if (!me || this.charging === null) {
+      bar.sprite.visible = false;
+      return;
+    }
+    const { ctx, tex, sprite } = bar;
+    ctx.clearRect(0, 0, 96, 12);
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, 96, 12);
+    const c = this.charge;
+    ctx.fillStyle = c < 0.3 ? "#4ade80" : c < 0.6 ? "#facc15" : c < 0.85 ? "#fb923c" : "#ef4444";
+    ctx.fillRect(1, 1, 94 * c, 10);
+    tex.needsUpdate = true;
+    sprite.position.set(me.x, 2.45, me.z);
+    sprite.visible = true;
+  }
 
   private spawnTeam(team: MatchTeamInput, side: TeamSide) {
     const slots = formationSlots(team.formation);
@@ -279,6 +328,7 @@ export class MatchEngine {
     this.updateBall(dt);
     this.updateAnimation(dt);
     this.updateCamera(dt);
+    this.updatePowerBar(this.players.find((p) => p.isControlled));
 
     // Half / full time
     if (this.half === 1 && this.minute >= this.minutesPerHalf) {
@@ -313,7 +363,19 @@ export class MatchEngine {
     p.z = clamp(p.z, -FIELD.halfWidth - 2, FIELD.halfWidth + 2);
     const sp = Math.hypot(p.vx, p.vz);
     p.stats.distanceKm += (sp * dt) / 1000;
-    if (sp > 0.4) p.heading = Math.atan2(p.vx, p.vz);
+    // Orientação do corpo: com a bola, olha para a direção do movimento;
+    // sem a bola, acompanha a bola automaticamente. A rotação é SEMPRE
+    // suave (menor arco) — nunca gira instantaneamente.
+    let alvo = p.heading;
+    if (this.ball.owner === p) {
+      if (sp > 0.4) alvo = Math.atan2(p.vx, p.vz);
+    } else {
+      alvo = Math.atan2(this.ball.pos.x - p.x, this.ball.pos.z - p.z);
+    }
+    let diff = alvo - p.heading;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    p.heading += diff * clamp(9 * dt, 0, 1);
     p.rig.group.position.set(p.x, 0, p.z);
     p.rig.group.rotation.y = p.heading;
     if (p.stateTimer > 0) {
@@ -371,6 +433,8 @@ export class MatchEngine {
     const wantsSprint = this.input.sprint && Math.hypot(mv.x, mv.y) > 0.1 && p.stamina > 2;
     let speed = this.maxSpeed(p) * (wantsSprint ? 1.28 : 1);
     if (p.state === "slide") speed = 0;
+    // Carregando o chute/passe o jogador desacelera (referência: FIFA/UFL).
+    if (this.charging) speed *= 0.55;
 
     if (wantsSprint) p.stamina = clamp(p.stamina - dt * (10 - p.data.attributes.stamina / 14), 0, 100);
     else p.stamina = clamp(p.stamina + dt * 3.5, 0, 100);
@@ -382,11 +446,36 @@ export class MatchEngine {
       p.state = Math.hypot(p.vx, p.vz) < 0.5 ? "idle" : wantsSprint ? "sprint" : "run";
     }
 
+    // Barra de força: segurar ESPAÇO/ENTER (ou X/B no toque) com a bola
+    // carrega; soltar executa. Toque rápido = carga mínima (passe curto).
+    if (this.ball.owner === p && this.freeze <= 0) {
+      const want: "pass" | "shoot" | null = this.input.shootHeld
+        ? "shoot"
+        : this.input.passHeld
+          ? "pass"
+          : null;
+      if (want) {
+        if (this.charging !== want) {
+          this.charging = want;
+          this.charge = 0;
+        }
+        this.charge = clamp(this.charge + dt / 1.1, 0, 1);
+      } else if (this.charging) {
+        const c = Math.max(this.charge, 0.12);
+        if (this.charging === "pass") this.doPass(p, c);
+        else this.doShot(p, c);
+        this.charging = null;
+        this.charge = 0;
+      }
+    } else if (this.charging) {
+      // Perdeu a bola no meio da carga — cancela sem chutar.
+      this.charging = null;
+      this.charge = 0;
+    }
+
     for (const a of actions) {
       if (this.freeze > 0) break;
-      if (a === "pass" && this.ball.owner === p) this.doPass(p);
-      else if (a === "shoot" && this.ball.owner === p) this.doShot(p);
-      else if (a === "tackle") this.startSlide(p);
+      if (a === "tackle") this.startSlide(p);
       else if (a === "request" && this.ball.owner && this.ball.owner.side === p.side && this.ball.owner !== p) {
         this.doRequestBall(p);
       }
@@ -501,7 +590,7 @@ export class MatchEngine {
       // Play it out quickly.
       p.state = "idle";
       this.drive(p, 0, 0, 0, dt);
-      if (p.actionCooldown <= 0) this.doPass(p, true);
+      if (p.actionCooldown <= 0) this.doPass(p, 0.8, true);
       return;
     }
 
@@ -665,7 +754,7 @@ export class MatchEngine {
     return best;
   }
 
-  private doPass(p: Sim, longKick = false) {
+  private doPass(p: Sim, charge = 0.4, longKick = false) {
     const target = this.bestPassTarget(p);
     if (!target) return;
     const lead = 0.25;
@@ -677,13 +766,16 @@ export class MatchEngine {
     const acc = (p.data.attributes.passing + p.data.attributes.technique) / 2;
     const err = ((100 - acc) / 100) * (dist / 22);
     const ang = Math.atan2(dx, dz) + (Math.random() - 0.5) * err * 0.5;
-    const power = clamp(dist * (longKick ? 0.95 : 0.86) + 6, 8, longKick ? 34 : 26);
+    // Passe rasteiro e controlado: a força vem da barra de carga
+    // (0-30% curto, 30-60% médio, 60-100% forte/longo).
+    const power = clamp(6 + charge * 20 + (longKick ? 6 : 0), 6, longKick ? 34 : 27);
+    const loft = longKick || charge > 0.62 ? 3.2 + charge * 2.2 : 0.9;
 
     this.ball.owner = null;
     this.ball.kickLock = 0.28;
     this.ball.lastToucher = p;
     this.ball.pos.y = 0.15;
-    this.ball.vel.set(Math.sin(ang) * power, dist > 22 || longKick ? 4.2 : 1.1, Math.cos(ang) * power);
+    this.ball.vel.set(Math.sin(ang) * power, loft, Math.cos(ang) * power);
     p.state = "pass";
     p.stateTimer = 0.25;
     p.actionCooldown = 0.45;
@@ -702,7 +794,7 @@ export class MatchEngine {
 
   private pendingPass: { from: Sim; to: Sim } | null = null;
 
-  private doShot(p: Sim) {
+  private doShot(p: Sim, charge = 0.5) {
     const d = this.dir(p.side);
     const goalX = d * FIELD.halfLength;
     const dist = Math.hypot(goalX - p.x, -p.z);
@@ -712,13 +804,19 @@ export class MatchEngine {
     const dx = goalX - p.x;
     const dz = aimZ - p.z;
     const len = Math.hypot(dx, dz) || 1;
-    const power = clamp(16 + dist * 0.75 + acc / 8, 18, 34);
+    // Chute: mais forte e com trajetória maior que o passe; a barra de
+    // força manda na potência (fraco = colocado, cheio = bomba).
+    const power = clamp(14 + charge * 22 + acc / 10, 14, 38);
 
     this.ball.owner = null;
     this.ball.kickLock = 0.3;
     this.ball.lastToucher = p;
     this.ball.pos.y = 0.2;
-    this.ball.vel.set((dx / len) * power, clamp(2.2 + dist * 0.06, 2, 5.5), (dz / len) * power);
+    this.ball.vel.set(
+      (dx / len) * power,
+      clamp(1.6 + charge * 3.2 + dist * 0.04, 1.6, 6.2),
+      (dz / len) * power,
+    );
     p.state = "shoot";
     p.stateTimer = 0.3;
     p.actionCooldown = 0.7;
@@ -795,22 +893,25 @@ export class MatchEngine {
       return;
     }
 
-    // Physics - improved ball physics
+    // Physics - rolamento realista: gravidade, quique amortecido e atrito
+    // progressivo do gramado (a bola NUNCA para de forma abrupta).
     b.vel.y -= 22 * dt; // Stronger gravity
     b.pos.addScaledVector(b.vel, dt);
     if (b.pos.y <= 0.11) {
       b.pos.y = 0.11;
-      if (b.vel.y < 0) b.vel.y = -b.vel.y * 0.55; // Better bounce
-      if (Math.abs(b.vel.y) < 0.4) b.vel.y = 0;
-      const fr = 1 - 1.2 * dt; // More realistic friction
+      if (b.vel.y < 0) b.vel.y = -b.vel.y * 0.45; // quique amortecido
+      if (Math.abs(b.vel.y) < 0.5) b.vel.y = 0;
+      // Atrito do gramado: perda de velocidade progressiva (~0.85/s) —
+      // passe fraco rola pouco, passe forte percorre distância maior.
+      const fr = 1 - 0.85 * dt;
       b.vel.x *= fr;
       b.vel.z *= fr;
     } else {
-      const air = 1 - 0.08 * dt; // Less air resistance
+      const air = 1 - 0.1 * dt; // resistência do ar
       b.vel.x *= air;
       b.vel.z *= air;
     }
-    if (Math.hypot(b.vel.x, b.vel.z) < 0.1) {
+    if (Math.hypot(b.vel.x, b.vel.z) < 0.15) {
       b.vel.x = 0;
       b.vel.z = 0;
     }
@@ -1020,32 +1121,28 @@ export class MatchEngine {
     const me = this.players.find((p) => p.isControlled);
     if (!me) return;
     const d = this.dir(me.side);
-    
-    // Dynamic camera that follows ball more aggressively during attacks
-    const ballDist = Math.hypot(me.x - this.ball.pos.x, me.z - this.ball.pos.z);
-    const ballInFront = (this.ball.pos.x - me.x) * d > 0;
-    
-    // Focus point: blend between player and ball based on possession
-    const focusBlend = ballInFront ? 0.6 : 0.3;
-    const focusX = lerp(me.x, this.ball.pos.x, focusBlend);
-    const focusZ = lerp(me.z, this.ball.pos.z, focusBlend);
 
-    // Dynamic distance based on game situation - CLOSER to player
-    const back = ballInFront && ballDist < 15 ? 10 : 14;
-    const height = ballInFront ? 9 : 7;
-    
+    // Câmera estilo "modo jogador" (FIFA Player Career / UFL / eFootball):
+    // atrás do atleta, na altura da cabeça/tronco, orbitando suavemente.
+    // A bola influencia o enquadramento: quanto mais longe, mais a câmera
+    // abre; quanto mais perto, mais ela fecha.
+    const ballDist = Math.hypot(me.x - this.ball.pos.x, me.z - this.ball.pos.z);
+    const blend = clamp(0.18 + ballDist * 0.02, 0.18, 0.5);
+    const focusX = lerp(me.x, this.ball.pos.x, blend);
+    const focusZ = lerp(me.z, this.ball.pos.z, blend);
+    const back = clamp(5.2 + ballDist * 0.24, 5.2, 12.5);
+    const height = clamp(2.4 + ballDist * 0.11, 2.4, 6.8);
+
     this.camTarget.set(focusX - d * back, height, focusZ);
     this.camTarget.x = clamp(this.camTarget.x, -FIELD.halfLength - 20, FIELD.halfLength + 20);
     this.camTarget.z = clamp(this.camTarget.z, -FIELD.halfWidth - 10, FIELD.halfWidth + 10);
-    
-    // Smoother camera movement
-    const k = clamp(3 * dt, 0, 1);
+
+    // Suavização alta — sem movimentos bruscos.
+    const k = clamp(2.6 * dt, 0, 1);
     this.camera.position.lerp(this.camTarget, k);
-    if (this.camera.position.y < 4) this.camera.position.y = 4;
-    
-    // Look ahead in attack direction
-    const lookAhead = ballInFront ? 6 : 3;
-    this.camLook.lerp(new THREE.Vector3(focusX + d * lookAhead, 1.2, focusZ), k);
+    if (this.camera.position.y < 1.6) this.camera.position.y = 1.6;
+
+    this.camLook.lerp(new THREE.Vector3(focusX + d * 2.5, 1.5, focusZ), k);
     this.camera.lookAt(this.camLook);
   }
 
@@ -1086,6 +1183,7 @@ export class MatchEngine {
       },
       possessionSide: this.ball.owner ? this.ball.owner.side : null,
       stamina: me ? Math.round(me.stamina) : 100,
+      charge: this.charging ? this.charge : 0,
       ...(this.lastEvent ? { lastEvent: this.lastEvent } : {}),
       running: this.running,
     });
@@ -1132,6 +1230,8 @@ export class MatchEngine {
     this.input.dispose();
     this.resizeObs?.disconnect();
     window.removeEventListener("resize", this.handleResize);
+    const w = window as unknown as { __engine3d?: MatchEngine };
+    if (w.__engine3d === this) delete w.__engine3d;
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();
@@ -1139,6 +1239,8 @@ export class MatchEngine {
       if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
       else mat?.dispose();
     });
+    this.powerBar?.tex.dispose();
+    this.powerBar = null;
     this.renderer.dispose();
   }
 }

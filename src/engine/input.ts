@@ -21,6 +21,9 @@ export class InputSystem {
   private sprintTouch = false;
   /** Queued one-shot actions, consumed by the engine each tick. */
   private queue: EngineAction[] = [];
+  /** Botões de ação segurados (carregar força do passe/chute). */
+  private heldPass = false;
+  private heldShoot = false;
 
   private keys = new Set<string>();
   private stick = { x: 0, y: 0 };
@@ -28,6 +31,14 @@ export class InputSystem {
 
   get sprint() {
     return this.sprintKey || this.sprintTouch;
+  }
+
+  get passHeld() {
+    return this.heldPass;
+  }
+
+  get shootHeld() {
+    return this.heldShoot;
   }
 
   attachKeyboard(target: Window | HTMLElement = window) {
@@ -39,8 +50,8 @@ export class InputSystem {
       if (ev.repeat) return;
       this.keys.add(k);
       if (k === "shift") this.sprintKey = true;
-      if (k === " ") this.press("pass");
-      if (k === "enter") this.press("shoot");
+      if (k === " ") this.heldPass = true;
+      if (k === "enter") this.heldShoot = true;
       if (k === "backspace") this.press("tackle");
       if (k === "e") this.press("request");
       this.syncKeys();
@@ -49,11 +60,15 @@ export class InputSystem {
       const k = (e as KeyboardEvent).key.toLowerCase();
       this.keys.delete(k);
       if (k === "shift") this.sprintKey = false;
+      if (k === " ") this.heldPass = false;
+      if (k === "enter") this.heldShoot = false;
       this.syncKeys();
     };
     const blur = () => {
       this.keys.clear();
       this.sprintKey = false;
+      this.heldPass = false;
+      this.heldShoot = false;
       this.syncKeys();
     };
     target.addEventListener("keydown", down);
@@ -75,6 +90,12 @@ export class InputSystem {
 
   setTouchSprint(active: boolean) {
     this.sprintTouch = active;
+  }
+
+  /** Segurar/soltar passe ou chute (botões X/B do mobile). */
+  setTouchHold(action: "pass" | "shoot", active: boolean) {
+    if (action === "pass") this.heldPass = active;
+    else this.heldShoot = active;
   }
 
   /** Same entry point used by keyboard and by the mobile A/X/B buttons. */
@@ -113,5 +134,7 @@ export class InputSystem {
     this.detach = null;
     this.keys.clear();
     this.queue = [];
+    this.heldPass = false;
+    this.heldShoot = false;
   }
 }

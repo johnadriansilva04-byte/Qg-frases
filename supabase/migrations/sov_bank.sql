@@ -301,7 +301,10 @@ BEGIN
 
   -- credited reflete a verdade: FALSE quando o bônus já tinha sido creditado
   -- (chamada idempotente de retry/login seguinte). O saldo retornado é
-  -- sempre o autoritativo do ledger.
+  -- sempre o autoritativo ATUAL da carteira — no retry, o `balance` vindo do
+  -- registrar é o saldo congelado do lançamento original (ex.: 50 do
+  -- cadastro), que NÃO pode ser devolvido como se fosse o saldo corrente.
+  SELECT w.balance INTO v_bal FROM user_wallets w WHERE w.user_id = p_user_id;
   RETURN QUERY SELECT NOT COALESCE(v_dup, FALSE), COALESCE(v_bal, 0::DECIMAL);
 END;
 $$;

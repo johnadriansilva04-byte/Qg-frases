@@ -27,7 +27,7 @@ const celularFixo = readFileSync("src/components/CelularFixo.tsx", "utf8");
 const personagens = readFileSync("src/components/botao/career/rpg/personagens.ts", "utf8");
 const eventos = readFileSync("src/components/botao/career/rpg/eventos.ts", "utf8");
 const adManager = readFileSync("src/lib/adManager.ts", "utf8");
-const subornoStory = readFileSync("src/components/botao/career/SubornoStory.tsx", "utf8");
+const narrativeModal = readFileSync("src/components/botao/career/NarrativeModal.tsx", "utf8");
 
 /* ─── Celular ─── */
 check(
@@ -47,8 +47,8 @@ check(
   !/onClick=\{onVoltar\}[^>]*>\s*Entendido/.test(conversas),
 );
 check(
-  "Decisão prioritária (suborno) tem caminho de saída (onFechar → hub)",
-  celularFixo.includes("prioridade") && subornoStory.includes("onFechar"),
+  "Decisão prioritária (narrativa) tem caminho de saída (onBack → hub)",
+  celularFixo.includes("prioridade") && narrativeModal.includes("onBack"),
 );
 check(
   "Celular fecha só pelo botão Fechar (não pelo voltar de uma mensagem)",

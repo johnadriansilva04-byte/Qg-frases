@@ -1,3 +1,101 @@
+## 3D grava como o 2D (prova E2E) + SUBORNO REMOVIDO do jogo (2026-08-24, 29ª passada)
+
+- **3D conta na tabela e nos saldos EXATAMENTE como o 2D**: os dois modos
+  chamam o mesmo `finishTournamentMatch` (Match3D converte o placar do
+  engine em MatchResult). Novo `testes/e2e-3d-classificacao.mjs` (16/16)
+  prova com placar real 2×0 injetado no engine (detecção real de gol:
+  |x|>halfLength): rodada 17→18, J 17→18, pontos 14→17, receita 36 no
+  caixa, Δcarteira == Δsnapshot, invariante 5088 == 109 + 4979, F5 preserva.
+  2D (`e2e-2d-classificacao.mjs`, 21/21) idem. O 2D E2E agora tolera a
+  detecção de fim (CONTINUAR + 150 iterações — o último flick terminava a
+  partida na iteração final e o loop lia a tela já em transição).
+- **SUBORNO REMOVIDO cirurgicamente, RPG intacto**: apagados
+  `career/subornoEngine.ts` e `career/SubornoStory.tsx`; removidos do
+  BotaoGame (import, `aplicarSuborno`, branch do prioridadeCelular, gatilho
+  do preparaEscolha, contexto `subornoAtivo` das manchetes), o campo
+  `CareerState.suborno`, o choice event `subornador-abordagem` (+ remetente
+  "Subornador") do choicesEngine, o pool T_SUBORNO do newsGenerator, a
+  categoria "suborno" do templateEngine/NewsPortal e menções nos prompts/
+  comentários. A prioridade do celular fica narrativa > choice (o RPG
+  inteiro — narrativa dinâmica, choice events, patrocinador, Valéria,
+  história John Adrian — segue intocado). Carreiras antigas com
+  `suborno` no JSONB simplesmente ignoram o campo morto.
+- **Guardas novas (persistencia-unica 120/120)**: arquivos apagados não
+  voltam, BotaoGame/careerRemote/types/choices/news sem nenhuma referência
+  a suborno. `celular-anuncios` usa NarrativeModal.onBack no lugar do
+  SubornoStory.onFechar; testes SSR (test-ssr-flow/test-ssr-futebol)
+  atualizados (narrativa no lugar do suborno).
+- **Stubs legados corrigidos** (falhas pré-existentes no HEAD, não eram
+  regressão): test-f5 e test-bolsa-persistencia criavam career sem
+  `clubeCaixa` → a migração CLUBE×TREINADOR do normalizarCareer zerava o
+  coach.sov. Stubs agora na forma moderna (f5 19/19, bolsa 29/29).
+- **Verificação**: tsc 0; build OK; E2E 2D 21/21, E2E 3D→classificação
+  16/16, E2E 3D headless 20/20; guardas 120/114+6; jiti: conversas 41,
+  entregas 9, temporada 57, ia 52, torcida 42+14, f5 19, bolsa 29,
+  regras-fim 36, clube-financas 17, promocao 136, evolucao 34,
+  transferencias 17, marketplace OK, historia 53; sov-consistencia 6,
+  fluxo-usuario-novo 14, onclick-guard OK. (test-ssr-flow/test-ssr-futebol
+  têm 1 falha pré-existente no HEAD — `timeDesconhecido` no bundle SSR —
+  sem relação com estas mudanças.)
+
+## Coerência de saldo clube×pessoal + vitrine pública de clubes (2026-08-24, 28ª passada)
+
+E2E do modo técnico 2D (partida conta, rodada avança, tabela atualiza — prova
+REST: rodada 9→10, J 9→10, UI da classificação confere) + auditoria de saldo
+em todos os módulos. Causas-raiz encontradas e corrigidas:
+
+- **CACHE DO LEADERBOARD DERRUBADO A CADA SAVE (o "saldo do clube caindo como
+  pessoal")**: `saveCareerToSupabase` gravava `pontos_soberania = coach.sov`
+  (só o pessoal). A carteira é o TOTAL (pessoal + caixa): o cache caía de
+  5147 → 288 a cada persistCareer e os módulos que leem o cache exibiam o
+  dinheiro do clube como pessoal. Fix: cache = `coach.sov + clubeCaixa`.
+- **DRIFT ledger × snapshot na partida de liga**: o snapshot somava a receita
+  REAL (`receitaDa` × mult da divisão: 36/12/0 na série A) no clubeCaixa mas
+  o ledger gravava o delta cru (3/1/0) — a carteira ficava 12× atrás a cada
+  vitória. Fix: `aplicarResultadoRemoto(..., valorDelta)` e
+  `aplicarFimCampanhaRemoto(..., valorBonus)` recebem os valores EXATOS que
+  o snapshot aplicou (receitaPartida / premiacaoTemporada, separados no
+  finishTournamentMatch — cada um com escritor/chave próprios).
+- **Desafio de patrocinador no AMISTOSO**: ledger creditava e o snapshot não
+  somava no caixa (drift inverso). Fix: cai no clubeCaixa com extrato.
+- **Displays**: SovBankApp "Perfil Pessoal" = `saldo − clube.caixa` (a
+  carteira é o TOTAL — mostrar o total como pessoal contava o clube 2×);
+  hero rotulado "Saldo total (pessoal + caixa)"; EconomiaScreen discrimina
+  "Pessoal: X · Caixa do clube: Y" no card SOV Bank.
+- **Invariante provada por E2E**: `pontos_soberania(cache) == coach.sov +
+  clubeCaixa` antes E depois da partida (5155 == 313 + 4842; Δcarteira 8 ==
+  Δsnapshot 8 — salário r10 net-zero caixa→pessoal, patrocínio +8 no caixa).
+- **futebol.sql (bug pré-existente de deploy limpo)**: GRANT de
+  `criar_mesa_futebol(TEXT)` mas a função tem 3 parâmetros — o arquivo
+  quebrava na linha do GRANT e TUDO depois (bloco de dono de clube!)
+  não aplicava em banco fresco. Corrigido para a assinatura completa.
+- **VITRINE PÚBLICA DE CLUBES (nova)**: migration `clubes_venda.sql`
+  (ordem 13) — `botao_times.em_venda/preco_venda` + RPCs
+  `cidadela_anunciar_venda_clube` (só o dono; preço NULL retira),
+  `cidadela_listar_clubes_a_venda` (todo autenticado vê) e
+  `cidadela_comprar_clube_anunciado` (ATÔMICA: lock FOR UPDATE, débito do
+  comprador + crédito do vendedor no ledger, posse transferida, vitrine
+  limpa e a participação do vendedor REMOVIDA do JSONB dele — sem isso o
+  vendedor seguia recebendo dividendos de clube vendido). UI: PropriedadeScreen
+  ("Anunciar venda" no clube 100% + seção "Clubes à venda" com compra em 1
+  clique + reconciliação perdeu-clube pelo mapa) e SovMarket do celular
+  (seção "Clubes à venda"). Validada em pg local docker: 19/19 (cadeia real
+  de migrations + ciclo anunciar→listar→comprar→revender, bordas de dono,
+  saldo insuficiente, idempotência).
+- **PRODUÇÃO: aplicar `supabase/migrations/clubes_venda.sql` no SQL Editor**
+  — sem ela a vitrine não existe no servidor (E2E `testes/e2e-vitrine-clube.mjs`
+  detecta e instrui). Após aplicar, rodar o E2E: ele anuncia o Jacu do Norte
+  (clube da conta de exposição) por 250 SOV e prova a visibilidade no
+  Mercado de Clubes e no celular.
+- **Harness E2E 3D estabilizado**: carga/chute agora observam a CONDIÇÃO de
+  sucesso frame a frame com até 4 tentativas (a IA da partida podia marcar
+  gol no meio da janela fixa de 600ms e zerar o estado — flake, não bug).
+- **Verificação**: tsc 0; build OK; E2E 2D→classificação 21/21 (3 asserções
+  novas de coerência); E2E 3D 20/20 ×3 runs; compra de clube 6/6; guardas
+  114/114 (+10 novas: cache total, valorDelta/valorBonus, vitrine, displays);
+  jiti (clube-financas 17, promocao 136, evolucao 34, transferencias 17,
+  marketplace) OK.
+
 ## E2E temporadas: economia parava na 2ª temporada + React #418 + compra de clube (2026-08-24, 27ª passada)
 
 E2E longo do campeonato offline (uma conta, T18→T23) + auditoria financeira

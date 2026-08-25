@@ -10,7 +10,7 @@ import type { Team } from "../data/teams";
  *
  * Fluxo infinito: o portal passa notícias automaticamente sem poluir a tela.
  * Conteúdo variado conectado ao jogo: análises debochadas dos jogos da rodada,
- * fofocas de bastidores, escândalos, suborno e reações da torcida. Os textos
+ * fofocas de bastidores, escândalos e reações da torcida. Os textos
  * vêm das `headlines` reais da carreira + geração assíncrona da IA (fallback
  * procedural) — tudo na voz da comentarista sarcástica.
  */
@@ -73,7 +73,7 @@ export function NewsPortal({
         };
         const [a, b] = await Promise.all([
           AIService.generateText(ctx, "noticia"),
-          AIService.generateText({ ...ctx, categoria: "suborno" }, "noticia"),
+          AIService.generateText({ ...ctx, categoria: "escandalo" }, "noticia"),
         ]);
         const items: NewsItem[] = [];
         if (a)

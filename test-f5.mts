@@ -49,6 +49,10 @@ const careerBase = {
   ligas,
   composicoes,
   memoriaRpg: null,
+  // Forma pós-separação CLUBE×TREINADOR: sem clubeCaixa o normalizador
+  // interpreta o coach.sov como caixa legado e zera o pessoal (migração).
+  clubeCaixa: 800,
+  clubeExtrato: [],
 } as unknown as CareerState;
 const careerComTorcida = garantirTorcidaUniverso(careerBase, userTeam);
 

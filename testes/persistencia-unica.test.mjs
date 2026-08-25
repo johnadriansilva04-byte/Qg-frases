@@ -578,5 +578,85 @@ expect(
   "BotaoGame: empate de mata-mata resolve pênaltis antes de efeitos/chaveamento",
 );
 
+// --- Coerência ledger × snapshot (drift de saldo clube×pessoal) ---------
+expect(
+  careerRemoteSrc.includes("(c.coach.sov ?? 0) + (c.clubeCaixa ?? 0)"),
+  "saveCareerToSupabase: cache do leaderboard = TOTAL (pessoal + caixa), nunca só coach.sov",
+);
+expect(
+  careerRemoteSrc.includes("valorDelta?: number"),
+  "aplicarResultadoRemoto: aceita o valor real da partida (receita×mult) para o ledger",
+);
+expect(
+  careerRemoteSrc.includes("valorBonus?: number"),
+  "aplicarFimCampanhaRemoto: aceita a premiação real (premiacaoDa) para o ledger",
+);
+expect(
+  botaoGameSrc2.includes("receitaPartida,"),
+  "BotaoGame: partida de liga passa a receita real ao ledger (não o delta cru 3/1/0)",
+);
+expect(
+  botaoGameSrc2.includes("valorBonus: premiacaoTemporada"),
+  "BotaoGame: premiação de fim de temporada passa o valor real ao ledger",
+);
+expect(
+  botaoGameSrc2.includes("Patrocínio — desafio cumprido (amistoso)"),
+  "BotaoGame: desafio do amistoso também cai no caixa do clube no snapshot",
+);
+const sovBankAppSrc = ler("src/components/financial/SovBankApp.tsx");
+expect(
+  sovBankAppSrc.includes("saldo - clube.caixa"),
+  "SovBankApp: Perfil Pessoal = carteira − caixa do clube (carteira é o TOTAL)",
+);
+const vitrineSrc = ler("src/lib/cidadela/clubesPropriedade.ts");
+expect(
+  vitrineSrc.includes("cidadela_anunciar_venda_clube") &&
+    vitrineSrc.includes("cidadela_comprar_clube_anunciado"),
+  "clubesPropriedade: vitrine pública (anunciar/listar/comprar) ligada nas RPCs",
+);
+const vitrineSql = ler("supabase/migrations/clubes_venda.sql");
+expect(
+  vitrineSql.includes("record_transaction(v_uid, 'transfer', -v_preco") &&
+    vitrineSql.includes("FOR UPDATE") &&
+    vitrineSql.includes("progresso_caminpanha"),
+  "clubes_venda.sql: compra atômica com lock, ledger dos dois lados e limpeza do snapshot do vendedor",
+);
+const sovMarketSrc = ler("src/components/financial/SovMarket.tsx");
+expect(
+  sovMarketSrc.includes("Clubes à venda"),
+  "SovMarket (celular): vitrine de clubes visível no Marketplace",
+);
+
+// --- Suborno REMOVIDO do jogo (narrativa dinâmica + choice events seguem) --
+const fsSync = await import("node:fs");
+expect(
+  !fsSync.existsSync("src/components/botao/career/subornoEngine.ts") &&
+    !fsSync.existsSync("src/components/botao/career/SubornoStory.tsx"),
+  "subornoEngine.ts e SubornoStory.tsx removidos do repo",
+);
+expect(
+  !/suborno|Suborno/.test(botaoGameSrc2),
+  "BotaoGame sem nenhuma referência a suborno",
+);
+expect(
+  !/suborno|Suborno/.test(careerRemoteSrc),
+  "careerRemote sem referência a suborno",
+);
+const choicesSrc = ler("src/components/botao/career/choicesEngine.ts");
+expect(
+  !choicesSrc.includes("subornador-abordagem") && !choicesSrc.includes("Subornador"),
+  "choicesEngine: evento de propina removido do RPG",
+);
+const newsSrc = ler("src/components/botao/career/newsGenerator.ts");
+expect(
+  !newsSrc.includes("T_SUBORNO") && !newsSrc.includes("subornoAtivo"),
+  "newsGenerator: manchetes de suborno removidas",
+);
+const careerTypesSrc = ler("src/components/botao/career/types.ts");
+expect(
+  !careerTypesSrc.includes("suborno"),
+  "CareerState sem campo suborno",
+);
+
 console.log(`\n== ${ok} OK / ${falhas} falhas ==`);
 if (falhas > 0) process.exit(1);

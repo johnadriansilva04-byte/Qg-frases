@@ -34,4 +34,4 @@ createServer(async (req, res) => {
   r.headers.forEach((v, k) => (headers[k] = v));
   res.writeHead(r.status, headers);
   res.end(Buffer.from(await r.arrayBuffer()));
-}).listen(3417, "127.0.0.1", () => console.log("serving"));
+}).listen(Number(process.argv[2] ?? 3417), "0.0.0.0", () => console.log("serving"));

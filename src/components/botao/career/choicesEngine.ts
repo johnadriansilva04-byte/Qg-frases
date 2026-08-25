@@ -229,39 +229,6 @@ export const CHOICE_EVENTS: ChoiceEvent[] = [
       },
     ],
   },
-  {
-    id: "subornador-abordagem",
-    titulo: "Abordagem suspeita",
-    descricao:
-      "Treinador, desculpa te incomodar. Sou eu, o 'intermediário'. Olha, tem uma graninha " +
-      "extra pra você se o jogo de hoje... digamos... não sair do jeito que a torcida espera. " +
-      "Ninguém precisa saber. Topa?",
-    escolhas: [
-      {
-        id: "aceitar-suborno",
-        texto: "Aceitar o envelope",
-        descricao: "+25 soberania imediato, mas joga a próxima partida DESFALCADO e perde 5 pontos na tabela. Risco de W.O. se lesar de novo.",
-        impactoFinanceiro: 25,
-        desfalqueBotao: 1,
-        perdaPontos: 5,
-        riscoAlto: true,
-      },
-      {
-        id: "recusar-suborno",
-        texto: "Recusar e ameaçar denunciar",
-        descricao: "+6 soberania (imagem limpa) e a diretoria confia mais em você.",
-        impactoFinanceiro: 6,
-        bonusMoral: 2,
-      },
-      {
-        id: "jogar-duplo",
-        texto: "Fingir que topa e recolher provas",
-        descricao: "Sem dinheiro, mas +4 soberania ao denunciar depois. Arriscado.",
-        impactoFinanceiro: 4,
-        riscoAlto: true,
-      },
-    ],
-  },
 ];
 
 export function sortearEvento(idsUsadosRecentes: string[]): ChoiceEvent {
@@ -281,7 +248,6 @@ export const REMETENTE_DECISAO: Record<string, { nome: string; cargo: string; av
   "presidente-ultimato": { nome: "Presidente", cargo: "Dono do Clube", avatar: "🎩" },
   "empresario-proposta": { nome: "Wagner", cargo: "Empresário", avatar: "💼" },
   "namorada-cobranca": { nome: "Valéria", cargo: "Namorada", avatar: "💛" },
-  "subornador-abordagem": { nome: "Intermediário", cargo: "Subornador", avatar: "🕶️" },
 };
 
 export function remetenteDecisao(eventoId: string): { nome: string; cargo: string; avatar: string } {
