@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { FIELD, buildField } from "./field";
 import { formationSlots } from "./formations";
 import { InputSystem } from "./input";
-import { createBallMesh, createPlayerRig, type PlayerRig } from "./playerModel";
+import { createBallMesh, createPlayerRig, createPlayerRigWithFallback, type PlayerRig } from "./playerModel";
+import { playerModelCache, FBX_PATHS } from "./playerModelCache";
 import type {
   MatchEvent,
   MatchLiveState,
@@ -34,6 +35,9 @@ interface Sim {
   animPhase: number;
   actionCooldown: number;
   stats: MatchPlayerStats;
+  // Propriedades para sistema de animações FBX
+  currentAnimation?: string;
+  currentAction?: THREE.AnimationAction;
 }
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -130,6 +134,11 @@ export class MatchEngine {
     buildField(this.scene, this.quality);
     this.scene.add(this.ball.mesh);
 
+    // Preload modelos FBX de forma assíncrona (não bloqueia a inicialização)
+    this.preloadModels().catch((err: unknown) => {
+      console.warn("Falha no preload de modelos FBX, usando fallback procedural:", err);
+    });
+
     this.spawnTeam(setup.home, "home");
     this.spawnTeam(setup.away, "away");
 
@@ -147,13 +156,28 @@ export class MatchEngine {
 
   // ---------------------------------------------------------------- setup
 
+  /**
+   * Preload assíncrono dos modelos FBX e animações
+   */
+  private async preloadModels(): Promise<void> {
+    const animationMap = new Map<string, string>([
+      ["run", FBX_PATHS.ANIMATIONS.run],
+      ["save", FBX_PATHS.ANIMATIONS.save],
+      ["trip", FBX_PATHS.ANIMATIONS.trip],
+    ]);
+
+    await playerModelCache.loadModel(FBX_PATHS.BASE_MODEL, animationMap);
+    console.log("Preload de modelos FBX concluído");
+  }
+
   private spawnTeam(team: MatchTeamInput, side: TeamSide) {
     const slots = formationSlots(team.formation);
     team.players.slice(0, 11).forEach((p, i) => {
       const slot = slots[i] ?? slots[10]!;
       const isKeeper = i === 0 || p.role === "GK";
       const isControlled = side === this.setup.controlledSide && p.id === this.setup.controlledPlayerId;
-      const rig = createPlayerRig(team.colors.primary, team.colors.secondary, isControlled, isKeeper);
+      // Tenta usar FBX primeiro, com fallback para procedural
+      const rig = createPlayerRigWithFallback(team.colors.primary, team.colors.secondary, isControlled, isKeeper);
       if (this.quality === "high") rig.group.traverse((o) => (o.castShadow = true));
       this.scene.add(rig.group);
       this.players.push({
@@ -1090,6 +1114,14 @@ export class MatchEngine {
     for (const p of this.players) {
       const sp = Math.hypot(p.vx, p.vz);
       const rig = p.rig;
+
+      // Se tem mixer (modelo FBX), usa sistema de animações
+      if (rig.mixer) {
+        this.updateFBXAnimation(p, dt);
+        continue;
+      }
+
+      // Fallback para animação procedural
       if (p.state === "slide") {
         rig.group.rotation.x = -1.15;
         rig.group.position.y = 0.1;
@@ -1132,6 +1164,80 @@ export class MatchEngine {
       rig.legR.rotation.x = -Math.sin(p.animPhase) * amp;
       if (rig.marker) rig.marker.rotation.z += dt;
     }
+  }
+
+  /**
+   * Atualiza animações para modelos FBX usando AnimationMixer
+   */
+  private updateFBXAnimation(p: Sim, dt: number): void {
+    const rig = p.rig;
+    if (!rig.mixer || !rig.fbxRig) return;
+
+    // Atualiza o mixer
+    rig.mixer.update(dt);
+
+    // Mapeia estado do jogo para animação FBX
+    const animationName = this.mapStateToAnimation(p.state, p);
+
+    // Troca animação se necessário
+    if (animationName && animationName !== p.currentAnimation) {
+      this.playAnimation(rig, animationName, p.state === "sprint" ? 1.3 : 1.0);
+      p.currentAnimation = animationName;
+    }
+
+    // Anima marker se existir
+    if (rig.marker) rig.marker.rotation.z += dt;
+  }
+
+  /**
+   * Mapeia estado do jogador para nome da animação FBX
+   */
+  private mapStateToAnimation(state: PlayerState, p: Sim): string | null {
+    switch (state) {
+      case "run":
+      case "sprint":
+        return "run";
+      case "save":
+        return "save";
+      case "slide":
+        return "trip"; // Usa trip como fallback para slide
+      case "idle":
+      case "pass":
+      case "shoot":
+      case "recover":
+      case "celebrate":
+        // Para estados sem animação específica ainda, retorna null (mantém idle)
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Toca uma animação no mixer com blending suave
+   */
+  private playAnimation(rig: PlayerRig, name: string, speed: number = 1.0): void {
+    if (!rig.mixer || !rig.fbxRig) return;
+
+    const clip = rig.fbxRig.animations.get(name);
+    if (!clip) {
+      console.warn(`Animação ${name} não encontrada`);
+      return;
+    }
+
+    // Fade out animação atual
+    if (rig.currentAction) {
+      rig.currentAction.fadeOut(0.2);
+    }
+
+    // Fade in nova animação
+    const action = rig.mixer.clipAction(clip);
+    action.reset();
+    action.fadeIn(0.2);
+    action.timeScale = speed;
+    action.play();
+
+    rig.currentAction = action;
   }
 
   private camTarget = new THREE.Vector3();

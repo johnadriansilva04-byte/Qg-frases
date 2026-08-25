@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { playerModelCache, FBX_PATHS, type FBXPlayerRig } from "./playerModelCache";
 
 export interface PlayerRig {
   group: THREE.Group;
@@ -8,6 +9,10 @@ export interface PlayerRig {
   armL: THREE.Mesh;
   armR: THREE.Mesh;
   marker?: THREE.Mesh | undefined;
+  // Propriedades opcionais para suporte a FBX
+  mixer?: THREE.AnimationMixer;
+  fbxRig?: FBXPlayerRig;
+  currentAction?: THREE.AnimationAction;
 }
 
 const skinMat = new THREE.MeshStandardMaterial({ 
@@ -131,11 +136,11 @@ export function createBallMesh(): THREE.Mesh {
   canvas.width = 64;
   canvas.height = 64;
   const ctx = canvas.getContext("2d")!;
-  
+
   // White base
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, 64, 64);
-  
+
   // Black pentagon pattern
   ctx.fillStyle = "#1a1a1a";
   const pentagons = [
@@ -146,12 +151,12 @@ export function createBallMesh(): THREE.Mesh {
     ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
     ctx.fill();
   });
-  
+
   const tex = new THREE.CanvasTexture(canvas);
-  
+
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.15, 24, 16),
-    new THREE.MeshStandardMaterial({ 
+    new THREE.MeshStandardMaterial({
       map: tex,
       color: 0xffffff,
       roughness: 0.4,
@@ -162,4 +167,80 @@ export function createBallMesh(): THREE.Mesh {
   );
   mesh.castShadow = true;
   return mesh;
+}
+
+/**
+ * Tenta criar um PlayerRig usando o modelo FBX.
+ * Se o modelo não estiver carregado ou falhar, retorna null para usar fallback procedural.
+ * @param primary Cor primária do time
+ * @param secondary Cor secundária do time
+ * @param isControlled Se é o jogador controlado
+ * @param isKeeper Se é goleiro
+ */
+export function createPlayerRigFBX(
+  primary: string,
+  secondary: string,
+  isControlled: boolean,
+  isKeeper: boolean
+): PlayerRig | null {
+  // Verifica se o modelo FBX está carregado
+  if (!playerModelCache.isLoaded(FBX_PATHS.BASE_MODEL)) {
+    return null;
+  }
+
+  // Tenta clonar o rig FBX
+  const fbxRig = playerModelCache.cloneRig(
+    FBX_PATHS.BASE_MODEL,
+    primary,
+    secondary,
+    isControlled,
+    isKeeper
+  );
+
+  if (!fbxRig) {
+    return null;
+  }
+
+  // Cria um PlayerRig compatível com a interface existente
+  // Os meshes procedurais (torso, legL, etc.) ficam como null pois o FBX não os tem
+  return {
+    group: fbxRig.group,
+    torso: null as any, // FBX não tem mesh individual de torso
+    legL: null as any, // FBX não tem mesh individual de perna
+    legR: null as any,
+    armL: null as any,
+    armR: null as any,
+    marker: fbxRig.marker,
+    mixer: fbxRig.mixer,
+    fbxRig,
+  };
+}
+
+/**
+ * Cria um PlayerRig tentando usar FBX primeiro, com fallback para procedural.
+ * @param primary Cor primária do time
+ * @param secondary Cor secundária do time
+ * @param isControlled Se é o jogador controlado
+ * @param isKeeper Se é goleiro
+ * @param useFBX Se deve tentar usar FBX (default: true)
+ */
+export function createPlayerRigWithFallback(
+  primary: string,
+  secondary: string,
+  isControlled: boolean,
+  isKeeper: boolean,
+  useFBX: boolean = true
+): PlayerRig {
+  // Tenta FBX primeiro se habilitado
+  if (useFBX) {
+    const fbxRig = createPlayerRigFBX(primary, secondary, isControlled, isKeeper);
+    if (fbxRig) {
+      console.log("Usando modelo FBX para jogador");
+      return fbxRig;
+    }
+    console.log("FBX não disponível, usando fallback procedural");
+  }
+
+  // Fallback para o modelo procedural
+  return createPlayerRig(primary, secondary, isControlled, isKeeper);
 }
