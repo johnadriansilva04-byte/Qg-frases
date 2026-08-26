@@ -277,6 +277,16 @@ class PlayerModelCache {
   }
 
   /**
+   * Verifica se o modelo e as animações estão completamente carregados
+   */
+  isFullyLoaded(modelPath: string): boolean {
+    const cached = this.cache.get(modelPath);
+    if (!cached?.loaded || cached.error) return false;
+    // Verifica se há animações carregadas
+    return cached.baseAnimations.size > 0;
+  }
+
+  /**
    * Limpa o cache (útil para testes ou reload)
    */
   clear(): void {
@@ -306,8 +316,12 @@ export const playerModelCache = new PlayerModelCache();
 export const FBX_PATHS = {
   BASE_MODEL: "/Ch38_nonPBR.fbx",
   ANIMATIONS: {
+    idle: "/Goalkeeper Idle.fbx",
     run: "/Fast Run.fbx",
+    pass: "/Soccer Pass.fbx",
+    dribble: "/Dribble.fbx",
     save: "/Goalkeeper Diving Save.fbx",
+    goalkeeperPass: "/Goalkeeper Pass.fbx",
     trip: "/Soccer Trip.fbx",
   },
 } as const;

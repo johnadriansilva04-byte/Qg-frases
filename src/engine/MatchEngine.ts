@@ -189,8 +189,12 @@ export class MatchEngine {
     console.log("[MatchEngine.preloadModels] Caminho do modelo:", FBX_PATHS.BASE_MODEL);
 
     const animationMap = new Map<string, string>([
+      ["idle", FBX_PATHS.ANIMATIONS.idle],
       ["run", FBX_PATHS.ANIMATIONS.run],
+      ["pass", FBX_PATHS.ANIMATIONS.pass],
+      ["dribble", FBX_PATHS.ANIMATIONS.dribble],
       ["save", FBX_PATHS.ANIMATIONS.save],
+      ["goalkeeperPass", FBX_PATHS.ANIMATIONS.goalkeeperPass],
       ["trip", FBX_PATHS.ANIMATIONS.trip],
     ]);
 
@@ -205,22 +209,44 @@ export class MatchEngine {
   }
 
   /** Troca os rigs (procedural -> FBX) APENAS se o cache tiver o modelo.
-      Se não tiver, NÃO destrói os procedurais (evita jogador invisível). */
+      Se não tiver, NÃO destrói os procedurais (evita jogador invisível).
+      Adiciona delay para garantir carregamento completo e evitar movimento excessivo. */
   private swapToFbxIfPossible(): void {
-    if (!playerModelCache.isLoaded(FBX_PATHS.BASE_MODEL)) return;
-    for (const p of this.players) {
-      const setup = p.side === "home" ? this.setup.home : this.setup.away;
-      // Remove o grupo antigo da cena
-      if (p.rig.group.parent) p.rig.group.parent.remove(p.rig.group);
-      const rig = createPlayerRigWithFallback(
-        setup.colors.primary, setup.colors.secondary, p.isControlled, p.isKeeper
-      );
-      p.rig = rig;
-      this.scene.add(rig.group);
-      if (p.currentAction) { (p.currentAction as any).stop(); delete p.currentAction; }
-      delete (p as any).currentAnimation;
-      rig.group.position.set(p.x, 0, p.z);
+    if (!playerModelCache.isFullyLoaded(FBX_PATHS.BASE_MODEL)) {
+      console.log("[MatchEngine.swapToFbxIfPossible] Modelo ainda não está completamente carregado");
+      return;
     }
+
+    // Adiciona delay para garantir que o modelo está completamente carregado
+    // e evitar que os personagens fiquem "doidos" durante a transição
+    setTimeout(() => {
+      if (!playerModelCache.isFullyLoaded(FBX_PATHS.BASE_MODEL)) {
+        console.log("[MatchEngine.swapToFbxIfPossible] Modelo ainda não carregado no delay");
+        return;
+      }
+
+      console.log("[MatchEngine.swapToFbxIfPossible] Trocando para modelos FBX...");
+      for (const p of this.players) {
+        const setup = p.side === "home" ? this.setup.home : this.setup.away;
+        // Remove o grupo antigo da cena
+        if (p.rig.group.parent) p.rig.group.parent.remove(p.rig.group);
+        const rig = createPlayerRigWithFallback(
+          setup.colors.primary, setup.colors.secondary, p.isControlled, p.isKeeper
+        );
+        p.rig = rig;
+        this.scene.add(rig.group);
+        if (p.currentAction) { (p.currentAction as any).stop(); delete p.currentAction; }
+        delete (p as any).currentAnimation;
+        rig.group.position.set(p.x, 0, p.z);
+
+        // Inicializa com animação idle para evitar movimento excessivo
+        if (rig.mixer && rig.fbxRig) {
+          this.playAnimation(rig, "idle", 1.0);
+          (p as any).currentAnimation = "idle";
+        }
+      }
+      console.log("[MatchEngine.swapToFbxIfPossible] ✓ Troca para FBX concluída");
+    }, 3000); // 3 segundos de delay para garantir carregamento completo das animações
   }
 
   /** Escala exatamente `playersPerTeam` jogadores: 1 GK + restante de linha. */
@@ -1333,22 +1359,26 @@ export class MatchEngine {
    */
   private mapStateToAnimation(state: PlayerState, p: Sim): string | null {
     switch (state) {
+      case "idle":
+        return "idle"; // Animação de parado para evitar movimento excessivo
       case "run":
       case "sprint":
         return "run";
+      case "pass":
+        return p.isKeeper ? "goalkeeperPass" : "pass";
+      case "dribble":
+        return "dribble";
       case "save":
         return "save";
       case "slide":
         return "trip"; // Usa trip como fallback para slide
-      case "idle":
-      case "pass":
       case "shoot":
       case "recover":
       case "celebrate":
-        // Para estados sem animação específica ainda, retorna null (mantém idle)
-        return null;
+        // Para estados sem animação específica ainda, usa idle
+        return "idle";
       default:
-        return null;
+        return "idle"; // Default para idle para evitar movimento
     }
   }
 
@@ -1358,10 +1388,14 @@ export class MatchEngine {
   private playAnimation(rig: PlayerRig, name: string, speed: number = 1.0): void {
     if (!rig.mixer || !rig.fbxRig) return;
 
-    const clip = rig.fbxRig.animations.get(name);
+    let clip = rig.fbxRig.animations.get(name);
     if (!clip) {
-      console.warn(`Animação ${name} não encontrada`);
-      return;
+      console.warn(`Animação ${name} não encontrada, tentando fallback para idle`);
+      clip = rig.fbxRig.animations.get("idle");
+      if (!clip) {
+        console.warn("Animação idle também não encontrada, não mudando animação");
+        return;
+      }
     }
 
     // Fade out animação atual
