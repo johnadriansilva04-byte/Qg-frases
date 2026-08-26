@@ -4,8 +4,8 @@
  */
 
 import React from "react";
-import type { Panel, Entity, ShapeType } from "./iqTypes";
-import { TYPE_VALUES, SIZE_VALUES, COLOR_VALUES, ANGLE_VALUES, IMAGE_SIZE, DEFAULT_WIDTH } from "./iqConstants";
+import type { Panel, Entity } from "./iqTypes";
+import { TYPE_VALUES, SIZE_VALUES, COLOR_VALUES, ANGLE_VALUES, IMAGE_SIZE, DEFAULT_WIDTH, type ShapeType } from "./iqConstants";
 
 interface IQRendererProps {
   panel: Panel;
@@ -18,9 +18,9 @@ interface IQRendererProps {
 const ShapeRenderer: React.FC<{ entity: Entity; size: number }> = ({ entity, size }) => {
   const { bbox, attributes } = entity;
   const type = attributes.type as ShapeType;
-  const sizeValue = SIZE_VALUES[attributes.size];
-  const colorValue = COLOR_VALUES[attributes.color];
-  const angleValue = ANGLE_VALUES[attributes.angle];
+  const sizeValue = SIZE_VALUES[attributes.size] ?? 0.7;
+  const colorValue = COLOR_VALUES[attributes.color] ?? 255;
+  const angleValue = ANGLE_VALUES[attributes.angle] ?? 0;
 
   // Converter coordenadas normalizadas para pixels
   const x = bbox[1] * size;
@@ -144,9 +144,9 @@ export const IQPanelRenderer: React.FC<IQRendererProps> = ({ panel, size = IMAGE
 interface IQMatrixRendererProps {
   matrix: Panel[][];
   onAnswerSelect?: (answer: number) => void;
-  selectedAnswer?: number;
+  selectedAnswer?: number | undefined;
   showAnswer?: boolean;
-  correctAnswer?: number;
+  correctAnswer?: number | undefined;
 }
 
 export const IQMatrixRenderer: React.FC<IQMatrixRendererProps> = ({
@@ -189,9 +189,9 @@ export const IQMatrixRenderer: React.FC<IQMatrixRendererProps> = ({
 interface IQAnswersRendererProps {
   answers: Array<{ panel: Panel; isCorrect: boolean }>;
   onAnswerSelect?: (answer: number) => void;
-  selectedAnswer?: number;
+  selectedAnswer?: number | undefined;
   showAnswer?: boolean;
-  correctAnswer?: number;
+  correctAnswer?: number | undefined;
 }
 
 export const IQAnswersRenderer: React.FC<IQAnswersRendererProps> = ({

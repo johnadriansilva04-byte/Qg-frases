@@ -202,8 +202,9 @@ function generateAnswerOptions(correctPanel: Panel): AnswerOption[] {
     const distractor = JSON.parse(JSON.stringify(correctPanel)) as Panel;
 
     // Modificar aleatoriamente um atributo
-    if (distractor.structure.components.length > 0) {
-      const layout = distractor.structure.components[0].layout;
+    const firstComponent = distractor.structure.components[0];
+    if (firstComponent) {
+      const layout = firstComponent.layout;
       if (layout.entities.length > 0) {
         const entity = layout.entities[0]!;
         const modifications = ["type", "size", "color", "angle"];
@@ -252,10 +253,10 @@ export function generateIQProblem(): IQProblem {
   const matrix = generateMatrix3x3();
 
   // O painel correto seria o resultado da progressão da terceira linha
-  const correctPanel = JSON.parse(JSON.stringify(matrix[2][1])) as Panel;
+  const correctPanel = JSON.parse(JSON.stringify(matrix[2]![1]!)) as Panel;
 
   // Remover o último painel (será a resposta)
-  matrix[2][2] = createEmptyPanel();
+  matrix[2]![2] = createEmptyPanel();
 
   // Gerar opções de resposta
   const answers = generateAnswerOptions(correctPanel);

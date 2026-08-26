@@ -86,7 +86,7 @@ class Attribute {
     this.valueLevel = valueLevel;
   }
 
-  getValue(valueLevel?: number): number | string {
+  getValue(valueLevel?: number): number | string | boolean {
     const level = valueLevel !== undefined ? valueLevel : this.valueLevel;
     return this.values[level]!;
   }
@@ -155,8 +155,9 @@ export class UniformityAttribute extends Attribute {
     return (this.values[level] as number) === 1;
   }
 
-  override sampleNew(): void {
-    // Não deve resample uniformity
+  override sampleNew(): number {
+    // Uniformity nunca é ressampleada — mantém o nível atual (como no I-RAVEN).
+    return this.valueLevel;
   }
 }
 

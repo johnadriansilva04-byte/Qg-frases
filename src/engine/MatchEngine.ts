@@ -1341,6 +1341,58 @@ export class MatchEngine {
     this.camera.lookAt(this.camLook);
   }
 
+  // ---------------------------------------------------------------- power bar
+
+  /**
+   * Barra de força do chute/passe: sprite 2D (canvas) que flutua sobre o
+   * jogador controlado enquanto `charging` está ativo. Criada uma única vez
+   * no construtor; só redesenha a textura quando o valor muda.
+   */
+  private createPowerBar() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 20;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return; // sem 2D context: jogo segue sem a barra
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.9, 0.3, 1);
+    sprite.renderOrder = 999;
+    sprite.visible = false;
+    this.scene.add(sprite);
+    this.powerBar = { sprite, ctx, tex };
+  }
+
+  /** Atualiza posição/preenchimento da barra; esconde quando não há carga. */
+  private updatePowerBar(me: Sim | undefined) {
+    const bar = this.powerBar;
+    if (!bar) return;
+    const show = !!me && this.charging !== null && this.ball.owner === me;
+    bar.sprite.visible = show;
+    if (!show || !me) return;
+
+    bar.sprite.position.set(me.x, 2.35, me.z);
+
+    const { ctx, tex } = bar;
+    const { width: w, height: h } = ctx.canvas;
+    ctx.clearRect(0, 0, w, h);
+    // Fundo + moldura
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, w - 2, h - 2);
+    // Preenchimento: verde -> amarelo -> vermelho conforme a carga
+    const t = this.charge;
+    const hue = Math.round(120 - 120 * t);
+    const pad = 3;
+    ctx.fillStyle = `hsl(${hue}, 90%, 50%)`;
+    ctx.fillRect(pad, pad, (w - pad * 2) * t, h - pad * 2);
+    tex.needsUpdate = true;
+  }
+
   private handleResize = () => {
     const parent = this.canvas.parentElement;
     const w = parent?.clientWidth || window.innerWidth;
