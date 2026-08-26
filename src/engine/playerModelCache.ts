@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 /**
  * Sistema de cache e carregamento de modelos FBX para jogadores.
@@ -175,8 +176,9 @@ class PlayerModelCache {
       return null;
     }
 
-    // Clona o modelo base com skeleton e skinning
-    const clonedGroup = cached.baseModel.clone(true);
+    // clone(true) simples quebra modelos com skinning (bones invertem,
+    // personagem some). SkeletonUtils.clone duplica corretamente o skeleton.
+    const clonedGroup = skeletonClone(cached.baseModel) as THREE.Group;
     const mixer = new THREE.AnimationMixer(clonedGroup);
 
     // Aplica cores do time

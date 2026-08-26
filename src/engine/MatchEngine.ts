@@ -153,10 +153,13 @@ export class MatchEngine {
     this.scene.add(this.ball.mesh);
     this.createPowerBar();
 
-    // Preload modelos FBX de forma assíncrona (não bloqueia a inicialização)
-    this.preloadModels().catch((err: unknown) => {
-      console.warn("Falha no preload de modelos FBX, usando fallback procedural:", err);
-    });
+    // Preload modelos FBX em background; quando terminar, troca para FBX
+    // apenas se carregou com sucesso (evita jogador invisível).
+    this.preloadModels()
+      .then(() => this.swapToFbxIfPossible())
+      .catch((err: unknown) => {
+        console.warn("Falha no preload de modelos FBX, usando fallback procedural:", err);
+      });
 
     this.spawnTeam(setup.home, "home");
     this.spawnTeam(setup.away, "away");
@@ -198,6 +201,25 @@ export class MatchEngine {
       console.log("[MatchEngine.preloadModels] ✓ Preload de modelos FBX concluído com sucesso");
     } catch (error) {
       console.error("[MatchEngine.preloadModels] ✗ Erro no preload:", error);
+    }
+  }
+
+  /** Troca os rigs (procedural -> FBX) APENAS se o cache tiver o modelo.
+      Se não tiver, NÃO destrói os procedurais (evita jogador invisível). */
+  private swapToFbxIfPossible(): void {
+    if (!playerModelCache.isLoaded(FBX_PATHS.BASE_MODEL)) return;
+    for (const p of this.players) {
+      const setup = p.side === "home" ? this.setup.home : this.setup.away;
+      // Remove o grupo antigo da cena
+      if (p.rig.group.parent) p.rig.group.parent.remove(p.rig.group);
+      const rig = createPlayerRigWithFallback(
+        setup.colors.primary, setup.colors.secondary, p.isControlled, p.isKeeper
+      );
+      p.rig = rig;
+      this.scene.add(rig.group);
+      if (p.currentAction) { (p.currentAction as any).stop(); delete p.currentAction; }
+      delete (p as any).currentAnimation;
+      rig.group.position.set(p.x, 0, p.z);
     }
   }
 
