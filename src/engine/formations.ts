@@ -67,6 +67,17 @@ const F: Record<Formation, Slot[]> = {
   ],
 };
 
-export function formationSlots(formation: Formation): Slot[] {
+/**
+ * Formação única do formato 3x3: 1 goleiro + 2 jogadores de linha
+ * (um fixo mais recuado, um pivô mais avançado).
+ */
+const SLOTS_3V3: Slot[] = [
+  { nx: -0.92, nz: 0, role: "GK" },
+  { nx: -0.3, nz: -0.45, role: "DF" },
+  { nx: 0.15, nz: 0.45, role: "FW" },
+];
+
+export function formationSlots(formation: Formation, playersPerTeam = 11): Slot[] {
+  if (playersPerTeam === 3) return SLOTS_3V3;
   return F[formation] ?? F["4-4-2"];
 }

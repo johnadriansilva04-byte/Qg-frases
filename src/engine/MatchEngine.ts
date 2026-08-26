@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { FIELD, buildField } from "./field";
+import { buildField, type FieldDims } from "./field";
+import { resolveFormat } from "./matchFormat";
 import { formationSlots } from "./formations";
 import { InputSystem } from "./input";
 import { createBallMesh, createPlayerRig, createPlayerRigWithFallback, type PlayerRig } from "./playerModel";
@@ -34,6 +35,8 @@ interface Sim {
   slot: { nx: number; nz: number };
   animPhase: number;
   actionCooldown: number;
+  /** Evita rolar a defesa do goleiro a cada frame: uma chance por aproximação. */
+  saveTried?: boolean;
   stats: MatchPlayerStats;
   // Propriedades para sistema de animações FBX
   currentAnimation?: string;
@@ -91,6 +94,9 @@ export class MatchEngine {
     tex: THREE.CanvasTexture;
   } | null = null;
 
+  private readonly field: FieldDims;
+  private readonly playersPerTeam: number;
+
   constructor(
     private canvas: HTMLCanvasElement,
     private setup: MatchSetup,
@@ -139,7 +145,11 @@ export class MatchEngine {
     this.camera = new THREE.PerspectiveCamera(mobile ? 62 : 55, 16 / 9, 0.5, 400);
     this.camera.position.set(0, 14, -26);
 
-    buildField(this.scene, this.quality);
+    const fmt = resolveFormat(setup.format);
+    this.field = fmt.field;
+    this.playersPerTeam = fmt.playersPerTeam;
+
+    buildField(this.scene, this.quality, this.field);
     this.scene.add(this.ball.mesh);
     this.createPowerBar();
 
@@ -191,10 +201,28 @@ export class MatchEngine {
     }
   }
 
+  /** Escala exatamente `playersPerTeam` jogadores: 1 GK + restante de linha. */
+  private pickSquad(team: MatchTeamInput, side: TeamSide): MatchPlayerInput[] {
+    const n = this.playersPerTeam;
+    const keeper = team.players.find((p) => p.role === "GK") ?? team.players[0]!;
+    const outfield = team.players.filter((p) => p !== keeper);
+    const squad: MatchPlayerInput[] = [keeper];
+    // O jogador controlado pelo usuário sempre entra em campo.
+    if (side === this.setup.controlledSide) {
+      const controlled = outfield.find((p) => p.id === this.setup.controlledPlayerId);
+      if (controlled) squad.push(controlled);
+    }
+    for (const p of outfield) {
+      if (squad.length >= n) break;
+      if (!squad.includes(p)) squad.push(p);
+    }
+    return squad.slice(0, n);
+  }
+
   private spawnTeam(team: MatchTeamInput, side: TeamSide) {
-    const slots = formationSlots(team.formation);
-    team.players.slice(0, 11).forEach((p, i) => {
-      const slot = slots[i] ?? slots[10]!;
+    const slots = formationSlots(team.formation, this.playersPerTeam);
+    this.pickSquad(team, side).forEach((p, i) => {
+      const slot = slots[i] ?? slots[slots.length - 1]!;
       const isKeeper = i === 0 || p.role === "GK";
       const isControlled = side === this.setup.controlledSide && p.id === this.setup.controlledPlayerId;
       // Tenta usar FBX primeiro, com fallback para procedural
@@ -244,10 +272,12 @@ export class MatchEngine {
 
   private slotWorld(p: Sim, ballX: number) {
     const d = this.dir(p.side);
-    const shift = clamp(ballX * d * 0.35, -14, 16);
-    const x = d * (p.slot.nx * 44) + d * shift;
-    const z = p.slot.nz * 28;
-    return { x: clamp(x, -FIELD.halfLength + 2, FIELD.halfLength - 2), z: clamp(z, -31, 31) };
+    const L = this.field.halfLength;
+    const W = this.field.halfWidth;
+    const shift = clamp(ballX * d * 0.35, -L * 0.27, L * 0.3);
+    const x = d * (p.slot.nx * L * 0.84) + d * shift;
+    const z = p.slot.nz * W * 0.82;
+    return { x: clamp(x, -L + 2, L - 2), z: clamp(z, -W * 0.91, W * 0.91) };
   }
 
   private resetPositions(kickoffSide: TeamSide) {
@@ -259,7 +289,7 @@ export class MatchEngine {
       const s = this.slotWorld(p, 0);
       const d = this.dir(p.side);
       // Keep everyone in their own half for the kickoff.
-      p.x = p.isKeeper ? d * -(FIELD.halfLength - 1.2) : Math.min(s.x * d, -2) * d;
+      p.x = p.isKeeper ? d * -(this.field.halfLength - 1.2) : Math.min(s.x * d, -2) * d;
       p.z = s.z;
       p.vx = p.vz = 0;
       p.state = "idle";
@@ -360,8 +390,8 @@ export class MatchEngine {
   private integrate(p: Sim, dt: number) {
     p.x += p.vx * dt;
     p.z += p.vz * dt;
-    p.x = clamp(p.x, -FIELD.halfLength - 2, FIELD.halfLength + 2);
-    p.z = clamp(p.z, -FIELD.halfWidth - 2, FIELD.halfWidth + 2);
+    p.x = clamp(p.x, -this.field.halfLength - 2, this.field.halfLength + 2);
+    p.z = clamp(p.z, -this.field.halfWidth - 2, this.field.halfWidth + 2);
     const sp = Math.hypot(p.vx, p.vz);
     p.stats.distanceKm += (sp * dt) / 1000;
     // Orientação do corpo: com a bola, olha para a direção do movimento;
@@ -551,7 +581,7 @@ export class MatchEngine {
 
     if (owner === p) {
       // Carrying the ball: drive at goal, then decide pass or shot.
-      const goalX = d * FIELD.halfLength;
+      const goalX = d * this.field.halfLength;
       const toGoal = Math.hypot(goalX - p.x, 0 - p.z);
       const pressure = this.players.some(
         (o) => o.side !== p.side && Math.hypot(o.x - p.x, o.z - p.z) < 2.6
@@ -623,7 +653,7 @@ export class MatchEngine {
       return;
     } else {
       // Attacking without the ball: offer support / make runs.
-      const supportX = clamp(lerp(slot.x, b.x + d * 9, 0.5), -FIELD.halfLength + 6, FIELD.halfLength - 6);
+      const supportX = clamp(lerp(slot.x, b.x + d * 9, 0.5), -this.field.halfLength + 6, this.field.halfLength - 6);
       const supportZ = lerp(slot.z, b.z, 0.25);
       this.drive(p, supportX - p.x, supportZ - p.z, speed * 0.78, dt);
       p.state = Math.hypot(p.vx, p.vz) < 0.5 ? "idle" : "run";
@@ -637,11 +667,12 @@ export class MatchEngine {
   private updateKeeper(p: Sim, dt: number) {
     const d = this.dir(p.side);
     const b = this.ball.pos;
-    const goalX = d * -(FIELD.halfLength - 0.8);
-    const insideBox = d < 0 ? b.x > FIELD.halfLength - 20 : b.x < -FIELD.halfLength + 20;
-    const targetZ = clamp(b.z * 0.55, -5, 5);
+    const goalX = d * -(this.field.halfLength - 0.8);
+    const boxEdge = this.field.halfLength - (this.field.penaltyBoxDepth + 4);
+    const insideBox = d < 0 ? b.x > boxEdge : b.x < -boxEdge;
+    const targetZ = clamp(b.z * 0.55, -(this.field.goalHalfWidth + 1.4), this.field.goalHalfWidth + 1.4);
     let targetX = goalX;
-    if (insideBox) targetX = goalX + d * Math.min(6, Math.abs(b.x - goalX) * 0.35);
+    if (insideBox) targetX = goalX + d * Math.min(this.field.smallBoxDepth + 0.5, Math.abs(b.x - goalX) * 0.35);
 
     if (this.ball.owner === p) {
       // Play it out quickly.
@@ -652,7 +683,10 @@ export class MatchEngine {
     }
 
     const distBall = Math.hypot(p.x - b.x, p.z - b.z);
-    if (insideBox && distBall < 9 && (!this.ball.owner || this.ball.owner.side !== p.side)) {
+    // Perseguição limitada à proximidade da área (campo reduzido não permite
+    // que o goleiro saia caçando a bola no meio-campo).
+    const chaseRange = this.field.penaltyBoxDepth + 2.5;
+    if (insideBox && distBall < chaseRange && (!this.ball.owner || this.ball.owner.side !== p.side)) {
       this.drive(p, b.x - p.x, b.z - p.z, this.maxSpeed(p) * 0.95, dt);
       p.state = "save";
     } else {
@@ -660,8 +694,14 @@ export class MatchEngine {
       p.state = Math.hypot(p.vx, p.vz) < 0.4 ? "idle" : "run";
     }
 
-    // Save attempt
-    if (distBall < 2.3 && b.y < 2.6 && !this.ball.owner) {
+    // Tentativa de defesa: UMA rolagem por aproximação da bola (não por
+    // frame — senão a chance acumula e o goleiro vira infalível). O alcance
+    // acompanha o tamanho do gol: no gol pequeno do 3x3 o goleiro cobre
+    // ~60% da largura, e chutes no canto entram.
+    const reach = clamp(this.field.goalHalfWidth * 0.6, 0.9, 2.3);
+    const inReach = distBall < reach && b.y < 2.6 && !this.ball.owner;
+    if (inReach && !p.saveTried) {
+      p.saveTried = true;
       const skill = 0.45 + p.data.attributes.defending / 250;
       if (Math.random() < skill) {
         this.ball.owner = p;
@@ -671,6 +711,8 @@ export class MatchEngine {
         p.actionCooldown = 0.9;
         this.emit({ type: "save", minute: this.mm(), side: p.side, playerId: p.data.id, playerName: p.data.name });
       }
+    } else if (!inReach) {
+      p.saveTried = false;
     }
   }
 
@@ -904,16 +946,17 @@ export class MatchEngine {
 
   private doShot(p: Sim, charge = 0.5) {
     const d = this.dir(p.side);
-    const goalX = d * FIELD.halfLength;
+    const goalX = d * this.field.halfLength;
     const dist = Math.hypot(goalX - p.x, -p.z);
     const acc = p.data.attributes.shooting;
     
     // Improved aiming: aim for corners based on shooting skill
     const spread = (1 - acc / 100) * clamp(dist / 8, 0.4, 3) + 0.25;
     const aimCorner = acc > 65 && Math.random() < 0.4;
-    const aimZ = aimCorner 
-      ? (Math.random() < 0.5 ? -4.5 : 4.5) + (Math.random() - 0.5) * spread
-      : clamp((Math.random() - 0.5) * 2 * spread, -5, 5);
+    const gz = this.field.goalHalfWidth;
+    const aimZ = aimCorner
+      ? (Math.random() < 0.5 ? -(gz + 0.8) : gz + 0.8) + (Math.random() - 0.5) * spread
+      : clamp((Math.random() - 0.5) * 2 * spread, -(gz + 1.4), gz + 1.4);
     
     const dx = goalX - p.x;
     const dz = aimZ - p.z;
@@ -943,8 +986,10 @@ export class MatchEngine {
   // ---------------------------------------------------------------- ball
 
   private checkOffside(): boolean {
+    // Formato reduzido (3x3) segue a tradição do futsal: sem impedimento.
+    if (this.playersPerTeam <= 3) return false;
     const b = this.ball;
-    const L = FIELD.halfLength;
+    const L = this.field.halfLength;
     const last = b.lastToucher;
     
     if (!last) return false;
@@ -1076,10 +1121,10 @@ export class MatchEngine {
 
   private postCollision() {
     const b = this.ball;
-    const L = FIELD.halfLength;
+    const L = this.field.halfLength;
     for (const s of [-1, 1]) {
-      if (Math.abs(b.pos.x - s * L) < 0.35 && b.pos.y < FIELD.goalHeight + 0.2) {
-        for (const z of [-FIELD.goalHalfWidth, FIELD.goalHalfWidth]) {
+      if (Math.abs(b.pos.x - s * L) < 0.35 && b.pos.y < this.field.goalHeight + 0.2) {
+        for (const z of [-this.field.goalHalfWidth, this.field.goalHalfWidth]) {
           if (Math.abs(b.pos.z - z) < 0.24) {
             b.vel.x *= -0.6;
             b.vel.z = (b.pos.z - z) * 6;
@@ -1088,7 +1133,7 @@ export class MatchEngine {
             return;
           }
         }
-        if (Math.abs(b.pos.z) < FIELD.goalHalfWidth && Math.abs(b.pos.y - FIELD.goalHeight) < 0.2 && b.vel.y > 0) {
+        if (Math.abs(b.pos.z) < this.field.goalHalfWidth && Math.abs(b.pos.y - this.field.goalHeight) < 0.2 && b.vel.y > 0) {
           b.vel.y *= -0.5;
         }
       }
@@ -1097,9 +1142,12 @@ export class MatchEngine {
 
   private checkGoal(): boolean {
     const b = this.ball;
-    const L = FIELD.halfLength;
-    if (Math.abs(b.pos.x) < L + 0.1) return false;
-    if (Math.abs(b.pos.z) > FIELD.goalHalfWidth || b.pos.y > FIELD.goalHeight) return false;
+    const L = this.field.halfLength;
+    // Gol ao cruzar a linha: sem margem extra — uma faixa [L, L+0.1) cria uma
+    // "janela morta" onde o frame cai além da linha mas o gol não é dado e a
+    // bola vira escanteio/tiro de meta (frequente em chutes lentos no 3x3).
+    if (Math.abs(b.pos.x) < L) return false;
+    if (Math.abs(b.pos.z) > this.field.goalHalfWidth || b.pos.y > this.field.goalHeight) return false;
 
     const scoringSide: TeamSide = b.pos.x > 0 ? (this.dir("home") > 0 ? "home" : "away") : this.dir("home") > 0 ? "away" : "home";
     this.score[scoringSide]++;
@@ -1124,8 +1172,8 @@ export class MatchEngine {
 
   private checkOut() {
     const b = this.ball;
-    const L = FIELD.halfLength;
-    const W = FIELD.halfWidth;
+    const L = this.field.halfLength;
+    const W = this.field.halfWidth;
     const last = b.lastToucher;
     const other: TeamSide = last ? (last.side === "home" ? "away" : "home") : "home";
 
@@ -1137,11 +1185,11 @@ export class MatchEngine {
       const towardsOpponentGoal = Math.sign(b.pos.x) === this.dir(attackingSide);
       
       // Check for penalty (ball out in goal area)
-      const inGoalArea = Math.abs(b.pos.z) < FIELD.goalHalfWidth + 2;
+      const inGoalArea = Math.abs(b.pos.z) < this.field.goalHalfWidth + 2;
       
       if (inGoalArea && !towardsOpponentGoal) {
         // Penalty for the attacking team
-        this.restart(Math.sign(b.pos.x) * (L - FIELD.penaltySpot), 0, other, "penalty", "pênalti");
+        this.restart(Math.sign(b.pos.x) * (L - this.field.penaltySpot), 0, other, "penalty", "pênalti");
       } else if (towardsOpponentGoal) {
         // corner for the attacking team
         this.restart(Math.sign(b.pos.x) * (L - 0.5), Math.sign(b.pos.z || 1) * (W - 0.5), attackingSide, "corner", "escanteio");
@@ -1329,8 +1377,8 @@ export class MatchEngine {
     const height = clamp(2.4 + ballDist * 0.11, 2.4, 6.8);
 
     this.camTarget.set(focusX - d * back, height, focusZ);
-    this.camTarget.x = clamp(this.camTarget.x, -FIELD.halfLength - 20, FIELD.halfLength + 20);
-    this.camTarget.z = clamp(this.camTarget.z, -FIELD.halfWidth - 10, FIELD.halfWidth + 10);
+    this.camTarget.x = clamp(this.camTarget.x, -this.field.halfLength - 20, this.field.halfLength + 20);
+    this.camTarget.z = clamp(this.camTarget.z, -this.field.halfWidth - 10, this.field.halfWidth + 10);
 
     // Suavização alta — sem movimentos bruscos.
     const k = clamp(2.6 * dt, 0, 1);

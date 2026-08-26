@@ -6,18 +6,16 @@ import type { Formation, MatchPlayerInput, MatchSetup, MatchTeamInput, PositionR
  * This file exists so the engine can be run and tested in isolation.
  */
 
-const NAMES_A = ["Rafael", "Diego", "Léo", "Vitor", "Bruno", "Caio", "Igor", "Murilo", "Téo", "Nando", "Kaká"];
-const NAMES_B = ["Marcos", "Alan", "Tiago", "Pedro", "Juan", "Feli", "Dado", "Lucas", "Neno", "Zeca", "Rui"];
+const NAMES_A = ["Rafael", "Léo", "Kaká"];
+const NAMES_B = ["Marcos", "Tiago", "Rui"];
 
 function rand(min: number, max: number) {
   return Math.round(min + Math.random() * (max - min));
 }
 
 function makePlayers(names: string[], formation: Formation, base: number): MatchPlayerInput[] {
-  const roles: PositionRole[] =
-    formation === "4-3-3"
-      ? ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW"]
-      : ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "MF", "FW", "FW"];
+  // Formato 3x3: 1 goleiro + 2 jogadores de linha.
+  const roles: PositionRole[] = ["GK", "MF", "FW"];
   return names.map((name, i) => ({
     id: `${base}-${i}`,
     name,
@@ -59,7 +57,7 @@ export function createDemoSetup(): MatchSetup {
     home,
     away,
     controlledSide: "home",
-    controlledPlayerId: home.players[9]!.id,
+    controlledPlayerId: home.players[2]!.id,
     minutesPerHalf: 45,
     realSecondsPerHalf: 120,
   };

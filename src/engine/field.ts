@@ -1,6 +1,20 @@
 import * as THREE from "three";
 
-export const FIELD = {
+export interface FieldDims {
+  halfLength: number; // x
+  halfWidth: number; // z
+  goalHalfWidth: number;
+  goalHeight: number;
+  penaltyBoxDepth: number;
+  penaltyBoxHalfWidth: number;
+  smallBoxDepth: number;
+  smallBoxHalfWidth: number;
+  centerCircle: number;
+  penaltySpot: number; // |x|
+}
+
+/** Campo oficial 11x11. */
+export const FIELD: FieldDims = {
   halfLength: 52.5, // x
   halfWidth: 34, // z
   goalHalfWidth: 3.66,
@@ -11,6 +25,23 @@ export const FIELD = {
   smallBoxHalfWidth: 9.16,
   centerCircle: 9.15,
   penaltySpot: 41.5, // |x|
+};
+
+/**
+ * Quadra reduzida para o formato 3x3 (~40% do campo oficial):
+ * arena pequena, disputa constante da bola, gol estilo futsal.
+ */
+export const FIELD_3V3: FieldDims = {
+  halfLength: 21,
+  halfWidth: 13.5,
+  goalHalfWidth: 1.6,
+  goalHeight: 1.5,
+  penaltyBoxDepth: 6.6,
+  penaltyBoxHalfWidth: 8,
+  smallBoxDepth: 2.2,
+  smallBoxHalfWidth: 3.7,
+  centerCircle: 3.7,
+  penaltySpot: 16, // |x|
 };
 
 const LINE_Y = 0.02;
@@ -47,9 +78,9 @@ function addDot(group: THREE.Group, cx: number, cz: number) {
   group.add(m);
 }
 
-function buildGoal(sign: number): THREE.Group {
+function buildGoal(sign: number, dims: FieldDims): THREE.Group {
   const g = new THREE.Group();
-  const { halfLength, goalHalfWidth: gw, goalHeight: gh } = FIELD;
+  const { halfLength, goalHalfWidth: gw, goalHeight: gh } = dims;
   const mat = new THREE.MeshStandardMaterial({ 
     color: 0xffffff, 
     metalness: 0.3, 
@@ -96,8 +127,8 @@ function buildGoal(sign: number): THREE.Group {
 }
 
 /** Builds pitch, lines, goals, nets, corner flags, stands and lighting. */
-export function buildField(scene: THREE.Scene, quality: "low" | "high") {
-  const { halfLength: L, halfWidth: W } = FIELD;
+export function buildField(scene: THREE.Scene, quality: "low" | "high", dims: FieldDims = FIELD) {
+  const { halfLength: L, halfWidth: W } = dims;
 
   // Dramatic sunset/stadium lighting
   const skyColor = new THREE.Color(0x1a2a3a);
@@ -159,33 +190,33 @@ export function buildField(scene: THREE.Scene, quality: "low" | "high") {
     [0, -W],
     [0, W],
   ]);
-  addCircle(lines, 0, 0, FIELD.centerCircle);
+  addCircle(lines, 0, 0, dims.centerCircle);
   addDot(lines, 0, 0);
 
   for (const s of [-1, 1]) {
-    const pb = FIELD.penaltyBoxDepth;
-    const pw = FIELD.penaltyBoxHalfWidth;
+    const pb = dims.penaltyBoxDepth;
+    const pw = dims.penaltyBoxHalfWidth;
     addPath(lines, [
       [s * L, -pw],
       [s * (L - pb), -pw],
       [s * (L - pb), pw],
       [s * L, pw],
     ]);
-    const sb = FIELD.smallBoxDepth;
-    const sw = FIELD.smallBoxHalfWidth;
+    const sb = dims.smallBoxDepth;
+    const sw = dims.smallBoxHalfWidth;
     addPath(lines, [
       [s * L, -sw],
       [s * (L - sb), -sw],
       [s * (L - sb), sw],
       [s * L, sw],
     ]);
-    addDot(lines, s * FIELD.penaltySpot, 0);
+    addDot(lines, s * dims.penaltySpot, 0);
     // Penalty arc
     const pts: [number, number][] = [];
     for (let i = 0; i <= 24; i++) {
       const a = -Math.PI / 2 + (i / 24) * Math.PI;
-      const x = s * FIELD.penaltySpot - s * Math.cos(a) * FIELD.centerCircle;
-      const z = Math.sin(a) * FIELD.centerCircle;
+      const x = s * dims.penaltySpot - s * Math.cos(a) * dims.centerCircle;
+      const z = Math.sin(a) * dims.centerCircle;
       if (Math.abs(x) < L - pb) pts.push([x, z]);
     }
     if (pts.length > 1) addPath(lines, pts);
@@ -201,8 +232,8 @@ export function buildField(scene: THREE.Scene, quality: "low" | "high") {
   }
   scene.add(lines);
 
-  scene.add(buildGoal(1));
-  scene.add(buildGoal(-1));
+  scene.add(buildGoal(1, dims));
+  scene.add(buildGoal(-1, dims));
 
   // Corner flags
   const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.5, roughness: 0.3 });

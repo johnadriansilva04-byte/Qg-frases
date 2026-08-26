@@ -17,6 +17,9 @@ export type PositionRole = "GK" | "DF" | "MF" | "FW";
 
 export type Formation = "4-4-2" | "4-3-3" | "3-5-2" | "4-2-3-1";
 
+/** Formato da partida: 3x3 (1 goleiro + 2 de linha) ou 11x11 tradicional. */
+export type MatchFormat = "3x3" | "11x11";
+
 /** Attributes come from the existing player system (0-100). */
 export interface PlayerAttributes {
   pace: number;
@@ -43,7 +46,7 @@ export interface MatchTeamInput {
   shortName: string;
   formation: Formation;
   colors: { primary: string; secondary: string };
-  /** Exactly 11 players, first one is the goalkeeper. */
+  /** Elenco do time. No 3x3 o motor escala 1 GK + 2 de linha; no 11x11, 11. */
   players: MatchPlayerInput[];
 }
 
@@ -63,6 +66,8 @@ export interface MatchSetup {
   realSecondsPerHalf?: number;
   /** Optional starting state when resuming a match from the main system. */
   initialScore?: { home: number; away: number };
+  /** Formato da partida (default: "3x3" — ver matchFormat.ts). */
+  format?: MatchFormat;
 }
 
 export type MatchEventType =

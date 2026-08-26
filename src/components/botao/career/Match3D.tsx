@@ -46,7 +46,7 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
         players: generateMockPlayers(awayTeam, "away"),
       },
       controlledSide: fixture.homeId === userTeam.id ? "home" : "away",
-      controlledPlayerId: fixture.homeId === userTeam.id ? homeTeam.id + "_player_10" : awayTeam.id + "_player_10",
+      controlledPlayerId: fixture.homeId === userTeam.id ? homeTeam.id + "_player_2" : awayTeam.id + "_player_2",
       minutesPerHalf: 45,
       realSecondsPerHalf: 120,
     };
@@ -92,7 +92,8 @@ export function Match3D({ fixture, userTeam, career, onResult, onBack }: Props) 
  * TODO: Integrar com o sistema real de jogadores quando existir.
  */
 function generateMockPlayers(team: Team, side: "home" | "away") {
-  const roles: Array<"GK" | "DF" | "MF" | "FW"> = ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "MF", "FW", "FW"];
+  // Formato 3x3: 1 goleiro + 2 jogadores de linha por equipe.
+  const roles: Array<"GK" | "DF" | "MF" | "FW"> = ["GK", "MF", "FW"];
   return roles.map((role, idx) => ({
     id: `${team.id}_player_${idx}`,
     name: `Jogador ${idx + 1}`,
