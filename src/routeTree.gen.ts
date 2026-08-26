@@ -15,10 +15,12 @@ import { Route as BrioRouteImport } from './routes/brio'
 import { Route as CampusRouteImport } from './routes/campus'
 import { Route as CidadelaRouteImport } from './routes/cidadela'
 import { Route as CorretorRouteImport } from './routes/corretor'
+import { Route as EngineCheckRouteImport } from './routes/engine-check'
 import { Route as GeradorRouteImport } from './routes/gerador'
 import { Route as NoticiasRouteImport } from './routes/noticias'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
+import { Route as TesteQiRouteImport } from './routes/teste-qi'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -50,6 +52,11 @@ const CorretorRoute = CorretorRouteImport.update({
   path: '/corretor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EngineCheckRoute = EngineCheckRouteImport.update({
+  id: '/engine-check',
+  path: '/engine-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GeradorRoute = GeradorRouteImport.update({
   id: '/gerador',
   path: '/gerador',
@@ -70,6 +77,11 @@ const TermosRoute = TermosRouteImport.update({
   path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TesteQiRoute = TesteQiRouteImport.update({
+  id: '/teste-qi',
+  path: '/teste-qi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -78,10 +90,12 @@ export interface FileRoutesByFullPath {
   '/campus': typeof CampusRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
+  '/engine-check': typeof EngineCheckRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
+  '/teste-qi': typeof TesteQiRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,10 +104,12 @@ export interface FileRoutesByTo {
   '/campus': typeof CampusRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
+  '/engine-check': typeof EngineCheckRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
+  '/teste-qi': typeof TesteQiRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,10 +119,12 @@ export interface FileRoutesById {
   '/campus': typeof CampusRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
+  '/engine-check': typeof EngineCheckRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
+  '/teste-qi': typeof TesteQiRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,10 +135,12 @@ export interface FileRouteTypes {
     | '/campus'
     | '/cidadela'
     | '/corretor'
+    | '/engine-check'
     | '/gerador'
     | '/noticias'
     | '/privacidade'
     | '/termos'
+    | '/teste-qi'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -129,10 +149,12 @@ export interface FileRouteTypes {
     | '/campus'
     | '/cidadela'
     | '/corretor'
+    | '/engine-check'
     | '/gerador'
     | '/noticias'
     | '/privacidade'
     | '/termos'
+    | '/teste-qi'
   id:
     | '__root__'
     | '/'
@@ -141,10 +163,12 @@ export interface FileRouteTypes {
     | '/campus'
     | '/cidadela'
     | '/corretor'
+    | '/engine-check'
     | '/gerador'
     | '/noticias'
     | '/privacidade'
     | '/termos'
+    | '/teste-qi'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -154,10 +178,12 @@ export interface RootRouteChildren {
   CampusRoute: typeof CampusRoute
   CidadelaRoute: typeof CidadelaRoute
   CorretorRoute: typeof CorretorRoute
+  EngineCheckRoute: typeof EngineCheckRoute
   GeradorRoute: typeof GeradorRoute
   NoticiasRoute: typeof NoticiasRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
+  TesteQiRoute: typeof TesteQiRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -204,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/engine-check': {
+      id: '/engine-check'
+      path: '/engine-check'
+      fullPath: '/engine-check'
+      preLoaderRoute: typeof EngineCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/gerador': {
       id: '/gerador'
       path: '/gerador'
@@ -232,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/teste-qi': {
+      id: '/teste-qi'
+      path: '/teste-qi'
+      fullPath: '/teste-qi'
+      preLoaderRoute: typeof TesteQiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -242,10 +282,12 @@ const rootRouteChildren: RootRouteChildren = {
   CampusRoute: CampusRoute,
   CidadelaRoute: CidadelaRoute,
   CorretorRoute: CorretorRoute,
+  EngineCheckRoute: EngineCheckRoute,
   GeradorRoute: GeradorRoute,
   NoticiasRoute: NoticiasRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,
+  TesteQiRoute: TesteQiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

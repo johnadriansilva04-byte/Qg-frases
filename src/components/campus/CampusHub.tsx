@@ -331,7 +331,12 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
               </button>
             </div>
             <div className="p-4">
-              <IQTestComponent showSolution={true} />
+              <IQTestComponent
+                showSolution={true}
+                onReward={(amount) => {
+                  if (userId && amount > 0) void salvareSovHelper(userId, amount, "teste-qi", 0);
+                }}
+              />
             </div>
           </div>
         </div>

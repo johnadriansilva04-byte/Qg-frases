@@ -31,6 +31,14 @@ const SECTIONS = [
     bgColor: "bg-blue-500/10",
   },
   {
+    icon: "brain",
+    title: "Teste de QI",
+    description: "Matrizes de raciocínio lógico com explicação das regras e recompensas em SALVE.",
+    link: "/teste-qi",
+    color: "from-emerald-500 to-teal-500",
+    bgColor: "bg-emerald-500/10",
+  },
+  {
     icon: "flask",
     title: "Laboratórios",
     description: "Pesquisa e inovação científica. Em breve.",
@@ -142,6 +150,18 @@ function Brio() {
                 <div className={`absolute inset-0 bg-gradient-to-r ${section.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
                 <div className="relative flex items-start gap-4 md:gap-6">
                   <div className={`p-3 md:p-4 rounded-xl ${section.bgColor} group-hover:scale-110 transition-transform`}>
+                    {section.icon === "brain" && (
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <path d="M9.5 2a3.5 3.5 0 0 0-3.2 2.1A3.5 3.5 0 0 0 4 7.3c-1.1.7-1.8 1.9-1.8 3.2 0 .8.25 1.55.7 2.18A3.5 3.5 0 0 0 4.5 19a3.5 3.5 0 0 0 5 2.4c.3.4.8.6 1.3.6.9 0 1.7-.8 1.7-1.8V3.8c0-1-.8-1.8-1.7-1.8-.5 0-1 .2-1.3.6A3.5 3.5 0 0 0 9.5 2Z" fill="url(#brainGrad)" />
+                        <path d="M14.5 2a3.5 3.5 0 0 1 3.2 2.1A3.5 3.5 0 0 1 20 7.3c1.1.7 1.8 1.9 1.8 3.2 0 .8-.25 1.55-.7 2.18A3.5 3.5 0 0 1 19.5 19a3.5 3.5 0 0 1-5 2.4c-.3.4-.8.6-1.3.6-.9 0-1.7-.8-1.7-1.8V3.8c0-1 .8-1.8 1.7-1.8.5 0 1 .2 1.3.6A3.5 3.5 0 0 1 14.5 2Z" fill="url(#brainGrad)" opacity="0.85" />
+                        <defs>
+                          <linearGradient id="brainGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#10b981" />
+                            <stop offset="1" stopColor="#14b8a6" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
                     {section.icon === "book" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <path d="M8 12 L8 52 L32 48 L56 52 L56 12 L32 16 L8 12Z" fill="url(#bookGrad)" />

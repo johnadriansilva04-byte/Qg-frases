@@ -1,125 +1,189 @@
 /**
- * Componente principal do teste de QI
- * Integra geração, renderização e interação
+ * Teste de QI — motor procedural I-RAVEN (completo) integrado ao React.
+ *
+ * Usa o RavenEngine (types/rules/engine/distractors) para gerar problemas
+ * reais de matrizes 3x3 com 7 distratores imparciais, renderiza via SVG
+ * responsivo e, após cada resposta, mostra a explicação pedagógica das
+ * regras ocultas e concede recompensas em SALVE ($SOVEREIGN).
  */
 
-import React, { useState, useEffect } from "react";
-import { generateIQProblem } from "./MatrixGenerator";
-import { IQMatrixRenderer } from "./IQRenderer";
-import { IQAnswersRenderer } from "./IQRenderer";
-import type { IQProblem } from "./iqTypes";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { BrainCircuit, Lightbulb, Sparkles } from "lucide-react";
+import { RavenEngine } from "./engine";
+import { renderMatrix, renderPanel } from "./renderer/svgRenderer";
+import { explainProblem, EDUCATIONAL_DISCLAIMER, type RuleExplanation } from "./pedagogy";
+import { computeSalveReward, SALVE_CURRENCY, type SalveReward } from "./rewards";
+import type { GeneratedProblem } from "./types";
 
 interface IQTestComponentProps {
   onProblemComplete?: (correct: boolean, timeTaken: number) => void;
+  /** Chamado com o total de SALVE ganho em cada desafio (0 em caso de erro). */
+  onReward?: (amount: number, rewards: SalveReward[]) => void;
   showSolution?: boolean;
 }
 
-export const IQTestComponent: React.FC<IQTestComponentProps> = ({ onProblemComplete, showSolution = false }) => {
-  const [problem, setProblem] = useState<IQProblem | null>(null);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [startTime, setStartTime] = useState<number>(0);
-  const [isGenerating, setIsGenerating] = useState(true);
+export const IQTestComponent: React.FC<IQTestComponentProps> = ({
+  onProblemComplete,
+  onReward,
+  showSolution = true,
+}) => {
+  const engineRef = useRef<RavenEngine | null>(null);
+  if (!engineRef.current) engineRef.current = new RavenEngine();
 
-  // Gerar novo problema ao montar
-  useEffect(() => {
-    generateNewProblem();
+  const [problem, setProblem] = useState<GeneratedProblem | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [explanations, setExplanations] = useState<RuleExplanation[]>([]);
+  const [lastRewards, setLastRewards] = useState<SalveReward[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [startTime, setStartTime] = useState(0);
+
+  const generateNewProblem = useCallback(() => {
+    setSelected(null);
+    setShowAnswer(false);
+    setExplanations([]);
+    setLastRewards([]);
+    setProblem(engineRef.current!.generateProblem());
+    setStartTime(Date.now());
   }, []);
 
-  const generateNewProblem = () => {
-    setIsGenerating(true);
-    setSelectedAnswer(null);
-    setShowAnswer(false);
-
-    // Pequeno delay para permitir que a UI atualize
-    setTimeout(() => {
-      try {
-        const newProblem = generateIQProblem();
-        setProblem(newProblem);
-        setStartTime(Date.now());
-      } catch (error) {
-        console.error("Erro ao gerar problema:", error);
-      } finally {
-        setIsGenerating(false);
-      }
-    }, 100);
-  };
-
-  const handleAnswerSelect = (answerIdx: number) => {
-    if (showAnswer || !problem) return;
-
-    setSelectedAnswer(answerIdx);
-    const timeTaken = Date.now() - startTime;
-    const correct = answerIdx === problem.correctAnswer;
-
-    if (onProblemComplete) {
-      onProblemComplete(correct, timeTaken);
-    }
-
-    if (showSolution) {
-      setShowAnswer(true);
-    }
-  };
-
-  const handleShowAnswer = () => {
-    setShowAnswer(true);
-  };
-
-  const handleNewProblem = () => {
+  useEffect(() => {
     generateNewProblem();
+  }, [generateNewProblem]);
+
+  const handleSelect = (idx: number) => {
+    if (showAnswer || !problem) return;
+    setSelected(idx);
+    const correct = idx === problem.answerIndex;
+    const timeTaken = Date.now() - startTime;
+    const newStreak = correct ? streak + 1 : 0;
+    setStreak(newStreak);
+
+    const rewards = computeSalveReward({ correct, firstTry: true, hintsUsed: 0, streak: newStreak });
+    setLastRewards(rewards);
+    const total = rewards.reduce((s, r) => s + r.amount, 0);
+    if (total > 0 && onReward) onReward(total, rewards);
+
+    setExplanations(explainProblem(problem));
+    onProblemComplete?.(correct, timeTaken);
+    if (showSolution) setShowAnswer(true);
   };
 
-  if (isGenerating || !problem) {
+  if (!problem) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-gray-600">Gerando problema de QI...</div>
+      <div className="flex items-center justify-center p-8 text-muted-foreground">
+        Gerando desafio de raciocínio...
       </div>
     );
   }
 
+  const correct = selected !== null && selected === problem.answerIndex;
+  const salveTotal = lastRewards.reduce((s, r) => s + r.amount, 0);
+
   return (
-    <div className="flex flex-col items-center gap-6 p-4">
-      <h2 className="text-2xl font-bold text-gray-800">Teste de QI - Matrizes de Progressão</h2>
+    <div className="flex flex-col items-center gap-4 p-2 md:p-4">
+      <div className="flex items-center gap-2">
+        <BrainCircuit className="h-5 w-5 text-emerald-500" />
+        <h2 className="text-lg font-black text-foreground">Teste de QI — Matrizes de Raciocínio</h2>
+      </div>
 
-      {/* Matriz 3x3 */}
-      <IQMatrixRenderer matrix={problem.matrix} />
+      {/* Matriz 3x3 (SVG responsivo) */}
+      <div
+        className="w-full max-w-[420px] overflow-hidden rounded-lg border border-border bg-white"
+        dangerouslySetInnerHTML={{ __html: renderMatrix(problem) }}
+      />
 
-      {/* Opções de resposta */}
+      {/* Opções clicáveis */}
       <div className="w-full">
-        <h3 className="text-lg font-semibold mb-2 text-center">Selecione a resposta correta:</h3>
-        <IQAnswersRenderer
-          answers={problem.answers}
-          onAnswerSelect={handleAnswerSelect}
-          selectedAnswer={selectedAnswer ?? undefined}
-          showAnswer={showAnswer}
-          correctAnswer={problem.correctAnswer}
-        />
+        <h3 className="mb-2 text-center text-sm font-semibold text-muted-foreground">
+          Selecione a peça que completa a matriz:
+        </h3>
+        <div className="grid grid-cols-4 gap-2">
+          {problem.options.map((opt, idx) => {
+            const isSelected = selected === idx;
+            const isCorrect = idx === problem.answerIndex;
+            const ring = showAnswer
+              ? isCorrect
+                ? "ring-2 ring-emerald-500"
+                : isSelected
+                  ? "ring-2 ring-red-500"
+                  : ""
+              : isSelected
+                ? "ring-2 ring-blue-500"
+                : "";
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSelect(idx)}
+                disabled={showAnswer}
+                className={`overflow-hidden rounded-md border border-border bg-white transition hover:border-emerald-500 disabled:cursor-default ${ring}`}
+                aria-label={`Opção ${idx + 1}`}
+              >
+                <span dangerouslySetInnerHTML={{ __html: renderPanel(opt) }} />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Controles */}
-      <div className="flex gap-4">
-        {!showAnswer && selectedAnswer !== null && !showSolution && (
-          <button
-            onClick={handleShowAnswer}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+      {/* Feedback + recompensa */}
+      {showAnswer && selected !== null && (
+        <div className="w-full space-y-3">
+          <div
+            className={`rounded-lg border p-3 text-center text-sm font-bold ${
+              correct
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                : "border-red-500/40 bg-red-500/10 text-red-400"
+            }`}
           >
-            Mostrar Resposta
-          </button>
-        )}
-        <button
-          onClick={handleNewProblem}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-        >
-          Novo Problema
-        </button>
-      </div>
+            {correct ? "✓ Correto!" : "✗ Incorreto — veja a explicação abaixo."}
+            {correct && salveTotal > 0 && (
+              <span className="ml-2 text-amber-400">
+                +{salveTotal} {SALVE_CURRENCY.symbol}
+              </span>
+            )}
+          </div>
 
-      {/* Feedback */}
-      {showAnswer && selectedAnswer !== null && (
-        <div className={`text-lg font-semibold ${selectedAnswer === problem.correctAnswer ? "text-green-600" : "text-red-600"}`}>
-          {selectedAnswer === problem.correctAnswer ? "✓ Correto!" : "✗ Incorreto!"}
+          {lastRewards.length > 0 && correct && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
+              <p className="mb-1 flex items-center gap-1 font-bold uppercase tracking-wide">
+                <Sparkles className="h-3 w-3" /> Recompensas em {SALVE_CURRENCY.name}
+              </p>
+              {lastRewards.map((r, i) => (
+                <p key={i}>
+                  +{r.amount} {SALVE_CURRENCY.symbol} — {r.reason}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* Explicação pedagógica das regras ocultas */}
+          {explanations.length > 0 && (
+            <div className="rounded-lg border border-border bg-surface/50 p-3 text-xs text-muted-foreground">
+              <p className="mb-2 flex items-center gap-1 font-bold uppercase tracking-wide text-foreground">
+                <Lightbulb className="h-3 w-3 text-emerald-500" /> Regras ocultas deste desafio
+              </p>
+              <ul className="space-y-1">
+                {explanations.map((e, i) => (
+                  <li key={i}>
+                    <span className="font-semibold text-foreground">{e.titulo}:</span> {e.explicacao}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10px] italic opacity-70">{EDUCATIONAL_DISCLAIMER}</p>
+            </div>
+          )}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={generateNewProblem}
+        className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-emerald-500"
+      >
+        Novo desafio
+      </button>
     </div>
   );
 };

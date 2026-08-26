@@ -1,21 +1,20 @@
 /**
- * Exportações do módulo de Teste de QI
- * Motor procedural de testes de QI baseado no I-RAVEN
+ * Módulo "Teste de QI" — motor procedural completo traduzido do I-RAVEN
+ * (100% cliente, sem Python), com explicações pedagógicas e recompensas
+ * em SALVE ($SOVEREIGN).
  */
-
 export { IQTestComponent } from "./IQTestComponent";
-export { IQMatrixRenderer, IQAnswersRenderer, IQPanelRenderer } from "./IQRenderer";
-export { generateIQProblem } from "./MatrixGenerator";
-export { createRule, ConstantRule, ProgressionRule, ArithmeticRule, DistributeThreeRule } from "./RuleEngine";
+export { RavenEngine } from "./engine";
+export { renderMatrix, renderPanel, renderOptions, mountProblem } from "./renderer/svgRenderer";
+export { explainRule, explainProblem, EDUCATIONAL_DISCLAIMER } from "./pedagogy";
+export type { RuleExplanation } from "./pedagogy";
 export {
-  NumberAttribute,
-  TypeAttribute,
-  SizeAttribute,
-  ColorAttribute,
-  AngleAttribute,
-  UniformityAttribute,
-  PositionAttribute,
-} from "./AttributeEngine";
-
-export * from "./iqTypes";
-export * from "./iqConstants";
+  SALVE_CURRENCY,
+  SALVE_REWARDS,
+  computeSalveReward,
+  sessionCompletionReward,
+  settleRewards,
+} from "./rewards";
+export type { ChallengeResult, SalveReward, SalveWallet } from "./rewards";
+export * from "./types";
+export * from "./constants";
