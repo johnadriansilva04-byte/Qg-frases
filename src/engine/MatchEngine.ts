@@ -153,10 +153,16 @@ export class MatchEngine {
     this.scene.add(this.ball.mesh);
     this.createPowerBar();
 
-    // Preload modelos FBX de forma assíncrona (não bloqueia a inicialização)
-    this.preloadModels().catch((err: unknown) => {
-      console.warn("Falha no preload de modelos FBX, usando fallback procedural:", err);
-    });
+    // Preload modelos FBX ANTES de escalar os times — caso contrário
+    // createPlayerRigWithFallback pega o fallback procedural (modelo
+    // "boneco de palito") e o jogador 3D real nunca é usado.
+    this.preloadModels()
+      .then(() => {
+        this.recreateAllRigs();
+      })
+      .catch((err: unknown) => {
+        console.warn("Falha no preload de modelos FBX, usando fallback procedural:", err);
+      });
 
     this.spawnTeam(setup.home, "home");
     this.spawnTeam(setup.away, "away");
@@ -198,6 +204,25 @@ export class MatchEngine {
       console.log("[MatchEngine.preloadModels] ✓ Preload de modelos FBX concluído com sucesso");
     } catch (error) {
       console.error("[MatchEngine.preloadModels] ✗ Erro no preload:", error);
+    }
+  }
+
+  /** Troca os rigs (procedural -> FBX) de todos os jogadores em campo. */
+  private recreateAllRigs(): void {
+    for (const p of this.players) {
+      const setup = p.side === "home" ? this.setup.home : this.setup.away;
+      const isControlled = p.isControlled;
+      const isKeeper = p.isKeeper;
+      // Remove o grupo antigo da cena
+      if (p.rig.group.parent) p.rig.group.parent.remove(p.rig.group);
+      const rig = createPlayerRigWithFallback(
+        setup.colors.primary, setup.colors.secondary, isControlled, isKeeper
+      );
+      p.rig = rig;
+      this.scene.add(rig.group);
+      if (p.currentAction) { (p.currentAction as any).stop(); delete p.currentAction; }
+      delete (p as any).currentAnimation;
+      rig.group.position.set(p.x, 0, p.z);
     }
   }
 
@@ -456,13 +481,14 @@ export class MatchEngine {
     const actions = this.input.consume();
     const d = this.dir(p.side);
     const mv = this.input.move;
-    // Move vector: x = right/left, y = forward/back
-    // Standard WASD mapping:
-    // W (y>0) = forward toward goal = attack direction on X axis
-    // S (y<0) = backward toward own goal = opposite attack direction on X axis
-    // A (x<0) = left = negative Z
-    // D (x>0) = right = positive Z
-    // Invert Z for camera perspective
+    // Mapeamento relativo à CÂMERA (atrás do jogador, olhando para o ataque):
+    // W (y>0) = avançar em direção ao gol (eixo de ataque da equipe)
+    // S (y<0) = recuar em direção ao próprio gol
+    // D (x>0) = direita da tela; A (x<0) = esquerda da tela.
+    // A tela tem esquerda/direita definidas pelo eixo Z e elas NÃO mudam no
+    // segundo tempo — quando os times trocam de lado a câmera gira 180° e o
+    // eixo Z na tela também gira, então o sinal de dz permanece o mesmo.
+    // (Antes o dz não era multiplicado por `d`, o que invertia A/D no 2º tempo.)
     const dx = mv.y * d;
     const dz = -mv.x;
 
