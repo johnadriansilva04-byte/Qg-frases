@@ -15,7 +15,6 @@ import { Route as BrioRouteImport } from './routes/brio'
 import { Route as CampusRouteImport } from './routes/campus'
 import { Route as CidadelaRouteImport } from './routes/cidadela'
 import { Route as CorretorRouteImport } from './routes/corretor'
-import { Route as EngineCheckRouteImport } from './routes/engine-check'
 import { Route as GeradorRouteImport } from './routes/gerador'
 import { Route as NoticiasRouteImport } from './routes/noticias'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
@@ -52,11 +51,6 @@ const CorretorRoute = CorretorRouteImport.update({
   path: '/corretor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EngineCheckRoute = EngineCheckRouteImport.update({
-  id: '/engine-check',
-  path: '/engine-check',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const GeradorRoute = GeradorRouteImport.update({
   id: '/gerador',
   path: '/gerador',
@@ -90,7 +84,6 @@ export interface FileRoutesByFullPath {
   '/campus': typeof CampusRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
-  '/engine-check': typeof EngineCheckRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -104,7 +97,6 @@ export interface FileRoutesByTo {
   '/campus': typeof CampusRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
-  '/engine-check': typeof EngineCheckRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -119,7 +111,6 @@ export interface FileRoutesById {
   '/campus': typeof CampusRoute
   '/cidadela': typeof CidadelaRoute
   '/corretor': typeof CorretorRoute
-  '/engine-check': typeof EngineCheckRoute
   '/gerador': typeof GeradorRoute
   '/noticias': typeof NoticiasRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -135,7 +126,6 @@ export interface FileRouteTypes {
     | '/campus'
     | '/cidadela'
     | '/corretor'
-    | '/engine-check'
     | '/gerador'
     | '/noticias'
     | '/privacidade'
@@ -149,7 +139,6 @@ export interface FileRouteTypes {
     | '/campus'
     | '/cidadela'
     | '/corretor'
-    | '/engine-check'
     | '/gerador'
     | '/noticias'
     | '/privacidade'
@@ -163,7 +152,6 @@ export interface FileRouteTypes {
     | '/campus'
     | '/cidadela'
     | '/corretor'
-    | '/engine-check'
     | '/gerador'
     | '/noticias'
     | '/privacidade'
@@ -178,7 +166,6 @@ export interface RootRouteChildren {
   CampusRoute: typeof CampusRoute
   CidadelaRoute: typeof CidadelaRoute
   CorretorRoute: typeof CorretorRoute
-  EngineCheckRoute: typeof EngineCheckRoute
   GeradorRoute: typeof GeradorRoute
   NoticiasRoute: typeof NoticiasRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
@@ -230,13 +217,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/engine-check': {
-      id: '/engine-check'
-      path: '/engine-check'
-      fullPath: '/engine-check'
-      preLoaderRoute: typeof EngineCheckRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/gerador': {
       id: '/gerador'
       path: '/gerador'
@@ -282,7 +262,6 @@ const rootRouteChildren: RootRouteChildren = {
   CampusRoute: CampusRoute,
   CidadelaRoute: CidadelaRoute,
   CorretorRoute: CorretorRoute,
-  EngineCheckRoute: EngineCheckRoute,
   GeradorRoute: GeradorRoute,
   NoticiasRoute: NoticiasRoute,
   PrivacidadeRoute: PrivacidadeRoute,
