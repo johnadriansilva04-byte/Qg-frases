@@ -84,12 +84,20 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
       });
       if (error) {
         console.error("Erro na RPC listar_mesas_trilha_disponiveis:", error);
+        // Fallback: se a função não existe, retorna array vazio sem erro
+        if (error.code === 'PGRST202' || error.code === '404') {
+          console.log("Função não encontrada, usando array vazio");
+          setMesas([]);
+          setLoading(false);
+          return;
+        }
         throw error;
       }
       console.log("Mesas carregadas:", data);
       setMesas((Array.isArray(data) ? data as unknown as Mesa[] : []));
     } catch (error) {
       console.error("Erro ao carregar mesas:", error);
+      setMesas([]); // Fallback seguro
     } finally {
       setLoading(false);
     }

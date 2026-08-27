@@ -501,20 +501,30 @@ export async function atualizarPerfilClube(
   userId: string,
   input: PerfilClubeInput,
 ): Promise<UsuarioBotao | null> {
-  const { data, error } = await supabase.rpc("atualizar_perfil_clube", {
-    p_uid: userId,
-    p_nome: input.nome ?? null,
-    p_time: input.time ?? null,
-    p_abreviacao: input.abreviacao ?? null,
-    p_cores: input.cores ?? null,
-    p_tatica: input.tatica ?? null,
-    p_botoes: input.botoes ?? null,
-  });
-  if (error) {
+  try {
+    const { data, error } = await supabase.rpc("atualizar_perfil_clube", {
+      p_uid: userId,
+      p_nome: input.nome ?? null,
+      p_time: input.time ?? null,
+      p_abreviacao: input.abreviacao ?? null,
+      p_cores: input.cores ?? null,
+      p_tatica: input.tatica ?? null,
+      p_botoes: input.botoes ?? null,
+    });
+    if (error) {
+      console.error("[API] Erro ao atualizar perfil do clube:", error);
+      // Fallback: se a função não existe, ignora o erro e retorna null
+      if (error.code === 'PGRST202' || error.code === '404') {
+        console.log("Função atualizar_perfil_clube não encontrada, ignorando");
+        return null;
+      }
+      throw error;
+    }
+    return (data as UsuarioBotao | null) ?? null;
+  } catch (error) {
     console.error("[API] Erro ao atualizar perfil do clube:", error);
-    throw error;
+    return null; // Fallback seguro
   }
-  return (data as UsuarioBotao | null) ?? null;
 }
 
 /**

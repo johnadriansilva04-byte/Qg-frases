@@ -233,19 +233,25 @@ export async function resgatarMissao(missaoId: string): Promise<number | null> {
 }
 
 export async function carregarChatCidadela(limit = 60): Promise<MensagemChatCidadela[]> {
-  // Tenta Supabase primeiro
-  const { data, error } = await supabase
-    .from("cidadela_chat_messages")
-    .select("id,sender_id,sender_nome,tipo,texto,created_at")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  try {
+    // Tenta Supabase primeiro
+    const { data, error } = await supabase
+      .from("cidadela_chat_messages")
+      .select("id,sender_id,sender_nome,tipo,texto,created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
 
-  if (!error && data) {
-    return ((data ?? []) as MensagemChatCidadela[]).reverse();
+    if (!error && data) {
+      return ((data ?? []) as MensagemChatCidadela[]).reverse();
+    }
+
+    // Fallback local
+    console.warn("[Pracinha] Usando chat local (Supabase indisponível):", error);
+  } catch (error) {
+    console.warn("[Pracinha] Erro ao carregar chat do Supabase:", error);
   }
 
   // Fallback local
-  console.warn("[Pracinha] Usando chat local (Supabase indisponível)");
   const stored = localStorage.getItem(CHAT_STORAGE_KEY);
   if (!stored) return [];
 
