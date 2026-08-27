@@ -330,7 +330,7 @@ BEGIN
      SET status             = 'finalizado',
          vencedor_id        = p_vencedor_id,
          motivo_finalizacao = p_motivo,
-         turno              = NULL
+         turn               = NULL
    WHERE m.mesa_id = p_mesa_id
      AND (m.jogador_1_id = v_uid OR m.jogador_2_id = v_uid)
   RETURNING m.* INTO v_mesa;
@@ -367,7 +367,7 @@ BEGIN
      SET status             = 'finalizado',
          vencedor_id        = v_vencedor_id,
          motivo_finalizacao = 'abandono',
-         turno              = NULL
+         turn               = NULL
    WHERE m.mesa_id = p_mesa_id
   RETURNING m.* INTO v_mesa;
 
@@ -923,7 +923,7 @@ BEGIN
             WHEN turn = 1 THEN jogador_2_id
             ELSE NULL
         END,
-        turno = NULL
+        turn = NULL
     WHERE status = 'em_andamento'
       AND iniciado_em < now() - interval '30 minutes';
 
