@@ -66,7 +66,7 @@ check("re-cadastro: perfil existente é devolvido (não duplica)", cadastrarFn.i
 check("vídeo: sem confirmação do ledger retorna null (nada somado)", storageTs.includes('recompensa de vídeo NÃO confirmada'));
 check("vídeo: sem fallback local de soma", !storageTs.includes("(currentData.pontos_soberania || 0) + pontos"));
 check("carreira: cache nunca soma pontosTotais sem ledger", !storageTs.includes(") + pontosTotais"));
-check("carreira/online: cache = saldo do ledger ou INALTERADO", storageTs.includes("saldoSov ?? (currentData.pontos_soberania || 0)"));
+check("carreira/online: cache = saldo do ledger ou INALTERADO", storageTs.includes("cacheSoberaniaInteiro(saldoSov) : (currentData.pontos_soberania || 0)"));
 check("salvarResultado (legado): sem fallback local", !apiTs.includes("params.usuario.pontos_soberania + params.pontos"));
 check("salvarResultado (legado): falha logada e cache preservado", apiTs.includes("SOV da partida NÃO confirmado"));
 check("aposta online: aborta sem confirmação do ledger", careerRemote.includes("aposta NÃO confirmada") && !careerRemote.includes("saldoLedger ?? Math.max(0, atual + delta)"));

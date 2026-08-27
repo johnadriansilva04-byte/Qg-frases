@@ -1,3 +1,53 @@
+## Campeonato Online provado (E2E) + código morto removido (2026-08-27, 30ª passada)
+
+- **CAMPEONATO ONLINE FUNCIONAL (prova REST real, produção)**: novo
+  `testes/e2e-campeonato-bots.mjs` agora 0 falhas ponta a ponta: regra dos
+  50 SOV bloqueia conta endividada (criar/entrar), conta nova (bônus 50)
+  cria a sala, convidado entra pelo LINK DIRETO, dono preenche com bots
+  (32/32, bots usam `time_id` real da base TEAMS do código, NUNCA duplicam
+  humano), convidado NÃO preenche (regra do dono), inicia o campeonato,
+  31 rodadas × 16 confrontos = **496 pessoas no formato ACHATADO
+  (confrontos[] com `rodada` por elemento — não aninhado por rodada)**,
+  rodadas 1..31 cobrem o round-robin, dono resolve confronto bot×bot
+  (`resolver_confronto_bots`), REJEITA confronto com humano, classificação
+  atualiza pontos. **Não reintroduzir** crença de que `confrontos` é um
+  array de 31 rodadas; é um array ACHATADO de 496 jogos com `status`.
+- **`entrar_campeonato_online` só abre sala `aguardando`** — depois de
+  iniciar, a fonte verdade dos confrontos é a própria tabela (`rest`), não
+  a RPC. No E2E e no código, depois de `iniciar` leia `confrontos` da
+  tabela (`botao_campeonatos_online`), não da RPC de entrar.
+- **CÓDIGO MORTO REMOVIDO (12 arquivos)**: `Campo.tsx`, `GradeTimes.tsx`,
+  `OnlineMatch.tsx` (V1), `OnlineMatchV2.tsx`, `src/engine/demoMatch.ts`,
+  `src/hooks/useBotaoOnline.ts`, `src/lib/botao.functions.ts`,
+  `src/lib/financial/antiCheat.ts`, `bettingSystem.ts`, `careerManager.ts`,
+  `recoverySystem.ts`. Módulos vivos definitivos do online: `OnlineMatchV3`
+  (Amistoso Online/Mesa), `OnlineChampionship` (Campeonato Online),
+  `MesaOnlineMatch`+`AdminMesaPanel`, `TrilhaGame` (`useTrilhaChampionship`).
+  Dois engines distintos seguem intocados: `src/engine` (3D, Match3DView/
+  MatchEngine) e `src/components/botao/engine` (2D MatchView).
+- **`src/engine/MatchEngine.ts`**: `PlayerState` ganhou o estado `"dribble"`
+  (era provável cause de erro TS pré-existente); `formations.ts` (tracked no
+  git, intacto) é importado via `formationSlots` pelo engine 3D.
+- **Guards atualizados** (eram invariantes pré-existentes, não regressão):
+  `persistencia-unica` (sem referência a `OnlineMatch.tsx` no `semSoberaniaUI`)
+  e `conta-sem-perfil` (o `storage.ts` usa
+  `cacheSoberaniaInteiro(saldoSov) : (currentData.pontos_soberania || 0)` — o
+  guard antigo procurava string `saldoSov ?? ...` que nunca existiu em HEAD).
+- **README-conta E2E**: `openhands.rookie.e2e@gmail.com` (Rookie FC) tem
+  saldo SOV 0 (conta do README ficou endividada nas auditorias longas) — ele
+  NÃO pode criar campeonato na regra dos 50 SOV. Os E2Es de campeonato criam
+  conta NOVA elas mesmas (bônus 50 → elegível). Para E2Es de CARREIRA que
+  precisam de campanha ativa (`entrar-em-campo`), a conta precisa ter uma
+  carreira — o estado dela é volátil (o `e2e-2d-classificacao.mjs` falha se
+  a conta está sem carreira, não por regressão de código).
+- **Verificação**: tsc 0; build OK; estruturais (persistencia-unica 120,
+  sov-consistencia 6, onclick OK, conta-sem-perfil 33, fluxo-usuario-novo 14,
+  celular-anuncios 12, gol-semantico-guarda 13, sessao-antiga 11 — .mts via
+  node); engines jiti 18 suites verdes (conversas 41, entregas 9, f5 19,
+  ia 52, temporada 57, torcida 42+14, regras-fim 36, bolsa 29, história 53,
+  onboarding, marketplace, promo-rebaix 136, clube-fin 17, evolucao 34,
+  transferencias 17, sov-invest 46, gol-sem 14).
+
 ## 3D grava como o 2D (prova E2E) + SUBORNO REMOVIDO do jogo (2026-08-24, 29ª passada)
 
 - **3D conta na tabela e nos saldos EXATAMENTE como o 2D**: os dois modos

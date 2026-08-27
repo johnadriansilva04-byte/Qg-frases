@@ -16,7 +16,7 @@ import type {
   TeamSide,
 } from "./types";
 
-type PlayerState = "idle" | "run" | "sprint" | "pass" | "shoot" | "slide" | "recover" | "celebrate" | "save";
+type PlayerState = "idle" | "run" | "sprint" | "pass" | "shoot" | "slide" | "recover" | "celebrate" | "save" | "dribble";
 
 interface Sim {
   data: MatchPlayerInput;

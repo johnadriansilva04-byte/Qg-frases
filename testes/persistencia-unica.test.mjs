@@ -468,8 +468,8 @@ expect(
 );
 // Nomenclatura: pontos são SOV (nunca "pontos de soberania" em UI).
 const semSoberaniaUI = [
-  "src/components/botao/components/OnlineMatch.tsx",
   "src/components/botao/components/OnlineMatchV3.tsx",
+  "src/components/botao/components/OnlineChampionship.tsx",
   "src/components/botao/career/SeasonTransition.tsx",
   "src/components/botao/career/TitleCeremony.tsx",
   "src/components/botao/career/SeasonHub.tsx",

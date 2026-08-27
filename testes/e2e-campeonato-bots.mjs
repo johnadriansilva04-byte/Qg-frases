@@ -188,11 +188,16 @@ try {
   // ===== 6) Inicia o campeonato =====
   const iniciar = await rpc(novoDono.token, "iniciar_campeonato_online", { p_codigo: CODIGO });
   ok(iniciar.body?.status === "em_andamento", "campeonato iniciado");
-  ok((iniciar.body?.confrontos ?? []).length === 31, `31 rodadas geradas (${(iniciar.body?.confrontos ?? []).length} confrontos)`);
+  // Round-robin: 32 jogadores → 31 rodadas × 16 confrontos = 496 partidas (formato achatado).
+  const totalConfrontos = (iniciar.body?.confrontos ?? []).length;
+  ok(totalConfrontos === 496, `31 rodadas geradas (${totalConfrontos} confrontos)`);
+  const rodadas = new Set((iniciar.body?.confrontos ?? []).map((c) => c.rodada));
+  ok(rodadas.size === 31 && rodadas.has(1) && rodadas.has(31), `rodadas 1..31 cobrem todas as ${rodadas.size} rodadas`);
 
   // ===== 7) Confrontos bot×bot da rodada 1 resolvidos pelo dono =====
-  const campAtual = (await rpc(novoDono.token, "entrar_campeonato_online", { p_codigo: CODIGO })).body
-    ?? (await rest(`botao_campeonatos_online?codigo=eq.${CODIGO}&select=*`, novoDono.token))[0];
+  // `entrar_campeonato_online` só abre salas 'aguardando'; depois de iniciado,
+  // a fonte da verdade dos confrontos é a própria tabela.
+  const campAtual = (await rest(`botao_campeonatos_online?codigo=eq.${CODIGO}&select=*`, novoDono.token))[0];
   const rodada1 = (campAtual.confrontos ?? []).filter((c) => c.rodada === 1 && !c.bye && c.status === "pendente");
   const porId = Object.fromEntries((campAtual.participantes ?? []).map((p) => [p.user_id, p]));
   const botxbot = rodada1.filter((c) => porId[c.j1_id]?.bot && porId[c.j2_id]?.bot);
