@@ -715,11 +715,11 @@ $$;
 -- Registrar resultado de confronto de trilha (grupos ou eliminatórias)
 CREATE OR REPLACE FUNCTION public.registrar_resultado_trilha(
   p_campeonato_id BIGINT,
-  p_grupo TEXT DEFAULT NULL,
-  p_fase TEXT DEFAULT NULL,
   p_j1_id TEXT,
   p_j2_id TEXT,
-  p_vencedor_id TEXT
+  p_vencedor_id TEXT,
+  p_grupo TEXT DEFAULT NULL,
+  p_fase TEXT DEFAULT NULL
 )
 RETURNS public.campeonatos_trilha_online
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
