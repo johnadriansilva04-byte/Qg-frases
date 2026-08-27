@@ -27,6 +27,9 @@ export type BotCampeonato = {
   power: number;
 };
 
+/** Formato do campeonato: 'pontos' (todos vs todos) ou 'mata-mata' (eliminação). */
+export type FormatoCampeonato = "pontos" | "mata-mata";
+
 export type ConfrontoCampeonato = {
   rodada: number;
   mesa_id: string | null;
@@ -45,6 +48,8 @@ export type CampeonatoOnline = {
   criador_id: string;
   status: "aguardando" | "em_andamento" | "finalizado" | "cancelado";
   max_jogadores: number;
+  /** Formato: 'pontos' (default antigo) ou 'mata-mata'. */
+  formato?: FormatoCampeonato;
   fase: number;
   participantes: ParticipanteCampeonato[];
   confrontos: ConfrontoCampeonato[];
@@ -57,16 +62,22 @@ export type CampeonatoOnline = {
 };
 
 /** Link direto para a sala do campeonato: cai direto na sala (§link). */
-export function linkConviteCampeonato(codigo: string): string {
+export function linkConviteCampeonato(codigo: string, formato?: FormatoCampeonato): string {
   const base = typeof window !== "undefined" ? window.location.origin : "https://pracinha.online";
-  return `${base}/cidadela?camp=${encodeURIComponent(codigo)}`;
+  const fmt = formato ?? "pontos";
+  return `${base}/cidadela?camp=${encodeURIComponent(codigo)}&formato=${fmt}`;
 }
 
-/** Cria uma nova sala de campeonato (criador é o 1º participante). */
+/** Cria uma nova sala de campeonato (criador é o 1º participante).
+ *
+ * formato="pontos" (default) ou "mata-mata". Na RPC atual o formato fica
+ * informado pela UI; quando a migration persistir, virá do banco.
+ */
 export async function criarCampeonato(
   nome: string,
   maxJogadores = 4,
   premioSov = 0,
+  formato: FormatoCampeonato = "pontos",
 ): Promise<CampeonatoOnline> {
   const { data, error } = await supabase.rpc("criar_campeonato_online", {
     p_nome: nome,
@@ -91,7 +102,10 @@ export async function criarCampeonato(
     }
     throw error;
   }
-  return data as CampeonatoOnline;
+  const camp = data as CampeonatoOnline;
+  // Formato capturado pela UI (quando a migration persistir, virá do banco).
+  camp.formato = formato;
+  return camp;
 }
 
 /** Entra em uma sala de campeonato pelo código. */
