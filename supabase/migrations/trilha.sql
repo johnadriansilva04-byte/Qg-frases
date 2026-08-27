@@ -427,7 +427,7 @@ ALTER TABLE public.campeonatos_trilha_online
   ADD CONSTRAINT campeonatos_trilha_criador_fkey
     FOREIGN KEY (criador_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
--- Função auxiliar para gerar grupos
+-- Função auxiliar para gerar grupos (grupos de 4 jogadores)
 CREATE OR REPLACE FUNCTION public._gerar_grupos_trilha(p_ids UUID[], p_max INTEGER)
 RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -435,24 +435,25 @@ DECLARE
   v_grupos JSONB := '[]'::JSONB;
   v_grupo JSONB;
   v_grupo_nome TEXT;
-  v_grupo_tamanho INTEGER;
+  v_num_grupos INTEGER;
+  v_grupo_tamanho INTEGER := 4;
   v_idx INTEGER := 0;
   v_grupo_idx INTEGER := 0;
   v_grupo_participantes JSONB := '[]'::JSONB;
 BEGIN
-  -- Define tamanho dos grupos baseado no total de jogadores
-  v_grupo_tamanho := CASE
-    WHEN p_max = 8 THEN 4  -- 2 grupos de 4
-    WHEN p_max = 12 THEN 3 -- 4 grupos de 3
-    WHEN p_max = 16 THEN 4 -- 4 grupos de 4
-    WHEN p_max = 32 THEN 4 -- 8 grupos de 4
-    ELSE 4
+  -- Calcula número de grupos (sempre 4 jogadores por grupo)
+  v_num_grupos := CASE
+    WHEN p_max = 8 THEN 2   -- 2 grupos de 4
+    WHEN p_max = 12 THEN 3  -- 3 grupos de 4
+    WHEN p_max = 16 THEN 4  -- 4 grupos de 4
+    WHEN p_max = 32 THEN 8  -- 8 grupos de 4
+    ELSE 2
   END;
 
   -- Embaralha os IDs
   FOR v_idx IN 0..(array_length(p_ids, 1) - 1) LOOP
     v_grupo_idx := (v_idx / v_grupo_tamanho);
-    v_grupo_nome := chr(65 + v_grupo_idx); -- A, B, C, D, etc.
+    v_grupo_nome := chr(65 + v_grupo_idx); -- A, B, C, D, E, F, G, H
 
     -- Cria o grupo se não existir
     IF v_grupo_idx >= jsonb_array_length(v_grupos) THEN
@@ -498,7 +499,7 @@ BEGIN
     v_grupo_nome := v_grupo->>'nome';
     v_participantes := (v_grupo->>'participantes')::JSONB;
 
-    -- Round-robin dentro do grupo
+    -- Round-robin dentro do grupo (cada um joga contra todos)
     FOR v_i IN 0..(jsonb_array_length(v_participantes) - 1) LOOP
       FOR v_j IN (v_i + 1)..(jsonb_array_length(v_participantes) - 1) LOOP
         v_p1 := v_participantes[v_i];
@@ -520,6 +521,61 @@ BEGIN
   END LOOP;
 
   RETURN v_confrontos;
+END;
+$$;
+
+-- Função auxiliar para gerar eliminatórias (após fase de grupos)
+CREATE OR REPLACE FUNCTION public._gerar_eliminatorias_trilha(p_classificados JSONB)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_eliminitorias JSONB := '[]'::JSONB;
+  v_num_participantes INTEGER;
+  v_participantes TEXT[];
+  v_p1 TEXT;
+  v_p2 TEXT;
+  v_fase INTEGER := 1;
+  v_nome_fase TEXT;
+  v_idx INTEGER := 0;
+BEGIN
+  v_num_participantes := jsonb_array_length(p_classificados);
+
+  -- Se houver pelo menos 2 classificados, gera as eliminatórias
+  IF v_num_participantes >= 2 THEN
+    -- Extrai IDs dos classificados
+    v_participantes := ARRAY[]::TEXT[];
+    FOR v_idx IN 0..(v_num_participantes - 1) LOOP
+      v_participantes := v_participantes || ARRAY[(p_classificados[v_idx]->>'user_id')];
+    END LOOP;
+
+    -- Define nome da fase baseado no número de participantes
+    v_nome_fase := CASE
+      WHEN v_num_participantes = 2 THEN 'Final'
+      WHEN v_num_participantes = 4 THEN 'Semifinal'
+      WHEN v_num_participantes = 8 THEN 'Quartas de Final'
+      ELSE 'Oitavas de Final'
+    END;
+
+    -- Gera confrontos em pares
+    FOR v_idx IN 0..(v_num_participantes - 1) BY 2 LOOP
+      IF v_idx + 1 < v_num_participantes THEN
+        v_p1 := v_participantes[v_idx + 1];
+        v_p2 := v_participantes[v_idx + 2];
+
+        v_eliminitorias := v_eliminitorias || jsonb_build_array(jsonb_build_object(
+          'fase', v_nome_fase,
+          'rodada', v_fase,
+          'j1_id', v_p1,
+          'j2_id', v_p2,
+          'pl_j1', 0,
+          'pl_j2', 0,
+          'status', 'pendente'
+        ));
+      END IF;
+    END LOOP;
+  END IF;
+
+  RETURN v_eliminitorias;
 END;
 $$;
 
@@ -637,15 +693,15 @@ BEGIN
     v_ids := v_ids || ARRAY[v_id];
   END LOOP;
 
-  -- Gera grupos
+  -- Gera grupos (grupos de 4 jogadores)
   v_grupos := public._gerar_grupos_trilha(v_ids, v_row.max_jogadores);
 
-  -- Gera confrontos dos grupos
+  -- Gera confrontos dos grupos (round-robin: 3 pontos por vitória, 1 por empate)
   v_confrontos := public._gerar_confrontos_grupos_trilha(v_grupos);
 
   UPDATE public.campeonatos_trilha_online
      SET status = 'em_andamento',
-         fase = 1,
+         fase = 1, -- Fase de grupos
          rodada_atual = 1,
          grupos = v_grupos,
          confrontos = v_confrontos
@@ -656,10 +712,11 @@ BEGIN
 END;
 $$;
 
--- Registrar resultado de confronto de trilha
+-- Registrar resultado de confronto de trilha (grupos ou eliminatórias)
 CREATE OR REPLACE FUNCTION public.registrar_resultado_trilha(
   p_campeonato_id BIGINT,
-  p_grupo TEXT,
+  p_grupo TEXT DEFAULT NULL,
+  p_fase TEXT DEFAULT NULL,
   p_j1_id TEXT,
   p_j2_id TEXT,
   p_vencedor_id TEXT
@@ -679,6 +736,9 @@ DECLARE
   v_finalizados INTEGER := 0;
   v_ultima_rodada INTEGER;
   v_campeao JSONB;
+  v_classificados JSONB := '[]'::JSONB;
+  v_grupo_nome TEXT;
+  v_grupo_idx INTEGER;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
 
@@ -695,10 +755,14 @@ BEGIN
   -- Encontra o confronto
   FOR v_idx IN 0..(v_total - 1) LOOP
     v_item := v_confrontos[v_idx];
-    IF v_item->>'grupo' = p_grupo
-       AND v_item->>'j1_id' = p_j1_id
-       AND v_item->>'j2_id' = p_j2_id
-       AND v_item->>'status' = 'pendente' THEN
+    IF (p_grupo IS NOT NULL AND v_item->>'grupo' = p_grupo
+         AND v_item->>'j1_id' = p_j1_id
+         AND v_item->>'j2_id' = p_j2_id
+         AND v_item->>'status' = 'pendente')
+       OR (p_fase IS NOT NULL AND v_item->>'fase' = p_fase
+         AND v_item->>'j1_id' = p_j1_id
+         AND v_item->>'j2_id' = p_j2_id
+         AND v_item->>'status' = 'pendente') THEN
 
       -- Atualiza confronto
       v_item := jsonb_set(v_item, '{status}', '"finalizado"');
@@ -731,19 +795,21 @@ BEGIN
       );
       v_part := COALESCE(v_el, v_part);
 
-      -- Atualiza estatísticas do grupo
-      FOR v_grupo_idx IN 0..(jsonb_array_length(v_grupos) - 1) LOOP
-        IF v_grupos[v_grupo_idx]->>'nome' = p_grupo THEN
-          v_el := v_grupos[v_grupo_idx];
-          v_el := jsonb_set(v_el, '{jogos}', to_jsonb((v_el->>'jogos')::INT + 1));
-          IF p_vencedor_id IS NOT NULL THEN
-            v_el := jsonb_set(v_el, '{vitorias}', to_jsonb((v_el->>'vitorias')::INT + 1));
-          ELSE
-            v_el := jsonb_set(v_el, '{empates}', to_jsonb((v_el->>'empates')::INT + 1));
+      -- Atualiza estatísticas do grupo (apenas na fase de grupos)
+      IF p_grupo IS NOT NULL THEN
+        FOR v_grupo_idx IN 0..(jsonb_array_length(v_grupos) - 1) LOOP
+          IF v_grupos[v_grupo_idx]->>'nome' = p_grupo THEN
+            v_el := v_grupos[v_grupo_idx];
+            v_el := jsonb_set(v_el, '{jogos}', to_jsonb((v_el->>'jogos')::INT + 1));
+            IF p_vencedor_id IS NOT NULL THEN
+              v_el := jsonb_set(v_el, '{vitorias}', to_jsonb((v_el->>'vitorias')::INT + 1));
+            ELSE
+              v_el := jsonb_set(v_el, '{empates}', to_jsonb((v_el->>'empates')::INT + 1));
+            END IF;
+            v_grupos := jsonb_set(v_grupos, ARRAY[v_grupo_idx]::TEXT[], v_el);
           END IF;
-          v_grupos := jsonb_set(v_grupos, ARRAY[v_grupo_idx]::TEXT[], v_el);
-        END IF;
-      END LOOP;
+        END LOOP;
+      END IF;
 
       EXIT;
     END IF;
@@ -758,18 +824,51 @@ BEGIN
   FROM jsonb_array_elements(v_confrontos) c;
 
   IF v_finalizados = v_total THEN
-    -- Campeonato finalizado - determina campeão
-    SELECT el INTO v_campeao
-    FROM jsonb_array_elements(v_part) el
-    ORDER BY (el->>'pontos')::INT DESC, (el->>'vitorias')::INT DESC
-    LIMIT 1;
+    -- Fase de grupos finalizada - gera classificados
+    IF v_row.fase = 1 THEN
+      -- Classifica os 2 melhores de cada grupo (ou 1 se grupo de 3)
+      FOR v_grupo_idx IN 0..(jsonb_array_length(v_grupos) - 1) LOOP
+        v_grupo_nome := v_grupos[v_grupo_idx]->>'nome';
+        v_el := (
+          SELECT el
+          FROM jsonb_array_elements(v_part) el
+          WHERE el->>'user_id' IN (
+            SELECT unnest((v_grupos[v_grupo_idx]->>'participantes')::TEXT[])
+          )
+          ORDER BY (el->>'pontos')::INT DESC, (el->>'vitorias')::INT DESC
+          LIMIT 2
+        );
 
-    UPDATE public.campeonatos_trilha_online
-       SET status = 'finalizado', fase = -1,
-           participantes = v_part, grupos = v_grupos, confrontos = v_confrontos,
-           vencedor_id = (v_campeao->>'user_id')::UUID
-     WHERE id = v_row.id
-    RETURNING * INTO v_row;
+        IF v_el IS NOT NULL THEN
+          v_classificados := v_classificados || jsonb_build_array(v_el);
+        END IF;
+      END LOOP;
+
+      -- Gera eliminatórias com os classificados
+      v_confrontos := public._gerar_eliminatorias_trilha(v_classificados);
+
+      UPDATE public.campeonatos_trilha_online
+         SET fase = 2, -- Fase de eliminatórias
+             rodada_atual = 1,
+             participantes = v_part,
+             grupos = v_grupos,
+             confrontos = v_confrontos
+       WHERE id = v_row.id
+      RETURNING * INTO v_row;
+    ELSE
+      -- Eliminatórias finalizada - determina campeão
+      SELECT el INTO v_campeao
+      FROM jsonb_array_elements(v_part) el
+      WHERE el->>'user_id' = p_vencedor_id
+      LIMIT 1;
+
+      UPDATE public.campeonatos_trilha_online
+         SET status = 'finalizado', fase = -1,
+             participantes = v_part, grupos = v_grupos, confrontos = v_confrontos,
+             vencedor_id = (v_campeao->>'user_id')::UUID
+       WHERE id = v_row.id
+      RETURNING * INTO v_row;
+    END IF;
   ELSE
     -- Avança para próxima rodada se todos da atual foram finalizados
     PERFORM 1
