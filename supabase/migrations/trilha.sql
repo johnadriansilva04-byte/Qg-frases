@@ -367,6 +367,435 @@ END; $$;
 -- Função para listar mesas disponíveis (removida - versão atualizada abaixo com formato e nome_sala)
 
 -- ============================================================================
+-- CAMPEONATO ONLINE DE TRILHA (2026-08-27)
+-- Sistema de grupos A, B, C, D com 8, 12, 16, 32 jogadores
+-- ============================================================================
+
+-- Tabela de campeonatos de trilha online
+CREATE TABLE IF NOT EXISTS public.campeonatos_trilha_online (
+  id              BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  codigo          TEXT NOT NULL UNIQUE,
+  nome            TEXT NOT NULL DEFAULT 'Campeonato de Trilha',
+  criador_id      UUID NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'aguardando'
+                  CHECK (status IN ('aguardando','em_andamento','finalizado','cancelado')),
+  max_jogadores   INTEGER NOT NULL DEFAULT 8 CHECK (max_jogadores IN (8, 12, 16, 32)),
+  formato         TEXT NOT NULL DEFAULT 'grupos'
+                  CHECK (formato IN ('grupos','eliminacao')),
+  fase            INTEGER NOT NULL DEFAULT 0,
+  participantes   JSONB NOT NULL DEFAULT '[]'::JSONB,
+  grupos          JSONB NOT NULL DEFAULT '[]'::JSONB,
+  confrontos      JSONB NOT NULL DEFAULT '[]'::JSONB,
+  rodada_atual    INTEGER NOT NULL DEFAULT 0,
+  vencedor_id     UUID,
+  criado_em       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Índices para campeonatos_trilha_online
+CREATE INDEX IF NOT EXISTS idx_campeonatos_trilha_codigo ON public.campeonatos_trilha_online(codigo);
+CREATE INDEX IF NOT EXISTS idx_campeonatos_trilha_status ON public.campeonatos_trilha_online(status);
+CREATE INDEX IF NOT EXISTS idx_campeonatos_trilha_criador ON public.campeonatos_trilha_online(criador_id);
+
+-- Permissões para campeonatos_trilha_online
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.campeonatos_trilha_online TO authenticated;
+GRANT SELECT ON public.campeonatos_trilha_online TO anon;
+GRANT ALL ON public.campeonatos_trilha_online TO service_role;
+
+-- RLS para campeonatos_trilha_online
+ALTER TABLE public.campeonatos_trilha_online ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campeonatos_trilha_select_publico" ON public.campeonatos_trilha_online;
+CREATE POLICY "campeonatos_trilha_select_publico" ON public.campeonatos_trilha_online
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "campeonatos_trilha_insert_authenticated" ON public.campeonatos_trilha_online;
+CREATE POLICY "campeonatos_trilha_insert_authenticated" ON public.campeonatos_trilha_online
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "campeonatos_trilha_update_participante" ON public.campeonatos_trilha_online;
+CREATE POLICY "campeonatos_trilha_update_participante" ON public.campeonatos_trilha_online
+  FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "campeonatos_trilha_delete_criador" ON public.campeonatos_trilha_online;
+CREATE POLICY "campeonatos_trilha_delete_criador" ON public.campeonatos_trilha_online
+  FOR DELETE TO authenticated USING (true);
+
+-- FK para criador
+ALTER TABLE public.campeonatos_trilha_online
+  DROP CONSTRAINT IF EXISTS campeonatos_trilha_criador_fkey,
+  ADD CONSTRAINT campeonatos_trilha_criador_fkey
+    FOREIGN KEY (criador_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- Função auxiliar para gerar grupos
+CREATE OR REPLACE FUNCTION public._gerar_grupos_trilha(p_ids UUID[], p_max INTEGER)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_grupos JSONB := '[]'::JSONB;
+  v_grupo JSONB;
+  v_grupo_nome TEXT;
+  v_grupo_tamanho INTEGER;
+  v_idx INTEGER := 0;
+  v_grupo_idx INTEGER := 0;
+  v_grupo_participantes JSONB := '[]'::JSONB;
+BEGIN
+  -- Define tamanho dos grupos baseado no total de jogadores
+  v_grupo_tamanho := CASE
+    WHEN p_max = 8 THEN 4  -- 2 grupos de 4
+    WHEN p_max = 12 THEN 3 -- 4 grupos de 3
+    WHEN p_max = 16 THEN 4 -- 4 grupos de 4
+    WHEN p_max = 32 THEN 4 -- 8 grupos de 4
+    ELSE 4
+  END;
+
+  -- Embaralha os IDs
+  FOR v_idx IN 0..(array_length(p_ids, 1) - 1) LOOP
+    v_grupo_idx := (v_idx / v_grupo_tamanho);
+    v_grupo_nome := chr(65 + v_grupo_idx); -- A, B, C, D, etc.
+
+    -- Cria o grupo se não existir
+    IF v_grupo_idx >= jsonb_array_length(v_grupos) THEN
+      v_grupo := jsonb_build_object(
+        'nome', v_grupo_nome,
+        'participantes', '[]'::JSONB,
+        'jogos', 0,
+        'vitorias', 0,
+        'empates', 0,
+        'derrotas', 0,
+        'pontos', 0
+      );
+      v_grupos := v_grupos || jsonb_build_array(v_grupo);
+    END IF;
+
+    -- Adiciona participante ao grupo
+    v_grupo_participantes := (v_grupos[v_grupo_idx]->>'participantes')::JSONB;
+    v_grupo_participantes := v_grupo_participantes || jsonb_build_array(p_ids[v_idx + 1]::TEXT);
+    v_grupos := jsonb_set(v_grupos, ARRAY[v_grupo_idx]::TEXT[] || ARRAY['participantes'], v_grupo_participantes);
+  END LOOP;
+
+  RETURN v_grupos;
+END;
+$$;
+
+-- Função auxiliar para gerar confrontos dos grupos
+CREATE OR REPLACE FUNCTION public._gerar_confrontos_grupos_trilha(p_grupos JSONB)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_confrontos JSONB := '[]'::JSONB;
+  v_grupo JSONB;
+  v_participantes JSONB;
+  v_i INTEGER;
+  v_j INTEGER;
+  v_p1 TEXT;
+  v_p2 TEXT;
+  v_grupo_nome TEXT;
+  v_rodada INTEGER := 1;
+BEGIN
+  FOR v_grupo_idx IN 0..(jsonb_array_length(p_grupos) - 1) LOOP
+    v_grupo := p_grupos[v_grupo_idx];
+    v_grupo_nome := v_grupo->>'nome';
+    v_participantes := (v_grupo->>'participantes')::JSONB;
+
+    -- Round-robin dentro do grupo
+    FOR v_i IN 0..(jsonb_array_length(v_participantes) - 1) LOOP
+      FOR v_j IN (v_i + 1)..(jsonb_array_length(v_participantes) - 1) LOOP
+        v_p1 := v_participantes[v_i];
+        v_p2 := v_participantes[v_j];
+
+        v_confrontos := v_confrontos || jsonb_build_array(jsonb_build_object(
+          'grupo', v_grupo_nome,
+          'rodada', v_rodada,
+          'j1_id', v_p1,
+          'j2_id', v_p2,
+          'pl_j1', 0,
+          'pl_j2', 0,
+          'status', 'pendente'
+        ));
+
+        v_rodada := v_rodada + 1;
+      END LOOP;
+    END LOOP;
+  END LOOP;
+
+  RETURN v_confrontos;
+END;
+$$;
+
+-- Criar campeonato de trilha online
+CREATE OR REPLACE FUNCTION public.criar_campeonato_trilha_online(
+  p_nome TEXT DEFAULT 'Campeonato de Trilha',
+  p_max INTEGER DEFAULT 8,
+  p_formato TEXT DEFAULT 'grupos'
+)
+RETURNS public.campeonatos_trilha_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid   UUID := auth.uid();
+  v_row   public.campeonatos_trilha_online;
+  v_part  JSONB;
+  v_codigo TEXT;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+  IF p_max NOT IN (8, 12, 16, 32) THEN RAISE EXCEPTION 'max_jogadores precisa ser 8, 12, 16 ou 32'; END IF;
+  IF p_formato NOT IN ('grupos', 'eliminacao') THEN RAISE EXCEPTION 'formato invalido'; END IF;
+
+  v_codigo := 'TRILHA-' || to_char(now(), 'YYMMDDHH24MISSMS') || '-'
+              || substring(encode(gen_random_uuid()::text::bytea, 'hex'), 1, 6);
+
+  v_part := jsonb_build_array(jsonb_build_object(
+    'user_id', v_uid::TEXT,
+    'nome', COALESCE((SELECT nome FROM public.botao_usuarios WHERE user_id = v_uid), 'Jogador'),
+    'pontos', 0,
+    'jogos', 0,
+    'vitorias', 0,
+    'empates', 0,
+    'derrotas', 0
+  ));
+
+  INSERT INTO public.campeonatos_trilha_online
+    (codigo, nome, criador_id, max_jogadores, formato, participantes)
+  VALUES (v_codigo, p_nome, v_uid, p_max, p_formato, v_part)
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END;
+$$;
+
+-- Entrar no campeonato de trilha online
+CREATE OR REPLACE FUNCTION public.entrar_campeonato_trilha_online(p_codigo TEXT)
+RETURNS public.campeonatos_trilha_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_row public.campeonatos_trilha_online;
+  v_part JSONB;
+  v_novo JSONB;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT c.* INTO v_row FROM public.campeonatos_trilha_online c
+  WHERE c.codigo = p_codigo FOR UPDATE;
+
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+  IF v_row.status <> 'aguardando' THEN RAISE EXCEPTION 'campeonato nao esta aberto'; END IF;
+
+  v_part := v_row.participantes;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_part) el WHERE el->>'user_id' = v_uid::TEXT) THEN
+    RETURN v_row;
+  END IF;
+
+  IF jsonb_array_length(v_part) >= v_row.max_jogadores THEN
+    RAISE EXCEPTION 'campeonato cheio';
+  END IF;
+
+  v_novo := jsonb_build_object(
+    'user_id', v_uid::TEXT,
+    'nome', COALESCE((SELECT nome FROM public.botao_usuarios WHERE user_id = v_uid), 'Jogador'),
+    'pontos', 0,
+    'jogos', 0,
+    'vitorias', 0,
+    'empates', 0,
+    'derrotas', 0
+  );
+
+  UPDATE public.campeonatos_trilha_online
+     SET participantes = v_part || jsonb_build_array(v_novo)
+   WHERE id = v_row.id
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END;
+$$;
+
+-- Iniciar campeonato de trilha online
+CREATE OR REPLACE FUNCTION public.iniciar_campeonato_trilha_online(p_codigo TEXT)
+RETURNS public.campeonatos_trilha_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_row public.campeonatos_trilha_online;
+  v_ids UUID[];
+  v_id UUID;
+  v_grupos JSONB;
+  v_confrontos JSONB;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT c.* INTO v_row FROM public.campeonatos_trilha_online c
+  WHERE c.codigo = p_codigo FOR UPDATE;
+
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+  IF v_row.criador_id <> v_uid THEN RAISE EXCEPTION 'so o criador pode iniciar'; END IF;
+  IF v_row.status <> 'aguardando' THEN RAISE EXCEPTION 'campeonato nao esta aguardando'; END IF;
+  IF jsonb_array_length(v_row.participantes) < 2 THEN RAISE EXCEPTION 'minimo de 2 jogadores'; END IF;
+
+  -- Extrai IDs dos participantes
+  v_ids := ARRAY[]::UUID[];
+  FOR v_id IN SELECT (el->>'user_id')::UUID FROM jsonb_array_elements(v_row.participantes) el LOOP
+    v_ids := v_ids || ARRAY[v_id];
+  END LOOP;
+
+  -- Gera grupos
+  v_grupos := public._gerar_grupos_trilha(v_ids, v_row.max_jogadores);
+
+  -- Gera confrontos dos grupos
+  v_confrontos := public._gerar_confrontos_grupos_trilha(v_grupos);
+
+  UPDATE public.campeonatos_trilha_online
+     SET status = 'em_andamento',
+         fase = 1,
+         rodada_atual = 1,
+         grupos = v_grupos,
+         confrontos = v_confrontos
+   WHERE id = v_row.id
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END;
+$$;
+
+-- Registrar resultado de confronto de trilha
+CREATE OR REPLACE FUNCTION public.registrar_resultado_trilha(
+  p_campeonato_id BIGINT,
+  p_grupo TEXT,
+  p_j1_id TEXT,
+  p_j2_id TEXT,
+  p_vencedor_id TEXT
+)
+RETURNS public.campeonatos_trilha_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_row public.campeonatos_trilha_online;
+  v_part JSONB;
+  v_grupos JSONB;
+  v_confrontos JSONB;
+  v_idx INTEGER;
+  v_item JSONB;
+  v_el JSONB;
+  v_total INTEGER;
+  v_finalizados INTEGER := 0;
+  v_ultima_rodada INTEGER;
+  v_campeao JSONB;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  SELECT c.* INTO v_row FROM public.campeonatos_trilha_online c
+  WHERE c.id = p_campeonato_id FOR UPDATE;
+
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'campeonato nao encontrado'; END IF;
+
+  v_part := v_row.participantes;
+  v_grupos := v_row.grupos;
+  v_confrontos := v_row.confrontos;
+  v_total := jsonb_array_length(v_confrontos);
+
+  -- Encontra o confronto
+  FOR v_idx IN 0..(v_total - 1) LOOP
+    v_item := v_confrontos[v_idx];
+    IF v_item->>'grupo' = p_grupo
+       AND v_item->>'j1_id' = p_j1_id
+       AND v_item->>'j2_id' = p_j2_id
+       AND v_item->>'status' = 'pendente' THEN
+
+      -- Atualiza confronto
+      v_item := jsonb_set(v_item, '{status}', '"finalizado"');
+      v_item := jsonb_set(v_item, '{vencedor_id}', to_jsonb(p_vencedor_id));
+      v_confrontos := jsonb_set(v_confrontos, ARRAY[v_idx]::TEXT[], v_item);
+
+      -- Atualiza estatísticas dos participantes
+      v_el := (
+        SELECT jsonb_agg(
+          CASE
+            WHEN el->>'user_id' = p_j1_id THEN
+              el || jsonb_build_object(
+                'jogos', (el->>'jogos')::INT + 1,
+                'vitorias', (el->>'vitorias')::INT + CASE WHEN p_vencedor_id = p_j1_id THEN 1 ELSE 0 END,
+                'empates', (el->>'empates')::INT + CASE WHEN p_vencedor_id IS NULL THEN 1 ELSE 0 END,
+                'derrotas', (el->>'derrotas')::INT + CASE WHEN p_vencedor_id = p_j2_id THEN 1 ELSE 0 END,
+                'pontos', (el->>'pontos')::INT + CASE WHEN p_vencedor_id = p_j1_id THEN 3 WHEN p_vencedor_id IS NULL THEN 1 ELSE 0 END
+              )
+            WHEN el->>'user_id' = p_j2_id THEN
+              el || jsonb_build_object(
+                'jogos', (el->>'jogos')::INT + 1,
+                'vitorias', (el->>'vitorias')::INT + CASE WHEN p_vencedor_id = p_j2_id THEN 1 ELSE 0 END,
+                'empates', (el->>'empates')::INT + CASE WHEN p_vencedor_id IS NULL THEN 1 ELSE 0 END,
+                'derrotas', (el->>'derrotas')::INT + CASE WHEN p_vencedor_id = p_j1_id THEN 1 ELSE 0 END,
+                'pontos', (el->>'pontos')::INT + CASE WHEN p_vencedor_id = p_j2_id THEN 3 WHEN p_vencedor_id IS NULL THEN 1 ELSE 0 END
+              )
+            ELSE el
+          END)
+        FROM jsonb_array_elements(v_part) el
+      );
+      v_part := COALESCE(v_el, v_part);
+
+      -- Atualiza estatísticas do grupo
+      FOR v_grupo_idx IN 0..(jsonb_array_length(v_grupos) - 1) LOOP
+        IF v_grupos[v_grupo_idx]->>'nome' = p_grupo THEN
+          v_el := v_grupos[v_grupo_idx];
+          v_el := jsonb_set(v_el, '{jogos}', to_jsonb((v_el->>'jogos')::INT + 1));
+          IF p_vencedor_id IS NOT NULL THEN
+            v_el := jsonb_set(v_el, '{vitorias}', to_jsonb((v_el->>'vitorias')::INT + 1));
+          ELSE
+            v_el := jsonb_set(v_el, '{empates}', to_jsonb((v_el->>'empates')::INT + 1));
+          END IF;
+          v_grupos := jsonb_set(v_grupos, ARRAY[v_grupo_idx]::TEXT[], v_el);
+        END IF;
+      END LOOP;
+
+      EXIT;
+    END IF;
+  END LOOP;
+
+  -- Verifica se todos os confrontos foram finalizados
+  FOR v_idx IN 0..(v_total - 1) LOOP
+    IF (v_confrontos[v_idx]->>'status') = 'finalizado' THEN v_finalizados := v_finalizados + 1; END IF;
+  END LOOP;
+
+  SELECT max((c->>'rodada')::INT) INTO v_ultima_rodada
+  FROM jsonb_array_elements(v_confrontos) c;
+
+  IF v_finalizados = v_total THEN
+    -- Campeonato finalizado - determina campeão
+    SELECT el INTO v_campeao
+    FROM jsonb_array_elements(v_part) el
+    ORDER BY (el->>'pontos')::INT DESC, (el->>'vitorias')::INT DESC
+    LIMIT 1;
+
+    UPDATE public.campeonatos_trilha_online
+       SET status = 'finalizado', fase = -1,
+           participantes = v_part, grupos = v_grupos, confrontos = v_confrontos,
+           vencedor_id = (v_campeao->>'user_id')::UUID
+     WHERE id = v_row.id
+    RETURNING * INTO v_row;
+  ELSE
+    -- Avança para próxima rodada se todos da atual foram finalizados
+    PERFORM 1
+    FROM jsonb_array_elements(v_confrontos) c
+    WHERE (c->>'rodada')::INT = v_row.rodada_atual AND c->>'status' <> 'finalizado'
+    LIMIT 1;
+
+    IF NOT FOUND AND v_row.rodada_atual < v_ultima_rodada THEN
+      UPDATE public.campeonatos_trilha_online
+         SET participantes = v_part, grupos = v_grupos, confrontos = v_confrontos,
+             rodada_atual = v_row.rodada_atual + 1
+       WHERE id = v_row.id
+      RETURNING * INTO v_row;
+    ELSE
+      UPDATE public.campeonatos_trilha_online
+         SET participantes = v_part, grupos = v_grupos, confrontos = v_confrontos
+       WHERE id = v_row.id
+      RETURNING * INTO v_row;
+    END IF;
+  END IF;
+
+  RETURN v_row;
+END;
+$$;
+
+-- ============================================================================
 -- FUNÇÃO PARA LIMPEZA AUTOMÁTICA
 -- ============================================================================
 
