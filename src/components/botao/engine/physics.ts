@@ -95,6 +95,9 @@ export type StepResult = {
   wallHit: boolean;
   hit: boolean;
   ownGoal?: boolean;
+  /** Lado que tocou a bola por último NESTE passo (null = nenhum toque). A
+   *  acumulação entre passos é responsabilidade do chamador (MatchView). */
+  lastTouchSide: Side | null;
 };
 
 export function step(discs: Disc[]): StepResult {
@@ -190,9 +193,13 @@ export function step(discs: Disc[]): StepResult {
   }
 
   const moving = discs.some((d) => d.vx !== 0 || d.vy !== 0);
-  // Detectar gol contra: se gol foi no lado do último toque
-  const ownGoal = goal ? lastTouchSide === goal : false;
-  return { moving, goal, wallHit, hit, ownGoal };
+  // Gol contra (este passo): quem defende o gol onde a bola entrou é o lado
+  // OPOSTO ao lado que é creditado (goal). Se o ÚLTIMO A TOCAR na bola foi o
+  // lado que sofreu o gol, o lance é gol contra — ponto ainda assim vai para
+  // o lado atacante (goal).
+  const concedingSide: Side | null = goal === "home" ? "away" : goal === "away" ? "home" : null;
+  const ownGoal = goal ? lastTouchSide === concedingSide : false;
+  return { moving, goal, wallHit, hit, ownGoal, lastTouchSide };
 }
 
 export const MAX_POWER = 26;

@@ -309,7 +309,17 @@ export function MesaOnlineMatch({
   const handlePlay = useCallback(
     async (
       goals: number,
-      jogadaData?: { discId: string; ix: number; iy: number; power: number },
+      jogadaData?: {
+        discId: string;
+        ix: number;
+        iy: number;
+        power: number;
+        golInfo?: {
+          scoringSide: "home" | "away";
+          ownGoal: boolean;
+          authorSide: "home" | "away";
+        };
+      },
       posicoesFinais?: {
         discos: Array<{ id: string; x: number; y: number }>;
         bola: { x: number; y: number };
@@ -318,8 +328,8 @@ export function MesaOnlineMatch({
       if (!mesaRef.current) return;
       const ehDiscoReal =
         jogadaData &&
-        jogadaData.discId !== "own_goal" &&
-        jogadaData.discId !== "goal" &&
+        jogadaData.discId !== "gol_contra" &&
+        jogadaData.discId !== "gol" &&
         jogadaData.discId !== "pass_turn" &&
         jogadaData.discId !== "no_goal";
 
@@ -338,15 +348,17 @@ export function MesaOnlineMatch({
 
         if (dispareiRef.current) {
           if (goals > 0) {
-            const ehGolContra = jogadaData?.discId === "own_goal";
-            const autorDoGol = ehGolContra
-              ? mesa.jogador_1_id === userId
-                ? (mesa.jogador_2_id ?? mesa.jogador_1_id)
-                : mesa.jogador_1_id
-              : userId;
-            await mesaRef.current.registrarGol(autorDoGol);
+            // Autoria SEMÂNTICA do gol: o ponto pertence a quem ATACOU o gol
+            // onde a bola entrou (scoringSide vindo do motor), nunca a quem
+            // chutou por último (gol contra credita o adversário).
+            // jogador_1 joga "home" e jogador_2 joga "away" nos DOIS clientes.
+            const scoringSide: "home" | "away" =
+              jogadaData?.golInfo?.scoringSide ?? (souJogador1 ? "home" : "away");
+            const autorDoPonto =
+              scoringSide === "home" ? mesa.jogador_1_id : (mesa.jogador_2_id ?? mesa.jogador_1_id);
+            await mesaRef.current.registrarGol(autorDoPonto);
             await mesaRef.current.enviarGoalScored({
-              jogadorId: userId,
+              jogadorId: autorDoPonto ?? userId,
               placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
             });
             await mesaRef.current.trocarTurno();
@@ -370,7 +382,7 @@ export function MesaOnlineMatch({
         console.error("[MesaOnlineMatch] erro no handlePlay:", error);
       }
     },
-    [userId, mesa.jogador_1_id, mesa.jogador_2_id, placar],
+    [userId, mesa.jogador_1_id, mesa.jogador_2_id, placar, souJogador1],
   );
 
   const handleQuit = useCallback(() => {

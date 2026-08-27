@@ -47,7 +47,16 @@ type Props = {
   customTeam?: Team; // Time personalizado do usuário
   onPlay?: (
     goals: number,
-    jogadaData?: { discId: string; ix: number; iy: number; power: number },
+    jogadaData?: {
+      discId: string;
+      ix: number;
+      iy: number;
+      power: number;
+      /** Evento de gol SEMÂNTICO: quem atacou o gol atingido (recebe o ponto),
+       *  quem tocou por último (autor) e se foi gol contra. O ponto pertence a
+       *  scoringSide — nunca à identidade de quem chutou. */
+      golInfo?: { scoringSide: Side; ownGoal: boolean; authorSide: Side };
+    },
     posicoesFinais?: {
       discos: Array<{ id: string; x: number; y: number }>;
       bola: { x: number; y: number };
@@ -282,6 +291,7 @@ export function MatchView({
   const jogadaEmAndamentoRef = useRef(false);
   const hasShotThisTurnRef = useRef(false); // Flag para prevenir disparo duplo de jogada
   const isRemotePlayRef = useRef(false); // Flag para diferenciar jogada remota de local
+  const ultimoToqueRef = useRef<Side | null>(null); // Último lado a tocar a bola na jogada atual (semântica do gol contra)
 
   const verificarFimDeMovimento = useCallback(() => {
     // Verificar se todos os discos e a bola estão em repouso
@@ -424,13 +434,29 @@ export function MatchView({
   const runSimulation = useCallback(() => {
     simRef.current = true;
     let frames = 0;
-    let ownGoalDetected = false;
+    // Nova jogada: o rastreamento do último toque recomeça (o gol contra só é
+    // detectado com base nos toques DESTA jogada).
+    ultimoToqueRef.current = null;
     const loop = () => {
       let goal: Side | null = null;
+      // Classificação semântica do evento de gol acumulada na jogada.
+      let golInfo: { scoringSide: Side; ownGoal: boolean; authorSide: Side } | null = null;
       for (let i = 0; i < 2; i++) {
         const r = step(discsRef.current);
-        if (r.goal) goal = r.goal;
-        if (r.ownGoal) ownGoalDetected = true;
+        if (r.lastTouchSide) ultimoToqueRef.current = r.lastTouchSide;
+        if (r.goal) {
+          goal = r.goal;
+          // Semântica do gol: o ponto pertence a quem ATACOU o gol onde a bola
+          // entrou (scoringSide), nunca ao lado do último toque por padrão.
+          // Gol contra = último a tirar foi quem DEFENDE o gol atingido.
+          const concedingSide: Side = r.goal === "home" ? "away" : "home";
+          const authorSide = ultimoToqueRef.current ?? r.goal;
+          golInfo = {
+            scoringSide: r.goal,
+            ownGoal: authorSide === concedingSide,
+            authorSide,
+          };
+        }
         if (goal) break;
       }
       frames++;
@@ -442,16 +468,19 @@ export function MatchView({
       }
 
       if (goal) {
+        // Ponto SEMPRE para o lado atacante do gol atingido — nunca para o
+        // último a tocar (autor do gol contra recebe 0; o adversário leva o ponto).
         const next = { ...scoreRef.current, [goal]: scoreRef.current[goal] + 1 };
         setScore(next);
+        const ownGoal = golInfo?.ownGoal ?? false;
+        // Quem sofreu o gol (lado do gol atingido) recebe o próximo turno.
+        const conceding: Side = goal === "home" ? "away" : "home";
 
-        if (ownGoalDetected) {
+        if (ownGoal) {
           setFlash("GOL CONTRA!");
           setTimeout(() => setFlash(null), 1500);
           resetPositions(discsRef.current, formation);
           simRef.current = false;
-          // No gol contra, quem sofreu o gol recebe a bola (não quem fez)
-          const conceding: Side = goal === "home" ? "home" : "away";
           turnRef.current = conceding;
           setTurn(conceding);
           // Decrementa turnos normalmente (apenas no modo offline)
@@ -459,8 +488,16 @@ export function MatchView({
             const left = turnsRef.current - 1;
             setTurnsLeft(left);
           }
-          // Chamar onPlay para sincronização online (gol contra)
-          if (onPlay) onPlay(1, { discId: "own_goal", ix: 0, iy: 0, power: 0 });
+          // Chamar onPlay para sincronização online — carrega o evento de gol
+          // SEMÂNTICO (scoringSide/authorSide/ownGoal), não a identidade do chute.
+          if (onPlay)
+            onPlay(1, {
+              discId: "gol_contra",
+              ix: 0,
+              iy: 0,
+              power: 0,
+              ...(golInfo ? { golInfo } : {}),
+            });
           if (!isOnline && turnsRef.current - 1 <= 0) {
             finishMatch(next.home, next.away);
             return;
@@ -471,7 +508,6 @@ export function MatchView({
         setFlash("GOOOOL!");
         resetPositions(discsRef.current, formation);
         setTimeout(() => setFlash(null), 1200);
-        const conceding: Side = goal === "home" ? "away" : "home";
         // Quem sofreu o gol (conceding) recebe o próximo turno
         simRef.current = false;
         // Decrementa turnos normalmente (apenas no modo offline)
@@ -479,8 +515,16 @@ export function MatchView({
         if (!isOnline) {
           setTurnsLeft(left);
         }
-        // Chamar onPlay para sincronização online (gol normal)
-        if (onPlay) onPlay(1, { discId: "goal", ix: 0, iy: 0, power: 0 });
+        // Chamar onPlay para sincronização online (gol normal) — evento de
+        // gol SEMÂNTICO: quem recebe o ponto é quem atacou o gol atingido.
+        if (onPlay)
+          onPlay(1, {
+            discId: "gol",
+            ix: 0,
+            iy: 0,
+            power: 0,
+            ...(golInfo ? { golInfo } : {}),
+          });
         if (left <= 0) {
           finishMatch(next.home, next.away);
           return;
