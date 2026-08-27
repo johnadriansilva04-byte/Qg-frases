@@ -381,8 +381,9 @@ export function OnlineChampionship({
     ],
   );
 
-  /** Fim da partida contra BOT: cria a mesa de registro, vincula ao confronto
-   *  e registra o placar real jogado. */
+  /** Fim da partida contra BOT: mapeia os gols de home/away para os slots
+   *  j1/j2 do confronto. O bot pode estar em qualquer slot — nunca usar
+   *  "meusGols" como atalho. */
   const handleFimConfrontoBot = useCallback(
     async (r: MatchResult) => {
       markFirstGamePlayed();
@@ -390,12 +391,10 @@ export function OnlineChampionship({
       const { confronto, euSouJ1 } = confrontoBot;
       const golsJ1 = euSouJ1 ? r.homeGoals : r.awayGoals;
       const golsJ2 = euSouJ1 ? r.awayGoals : r.homeGoals;
-      const meusGols = euSouJ1 ? golsJ1 : golsJ2;
-      const golsBot = euSouJ1 ? golsJ2 : golsJ1;
       try {
         // Contra bot: registra direto no confronto (sem mesa realtime — bot não
         // é usuário real e quebraria a FK).
-        await registrarResultadoVsBot(campeonato.id, confronto.rodada, meusGols, golsBot);
+        await registrarResultadoVsBot(campeonato.id, confronto.rodada, golsJ1, golsJ2);
         const novoPerfil = await recarregar();
         if (novoPerfil) aplicarPerfil(novoPerfil);
       } catch (e: unknown) {

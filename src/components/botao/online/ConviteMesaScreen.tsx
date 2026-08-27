@@ -14,8 +14,10 @@ import { PROFISSOES, escolherProfissao, type ProfissaoId } from "@/lib/cidadela/
 import { cadastrar, type Perfil } from "./auth";
 
 type Props = {
-  /** mesa_x (modo "mesa") ou CAMP-x (modo "campeonato"). */
-  mesaId: string;
+  /** ID da mesa (?mesa=) — modo mesa. */
+  mesaId?: string | undefined;
+  /** Código do campeonato (?camp=) — modo campeonato. */
+  codigoCampeonato?: string | undefined;
   modo?: "mesa" | "campeonato";
   onPronto: (perfil: Perfil) => void;
   onCancelar: () => void;
@@ -27,7 +29,7 @@ type Props = {
  * uma, informa nome + e-mail, escolhe a profissão (1 pergunta, sem tour) e
  * entra direto na mesa/sala. A conta criada é um usuário normal.
  */
-export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar }: Props) {
+export function ConviteMesaScreen({ mesaId, codigoCampeonato, modo = "mesa", onPronto, onCancelar }: Props) {
   const [mesa, setMesa] = useState<MesaFutebol | null>(null);
   const [camp, setCamp] = useState<CampeonatoOnline | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -52,13 +54,22 @@ export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar 
     const fans: Record<string, number> = Object.fromEntries(
       Object.entries(torcidaBase).map(([id, t]) => [id, t.fans]),
     );
-    return gerarOfertasIniciais(clubesC, `convite:${mesaId}`, fans, 50);
-  }, [mesaId]);
+    return gerarOfertasIniciais(clubesC, `convite:${mesaId ?? codigoCampeonato}`, fans, 50);
+  }, [mesaId, codigoCampeonato]);
+
+  // Identificador usado nos efeitos abaixo: para modo campeonato, usa o
+  // código do campeonato (evita passar undefined para mesaId nas deps).
+  const alvo = modo === "campeonato" ? (codigoCampeonato ?? "") : (mesaId ?? "");
 
   useEffect(() => {
     let vivo = true;
     if (modo === "campeonato") {
-      void buscarCampeonato(mesaId)
+      if (!alvo) {
+        setErro("Link de campeonato inválido.");
+        setCarregando(false);
+        return;
+      }
+      void buscarCampeonato(alvo)
         .then((c) => {
           if (vivo) setCamp(c);
         })
@@ -69,7 +80,12 @@ export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar 
           if (vivo) setCarregando(false);
         });
     } else {
-      void buscarMesa(mesaId)
+      if (!alvo) {
+        setErro("Link de mesa inválido.");
+        setCarregando(false);
+        return;
+      }
+      void buscarMesa(alvo)
         .then((m) => {
           if (vivo) setMesa(m);
         })
@@ -83,7 +99,7 @@ export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar 
     return () => {
       vivo = false;
     };
-  }, [mesaId, modo]);
+  }, [alvo, modo]);
 
   const conviteValido = modo === "campeonato" ? camp !== null : mesa !== null;
   const bloqueada =
@@ -104,7 +120,8 @@ export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar 
       // Cadastro rápido (§13): nome + e-mail + clube escolhido. A senha é
       // gerada e o usuário define/ redefine depois — a conta é um usuário
       // normal com origem registrada como convite.
-      const senhaProvisoria = `convite-${mesaId.slice(-6)}-${Math.random().toString(36).slice(2, 8)}`;
+      const alvo = modo === "campeonato" ? (codigoCampeonato ?? "") : (mesaId ?? "");
+      const senhaProvisoria = `convite-${alvo.slice(-6)}-${Math.random().toString(36).slice(2, 8)}`;
       const timeClube: Team | undefined = TEAMS.find((t) => t.id === clube.clubeId);
       const coresClube: [string, string, string] = timeClube
         ? [timeClube.primary, timeClube.secondary, "#f59e0b"]
@@ -342,7 +359,7 @@ export function ConviteMesaScreen({ mesaId, modo = "mesa", onPronto, onCancelar 
             </div>
             <p className="mt-3 text-[10px] text-slate-600">
               Link deste convite:{" "}
-              {modo === "campeonato" ? linkConviteCampeonato(mesaId) : linkConviteMesa(mesaId)}
+              {modo === "campeonato" ? linkConviteCampeonato(alvo) : linkConviteMesa(alvo)}
             </p>
           </>
         )}

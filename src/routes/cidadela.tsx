@@ -239,7 +239,7 @@ function CidadelaCompView() {
     }
     return (
       <ConviteMesaScreen
-        mesaId={conviteCampCodigo}
+        codigoCampeonato={conviteCampCodigo}
         modo="campeonato"
         onPronto={() => {
           setActiveGame("botao");
