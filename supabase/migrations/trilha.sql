@@ -48,7 +48,11 @@ CREATE TABLE IF NOT EXISTS public.mesas_trilha (
   jogador_2_online         BOOLEAN NOT NULL DEFAULT false,
   ultimo_heartbeat_j1      TIMESTAMPTZ,
   ultimo_heartbeat_j2      TIMESTAMPTZ,
-  
+
+  -- Estatísticas de captura
+  captured_p1              INTEGER NOT NULL DEFAULT 0,
+  captured_p2              INTEGER NOT NULL DEFAULT 0,
+
   criado_em                TIMESTAMPTZ NOT NULL DEFAULT now(),
   atualizado_em            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -304,6 +308,14 @@ BEGIN
     WHEN v_novo_turn = 1 THEN v_mesa.jogador_1_id
     ELSE v_mesa.jogador_2_id
   END;
+
+  -- Atualiza estatísticas de captura se removeu peça
+  IF p_remove IS NOT NULL THEN
+    UPDATE public.mesas_trilha m
+       SET captured_p1 = CASE WHEN v_player_num = 1 THEN captured_p1 + 1 ELSE captured_p1 END,
+           captured_p2 = CASE WHEN v_player_num = 2 THEN captured_p2 + 1 ELSE captured_p2 END
+     WHERE m.mesa_id = p_mesa_id;
+  END IF;
 
   UPDATE public.mesas_trilha m
      SET turn                    = v_novo_turn,

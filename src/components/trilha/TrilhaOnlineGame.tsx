@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { HQPanel } from "./HQPanel";
-import { legalDestinations, legalPlacements, canFly, type Player } from "@/lib/trilha/engine";
+import { legalDestinations, legalPlacements, canFly, millsFormedAt, removableTargets, opponent, type Player } from "@/lib/trilha/engine";
 
 interface TrilhaOnlineGameProps {
   mesaId: string;
@@ -178,7 +178,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       turn: mesa.turn,
       hand: { 1: mesa.hand_p1, 2: mesa.hand_p2 },
       phase: mesa.phase,
-      captured: { 1: 0, 2: 0 },
+      captured: { 1: mesa.captured_p1 || 0, 2: mesa.captured_p2 || 0 },
       winner: null,
       reason: null,
       ply: 0
@@ -197,10 +197,21 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
 
   const captureTargets = useMemo(() => {
     if (!mesa || !mesa.pending_capture) return new Set<number>();
-    
-    // Lógica simplificada para determinar alvos de captura
-    // Em uma implementação completa, isso viria do estado do jogo
-    return new Set<number>();
+
+    const gameState = {
+      board: mesa.board,
+      turn: mesa.turn,
+      hand: { 1: mesa.hand_p1, 2: mesa.hand_p2 },
+      phase: mesa.phase,
+      captured: { 1: mesa.captured_p1 || 0, 2: mesa.captured_p2 || 0 },
+      winner: null,
+      reason: null,
+      ply: 0
+    };
+
+    const foe = opponent(mesa.turn);
+    const targets = removableTargets(gameState.board, foe);
+    return new Set(targets);
   }, [mesa]);
 
   const handleNodeClick = async (node: number) => {
@@ -280,10 +291,10 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       newPhase = "moving";
     }
 
-    // Verificar trilha (simplificado)
-    // Em uma implementação completa, verificaria se formou trilha
-    const formedMill = false; // TODO: Implementar verificação de trilha
-    if (formedMill) {
+    // Verificar trilha usando o motor do jogo
+    const formedMill = millsFormedAt(newBoard, to, mesa.turn).length > 0;
+    if (formedMill && remove === null) {
+      // Se formou trilha e ainda não removeu peça, ativa modo de captura
       newPendingCapture = true;
     }
 
@@ -332,7 +343,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       turn: mesa.turn,
       hand: { 1: mesa.hand_p1, 2: mesa.hand_p2 },
       phase: mesa.phase,
-      captured: { 1: 0, 2: 0 },
+      captured: { 1: mesa.captured_p1 || 0, 2: mesa.captured_p2 || 0 },
       winner: null,
       reason: null,
       ply: 0
@@ -475,7 +486,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
                 turn: mesa.turn,
                 hand: { 1: mesa.hand_p1, 2: mesa.hand_p2 },
                 phase: mesa.phase,
-                captured: { 1: 0, 2: 0 },
+                captured: { 1: mesa.captured_p1 || 0, 2: mesa.captured_p2 || 0 },
                 winner: null,
                 reason: null,
                 ply: 0
@@ -500,7 +511,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
               turn: mesa.turn,
               hand: { 1: mesa.hand_p1, 2: mesa.hand_p2 },
               phase: mesa.phase,
-              captured: { 1: 0, 2: 0 },
+              captured: { 1: mesa.captured_p1 || 0, 2: mesa.captured_p2 || 0 },
               winner: null,
               reason: null,
               ply: 0
