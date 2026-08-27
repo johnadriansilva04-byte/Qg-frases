@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS public.mesas_trilha (
   status                   TEXT NOT NULL DEFAULT 'aguardando'
                              CHECK (status IN ('aguardando','em_andamento','finalizado')),
   
-  -- Relógio autoritativo do servidor (10 min por partida)
-  duracao_segundos         INTEGER NOT NULL DEFAULT 600,
+  -- Relógio autoritativo do servidor (20 min por partida)
+  duracao_segundos         INTEGER NOT NULL DEFAULT 1200,
   iniciado_em              TIMESTAMPTZ,
   tempo_restante_segundos  INTEGER NOT NULL DEFAULT 600,
   
@@ -173,7 +173,8 @@ BEGIN
          status                  = 'em_andamento',
          iniciado_em             = now(),
          tempo_restante_segundos = m.duracao_segundos,
-         turn                    = 1
+         turn                    = 1,
+         seq_jogada              = 0
    WHERE m.mesa_id = p_mesa_id
   RETURNING m.* INTO v_mesa;
 
@@ -898,13 +899,13 @@ $$;
 -- FUNÇÃO PARA LIMPEZA AUTOMÁTICA
 -- ============================================================================
 
--- Função para limpar mesas antigas (mais de 7 minutos)
+-- Função para limpar mesas antigas (mais de 30 minutos de atividade)
 CREATE OR REPLACE FUNCTION limpar_mesas_trilha_antigas()
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- Finalizar mesas em jogo há mais de 7 minutos
+    -- Finalizar mesas em jogo há mais de 30 minutos (baseado em iniciado_em)
     UPDATE mesas_trilha
     SET status = 'finalizado',
         motivo_finalizacao = 'tempo_esgotado',
@@ -915,12 +916,12 @@ BEGIN
         END,
         turno = NULL
     WHERE status = 'em_andamento'
-      AND criado_em < now() - interval '7 minutes';
+      AND iniciado_em < now() - interval '30 minutes';
 
-    -- Remover mesas aguardando há mais de 7 minutos
+    -- Remover mesas aguardando há mais de 30 minutos (baseado em criado_em)
     DELETE FROM mesas_trilha
     WHERE status = 'aguardando'
-      AND criado_em < now() - interval '7 minutes';
+      AND criado_em < now() - interval '30 minutes';
 END;
 $$;
 -- ============================================================================
