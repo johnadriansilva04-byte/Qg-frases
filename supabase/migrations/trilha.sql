@@ -157,9 +157,16 @@ BEGIN
 
   IF v_mesa.id IS NULL THEN RAISE EXCEPTION 'mesa inexistente'; END IF;
 
-  -- Reconexão: já sou participante, apenas devolvo o estado atual.
+  -- Reconexão: já sou participante, apenas devolvo o estado atual atualizado.
   IF v_uid = v_mesa.jogador_1_id OR v_uid = v_mesa.jogador_2_id THEN
-    RETURN public.registrar_heartbeat_mesa_trilha(p_mesa_id);
+    UPDATE public.mesas_trilha m
+       SET jogador_1_online    = CASE WHEN m.jogador_1_id = v_uid THEN true ELSE m.jogador_1_online END,
+           jogador_2_online    = CASE WHEN m.jogador_2_id = v_uid THEN true ELSE m.jogador_2_online END,
+           ultimo_heartbeat_j1 = CASE WHEN m.jogador_1_id = v_uid THEN now() ELSE m.ultimo_heartbeat_j1 END,
+           ultimo_heartbeat_j2 = CASE WHEN m.jogador_2_id = v_uid THEN now() ELSE m.ultimo_heartbeat_j2 END
+     WHERE m.mesa_id = p_mesa_id
+    RETURNING m.* INTO v_mesa;
+    RETURN v_mesa;
   END IF;
 
   IF v_mesa.jogador_2_id IS NOT NULL THEN RAISE EXCEPTION 'mesa cheia'; END IF;

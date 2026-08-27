@@ -82,7 +82,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'mesas_trilha',
           filter: `mesa_id=eq.${mesaId}`
@@ -92,18 +92,47 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
           setMesa(payload.new);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'mesas_trilha',
+          filter: `mesa_id=eq.${mesaId}`
+        },
+        (payload) => {
+          console.log('[TrilhaOnline] Mesa inserida via realtime:', payload.new);
+          setMesa(payload.new);
+        }
+      )
       .subscribe((status) => {
         console.log('[TrilhaOnline] Status da subscrição:', status);
+        if (status === 'SUBSCRIPTION_ERROR') {
+          console.error('[TrilhaOnline] Erro na subscrição realtime');
+          setError('Erro na conexão em tempo real. Tentando reconectar...');
+        }
       });
 
-    // Heartbeat para manter presença
+    // Heartbeat para manter presença + recarregar estado periodicamente
     const heartbeatInterval = setInterval(async () => {
       if (userId) {
         await supabase.rpc('registrar_heartbeat_mesa_trilha', {
           p_mesa_id: mesaId
         });
+
+        // Recarregar estado da mesa periodicamente para garantir sincronização
+        const { data: currentMesa } = await supabase
+          .from('mesas_trilha')
+          .select('*')
+          .eq('mesa_id', mesaId)
+          .single();
+
+        if (currentMesa) {
+          console.log('[TrilhaOnline] Recarregando estado da mesa via heartbeat');
+          setMesa(currentMesa);
+        }
       }
-    }, 30000); // 30 segundos
+    }, 5000); // 5 segundos
 
     return () => {
       supabase.removeChannel(channel);
