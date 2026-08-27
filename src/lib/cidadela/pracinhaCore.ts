@@ -244,11 +244,8 @@ export async function carregarChatCidadela(limit = 60): Promise<MensagemChatCida
     if (!error && data) {
       return ((data ?? []) as MensagemChatCidadela[]).reverse();
     }
-
-    // Fallback local
-    console.warn("[Pracinha] Usando chat local (Supabase indisponível):", error);
   } catch (error) {
-    console.warn("[Pracinha] Erro ao carregar chat do Supabase:", error);
+    // Fallback local sem log
   }
 
   // Fallback local

@@ -512,18 +512,15 @@ export async function atualizarPerfilClube(
       p_botoes: input.botoes ?? null,
     });
     if (error) {
-      console.error("[API] Erro ao atualizar perfil do clube:", error);
       // Fallback: se a função não existe, ignora o erro e retorna null
       if (error.code === 'PGRST202' || error.code === '404') {
-        console.log("Função atualizar_perfil_clube não encontrada, ignorando");
         return null;
       }
       throw error;
     }
     return (data as UsuarioBotao | null) ?? null;
   } catch (error) {
-    console.error("[API] Erro ao atualizar perfil do clube:", error);
-    return null; // Fallback seguro
+    return null; // Fallback seguro sem log
   }
 }
 

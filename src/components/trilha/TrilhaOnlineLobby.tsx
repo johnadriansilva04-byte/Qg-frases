@@ -78,26 +78,21 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
 
   const carregarMesas = async () => {
     try {
-      console.log("Carregando mesas...");
       const { data, error } = await supabase.rpc("listar_mesas_trilha_disponiveis", {
         p_dificuldade: null,
       });
       if (error) {
-        console.error("Erro na RPC listar_mesas_trilha_disponiveis:", error);
         // Fallback: se a função não existe, retorna array vazio sem erro
         if (error.code === 'PGRST202' || error.code === '404') {
-          console.log("Função não encontrada, usando array vazio");
           setMesas([]);
           setLoading(false);
           return;
         }
         throw error;
       }
-      console.log("Mesas carregadas:", data);
       setMesas((Array.isArray(data) ? data as unknown as Mesa[] : []));
     } catch (error) {
-      console.error("Erro ao carregar mesas:", error);
-      setMesas([]); // Fallback seguro
+      setMesas([]); // Fallback seguro sem log
     } finally {
       setLoading(false);
     }
@@ -117,11 +112,9 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
         p_dificuldade: "recruta",
       });
       if (error) {
-        console.error("Erro ao criar mesa:", error);
         throw error;
       }
       const mesaId = data as string;
-      console.log("Mesa criada com ID:", mesaId);
       const link = linkDaMesa(mesaId);
       void navigator.clipboard?.writeText(link).catch(() => {});
       setToastLink(link);
@@ -129,7 +122,6 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
       // Recarrega a lista após criar (como no futebol online)
       setTimeout(() => void carregarMesas(), 500);
     } catch (error) {
-      console.error("Erro ao criar mesa:", error);
       alert("Erro ao criar mesa. Tente novamente.");
     } finally {
       setCriandoMesa(false);
