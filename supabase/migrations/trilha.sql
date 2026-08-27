@@ -363,27 +363,7 @@ BEGIN
   RETURN v_mesa;
 END; $$;
 
--- Função para listar mesas disponíveis
-CREATE OR REPLACE FUNCTION public.listar_mesas_trilha_disponive(p_dificuldade TEXT DEFAULT NULL)
-RETURNS TABLE (
-  mesa_id TEXT,
-  dificuldade TEXT,
-  jogador_1_nome TEXT,
-  criado_em TIMESTAMPTZ
-)
-LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT 
-    m.mesa_id,
-    m.dificuldade,
-    COALESCE(u.nome, 'Anônimo') as jogador_1_nome,
-    m.criado_em
-  FROM public.mesas_trilha m
-  LEFT JOIN public.botao_usuarios u ON u.user_id = m.jogador_1_id
-  WHERE m.status = 'aguardando'
-    AND (p_dificuldade IS NULL OR m.dificuldade = p_dificuldade)
-  ORDER BY m.criado_em DESC
-  LIMIT 20;
-$$;
+-- Função para listar mesas disponíveis (removida - versão atualizada abaixo com formato e nome_sala)
 
 -- ============================================================================
 -- FUNÇÃO PARA LIMPEZA AUTOMÁTICA
@@ -452,9 +432,9 @@ BEGIN
   RETURN v_mesa_id;
 END; $$;
 
-DROP FUNCTION IF EXISTS public.listar_mesas_trilha_disponive(p_dificuldade TEXT);
+DROP FUNCTION IF EXISTS public.listar_mesas_trilha_disponiveis(p_dificuldade TEXT);
 
-CREATE OR REPLACE FUNCTION public.listar_mesas_trilha_disponive(p_dificuldade TEXT DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.listar_mesas_trilha_disponiveis(p_dificuldade TEXT DEFAULT NULL)
 RETURNS TABLE (
   mesa_id TEXT,
   dificuldade TEXT,
