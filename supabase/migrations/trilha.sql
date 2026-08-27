@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS public.mesas_trilha (
   id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   mesa_id                  TEXT NOT NULL UNIQUE,
 
-  jogador_1_id             UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  jogador_2_id             UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  jogador_1_id             UUID NOT NULL,
+  jogador_2_id             UUID,
 
   dificuldade              TEXT NOT NULL DEFAULT 'recruta',
   
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.mesas_trilha (
   seq_jogada               BIGINT NOT NULL DEFAULT 0,
   
   -- Finalização
-  vencedor_id              UUID REFERENCES auth.users(id),
+  vencedor_id              UUID,
   motivo_finalizacao       TEXT,
   
   -- Presença online
@@ -59,6 +59,22 @@ CREATE INDEX IF NOT EXISTS idx_mesas_trilha_status ON public.mesas_trilha(status
 CREATE INDEX IF NOT EXISTS idx_mesas_trilha_j1 ON public.mesas_trilha(jogador_1_id);
 CREATE INDEX IF NOT EXISTS idx_mesas_trilha_j2 ON public.mesas_trilha(jogador_2_id);
 CREATE INDEX IF NOT EXISTS idx_mesas_trilha_dificuldade ON public.mesas_trilha(dificuldade);
+
+-- Adicionar FKs com referência correta para auth.users
+ALTER TABLE public.mesas_trilha
+  DROP CONSTRAINT IF EXISTS mesas_trilha_jogador_1_id_fkey,
+  ADD CONSTRAINT mesas_trilha_jogador_1_id_fkey
+    FOREIGN KEY (jogador_1_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+ALTER TABLE public.mesas_trilha
+  DROP CONSTRAINT IF EXISTS mesas_trilha_jogador_2_id_fkey,
+  ADD CONSTRAINT mesas_trilha_jogador_2_id_fkey
+    FOREIGN KEY (jogador_2_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+ALTER TABLE public.mesas_trilha
+  DROP CONSTRAINT IF EXISTS mesas_trilha_vencedor_id_fkey,
+  ADD CONSTRAINT mesas_trilha_vencedor_id_fkey
+    FOREIGN KEY (vencedor_id) REFERENCES auth.users(id);
 
 -- Permissões para mesas_trilha
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.mesas_trilha TO authenticated;
@@ -442,7 +458,7 @@ CREATE OR REPLACE FUNCTION public.listar_mesas_trilha_disponive(p_dificuldade TE
 RETURNS TABLE (
   mesa_id TEXT,
   dificuldade TEXT,
-  jogador_1_nome TEXT,
+  jogador_1_id UUID,
   criado_em TIMESTAMPTZ,
   nome_sala TEXT,
   formato TEXT
@@ -451,12 +467,11 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   SELECT
     m.mesa_id,
     m.dificuldade,
-    COALESCE(u.nome, 'Anônimo') as jogador_1_nome,
+    m.jogador_1_id,
     m.criado_em,
     m.nome,
     m.formato
   FROM public.mesas_trilha m
-  LEFT JOIN public.botao_usuarios u ON u.user_id = m.jogador_1_id
   WHERE m.status = 'aguardando'
     AND (p_dificuldade IS NULL OR m.dificuldade = p_dificuldade)
   ORDER BY m.criado_em DESC

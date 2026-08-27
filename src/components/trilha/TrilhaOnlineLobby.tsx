@@ -6,7 +6,7 @@ import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
 interface Mesa {
   mesa_id: string;
   dificuldade: string;
-  jogador_1_nome: string;
+  jogador_1_id: string;
   criado_em: string;
   nome_sala?: string | null;
   formato?: "normal" | "eliminacao" | null;
@@ -310,11 +310,11 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                       </div>
                       <div>
                         <h3 className="font-semibold">
-                          {mesa.nome_sala?.trim() || mesa.jogador_1_nome}
+                          {mesa.nome_sala?.trim() || `Mesa de ${mesa.jogador_1_id.slice(0, 8)}`}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           {ehElim ? "Campeonato eliminatório" : "Mesa 1×1"} ·{" "}
-                          {mesa.jogador_1_nome} · {formatarTempo(mesa.criado_em)}
+                          ID: {mesa.jogador_1_id.slice(0, 8)} · {formatarTempo(mesa.criado_em)}
                         </p>
                       </div>
                     </div>
