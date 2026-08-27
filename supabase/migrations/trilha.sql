@@ -408,6 +408,8 @@ ALTER TABLE public.mesas_trilha
 ALTER TABLE public.mesas_trilha
   ADD COLUMN IF NOT EXISTS formato TEXT NOT NULL DEFAULT 'normal';
 
+DROP FUNCTION IF EXISTS public.criar_mesa_trilha(p_dificuldade TEXT);
+
 CREATE OR REPLACE FUNCTION public.criar_mesa_trilha(
   p_nome TEXT DEFAULT NULL,
   p_formato TEXT DEFAULT 'normal',
@@ -433,6 +435,8 @@ BEGIN
 
   RETURN v_mesa_id;
 END; $$;
+
+DROP FUNCTION IF EXISTS public.listar_mesas_trilha_disponive(p_dificuldade TEXT);
 
 CREATE OR REPLACE FUNCTION public.listar_mesas_trilha_disponive(p_dificuldade TEXT DEFAULT NULL)
 RETURNS TABLE (
