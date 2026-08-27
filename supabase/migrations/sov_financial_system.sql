@@ -132,6 +132,8 @@ END;
 $$;
 
 -- Função para registrar transação no livro razão
+DROP FUNCTION IF EXISTS public.record_transaction(UUID, TEXT, DECIMAL, TEXT, TEXT, JSONB);
+
 CREATE OR REPLACE FUNCTION record_transaction(
   p_user_id UUID,
   p_transaction_type TEXT,

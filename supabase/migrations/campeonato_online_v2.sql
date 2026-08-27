@@ -39,6 +39,8 @@ COMMIT;
 --    transação que deixasse a conta negativa — inclusive CRÉDITO — e contas
 --    endividadas paravam de receber prêmio/receita/salário.)
 -- ---------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.record_transaction(UUID, TEXT, DECIMAL, TEXT, TEXT, JSONB);
+
 CREATE OR REPLACE FUNCTION public.record_transaction(
   p_user_id UUID,
   p_transaction_type TEXT,
