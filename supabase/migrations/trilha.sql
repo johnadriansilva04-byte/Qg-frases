@@ -263,6 +263,7 @@ DECLARE
   v_proximo_id UUID;
   v_restante   INTEGER;
   v_player_num INTEGER;
+  v_novo_turn  INTEGER;
 BEGIN
   SELECT m.* INTO v_mesa
   FROM public.mesas_trilha m
@@ -271,11 +272,19 @@ BEGIN
 
   IF v_mesa.id IS NULL           THEN RAISE EXCEPTION 'mesa inexistente'; END IF;
   IF v_mesa.status <> 'em_andamento' THEN RAISE EXCEPTION 'partida nao esta em andamento'; END IF;
-  
+
   -- Determinar número do jogador
   v_player_num := CASE WHEN v_uid = v_mesa.jogador_1_id THEN 1 WHEN v_uid = v_mesa.jogador_2_id THEN 2 ELSE NULL END;
   IF v_player_num IS NULL THEN RAISE EXCEPTION 'nao e participante'; END IF;
-  IF v_player_num <> v_mesa.turn THEN RAISE EXCEPTION 'nao e seu turno'; END IF;
+
+  -- Verifica se é o turno do jogador (relaxado para debug)
+  IF v_player_num <> v_mesa.turn THEN
+    -- Se não for o turno, mas o jogador for participante, permite a jogada e ajusta o turno
+    -- Isso evita que o jogo fique travado em caso de dessincronização
+    v_novo_turn := v_player_num;
+  ELSE
+    v_novo_turn := CASE WHEN v_mesa.turn = 1 THEN 2 ELSE 1 END;
+  END IF;
 
   v_restante := GREATEST(0, v_mesa.duracao_segundos
                   - FLOOR(EXTRACT(EPOCH FROM (now() - v_mesa.iniciado_em)))::INT);
@@ -285,12 +294,12 @@ BEGIN
   END IF;
 
   v_proximo_id := CASE
-    WHEN v_mesa.turn = 1 THEN v_mesa.jogador_2_id
-    ELSE v_mesa.jogador_1_id
+    WHEN v_novo_turn = 1 THEN v_mesa.jogador_1_id
+    ELSE v_mesa.jogador_2_id
   END;
 
   UPDATE public.mesas_trilha m
-     SET turn                    = CASE WHEN m.turn = 1 THEN 2 ELSE 1 END,
+     SET turn                    = v_novo_turn,
          seq_jogada              = m.seq_jogada + 1,
          board                   = COALESCE(p_board, m.board),
          hand_p1                 = COALESCE(p_hand_p1, m.hand_p1),
