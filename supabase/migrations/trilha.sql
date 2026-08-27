@@ -398,3 +398,63 @@ BEGIN
       AND criado_em < now() - interval '2 hours';
 END;
 $$;
+-- ============================================================================
+-- LOBBY DE TRILHA SEM DIFICULDADE (2026-08-26)
+-- Adiciona nome da sala + formato (normal / campeonato eliminatório)
+-- ============================================================================
+
+ALTER TABLE public.mesas_trilha
+  ADD COLUMN IF NOT EXISTS nome TEXT NULL;
+ALTER TABLE public.mesas_trilha
+  ADD COLUMN IF NOT EXISTS formato TEXT NOT NULL DEFAULT 'normal';
+
+CREATE OR REPLACE FUNCTION public.criar_mesa_trilha(
+  p_nome TEXT DEFAULT NULL,
+  p_formato TEXT DEFAULT 'normal',
+  p_dificuldade TEXT DEFAULT 'recruta'
+)
+RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_mesa_id TEXT;
+  v_uid     UUID := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+
+  IF p_formato NOT IN ('normal','eliminacao') THEN
+    RAISE EXCEPTION 'formato invalido';
+  END IF;
+
+  v_mesa_id := 'trilha_' || substring(encode(gen_random_uuid()::text::bytea, 'hex'), 1, 12);
+
+  INSERT INTO public.mesas_trilha AS m
+    (mesa_id, jogador_1_id, dificuldade, status, jogador_1_online, ultimo_heartbeat_j1, nome, formato)
+  VALUES (v_mesa_id, v_uid, p_dificuldade, 'aguardando', true, now(), p_nome, p_formato);
+
+  RETURN v_mesa_id;
+END; $$;
+
+CREATE OR REPLACE FUNCTION public.listar_mesas_trilha_disponive(p_dificuldade TEXT DEFAULT NULL)
+RETURNS TABLE (
+  mesa_id TEXT,
+  dificuldade TEXT,
+  jogador_1_nome TEXT,
+  criado_em TIMESTAMPTZ,
+  nome_sala TEXT,
+  formato TEXT
+)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT
+    m.mesa_id,
+    m.dificuldade,
+    COALESCE(u.nome, 'Anônimo') as jogador_1_nome,
+    m.criado_em,
+    m.nome,
+    m.formato
+  FROM public.mesas_trilha m
+  LEFT JOIN public.botao_usuarios u ON u.user_id = m.jogador_1_id
+  WHERE m.status = 'aguardando'
+    AND (p_dificuldade IS NULL OR m.dificuldade = p_dificuldade)
+  ORDER BY m.criado_em DESC
+  LIMIT 20;
+$$;

@@ -1078,7 +1078,11 @@ export type Database = {
         Returns: Json;
       };
       criar_mesa_trilha: {
-        Args: { p_dificuldade: string };
+        Args: {
+          p_dificuldade?: string;
+          p_nome?: string | null;
+          p_formato?: string;
+        };
         Returns: string;
       };
       entrar_mesa_trilha: {
