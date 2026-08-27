@@ -10,6 +10,10 @@
 --
 -- Idempotente: pode colar no SQL Editor mais de uma vez sem erro.
 
+-- Fallback: garantir que a coluna dono_user_id existe (caso futebol.sql não tenha sido rodado)
+ALTER TABLE public.botao_times
+  ADD COLUMN IF NOT EXISTS dono_user_id UUID REFERENCES public.botao_usuarios(user_id) ON DELETE SET NULL;
+
 ALTER TABLE public.botao_times
   ADD COLUMN IF NOT EXISTS em_venda BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE public.botao_times
