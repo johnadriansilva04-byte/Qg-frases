@@ -18,6 +18,53 @@
 --   8) UPDATE de botao_campeonatos_online restrito ao criador.
 -- ============================================================================
 
+-- Fallback: criar tabela se não existir (caso futebol.sql não tenha sido rodado)
+CREATE TABLE IF NOT EXISTS public.botao_campeonatos_online (
+  id              BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  codigo          TEXT NOT NULL UNIQUE,
+  nome            TEXT NOT NULL DEFAULT 'Campeonato Online',
+  criador_id      UUID NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'aguardando'
+                  CHECK (status IN ('aguardando','em_andamento','finalizado','cancelado')),
+  max_jogadores   INTEGER NOT NULL DEFAULT 4 CHECK (max_jogadores BETWEEN 2 AND 32),
+  fase            INTEGER NOT NULL DEFAULT 0,
+  participantes   JSONB NOT NULL DEFAULT '[]'::JSONB,
+  confrontos      JSONB NOT NULL DEFAULT '[]'::JSONB,
+  rodada_atual    INTEGER NOT NULL DEFAULT 0,
+  vencedor_id     UUID,
+  premio_sov      INTEGER NOT NULL DEFAULT 0,
+  formato         TEXT NOT NULL DEFAULT 'pontos',
+  criado_em       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Índices e permissões básicas
+CREATE INDEX IF NOT EXISTS idx_campeonatos_codigo ON public.botao_campeonatos_online(codigo);
+CREATE INDEX IF NOT EXISTS idx_campeonatos_status ON public.botao_campeonatos_online(status);
+CREATE INDEX IF NOT EXISTS idx_campeonatos_criador ON public.botao_campeonatos_online(criador_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.botao_campeonatos_online TO authenticated;
+GRANT SELECT ON public.botao_campeonatos_online TO anon;
+GRANT ALL ON public.botao_campeonatos_online TO service_role;
+
+ALTER TABLE public.botao_campeonatos_online ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campeonatos_select_publico" ON public.botao_campeonatos_online;
+CREATE POLICY "campeonatos_select_publico" ON public.botao_campeonatos_online
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "campeonatos_insert_authenticated" ON public.botao_campeonatos_online;
+CREATE POLICY "campeonatos_insert_authenticated" ON public.botao_campeonatos_online
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "campeonatos_update_participante" ON public.botao_campeonatos_online;
+CREATE POLICY "campeonatos_update_participante" ON public.botao_campeonatos_online
+  FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "campeonatos_delete_criador" ON public.botao_campeonatos_online;
+CREATE POLICY "campeonatos_delete_criador" ON public.botao_campeonatos_online
+  FOR DELETE TO authenticated USING (true);
+
 BEGIN;
 
 -- ---------------------------------------------------------------------------
