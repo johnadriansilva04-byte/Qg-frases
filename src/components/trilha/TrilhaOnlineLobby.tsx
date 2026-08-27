@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, Users, Trophy, Play, Plus, RefreshCw, Link2, Crown, Swords } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
@@ -16,9 +16,11 @@ type Formato = "normal" | "eliminacao";
 
 interface TrilhaOnlineLobbyProps {
   onBack?: () => void;
+  /** Link direto (?mesaTrilha=...): entra direto na mesa especificada. */
+  mesaInicial?: string;
 }
 
-export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
+export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProps = {}) {
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [criandoMesa, setCriandoMesa] = useState(false);
@@ -28,6 +30,7 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
   const [mesaAtual, setMesaAtual] = useState<string | null>(null);
   const [supabaseNotConfigured, setSupabaseNotConfigured] = useState(false);
   const [toastLink, setToastLink] = useState<string | null>(null);
+  const entradaLinkTentada = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -58,12 +61,32 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
     };
   }, []);
 
+  // LINK DIRETO (?mesaTrilha=ID): entra direto na mesa especificada.
+  useEffect(() => {
+    if (!mesaInicial || entradaLinkTentada.current === mesaInicial) return;
+    entradaLinkTentada.current = mesaInicial;
+    void (async () => {
+      try {
+        // Tenta entrar na mesa; se falhar (mesa cheia/começou), ainda assim abre o lobby
+        await entrarMesa(mesaInicial);
+      } catch (e) {
+        console.error("Erro ao entrar na mesa pelo link:", e);
+        // Continua para o lobby mesmo se falhar
+      }
+    })();
+  }, [mesaInicial]);
+
   const carregarMesas = async () => {
     try {
+      console.log("Carregando mesas...");
       const { data, error } = await supabase.rpc("listar_mesas_trilha_disponiveis", {
         p_dificuldade: null,
       });
-      if (error) throw error;
+      if (error) {
+        console.error("Erro na RPC listar_mesas_trilha_disponiveis:", error);
+        throw error;
+      }
+      console.log("Mesas carregadas:", data);
       setMesas((Array.isArray(data) ? data as unknown as Mesa[] : []));
     } catch (error) {
       console.error("Erro ao carregar mesas:", error);
@@ -83,18 +106,20 @@ export function TrilhaOnlineLobby({ onBack }: TrilhaOnlineLobbyProps = {}) {
       const { data, error } = await supabase.rpc("criar_mesa_trilha", {
         p_nome: nomeSala.trim() || null,
         p_formato: formato,
+        p_dificuldade: "recruta",
       });
       if (error) {
-        const legacy = await supabase.rpc("criar_mesa_trilha", { p_dificuldade: "recruta" });
-        if (legacy.error) throw legacy.error;
-        setMesaAtual(legacy.data as string);
-        return;
+        console.error("Erro ao criar mesa:", error);
+        throw error;
       }
       const mesaId = data as string;
+      console.log("Mesa criada com ID:", mesaId);
       const link = linkDaMesa(mesaId);
       void navigator.clipboard?.writeText(link).catch(() => {});
       setToastLink(link);
       setMesaAtual(mesaId);
+      // Recarrega a lista após criar (como no futebol online)
+      setTimeout(() => void carregarMesas(), 500);
     } catch (error) {
       console.error("Erro ao criar mesa:", error);
       alert("Erro ao criar mesa. Tente novamente.");

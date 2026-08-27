@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Target, Trophy, Crown, Grid3X3, IdCard } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
+import { TrilhaOnlineLobby } from "@/components/trilha/TrilhaOnlineLobby";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { ConviteMesaScreen } from "@/components/botao/online/ConviteMesaScreen";
 import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
@@ -100,6 +101,7 @@ function CidadelaCompView() {
   // §11-§13: convite de mesa via link direto (?mesa=mesa_xxx) — abre o fluxo
   // do convidado (3 propostas de clube + cadastro rápido), nunca cai no hub.
   // §link-camp: convite de campeonato (?camp=CAMP-...) — mesma lógica.
+  // §link-trilha: convite de mesa de trilha (?mesaTrilha=trilha_xxx) — entra direto no jogo.
   const [conviteMesaId, setConviteMesaId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("mesa");
@@ -107,6 +109,10 @@ function CidadelaCompView() {
   const [conviteCampCodigo, setConviteCampCodigo] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("camp");
+  });
+  const [conviteMesaTrilhaId, setConviteMesaTrilhaId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("mesaTrilha");
   });
   const passosTour: PassoTour[] =
     activeGame === "botao" ? PASSOS_TOUR_FUTEBOL : activeGame === "trilha" ? PASSOS_TOUR_TRILHA : [];
@@ -245,6 +251,16 @@ function CidadelaCompView() {
           setActiveGame("botao");
         }}
         onCancelar={() => setConviteCampCodigo(null)}
+      />
+    );
+  }
+
+  // §link-trilha: link direto de mesa de trilha — o convidado cai direto no lobby da trilha online.
+  if (conviteMesaTrilhaId) {
+    return (
+      <TrilhaOnlineLobby
+        mesaInicial={conviteMesaTrilhaId}
+        onBack={() => setConviteMesaTrilhaId(null)}
       />
     );
   }
