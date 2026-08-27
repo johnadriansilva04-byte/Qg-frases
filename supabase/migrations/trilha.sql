@@ -172,7 +172,8 @@ BEGIN
          jogador_1_online        = true,
          status                  = 'em_andamento',
          iniciado_em             = now(),
-         tempo_restante_segundos = m.duracao_segundos
+         tempo_restante_segundos = m.duracao_segundos,
+         turn                    = 1
    WHERE m.mesa_id = p_mesa_id
   RETURNING m.* INTO v_mesa;
 
@@ -369,13 +370,13 @@ END; $$;
 -- FUNÇÃO PARA LIMPEZA AUTOMÁTICA
 -- ============================================================================
 
--- Função para limpar mesas antigas (mais de 1 hora)
+-- Função para limpar mesas antigas (mais de 7 minutos)
 CREATE OR REPLACE FUNCTION limpar_mesas_trilha_antigas()
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- Finalizar mesas em jogo há mais de 1 hora
+    -- Finalizar mesas em jogo há mais de 7 minutos
     UPDATE mesas_trilha
     SET status = 'finalizado',
         motivo_finalizacao = 'tempo_esgotado',
@@ -386,12 +387,12 @@ BEGIN
         END,
         turno = NULL
     WHERE status = 'em_andamento'
-      AND criado_em < now() - interval '1 hour';
+      AND criado_em < now() - interval '7 minutes';
 
-    -- Remover mesas aguardando há mais de 2 horas
+    -- Remover mesas aguardando há mais de 7 minutos
     DELETE FROM mesas_trilha
     WHERE status = 'aguardando'
-      AND criado_em < now() - interval '2 hours';
+      AND criado_em < now() - interval '7 minutes';
 END;
 $$;
 -- ============================================================================
