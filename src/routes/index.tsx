@@ -23,6 +23,14 @@ export const Route = createFileRoute("/")({
 
 const SECTIONS = [
   {
+    icon: "brain",
+    title: "Teste de QI",
+    description: "Exercícios e simulação de raciocínio",
+    link: "/teste-de-qi",
+    color: "from-indigo-500 to-violet-500",
+    bgColor: "bg-indigo-500/10",
+  },
+  {
     icon: "gamepad",
     title: "Cidadela dos Clássicos",
     description: "Jogos clássicos",
@@ -37,14 +45,6 @@ const SECTIONS = [
     link: "/campus",
     color: "from-amber-500 to-emerald-500",
     bgColor: "bg-amber-500/10",
-  },
-  {
-    icon: "pen",
-    title: "Gerador de Texto",
-    description: "Frases e correção",
-    link: "/gerador",
-    color: "from-green-500 to-cyan-500",
-    bgColor: "bg-green-500/10",
   },
 ];
 
@@ -71,9 +71,9 @@ function Index() {
             CIDADELA DO PRACINHA
           </h1>
           <Amelas className="mt-4 text-purple-500/40" />
-          <p className="mt-5 text-lg md:text-xl text-slate-300 mb-2">Jogos, Campus e Ferramentas</p>
+          <p className="mt-5 text-lg md:text-xl text-slate-300 mb-2">Teste de QI, Jogos e Campus</p>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            Todos os integrantes da Cidadela fazem parte do Campus. Escolha sua função e participe.
+            Todos os integrantes da Cidadela fazem parte do Campus. Teste seu raciocínio, escolha sua função e participe.
           </p>
         </header>
 
@@ -89,6 +89,18 @@ function Index() {
                 <div className={`absolute inset-0 bg-gradient-to-r ${section.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
                 <div className="relative flex items-start gap-4 md:gap-6">
                   <div className={`p-3 md:p-4 rounded-xl ${section.bgColor} group-hover:scale-110 transition-transform`}>
+                    {section.icon === "brain" && (
+                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
+                        <path d="M32 8 C22 8 14 16 14 26 C8 30 6 38 10 44 C6 50 10 58 18 58 L46 58 C54 58 58 50 54 44 C58 38 56 30 50 26 C50 16 42 8 32 8Z" fill="url(#brainGrad)" />
+                        <path d="M20 26 L20 40 M26 22 L26 44 M32 20 L32 46 M38 22 L38 44 M44 26 L44 40" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" opacity="0.75" />
+                        <defs>
+                          <linearGradient id="brainGrad" x1="8" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#6366f1" />
+                            <stop offset="1" stopColor="#a855f7" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    )}
                     {section.icon === "gamepad" && (
                       <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
                         <rect x="4" y="16" width="56" height="32" rx="8" fill="url(#gamepadGrad)" />
@@ -131,22 +143,6 @@ function Index() {
                           <linearGradient id="bookGrad" x1="8" y1="12" x2="56" y2="52" gradientUnits="userSpaceOnUse">
                             <stop stopColor="#3b82f6"/>
                             <stop offset="1" stopColor="#06b6d4"/>
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                    )}
-                    {section.icon === "pen" && (
-                      <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="w-10 h-10 md:w-12 md:h-12">
-                        <rect x="8" y="24" width="40" height="28" rx="2" fill="#fff" opacity="0.3"/>
-                        <path d="M12 28 L44 28" stroke="#fff" strokeWidth="2" opacity="0.4"/>
-                        <path d="M12 34 L36 34" stroke="#fff" strokeWidth="2" opacity="0.4"/>
-                        <path d="M12 40 L40 40" stroke="#fff" strokeWidth="2" opacity="0.4"/>
-                        <path d="M36 8 L56 28 L48 56 L28 36 L36 8Z" fill="url(#penGrad)" />
-                        <path d="M36 8 L56 28" stroke="#fff" strokeWidth="2" opacity="0.5"/>
-                        <defs>
-                          <linearGradient id="penGrad" x1="36" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-                            <stop stopColor="#22c55e"/>
-                            <stop offset="1" stopColor="#10b981"/>
                           </linearGradient>
                         </defs>
                       </svg>

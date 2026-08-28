@@ -435,8 +435,9 @@ function TelaInicial({
       {erro && <p className="qi-erro">{erro}</p>}
       {!backend && (
         <p className="qi-aviso qi-aviso--local">
-          Modo local (banco de questões determinístico): o resultado desta
-          prova não será salvo no servidor até a migration ser aplicada.
+          <span className="qi-aviso-dot" aria-hidden="true" />
+          Sua prova está em modo offline — o resultado fica salvo neste aparelho
+          e será sincronizado em breve.
         </p>
       )}
       <button type="button" className="qi-botao-primary" disabled={carregando || !!erro} onClick={onIniciar}>

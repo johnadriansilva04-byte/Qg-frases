@@ -4,7 +4,7 @@ import { SimulacaoIQ } from "@/components/campus/desenvolvimento-brio/simulacao-
 export const Route = createFileRoute("/simulacao-qi")({
   head: () => ({
     meta: [
-      { title: "Simulação de Teste de QI | Teste de QI — Desenvolvimento do Brio" },
+      { title: "Simulação de Teste de QI | Teste de QI — Cidadela do Pracinha" },
       {
         name: "description",
         content:

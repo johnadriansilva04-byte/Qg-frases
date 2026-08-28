@@ -4,13 +4,13 @@ import { AdSlot } from "@/components/AdSlot";
 export const Route = createFileRoute("/teste-de-qi")({
   head: () => ({
     meta: [
-      { title: "Teste de QI | Desenvolvimento do Brio" },
+      { title: "Teste de QI | Cidadela do Pracinha" },
       {
         name: "description",
         content:
-          "Módulo Teste de QI do Desenvolvimento do Brio: Exercícios (treinamento com explicação das regras) e Simulação (avaliação de 32 questões, 25 minutos).",
+          "Teste de QI da Cidadela do Pracinha: Exercícios (treinamento com explicação das regras) e Simulação (avaliação de 32 questões, 25 minutos).",
       },
-      { property: "og:title", content: "Teste de QI — Desenvolvimento do Brio" },
+      { property: "og:title", content: "Teste de QI — Cidadela do Pracinha" },
       {
         property: "og:description",
         content: "Treine o raciocínio com exercícios explicados e simule uma avaliação não verbal completa.",
@@ -61,13 +61,13 @@ function TesteDeQI() {
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-4 md:p-8">
         <header className="mb-10 text-center md:mb-14">
           <Link
-            to="/brio"
+            to="/"
             className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1.5 text-xs text-slate-400 transition hover:text-amber-400 hover:border-amber-500/40"
           >
             <svg width="12" height="12" viewBox="0 0 64 64" fill="none">
               <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Desenvolvimento do Brio
+            Página inicial
           </Link>
           <div className="mb-4 inline-flex items-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 shadow-lg shadow-amber-500/30">
@@ -88,8 +88,8 @@ function TesteDeQI() {
             </h1>
           </div>
           <p className="mx-auto max-w-2xl text-sm text-slate-400 md:text-base">
-            Módulo do <span className="text-amber-300">Desenvolvimento do Brio</span> para treinar e
-            avaliar o raciocínio não verbal. Escolha uma das duas trilhas:
+            Treine e avalie o raciocínio não verbal na Cidadela do Pracinha.
+            Escolha uma das duas trilhas:
           </p>
         </header>
 
@@ -179,11 +179,11 @@ function TesteDeQI() {
         </div>
 
         <div className="mt-8 text-center">
-          <Link to="/brio" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-amber-400">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-amber-400">
             <svg width="16" height="16" viewBox="0 0 64 64" fill="none">
               <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Voltar para o Desenvolvimento do Brio
+            Voltar para a página inicial
           </Link>
         </div>
       </div>

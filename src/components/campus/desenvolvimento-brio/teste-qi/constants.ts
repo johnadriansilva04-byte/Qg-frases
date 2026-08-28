@@ -22,7 +22,7 @@ export const TYPE_VALUES: readonly ShapeType[] = ['none', 'triangle', 'square', 
 export const TYPE_MIN = 0;
 export const TYPE_MAX = TYPE_VALUES.length - 1;
 
-export const SIZE_VALUES = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9] as const;
+export const SIZE_VALUES = [0.55, 0.65, 0.75, 0.85, 0.95, 1.05] as const;
 export const SIZE_MIN = 0;
 export const SIZE_MAX = SIZE_VALUES.length - 1;
 

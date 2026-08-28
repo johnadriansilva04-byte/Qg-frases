@@ -1,21 +1,32 @@
-## Módulo "Teste de QI" unificado (landing /teste-de-qi) + UI profissional (2026-08-28, 32ª passada)
+## Módulo "Teste de QI" na home + UI profissional (2026-08-28, 32ª passada)
 
-- **UM card no /brio → landing `/teste-de-qi`** (nova rota `src/routes/teste-de-qi.tsx`,
-  no routeTree.gen): dentro dela dois sub-módulos — **Exercícios** (rota `/teste-qi`,
-  componente `IQTestComponent`, "ENSINO") e **Simulação** (rota `/simulacao-qi`,
-  componente `SimulacaoIQ`, "AVALIAÇÃO", 32 questões, 25 min). Nada mudou na
-  separação `mode` exercise/simulation no banco/motor.
+- **Teste de QI movido para a HOME** (`/`): card "Teste de QI" (ícone brain,
+  gradiente indigo→violet) substitui o card **"Gerador de Texto"** na página
+  principal — a rota `/gerador` continua existindo, só sem o card. O card do
+  Brio foi REMOVIDO (`src/routes/brio.tsx` sem a seção brain). Header da home:
+  "Teste de QI, Jogos e Campus". A rota `/teste-de-qi` (landing) e os dois
+  sub-módulos (Exercícios `/teste-qi`, Simulação `/simulacao-qi`) continuam
+  acessíveis e agora com breadcrumb/meta "Cidadela do Pracinha" (não mais
+  "Desenvolvimento do Brio").
+- **Landing `/teste-de-qi`** (rota dedicada): dois sub-módulos — **Exercícios**
+  (rota `/teste-qi`, componente `IQTestComponent`, "ENSINO") e **Simulação**
+  (rota `/simulacao-qi`, componente `SimulacaoIQ`, "AVALIAÇÃO", 32 questões,
+  25 min). Nada mudou na separação `mode` exercise/simulation no banco/motor.
+- **Aviso do modo offline LIMPO**: a mensagem "Modo local (banco de questões
+  determinístico)..." foi substituída por um aviso elegante com dot azul —
+  "Sua prova está em modo offline — o resultado fica salvo neste aparelho e
+  será sincronizado em breve." (classe `.qi-aviso--local` + `.qi-aviso-dot`).
 - **UI da simulação redesenhada** (`src/styles.css` bloco `.qi-simulacao`):
-  células da matriz CLARAS (branco→cinza claro em gradiente, nada de "quadrado
-  preto gigante"); figuras MAIORES via `renderer.tsx` (`SIZE_SCALE` 10→14..48,
-  margem 22→14, escala max 1.15, min size 8); **lado a lado** em telas largas
-  (`.qi-corpo` grid 2 colunas ≥900px: matriz esquerda + opções direita) e
-  empilhado no mobile; painéis com `backdrop-filter`, bordas arredondadas,
-  badge "SIMULAÇÃO · AVALIAÇÃO", timer/counter em destaque, botão FINALIZAR
-  âmbar, resultado em cartão. E2E `testes/e2e-simulacao-qi.mjs` (27 checks)
-  continua VERDE (labels, data-qi-option e classe `qi-option` preservados).
-- **Exercícios /teste-qi**: matriz maior (max-w 520px) com moldura esmeralda e
-  opções AO LADO da matriz em telas largas (`lg:grid-cols-[1fr_1fr]`).
+  células da matriz CLARAS com gradiente radial (nada de "quadrado preto
+  gigante" — o `.qi-matrix-wrap` agora tem fundo SUTIL alpha ~8-14%); figuras
+  MUITO MAIORES via `renderer.tsx` (`SIZE_SCALE` 30..88 → forma grande mede
+  ~64px numa célula de 108px; `sizeInBox = f.size * (100/155)`, margem 10,
+  escala max 1.1); **lado a lado** em telas largas (`.qi-corpo` grid 2 colunas
+  ≥900px: matriz esquerda + opções direita) e empilhado no mobile. E2E
+  `testes/e2e-simulacao-qi.mjs` (27 checks) continua VERDE.
+- **Exercícios /teste-qi**: figuras também maiores via `constants.ts`
+  (`SIZE_VALUES` 0.4..0.9 → 0.55..1.05); matriz max-w 520px com moldura
+  esmeralda e opções AO LADO da matriz em telas largas.
 - **Migration idempotente**: `supabase/migrations/qi_simulacao.sql` ganhou
   `DROP POLICY IF EXISTS` antes dos 4 `CREATE POLICY qi_attempts_proprias_*`
   (corrige erro 42710 "policy already exists" ao reaplicar). ATENÇÃO:
