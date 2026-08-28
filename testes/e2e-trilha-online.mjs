@@ -3,7 +3,7 @@
  *  2. moinho na colocação → captura pendente mantém o turno de quem fechou;
  *  3. captura da PRÓPRIA peça é rejeitada; captura de peça inimiga funciona;
  *  4. reserva (9 peças) é respeitada;
- *  5. fim de jogo: adversário reduzido a 3 peças → mesa finaliza.
+ *  5. fim de jogo: adversário reduzido a 2 peças → mesa finaliza.
  *
  * O teste conversa com o banco de PRODUÇÃO via REST (igual ao app real).
  * Requer a migration supabase/migrations/trilha.sql re-aplicada no SQL Editor.
@@ -117,8 +117,8 @@ ok(s.pending_capture === false && s.turn === 2, "após capturar, turno passa a B
 ok(s.board[6] === 0, "peça 6 removida do tabuleiro", `board[6]=${s.board[6]}`);
 ok(s.captured_p1 === 1, `captura contabilizada p/ A (${s.captured_p1})`);
 
-// -------- Fim de jogo com 3 peças (fase de movimentação) --------
-// O fim-de-jogo (3 peças/bloqueio) é provado no harness local contra o SQL
+// -------- Fim de jogo com 2 peças (fase de movimentação) --------
+// O fim-de-jogo (2 peças/bloqueio) é provado no harness local contra o SQL
 // real: testes/pg-trilha-regras.mjs. Aqui garantimos que o fluxo REST segue
 // íntegro ao avançar as colocações.
 for (const n of [7, 3, 8, 4, 9]) { await coloca(a.uid, n); await coloca(b.uid, n + 10); }

@@ -261,7 +261,7 @@ export function applyMove(s: GameState, move: Move): GameState {
 
   // Condições de fim de jogo, avaliadas para quem vai jogar agora.
   if (next.phase === "moving") {
-    if (countOnBoard(next.board, foe) <= 3) {
+    if (countOnBoard(next.board, foe) <= 2) {
       next.phase = "over";
       next.winner = actor;
       next.reason = "annihilation";
@@ -299,7 +299,7 @@ export function applyCapture(s: GameState, move: Move): GameState {
   }
 
   if (next.phase === "moving") {
-    if (countOnBoard(next.board, foe) <= 3) {
+    if (countOnBoard(next.board, foe) <= 2) {
       next.phase = "over";
       next.winner = actor;
       next.reason = "annihilation";

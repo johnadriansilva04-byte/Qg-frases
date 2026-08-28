@@ -260,8 +260,8 @@ END; $$;
 --  * turno estrito (a captura pendente mantém o turno de quem fechou a trilha);
 --  * nunca capturar a própria peça;
 --  * máximo de 9 peças por jogador (reserva não pode ficar negativa nem subir);
---  * fim de jogo quando o adversário fica com 3 peças (aniquilação) ou sem
---    movimentos (bloqueio).
+--  * fim de jogo quando o adversário fica com 2 peças (aniquilação) ou sem
+--    movimentos (bloqueio); com exatamente 3 peças ainda há "voo" livre.
 -- ============================================================================
 
 -- O nó fecha uma trilha (moinho) do jogador?
@@ -548,13 +548,13 @@ BEGIN
     END IF;
   END IF;
 
-  -- Fim de jogo (apenas na fase de movimentação): adversário com 3 peças ou sem movimento
+  -- Fim de jogo (apenas na fase de movimentação): adversário com 2 peças ou sem movimento
   IF v_phase = 'moving' THEN
     SELECT count(*) INTO v_count_foe
     FROM generate_series(0, 23) AS g
     WHERE v_final[g + 1] = v_novo_turn;
 
-    IF v_count_foe <= 3 THEN
+    IF v_count_foe <= 2 THEN
       v_vencedor := CASE WHEN v_player_num = 1 THEN v_mesa.jogador_1_id ELSE v_mesa.jogador_2_id END;
       v_motivo := 'annihilation';
     ELSIF NOT public._trilha_tem_movimento(v_final, v_novo_turn) THEN

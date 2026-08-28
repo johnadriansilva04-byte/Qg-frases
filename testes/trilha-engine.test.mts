@@ -1,7 +1,7 @@
 /* Regras da Trilha no motor puro (jiti):
  *  - captura em duas etapas: manter o turno com quem fechou; alvo apenas inimigo;
  *  - mão debitada UMA vez por colocação (nunca duas vezes numa captura);
- *  - fim de jogo com 3 peças (aniquilação) e bloqueio.
+ *  - fim de jogo com 2 peças (aniquilação) e bloqueio.
  */
 import {
   applyMove,
@@ -63,8 +63,9 @@ function placeBoard(nodes: number[], player: 1 | 2): number[] {
   ok(completa.captured[1] === 1, "captura contabilizada p/ J1");
 }
 
-// ---------------------------------------------------------------- 2) fim de jogo com 3 peças
+// ---------------------------------------------------------------- 2) fim de jogo com 2 peças
 {
+  // (a) capturando para 3 peças: NÃO termina (ainda há voo), turno passa.
   let s = createInitialState();
   s.phase = "moving";
   s.hand = { 1: 0, 2: 0 };
@@ -72,10 +73,22 @@ function placeBoard(nodes: number[], player: 1 | 2): number[] {
   s.board = placeBoard([0, 1, 2, 3], 1);
   s.board[16] = 2; s.board[17] = 2; s.board[18] = 2;
   s.turn = 2;
-  s.pending_capture = true as never; // tipo do engine não tem; cast
-  // completar moinho capturando 3 → J1 fica com 3 → fim
-  const fim = applyCapture(s as any, { from: 22, to: 18, remove: 3 });
-  ok(fim.phase === "over", "jogo termina quando adversário fica com 3 peças");
+  s.pending_capture = true as never;
+  const apos3 = applyCapture(s as any, { from: 22, to: 18, remove: 3 });
+  ok(apos3.phase !== "over", "J1 com 3 peças: jogo AINDA não terminou");
+  ok(apos3.turn === 1, "J1 com 3 peças segue em voo (turno J1)");
+
+  // (b) capturando para 2 peças: jogo termina.
+  let s2 = createInitialState();
+  s2.phase = "moving";
+  s2.hand = { 1: 0, 2: 0 };
+  // J2 tem 16,17,18 (moinho) e J1 tem 3 peças 0,1,2
+  s2.board = placeBoard([0, 1, 2], 1);
+  s2.board[16] = 2; s2.board[17] = 2; s2.board[18] = 2;
+  s2.turn = 2;
+  s2.pending_capture = true as never;
+  const fim = applyCapture(s2 as any, { from: 22, to: 18, remove: 0 });
+  ok(fim.phase === "over", "jogo termina quando adversário fica com 2 peças");
   ok(fim.winner === 2, "vencedor é quem capturou");
   ok(fim.reason === "annihilation", "motivo annihilation");
 }

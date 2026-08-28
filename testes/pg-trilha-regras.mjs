@@ -5,7 +5,7 @@
  *     pendente) — nunca com o adversário;
  *  3. captura SÓ de peça inimiga (a própria peça é rejeitada pelo servidor);
  *  4. captura pendente deve repetir o movimento da trilha;
- *  5. fim de jogo quando o adversário fica com 3 peças (aniquilação);
+ *  5. fim de jogo quando o adversário fica com 2 peças (aniquilação);
  *  6. bloqueio sem movimentos;
  *  7. captura fora de trilha é rejeitada.
  *
@@ -161,55 +161,33 @@ ok(r1.ok && r1.mesa.turn === 1, "J2 move 5→13 (sem captura) → turno J1");
 r1 = jogada(J1, MESA_B, { from: 0, to: 7, remove: 13 });
 ok(!r1.ok, "captura sem trilha fechada é rejeitada");
 
-console.log("\n— Fase 3: fim de jogo por aniquilação (3 peças) —");
-// Simplificar: manipular diretamente a mesa para um cenário de fim (estado válido
-// de movimentação com 6 peças vs 5 e captura reduzindo para 3 exigiria 6 moinhos).
-// Aqui provamos o mecanismo servidor: numa mesa já em 'moving', aplicar uma
-// captura que deixa o adversário com 3 peças → mesa finaliza.
-PSQL(`UPDATE public.mesas_trilha
-      SET phase = 'moving', board = ARRAY[1,1,1,0,0,2,2,0, 0,0,0,0,0,0,0,0, 2,2,2,0,0,0,0,0]::INTEGER[],
-          hand_p1 = 0, hand_p2 = 0, turn = 2, pending_capture = TRUE,
-          last_move_from = NULL, last_move_to = 2, seq_jogada = 0
-      WHERE mesa_id = '${MESA}';`);
-// J2 fecha trilha 16,17,18? Não: peças do J2 estão em 5,6 e 16,17,18 (trilha 16,17,18).
-// A trilha do J2 em 16,17,18: movimentação 16→16 não é jogada. Vamos montar o board
-// de forma que J2 esteja prestes a mover e formar trilha, capturando J1 abaixo de 3.
-// Board: J1 em 0,1,2 (trilha) = 3 peças; J2 em 5,6,16,17 = 4 peças. Fase moving.
-PSQL(`UPDATE public.mesas_trilha
-      SET phase = 'moving', board = ARRAY[1,1,1,0,0,2,2,0, 0,0,0,0,0,0,0,0, 2,2,0,0,0,0,0,0]::INTEGER[],
-          hand_p1 = 0, hand_p2 = 0, turn = 2, pending_capture = FALSE,
-          last_move_from = NULL, last_move_to = NULL, seq_jogada = 0
-      WHERE mesa_id = '${MESA}';`);
-ok(true, "mesa configurada em phase=moving p/ teste de fim");
-// J2 move 16 → 18 (fecha trilha 16,17,18 extra? não, precisa 16,17,18: 16→18 não).
-// 16,17,18 é trilha se J2 tiver 16,17,18. J2 tem 5,6,16,17. Move 5→? Vamos: J2 move 17→18? Fecha trilha 16,17,18? 17 ao lado de 18 sim (17,18,19). Não.
-// Verificar board: J2 tem 5,6,16,17. Trilha possível 16,17,18: precisa 18. 17 move para 18 (adjacente: 17-18 sim). Board pós: 5,6,16,18 → trilha 16,17,18 não. Trilha 18,19,20 precisa 19,20.
-// OK: J2 forma trilha 16,17,18 movendo 17→18? Precisa 16,18 +17. Sim! Board pós: 16,18 do J2 e precisa 17. Mas 17 foi origem. Não.
-// Simplificar: J2 tem 16,17 e move para 18? Origem 17 → 18: board 5,6,16,18. Não fecha.
-// Melhor: configurar board com J2 já com 16,17,18 e J1 com 1,2,3 (não trilha) e J1 em 5 (5 peças). J2 move uma peça para fechar? J2 já tem trilha; capturaria automaticamente e reduz J1 para 4 — não chega a 3.
-// Para chegar a 3: J1 precisa ter 4 peças e J2 captura 1. Board: J1=0,1,3,4 (4 peças), J2=16,17,18,20? J2 tem 4 peças (16,17,18 = trilha). J2 move 20→? fecha outra trilha e captura 1 → J1=3 → fim.
-PSQL(`UPDATE public.mesas_trilha
-      SET phase = 'moving',
-          board = ARRAY[1,1,0,1,1,0,0,0, 0,0,0,0,0,0,0,0, 2,2,2,0,2,0,0,0]::INTEGER[],
-          hand_p1 = 0, hand_p2 = 0, turn = 2, pending_capture = FALSE,
-          last_move_from = NULL, last_move_to = NULL, seq_jogada = 0
-      WHERE mesa_id = '${MESA}';`);
-// J2 move 20 → 21 (adjacente 20-21? sim) deixando 16,17,18 (trilha) e peças 20,21.
-// Board pós J1=0,1,3,4 (4), J2=16,17,18,21 (4). Sem moinho novo ao mover 20→21. Não captura.
-// Para capturar, J2 move para fechar trilha. Trilhas de J1: 0,1,2? J1=0,1 mas não 2. 0,1,2 não. 2,3,4? J1=3,4 mas não 2. 
-// Vamos dar a J1 trilha 0,1,2 (3 peças) + peça 3 (4 peças). J2 16,17,18 (trilha) + 20 (4 peças). J2 move 20→19? (20 adjacente 19,21) 19 faz 18,19,20? não (20 origin). Não fecha.
-// Basta configurar um cenário VÁLIDO por SQL com pending_capture verdadeiro sobre trilha de J2, e capturar a peça de J1 que o deixa com 3. Simples: board com J2 já em trilha pronta para capturar (pending_capture=TRUE, last_move já aplicado).
+console.log("\n— Fase 3: fim de jogo por aniquilação (2 peças) —");
+// J2 já fechou trilha (moinho 16,17,18) e está com captura pendente.
+// 3a) Capturar até J1 ficar com 3 peças: jogo CONTINUA (voo).
 PSQL(`UPDATE public.mesas_trilha
       SET phase = 'moving',
           board = ARRAY[1,1,1,1,0,0,0,0, 0,0,0,0,0,0,0,0, 2,2,2,0,0,0,0,0]::INTEGER[],
           hand_p1 = 0, hand_p2 = 0, turn = 2, pending_capture = TRUE,
           last_move_from = 22, last_move_to = 18, last_move_remove = NULL, seq_jogada = 0
       WHERE mesa_id = '${MESA}';`);
-// J1 tem 4 peças (0,1,2,3). J2 tem trilha 16,17,18. J2 captura 3 → J1 fica 3 → fim.
+// J1 tem 4 peças (0,1,2,3). J2 captura 3 → J1 fica com 3 peças → NÃO finaliza.
 let fin = jogada(J2, MESA, { from: 22, to: 18, remove: 3 });
-ok(fin.ok && fin.mesa.status === "finalizado", `mesa finaliza após J1 ficar com 3 peças (${fin.mesa.status})`);
+ok(fin.ok && fin.mesa.status === "em_andamento", `J1 com 3 peças: jogo continua (${fin.mesa.status})`);
+ok(fin.ok && fin.mesa.turn === 1, `J1 com 3 peças segue em voo (turno ${fin.mesa.turn})`);
+
+// 3b) J2 captura mais uma → J1 fica com 2 peças → fim.
+PSQL(`UPDATE public.mesas_trilha
+      SET phase = 'moving',
+          board = ARRAY[1,0,1,0,0,0,0,0, 0,0,0,0,0,0,0,0, 2,2,2,0,2,2,0,0]::INTEGER[],
+          hand_p1 = 0, hand_p2 = 0, turn = 2, pending_capture = TRUE,
+          last_move_from = 22, last_move_to = 18, last_move_remove = NULL, seq_jogada = 0
+      WHERE mesa_id = '${MESA}';`);
+// J1 tem 3 peças (0,2). J2 captura 2 → J1 fica com 2 → finaliza (annihilation).
+fin = jogada(J2, MESA, { from: 22, to: 18, remove: 2 });
+ok(fin.ok && fin.mesa.status === "finalizado", `mesa finaliza após J1 ficar com 2 peças (${fin.mesa.status})`);
 ok(fin.ok && fin.mesa.vencedor_id === J2, `vencedor é J2 (${fin.mesa.vencedor_id === J2})`);
 ok(fin.ok && fin.mesa.motivo_finalizacao === "annihilation", `motivo annihilation (${fin.mesa.motivo_finalizacao})`);
+
 
 console.log("\n— Fase 4: bloqueio (sem movimentos) —");
 // Nova mesa para teste de bloqueio. J1 move um último lance e o J2 (4+ peças)

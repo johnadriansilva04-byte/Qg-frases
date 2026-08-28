@@ -85,7 +85,7 @@ const MOVING_W: Weights = {
   mobility: 5,
 };
 
-/** Configurações de 2/3 peças alinhadas com casa vazia disponível. */
+/** Fim de jogo com 2 peças; voz com 3 peças. */
 import { MILLS } from "./board";
 
 function lineStats(state: GameState, player: Player) {
@@ -152,9 +152,11 @@ export function evaluate(state: GameState, me: Player): number {
 
   const myCount = countOnBoard(state.board, me) + state.hand[me];
   const foeCount = countOnBoard(state.board, foe) + state.hand[foe];
+  // O jogo termina quando alguém fica com 2 peças (ou bloqueado). Com 3 peças
+  // ainda há "voo", então não é vitória — terminais reais já caem em state.winner.
   if (state.phase === "moving") {
-    if (countOnBoard(state.board, foe) < 3) return WIN;
-    if (countOnBoard(state.board, me) < 3) return -WIN;
+    if (countOnBoard(state.board, foe) < 2) return WIN;
+    if (countOnBoard(state.board, me) < 2) return -WIN;
   }
 
   const w = state.phase === "placing" ? PLACING_W : MOVING_W;
