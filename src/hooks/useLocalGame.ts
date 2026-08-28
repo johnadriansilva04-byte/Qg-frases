@@ -170,7 +170,12 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
     setPendingMove(null);
   }, [human]);
 
-  const captureTargets = pendingMove ? removableTargets(state.board, opponent(state.turn)) : [];
+  const captureTargets = pendingMove ? (() => {
+    const boardWithMove = [...state.board];
+    if (pendingMove.from !== null) boardWithMove[pendingMove.from] = 0;
+    boardWithMove[pendingMove.to] = state.turn;
+    return removableTargets(boardWithMove, opponent(state.turn));
+  })() : [];
 
   return { state, log, lastMove, thinking, commit, restart, resign, aiInfo, pendingCapture: pendingMove !== null, captureTargets };
 }
