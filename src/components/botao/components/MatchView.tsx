@@ -1075,9 +1075,9 @@ export function MatchView({
         <div className="mt-4">
           <ControlledMonetagButton
             className="w-full text-xs"
-            message="Partida encerrada! Uma página de patrocinador pode abrir. Deseja continuar?"
+            message="Você será direcionado para uma nova aba. Deseja continuar?"
           >
-            Ver patrocinador
+            Cansou de jogar? Descubra algo novo.
           </ControlledMonetagButton>
         </div>
       )}

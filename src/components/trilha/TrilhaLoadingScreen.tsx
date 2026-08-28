@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Megaphone, Target, Trophy, Gamepad2 } from "lucide-react";
-import { MonetagAd } from "@/components/MonetagAd";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
 import { sponsorArmado } from "@/lib/sponsorGate";
 import {
@@ -150,8 +149,6 @@ export function TrilhaLoadingScreen({
               <p className="text-[11px] leading-snug text-amber-100">{avisoSponsor.mensagem}</p>
             </div>
           )}
-
-          <MonetagAd />
 
           {/* Adsterra Banner durante loading */}
           <div className="mt-4">

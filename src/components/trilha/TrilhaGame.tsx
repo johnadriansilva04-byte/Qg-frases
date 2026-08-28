@@ -7,6 +7,7 @@ import { TrilhaBoard } from "./TrilhaBoard";
 import { GameEndAdModal } from "./GameEndAdModal";
 import { TrilhaLoadingScreen } from "./TrilhaLoadingScreen";
 import { TrilhaRPGScreen } from "./TrilhaRPGScreen";
+import { MatchEndAdCard } from "@/components/MatchEndAdCard";
 import { AI_PROFILES, type Difficulty } from "@/lib/trilha/ai";
 import { useLocalGame } from "@/hooks/useLocalGame";
 import { useTrilhaPhases, type Phase } from "@/hooks/useTrilhaChampionship";
@@ -749,6 +750,9 @@ function TrilhaGameBoard({
         onWatchVideo={handleWatchVideo}
         onClose={handleCloseAdModal}
       />
+
+      {/* Card de anúncio no fim de partida (career mode) */}
+      {gameEnded && !showAdModal && !showVictoryScreen && <MatchEndAdCard />}
 
       {/* Tela de vitória ao completar fase */}
       {showVictoryScreen && phases.phaseJustCompleted && (

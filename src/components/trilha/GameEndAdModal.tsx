@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trophy, X, Play, Video, TrendingDown, Minus } from "lucide-react";
+import { Trophy, X, Play, TrendingDown, Minus } from "lucide-react";
 
 type GameResult = "victory" | "defeat" | "draw";
 
@@ -138,37 +138,6 @@ export function GameEndAdModal({ isOpen, result, baseScore, onWatchVideo, onClos
               Após assistir vídeo: <span className="font-bold text-foreground">{resultInfo.afterVideoScore} pontos</span> ({resultInfo.improvement})
             </p>
           )}
-        </div>
-
-        {/* Monetag Ad */}
-        <div className="mb-6 bg-surface/50 rounded-lg p-4 border border-border">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Video className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium text-muted-foreground">Anúncio</span>
-          </div>
-
-          {/* Monetag Ad Container */}
-          <div className="relative min-h-[200px] flex items-center justify-center bg-black/5 rounded-lg overflow-hidden">
-            <div
-              id="monetag-gameend-ad"
-              className="w-full h-full flex items-center justify-center"
-            >
-              {/* Container para anúncio Monetag */}
-              <ins
-                className="adsbygoogle"
-                style={{ display: "block" }}
-                data-ad-client="ca-pub-2783546143377409"
-                data-ad-slot="3577664762"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              />
-            </div>
-
-            {/* Placeholder visual enquanto o anúncio carrega */}
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-              Carregando anúncio...
-            </div>
-          </div>
         </div>
 
         {/* Botão de assistir vídeo */}

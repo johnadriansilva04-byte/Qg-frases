@@ -37,27 +37,6 @@ export function VictoryScreen({ phase, onNextPhase, onContinue }: VictoryScreenP
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
       <div className="max-w-lg w-full">
         <div className="bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-6 sm:p-8 shadow-2xl">
-          {/* Banner Monetag no topo */}
-          <div className="mb-6 bg-surface/30 rounded-lg p-3 border border-border/50">
-            <div className="text-center text-xs text-muted-foreground mb-2">
-              Publicidade
-            </div>
-            <div
-              id="monetag-victory-ad"
-              className="min-h-[90px] flex items-center justify-center"
-            >
-              {/* Container para anúncio Monetag */}
-              <ins
-                className="adsbygoogle"
-                style={{ display: "block" }}
-                data-ad-client="ca-pub-2783546143377409"
-                data-ad-slot="3577664762"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              />
-            </div>
-          </div>
-
           {/* Conteúdo de vitória */}
           <div className="text-center mb-6">
             <div className="flex justify-center mb-4">

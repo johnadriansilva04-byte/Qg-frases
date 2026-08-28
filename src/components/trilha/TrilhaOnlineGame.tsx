@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 import { TrilhaBoard } from "./TrilhaBoard";
 import { HQPanel } from "./HQPanel";
+import { MatchEndAdCard } from "@/components/MatchEndAdCard";
 import { legalDestinations, legalPlacements, canFly, millsFormedAt, removableTargets, opponent, type Player } from "@/lib/trilha/engine";
 
 interface TrilhaOnlineGameProps {
@@ -107,7 +108,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       )
       .subscribe((status) => {
         console.log('[TrilhaOnline] Status da subscrição:', status);
-        if (status === 'SUBSCRIPTION_ERROR') {
+        if (status === 'CHANNEL_ERROR') {
           console.error('[TrilhaOnline] Erro na subscrição realtime');
           setError('Erro na conexão em tempo real. Tentando reconectar...');
         }
@@ -477,6 +478,9 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
             </p>
           </div>
         )}
+
+        {/* Card de anúncio no fim de partida online */}
+        {mesa.status === 'finalizado' && <MatchEndAdCard />}
 
         <div className="flex gap-6 items-start flex-col lg:flex-row">
           <div className="flex flex-1 flex-col items-center w-full">
