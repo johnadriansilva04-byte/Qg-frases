@@ -1,5 +1,6 @@
 /* E2E — compra de clube (100%) no Mercado de Clubes + continuidade pós-aquisição. */
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const BASE = "http://127.0.0.1:3417";
 const EMAIL = process.env.E2E_EMAIL ?? "";
@@ -39,30 +40,10 @@ const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 page.on("pageerror", (e) => { falhas++; console.log("❌ pageerror:", String(e).slice(0, 160)); });
 
-// Login
+// Login (portão da Cidadela)
 await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2", timeout: 60000 });
-await clicarTexto(page, "button", "Aceitar");
-await esperarTexto(page, /Futebol/i, 30000);
-await clicarTexto(page, "button, a, [role=button]", "Futebol");
-await esperarTexto(page, /Meu Clube/i, 20000);
-await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-await sleep(1500);
-const body2 = await texto(page);
-if (/Não tenho conta|Entrar/i.test(body2) && !/editar/i.test(body2)) {
-  await page.evaluate((email, senha) => {
-    const set = (i, v) => {
-      const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      s.call(i, v);
-      i.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-    const i = [...document.querySelectorAll("input")].find((x) => (x.placeholder ?? "").includes("@"));
-    if (i) set(i, email);
-    const p = document.querySelector("input[type=password]");
-    if (p) set(p, senha);
-  }, EMAIL, SENHA);
-  await clicarTexto(page, "button", "Entrar");
-  await sleep(7000);
-}
+await loginPelaCidadela(page, EMAIL, SENHA);
+await sleep(1000);
 
 // Hub
 await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2" });

@@ -3,6 +3,7 @@
 // e joga os turnos com flicks no canvas. NÃO é teste — é sessão de jogo.
 // Uso: DISPLAY=:99 node testes/sala-online-bot.mjs  (log: /tmp/sala-online.log)
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
@@ -35,23 +36,11 @@ async function clicarTexto(re) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 1) Login (a conta E2E já tem sessão de login no fluxo "Meu Clube / Conta").
+// 1) Login pelo portão da Cidadela (o Futebol não tem login interno).
 log("abrindo", `${BASE}/cidadela`);
 await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 90_000 });
 await sleep(4000);
-await clicarTexto(/Futebol/i);
-await sleep(5000);
-if (await tem(/MEU CLUBE|AMISTOSO/i)) {
-  await clicarTexto(/Meu Clube/i);
-  await sleep(2500);
-  const campos = await page.$$("input");
-  if (campos.length >= 2) {
-    await campos[0].type(EMAIL, { delay: 10 });
-    await campos[1].type(PASSWORD, { delay: 10 });
-    await clicarTexto(/Entrar|Acessar|Login/i);
-    await sleep(6000);
-  }
-}
+await loginPelaCidadela(page, EMAIL, PASSWORD);
 log("login feito; indo para a mesa", MESA);
 
 // 2) Link direto da mesa (autenticado cai direto no fluxo dela).

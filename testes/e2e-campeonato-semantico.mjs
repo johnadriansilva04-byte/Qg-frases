@@ -14,6 +14,7 @@
  */
 import puppeteer from "puppeteer-core";
 import { readFileSync } from "node:fs";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const BASE = process.env.E2E_BASE ?? "http://127.0.0.1:3417";
 const EMAIL = "openhands.rookie.e2e@gmail.com";
@@ -78,47 +79,10 @@ await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true
 page.on("pageerror", (e) => console.log("⚠️ pageerror:", String(e).slice(0, 200)));
 
 try {
-  // 1. Login pela UI
+  // 1. Login pela UI — portão da CIDADELA (o Futebol não tem login interno)
   await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 60000 });
-  await clicarTexto(page, "button", "Aceitar");
-  await esperarTexto(page, /Futebol|Estádio/i, 30);
-  await clicarTexto(page, "button, a, [role=button]", "Futebol");
-  await esperarTexto(page, /Amistoso|Meu Clube|Carreira/i, 30);
-  if (!(/Amistoso/i.test(await esperarTexto(page, /./, 1)))) {
-    await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-  }
-  // card Meu Clube / Conta (mapear login)
-  await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-  await sleep(1200);
-  const setCampo = async (ph, v) => {
-    await page.evaluate(
-      (p, val) => {
-        const inp = [...document.querySelectorAll("input")].find((i) =>
-          (i.placeholder ?? "").toLowerCase().includes(p.toLowerCase()),
-        );
-        if (inp) {
-          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-          setter.call(inp, val);
-          inp.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-      },
-      ph,
-      v,
-    );
-  };
-  await setCampo("seu@email.com", EMAIL);
-  await page.evaluate((v) => {
-    const inp = document.querySelector("input[type=password]");
-    if (inp) {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      setter.call(inp, v);
-      inp.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  }, SENHA);
-  await sleep(400);
-  await clicarTexto(page, "button", "Entrar");
-  await esperarTexto(page, /Rookie|Voltar|menu/i, 40);
-  ok(await clicarTexto(page, "button", "Voltar"), "login pela UI (Rookie FC)");
+  await loginPelaCidadela(page, EMAIL, SENHA);
+  ok(await clicarTexto(page, "button, a, [role=button]", "Futebol"), "login pela UI (Rookie FC)");
 
   // 2. Campeonato: re-usa ativo ou cria com bots (via supabase do browser)
   const camp = await page.evaluate(

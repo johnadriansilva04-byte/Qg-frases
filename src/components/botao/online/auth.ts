@@ -217,3 +217,58 @@ export async function sair() {
   await supabase.auth.signOut();
   limparCache();
 }
+
+/* ==================== Time local (sem login) ====================
+ * O Futebol roda sem conta: o "Meu Time" (nome, sigla, cores, tática e
+ * nomes dos botões) vive neste armazenamento local do navegador. Quando o
+ * jogador está autenticado (via Cidadela), o perfil do Supabase é a fonte
+ * verdade; sem sessão, usamos este cache.
+ */
+export type TimeLocal = {
+  nome: string;
+  abreviacao: string;
+  numero: number;
+  cores: string[];
+  tatica: string | null;
+  botoesNomes: string[] | null;
+};
+
+const TIME_LOCAL_KEY = "qgfrases_time_local_v1";
+
+export function carregarTimeLocal(): TimeLocal | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const bruto = window.localStorage.getItem(TIME_LOCAL_KEY);
+    if (!bruto) return null;
+    const t = JSON.parse(bruto) as Partial<TimeLocal>;
+    if (!t || typeof t.nome !== "string") return null;
+    return {
+      nome: t.nome,
+      abreviacao: typeof t.abreviacao === "string" ? t.abreviacao : "MTI",
+      numero: typeof t.numero === "number" ? t.numero : 10,
+      cores: Array.isArray(t.cores) && t.cores.length === 3 ? t.cores : CORES_PADRAO,
+      tatica: typeof t.tatica === "string" ? t.tatica : null,
+      botoesNomes: Array.isArray(t.botoesNomes) ? t.botoesNomes : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function salvarTimeLocal(t: TimeLocal) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(TIME_LOCAL_KEY, JSON.stringify(t));
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+export function limparTimeLocal() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(TIME_LOCAL_KEY);
+  } catch {
+    /* storage indisponível */
+  }
+}

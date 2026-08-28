@@ -42,10 +42,15 @@ check("resume expira em 2h e valida faixas",
   matchView.includes("2 * 3600_000") && matchView.includes("r.turnsLeft <= turns"));
 
 // --- Splash único no F5 ---
+// O overlay de auth (carregando) foi REMOVIDO de propósito (comentário no
+// código marca a decisão); o splash cobre só a fase de loading + a ponte
+// precisaHidratar evita remontagem. Nunca dois overlays concorrentes.
 check("ponte auth→hidratação evita remontar o splash",
   botaoGame.includes("precisaHidratar") && botaoGame.includes("hidratacaoIniciada"));
-check("overlay cobre as três fases",
-  botaoGame.includes("(carregando || loading || precisaHidratar)"));
+check("overlay único no F5 (auth REMOVIDO; loading + ponte de hidratação)",
+  botaoGame.includes("precisaHidratar") &&
+    botaoGame.includes("{loading && (\n        <LoadingScreen") &&
+    !botaoGame.includes("(carregando || loading || precisaHidratar)"));
 
 // --- Propriedade visível para a Cidadela ---
 check("botao_times ganha dono_user_id (sem tabela paralela de clubes)",

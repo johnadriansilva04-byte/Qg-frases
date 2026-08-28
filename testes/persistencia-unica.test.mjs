@@ -290,10 +290,29 @@ expect(
   "README: identidade do clube E2E documentada",
 );
 
-// 22. Exclusão total também na tela de conta (não só na api).
+// 22. §Login fora do Futebol: ProfileSetup virou "Meu Time" (só edição).
+// Sem tela de login/sair/excluir conta — quem quer conta vai à Cidadela.
 expect(
-  profileSetup.includes("excluirContaUsuario"),
-  "ProfileSetup: excluir conta usa a RPC de exclusão total",
+  !profileSetup.includes("excluirContaUsuario") &&
+    !profileSetup.includes("excluirConta") &&
+    !profileSetup.includes("signOut") &&
+    !profileSetup.includes("supabase.auth"),
+  "ProfileSetup: login/sair/excluir conta NÃO moram mais no Futebol (Cidadela)",
+);
+expect(
+  profileSetup.includes("Meu Time") &&
+    profileSetup.includes("salvarTimeLocal") &&
+    profileSetup.includes("onSalvarTimeLocal"),
+  "ProfileSetup: 'Meu Time' local (sem login) salvo no navegador",
+);
+
+// 22b. A Cidadela é quem pede login (auto-login/detecta sessão + prompt).
+const cidadelaRoute = ler("src/routes/cidadela.tsx");
+expect(
+  cidadelaRoute.includes("AuthScreen") &&
+    cidadelaRoute.includes("continuarComoVisitante") &&
+    cidadelaRoute.includes("Continuar como visitante"),
+  "Cidadela: login pedido no hub (AuthScreen) com opção de visitante",
 );
 
 // 23. §3-§5: Banco no celular com Perfil Pessoal × Perfil do Clube + extrato

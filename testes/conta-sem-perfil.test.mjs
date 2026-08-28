@@ -81,7 +81,14 @@ check("EconomiaScreen: IOF 10% na retirada", economia.includes("IOF 10%") || eco
 check("BolsaResumoCard: investido rotulado como valor de mercado", bolsaCard.includes("não é saldo"));
 
 // ─── 7. BotaoGame: recusa direciona ao cadastro ─────────────────────────
-check("BotaoGame: reage à recusa com orientação + tela de cadastro", botaoGame.includes("não possui cadastro no jogo") && botaoGame.includes('setScreen("profile");\n  }, [contaSemCadastro]'));
+// O Futebol roda sem login: a recusa de conta não leva mais ao módulo de
+// cadastro interno — o jogador segue local e o cadastro mora na Cidadela.
+check(
+  "BotaoGame: reage à recusa com orientação (login/cadastro NÃO no Futebol)",
+  botaoGame.includes("não possui cadastro") &&
+    botaoGame.includes("Cidadela dos Clássicos para criar") &&
+    !botaoGame.includes('setScreen("profile");\n  }, [contaSemCadastro]'),
+);
 
 console.log(`== ${ok} OK / ${bad} falhas ==`);
 process.exit(bad === 0 ? 0 : 1);

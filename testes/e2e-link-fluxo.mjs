@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 const BASE = "http://127.0.0.1:3417";
 const SUPA = "https://hkzhksauilonqppipjyc.supabase.co";
 const KEY = "sb_publishable_qT04tnP1_XEbAZ5EHw02FQ_CFDtX_LM";
@@ -39,41 +40,13 @@ const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
 });
 
-/** Login via UI: Cidadela → Futebol → Meu Clube / Conta → Entrar. */
+/** Login via UI: portão da Cidadela → hub → Futebol. */
 async function loginPelaUI(page, email, senha) {
   await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 60000 });
-  await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => /Aceitar/i.test(x.innerText ?? ""));
-    b?.click();
-  });
-  // Espera o hub terminar o loading (cards só existem depois).
-  await page
-    .waitForFunction(() => /Estádio do Campus/.test(document.body.innerText), { timeout: 30000 })
-    .catch(() => {});
+  await loginPelaCidadela(page, email, senha);
   await sleep(500);
   await page.evaluate(() => {
     const b = [...document.querySelectorAll("button,a")].find((x) => /Futebol/i.test(x.innerText ?? ""));
-    b?.click();
-  });
-  await sleep(4500);
-  await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button,a")].find((x) => /Meu Clube/i.test(x.innerText ?? ""));
-    b?.click();
-  });
-  await sleep(1800);
-  await page.evaluate((email, senha) => {
-    const set = (i, v) => {
-      const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      s.call(i, v);
-      i.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-    const e = [...document.querySelectorAll("input")].find((x) => (x.placeholder ?? "").includes("@"));
-    if (e) set(e, email);
-    const p = document.querySelector("input[type=password]");
-    if (p) set(p, senha);
-  }, email, senha);
-  await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => /^Entrar$/i.test(x.innerText?.trim() ?? ""));
     b?.click();
   });
   await sleep(4500);

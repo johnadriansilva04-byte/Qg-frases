@@ -54,11 +54,17 @@ import { MatchEndScreen, type MatchEndData } from "./components/MatchEndScreen";
 import { EntrevistaColetiva } from "./components/EntrevistaColetiva";
 import { TeamPicker, TeamBadge } from "./components/TeamPicker";
 // Tela de auth separada REMOVIDA: login mora só em módulos (celular do
-// OnboardingTour, CelularConversas) e no hub ("Meu Clube / Conta").
+// OnboardingTour, CelularConversas) e no hub ("Meu Time").
 import { OnlineMatchV3 } from "./components/OnlineMatchV3";
 import { OnlineChampionship } from "./components/OnlineChampionship";
 import { useBotaoAuth } from "./online/useBotaoAuth";
-import type { Perfil } from "./online/auth";
+import {
+  carregarTimeLocal,
+  limparTimeLocal,
+  salvarTimeLocal,
+  type Perfil,
+  type TimeLocal,
+} from "./online/auth";
 import { CoachSetup } from "./career/CoachSetup";
 import { ProfileSetup } from "./career/ProfileSetup";
 import { ChoiceModal } from "./career/ChoiceModal";
@@ -300,13 +306,16 @@ function bonusCampeao(dificuldade: Difficulty): number {
 }
 
 export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: BotaoGameProps = {}) {
-  const { perfil, carregando, logout, aplicarPerfil, recarregar, contaSemCadastro } = useBotaoAuth();
+  const { perfil, aplicarPerfil, recarregar, contaSemCadastro } = useBotaoAuth();
   // Link direto (?mesa= / ?camp=): a tela inicial já é o fluxo da sala —
   // o convidado nunca precisa procurar a mesa/campeonato.
   const [screen, setScreen] = useState<Screen>(
     mesaConviteInicial ? "online" : campCodigoInicial ? "online-championship" : "menu",
   );
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
+  // "Meu time sem login": persiste o time local do navegador quando o jogador
+  // não tem sessão (a Cidadela é quem pede conta — o Futebol roda sem login).
+  const [timeLocal, setTimeLocal] = useState<TimeLocal | null>(() => carregarTimeLocal());
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
   const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
@@ -493,16 +502,26 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
 
   // A tela atual fica apenas em memória; nunca restaura estado de outra sessão.
 
-  // Time personalizado vem exclusivamente do perfil autenticado no Supabase.
+  // Time personalizado: com sessão (via Cidadela) vem do perfil do Supabase;
+// sem login, do time local do navegador ("meu time sem login").
   const customTeamData = useMemo(() => {
+    if (!perfil) {
+      return {
+        nome: timeLocal?.nome ?? "Meu Time",
+        short: timeLocal?.abreviacao ?? "MTI",
+        primary: timeLocal?.cores?.[0] ?? "#FF0000",
+        secondary: timeLocal?.cores?.[1] ?? "#00FF00",
+        botoesNomes: timeLocal?.botoesNomes ?? undefined,
+      };
+    }
     return {
-      nome: perfil?.time_personalizado ?? "Meu Time",
-      short: perfil?.abreviacao_time ?? "MTI",
-      primary: perfil?.cores?.[0] ?? "#FF0000",
-      secondary: perfil?.cores?.[1] ?? "#00FF00",
-      botoesNomes: perfil?.botoes_nomes ?? undefined,
+      nome: perfil.time_personalizado ?? "Meu Time",
+      short: perfil.abreviacao_time ?? "MTI",
+      primary: perfil.cores?.[0] ?? "#FF0000",
+      secondary: perfil.cores?.[1] ?? "#00FF00",
+      botoesNomes: perfil.botoes_nomes ?? undefined,
     };
-  }, [perfil]);
+  }, [perfil, timeLocal]);
 
   // Nota: O time personalizado é carregado automaticamente via customTeamData useMemo
   // que depende dos dados do perfil Supabase
@@ -551,10 +570,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
     );
   }, [perfil?.user_id]);
 
-  // Formação PS2 escolhida pelo usuário no perfil (tática + posições dos botões).
+  // Formação PS2 escolhida pelo usuário (tática + posições dos botões). Sem
+  // sessão, usa a tática do time local.
+  const taticaAtiva = perfil?.tatica ?? timeLocal?.tatica ?? undefined;
   const formation = useMemo<Array<[number, number]>>(() => {
-    return formacaoById(perfil?.tatica ?? undefined).posicoes;
-  }, [perfil?.tatica]);
+    return formacaoById(taticaAtiva).posicoes;
+  }, [taticaAtiva]);
 
   const [rivalTeam, setRivalTeam] = useState("fla");
   const [difficulty, setDifficulty] = useState<Difficulty>("amador");
@@ -581,11 +602,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   }, [toast]);
 
   // Sessão Auth válida sem conta de jogo (perfil removido): o hook recusou a
-  // entrada e encerrou a sessão — aqui só explicamos e mandamos ao cadastro.
+  // entrada e encerrou a sessão. O Futebol roda sem login — o jogador segue
+  // no modo local (login/recadastro moram na Cidadela dos Clássicos).
   useEffect(() => {
     if (!contaSemCadastro) return;
-    setToast("Esta conta não possui cadastro no jogo. Crie sua conta para entrar na Cidadela.");
-    setScreen("profile");
+    setToast("Sua conta não possui cadastro no jogo. Entre na Cidadela dos Clássicos para criar.");
   }, [contaSemCadastro]);
 
   // ===== Restauração de estado após refresh (§20/§22 + F5 sem reset) =====
@@ -1016,25 +1037,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
   // valor pessoal. Sem carreira, o remoto é o único saldo existente.
   const saldoSov = career?.coach.sov ?? saldoSovRemoto ?? null;
 
-  const handleLogout = async () => {
-    if (emPartidaOnline) {
-      setToast("Não dá pra sair da conta durante uma partida online.");
-      return;
-    }
-    await logout();
-    zerarEstadoDaConta();
-    setScreen("menu");
-    setToast("Você saiu da conta.");
-  };
-
   const aoLogar = async (p?: Perfil) => {
-    console.log("[BotaoGame] aoLogar chamado:", { perfil: p });
-    // Sem perfil = logout ou exclusão de conta → volta ao hub (login é o
-    // módulo "Meu Clube / Conta", junto de Amistoso e Modo Carreira).
+    // Sair da conta não acontece mais dentro do Futebol — login/logout são da
+    // Cidadela dos Clássicos. Aqui o perfil chega pronto ou o jogo roda local.
     if (!p) {
       zerarEstadoDaConta();
       setScreen("menu");
-      setToast("Você saiu da conta.");
       return;
     }
     aplicarPerfil(p);
@@ -3943,10 +3951,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
               <Globe className="mx-auto mb-4 h-12 w-12 text-primary" />
               <h2 className="font-display text-2xl">Amistoso Online</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Faça login para desafiar outros jogadores em tempo real.
+                O modo online precisa de conta. Entre na Cidadela dos Clássicos para
+                desafiar outros jogadores em tempo real.
               </p>
-              <button onClick={() => setScreen("profile")} className="btn-primary mt-4">
-                Entrar / Cadastrar
+              <button onClick={() => setScreen("menu")} className="btn-primary mt-4">
+                Voltar
               </button>
             </div>
           ) : (
@@ -3975,10 +3984,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
               <Trophy className="mx-auto mb-4 h-12 w-12 text-primary" />
               <h2 className="font-display text-2xl">Campeonato Online</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Faça login para participar de campeonatos contra outros jogadores.
+                O modo online precisa de conta. Entre na Cidadela dos Clássicos para
+                participar de campeonatos contra outros jogadores.
               </p>
-              <button onClick={() => setScreen("profile")} className="btn-primary mt-4">
-                Entrar / Cadastrar
+              <button onClick={() => setScreen("menu")} className="btn-primary mt-4">
+                Voltar
               </button>
             </div>
           ) : (
@@ -4004,6 +4014,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
           />
           <ProfileSetup
             perfil={perfil}
+            timeLocal={timeLocal}
+            onSalvarTimeLocal={(t) => setTimeLocal(t)}
             onPronto={aoLogar}
             onBack={() => setScreen("menu")}
             evolucao={{
@@ -4217,7 +4229,6 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
         <CelularFixo
           userId={perfil?.user_id ?? null}
           nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
-          onLogin={aoLogar}
           conversas={career?.conversas ?? []}
           desafioPatrocinador={career?.desafioPatrocinador ?? null}
           feed={career?.feedCidadela ?? []}
@@ -4446,7 +4457,6 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       <CelularFixo
         userId={perfil?.user_id ?? null}
         nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
-        onLogin={aoLogar}
         conversas={career?.conversas ?? []}
         desafioPatrocinador={career?.desafioPatrocinador ?? null}
         feed={career?.feedCidadela ?? []}
@@ -4563,8 +4573,8 @@ function Menu({
       <div className="grid gap-4 sm:grid-cols-2">
         <MenuCard
           icon={<UserCircle className="size-5" />}
-          title="Meu Clube / Conta"
-          desc="Login, identidade do clube, tática e evolução dos botões. Acesso à conta."
+          title="Meu Time"
+          desc="Identidade do clube, tática e evolução dos botões — sem precisar de login."
           onClick={onProfile}
           accent="sky"
           dataTour="perfil"

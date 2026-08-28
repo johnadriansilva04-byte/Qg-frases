@@ -13,6 +13,7 @@
  *   E2E_EMAIL=... E2E_PASSWORD=... node testes/e2e-offline-temporadas.mjs
  */
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const BASE = "http://127.0.0.1:3417";
 const EMAIL = process.env.E2E_EMAIL ?? "";
@@ -60,31 +61,8 @@ const MANUTENCAO = { "serie-a": 120, "serie-b": 80, "serie-c": 50 };
 
 async function entrar(page) {
   await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2", timeout: 60000 });
-  await clicarTexto(page, "button", "Aceitar");
-  let body = await esperarTexto(page, /Futebol|Amistoso|Carreira no Campus/i, 30000);
-  if (!/Carreira no Campus|Amistoso/i.test(body)) {
-    await clicarTexto(page, "button, a, [role=button]", "Futebol");
-    body = await esperarTexto(page, /Amistoso|Carreira no Campus/i, 30000);
-  }
-  // Login (conta oficial já existe — ProfileSetup abre em modo login/editar)
-  await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-  await sleep(1500);
-  const body2 = await texto(page);
-  if (/Não tenho conta|Entrar/i.test(body2) && !/editar/i.test(body2)) {
-    await page.evaluate((email, senha) => {
-      const set = (i, v) => {
-        const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-        s.call(i, v);
-        i.dispatchEvent(new Event("input", { bubbles: true }));
-      };
-      const i = [...document.querySelectorAll("input")].find((x) => (x.placeholder ?? "").includes("@"));
-      if (i) set(i, email);
-      const p = document.querySelector("input[type=password]");
-      if (p) set(p, senha);
-    }, EMAIL, SENHA);
-    await clicarTexto(page, "button", "Entrar");
-    await esperarTexto(page, /Rookie|editar|Meu Time|Jogador/i, 20000);
-  }
+  // Portão de conta da Cidadela (login no hub, não no Futebol).
+  await loginPelaCidadela(page, EMAIL, SENHA);
   // Portão de profissão da Cidadela (conta nova)
   const bodyPort = await texto(page);
   if (/Quem é você na Cidadela/i.test(bodyPort)) {
@@ -94,7 +72,7 @@ async function entrar(page) {
   await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2" });
   await sleep(2500);
   let corpo = await texto(page);
-  if (!/Meu Clube|Carreira no Campus|Amistoso/i.test(corpo)) {
+  if (!/Carreira no Campus|Amistoso/i.test(corpo)) {
     await clicarTexto(page, "button, a, [role=button]", "Futebol");
     await esperarTexto(page, /Carreira no Campus|Amistoso/i, 15000);
   }

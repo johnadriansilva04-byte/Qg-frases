@@ -54,3 +54,53 @@ export async function esperarTexto(page, regex, tent = 25, ms = 400) {
   }
   return page.evaluate(() => document.body?.innerText ?? "");
 }
+
+/** Preenche email/senha na página (AuthScreen) e clica no Entrar. */
+export async function preencherLogin(page, email, senha) {
+  await page.evaluate(
+    (em, pw) => {
+      const set = (inp, v) => {
+        const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        s.call(inp, v);
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      const e = [...document.querySelectorAll("input")].find((i) =>
+        (i.placeholder ?? "").includes("@"),
+      );
+      const p = document.querySelector("input[type=password]");
+      if (e) set(e, em);
+      if (p) set(p, pw);
+    },
+    email,
+    senha,
+  );
+  await sleep(300);
+  await clicarTexto(page, "button", "Entrar");
+}
+
+/**
+ * Login pela UI NA CIDADELA — o portão de conta. O Futebol não tem mais login
+ * interno: sem sessão, a Cidadela abre o AuthScreen no hub.
+ */
+export async function loginPelaCidadela(page, email, senha) {
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find((x) => /Aceitar/i.test(x.innerText ?? ""));
+    b?.click();
+  });
+  await page.waitForFunction(
+    () => /Entrar|Criar conta|Estádio do Campus/.test(document.body.innerText),
+    { timeout: 30000 },
+  ).catch(() => {});
+  const t0 = await page.evaluate(() => document.body.innerText);
+  if (/Entrar|Criar conta/i.test(t0) && !/Bem-vindo de volta/i.test(t0)) {
+    // Portão de login da Cidadela visível → loga pela conta existente.
+    // (O botão "Não tenho conta" fica SEMPRE visível no modo login — ele
+    // alterna para o CADASTRO; não clicamos nele aqui. Contas novas têm
+    // fluxo próprio no e2e-carreira, que usa "Criar conta".)
+    await preencherLogin(page, email, senha);
+    await sleep(4000);
+  }
+  // Com sessão, a Cidadela mostra o hub com o card Futebol/Estádio.
+  await page.waitForFunction(() => /Estádio do Campus/.test(document.body.innerText), { timeout: 40000 }).catch(() => {});
+  await sleep(500);
+}

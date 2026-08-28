@@ -98,34 +98,9 @@ try {
   });
   ok(webglOk, "WebGL disponível no navegador de teste");
 
-  // 1. Cidadela → Futebol SEM carregamento duplo
-  await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 45000 });
-  await clicarTexto(page, "button", "Aceitar"); // banner de cookies
-  let body = await esperarTexto(page, /Futebol/i);
-  ok(/Futebol/i.test(body), "hub da Cidadela carregou");
-
-  // Clique no Futebol: NUNCA pode aparecer a tela "Abrindo o Estádio..."
-  const clicou = await clicarTexto(page, "button, a, [role=button]", "Futebol");
-  ok(clicou, "card Futebol clicado");
-  let viuLoadingAntigo = false;
-  const inicio = Date.now();
-  let menuVisivel = false;
-  while (Date.now() - inicio < 8000) {
-    const t = await texto(page);
-    if (/Abrindo o Estádio do Campus/i.test(t)) viuLoadingAntigo = true;
-    if (/Amistoso|Carreira no Campus|Meu Clube/i.test(t)) {
-      menuVisivel = true;
-      break;
-    }
-    await sleep(150);
-  }
-  ok(!viuLoadingAntigo, "sem loading duplicado ('Abrindo o Estádio' nunca apareceu)");
-  ok(menuVisivel, "tela principal do Futebol abriu DIRETO");
-  await page.screenshot({ path: SHOT(1) });
-
-  // 2. Login com a conta oficial
-  ok(await clicarTexto(page, "button, a, [role=button]", "Meu Clube"), "card 'Meu Clube / Conta' abriu");
-  await sleep(1200);
+  // 1. Cidadela → pede login (sem sessão) → loga na Cidadela → Futebol.
+  // O LOGIN VIVE NA CIDADELA: sem sessão o hub abre o AuthScreen; com sessão,
+  // entra direto. O Futebol NÃO tem mais login interno.
   const preencher = async (placeholder, valor) => {
     await page.evaluate(
       (ph, v) => {
@@ -142,21 +117,45 @@ try {
       valor,
     );
   };
-  await preencher("seu@email.com", EMAIL);
-  await page.evaluate((v) => {
-    const inp = document.querySelector("input[type=password]");
-    if (inp) {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      setter.call(inp, v);
-      inp.dispatchEvent(new Event("input", { bubbles: true }));
+  await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 45000 });
+  await clicarTexto(page, "button", "Aceitar"); // banner de cookies
+  // Portão de login da Cidadela: pede conta quando não há sessão.
+  let body = await esperarTexto(page, /Entrar|Criar conta|Futebol/i);
+  if (/Entrar|Criar conta/i.test(body) && !/Bem-vindo de volta/i.test(body)) {
+    await preencher("seu@email.com", EMAIL);
+    await page.evaluate((v) => {
+      const inp = document.querySelector("input[type=password]");
+      if (inp) {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        setter.call(inp, v);
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }, SENHA);
+    await sleep(300);
+    await page.screenshot({ path: SHOT(1) });
+    ok(await clicarTexto(page, "button", /^Entrar$/), "login na Cidadela clicado");
+    body = await esperarTexto(page, /Futebol/i, 40000);
+  }
+  ok(/Futebol/i.test(body), "hub da Cidadela carregou (login ok)");
+
+  // Clique no Futebol: NUNCA pode aparecer a tela "Abrindo o Estádio..."
+  const clicou = await clicarTexto(page, "button, a, [role=button]", "Futebol");
+  ok(clicou, "card Futebol clicado");
+  let viuLoadingAntigo = false;
+  const inicio = Date.now();
+  let menuVisivel = false;
+  while (Date.now() - inicio < 8000) {
+    const t = await texto(page);
+    if (/Abrindo o Estádio do Campus/i.test(t)) viuLoadingAntigo = true;
+    if (/Amistoso|Carreira no Campus|Meu Time/i.test(t)) {
+      menuVisivel = true;
+      break;
     }
-  }, SENHA);
-  await sleep(300);
+    await sleep(150);
+  }
+  ok(!viuLoadingAntigo, "sem loading duplicado ('Abrindo o Estádio' nunca apareceu)");
+  ok(menuVisivel, "tela principal do Futebol abriu DIRETO");
   await page.screenshot({ path: SHOT(2) });
-  ok(await clicarTexto(page, "button", "Entrar"), "submit login clicado");
-  body = await esperarTexto(page, /MEU CLUBE|AMISTOSO/i, 40000);
-  ok(/MEU CLUBE|AMISTOSO/i.test(body), "login ok — menu principal do jogo");
-  await page.screenshot({ path: SHOT(3) });
 
   // 3. Carreira → hub (atravessa telas intermediárias se houver)
   let noHub = false;

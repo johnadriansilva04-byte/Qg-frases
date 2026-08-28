@@ -5,6 +5,7 @@
  * Uso: E2E_EMAIL=... E2E_PASSWORD=... node testes/e2e-vitrine-clube.mjs
  */
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const BASE = process.env.E2E_BASE ?? "http://127.0.0.1:3417";
 const EMAIL = process.env.E2E_EMAIL ?? "";
@@ -48,24 +49,11 @@ page.on("pageerror", (e) => console.log("⚠️ pageerror:", String(e).slice(0, 
 
 try {
   await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 60000 });
-  await clicarTexto(page, "button", "Aceitar");
+  await loginPelaCidadela(page, EMAIL, SENHA);
   await sleep(400);
   await clicarTexto(page, "button, a, [role=button]", "Futebol");
-  await esperarTexto(page, /Amistoso/i, 15000);
-  await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-  await sleep(1200);
-  await page.evaluate((em, pw) => {
-    const set = (inp, v) => {
-      const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      s.call(inp, v); inp.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-    const e = [...document.querySelectorAll("input")].find((i) => (i.placeholder ?? "").includes("email"));
-    const p = document.querySelector("input[type=password]");
-    if (e) set(e, em); if (p) set(p, pw);
-  }, EMAIL, SENHA);
-  await sleep(300);
-  await clicarTexto(page, "button", "Entrar");
-  await esperarTexto(page, /MEU CLUBE|AMISTOSO/i, 40000);
+  await esperarTexto(page, /AMISTOSO|MEU TIME/i, 40000);
+  await sleep(2000);
 
   const auth = await page.evaluate(() => {
     for (const k of Object.keys(localStorage)) {

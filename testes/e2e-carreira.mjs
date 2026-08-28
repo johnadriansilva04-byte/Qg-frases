@@ -72,24 +72,17 @@ await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true
 page.on("pageerror", (e) => console.log("⚠️ pageerror:", String(e).slice(0, 160)));
 
 try {
-  // 1. Entrar no jogo (Cidadela → Futebol · Estádio do Campus)
+  // 1. Entrar no jogo (Cidadela · o portão de conta)
+  // Conta NOVA: o portão da Cidadela mostra o AuthScreen. Alterna para
+  // cadastro, cria a conta e o hub abre. Depois segue para o Futebol.
   await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 45000 });
   await clicarTexto(page, "button", "Aceitar"); // banner de cookies
-  let body = await esperarTexto(page, /Futebol|Amistoso|Carreira no Campus/i);
-  if (!/Carreira no Campus|Amistoso/i.test(body)) {
-    // a rota pode ter restaurado direto o jogo ativo (sessionStorage)
-    ok(await clicarTexto(page, "button, a, [role=button]", "Futebol"), "card Futebol (Estádio) encontrado");
-    body = await esperarTexto(page, /Amistoso|Carreira no Campus/i);
+  let body = await esperarTexto(page, /Entrar|Criar conta|Futebol/i, 20000);
+  if (/Entrar|Criar conta/i.test(body) && !/Bem-vindo de volta/i.test(body)) {
+    ok(await clicarTexto(page, "button", "Não tenho conta"), "alternou para cadastro");
+    await sleep(800);
   }
   await page.screenshot({ path: SHOT(1) });
-  ok(/carreira|amistoso|menu/i.test(body), "hub do futebol carregou no celular");
-
-  // 2. Meu Clube / Conta → criar conta nova
-  ok(await clicarTexto(page, "button, a, [role=button]", "Meu Clube"), "card 'Meu Clube / Conta' encontrado");
-  await sleep(1500);
-  await page.screenshot({ path: SHOT(2) });
-  ok(await clicarTexto(page, "button", "Não tenho conta"), "alternou para cadastro");
-  await sleep(800);
 
   const preencher = async (placeholder, valor) => {
     await page.evaluate(
@@ -135,10 +128,10 @@ try {
     set("Sigla", "RFC");
   });
   await sleep(300);
-  await page.screenshot({ path: SHOT(3) });
+  await page.screenshot({ path: SHOT(2) });
   ok(await clicarTexto(page, "button", "Criar conta"), "submit cadastro clicado");
   await sleep(6000);
-  await page.screenshot({ path: SHOT(4) });
+  await page.screenshot({ path: SHOT(3) });
   body = await texto(page);
   ok(!/erro|rate limit|incorretos/i.test(body) || /Rookie/i.test(body), "conta criada sem erro");
 
@@ -147,8 +140,7 @@ try {
     ok(await clicarTexto(page, "button, [role=button], div", "Técnico de Futebol"), "profissão: Técnico de Futebol escolhida");
     await sleep(2500);
   }
-  // De volta ao Estádio (Futebol) — a rota lembra o jogo ativo: se já estiver
-  // dentro do BotaoGame, o card "Futebol" não existe (e está tudo certo).
+  // De volta ao Estádio (Futebol) — o portão fechou com a conta criada.
   await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2" });
   await sleep(3000);
   body = await texto(page);
@@ -212,10 +204,10 @@ try {
     await sleep(5000);
   }
 
-  // 4. Meu Clube / Conta → evolução de botões
+  // 4. Meu Time (era "Meu Clube / Conta") → evolução de botões
   await clicarTexto(page, "button, a", "Voltar ao Estádio");
-  await esperarTexto(page, /Meu Clube/i, 15000);
-  ok(await clicarTexto(page, "button, a, [role=button]", "Meu Clube"), "volta ao Meu Clube / Conta");
+  await esperarTexto(page, /Meu Time/i, 15000);
+  ok(await clicarTexto(page, "button, a, [role=button]", "Meu Time"), "volta ao Meu Time");
   await sleep(2000);
   const painel = await page.$("[data-testid='painel-evolucao-botoes']");
   ok(!!painel, "painel de evolução de botões presente (sistema antigo substituído)");

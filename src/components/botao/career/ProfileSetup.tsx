@@ -1,32 +1,18 @@
 import { useState } from "react";
-import { ChevronLeft, LogIn, UserPlus, Trash2, Save, Shirt, Users, Sparkles, Coins } from "lucide-react";
-import {
-  cadastrar,
-  cachePerfil,
-  CORES_PADRAO,
-  entrar,
-  limparCache,
-  type Perfil,
-} from "../online/auth";
-import { atualizarPerfilClube, excluirContaUsuario } from "@/lib/botao/api";
-import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
-import {
-  FORMACAO_DEFAULT,
-  FORMACOES,
-  formacaoById,
-  type Tatica,
-} from "./formacoes";
-import {
-  custoProximoNivel,
-  estrelasNivel,
-  MAX_NIVEL_BOTAO,
-  podeEvoluir,
-  type NiveisBotoes,
-} from "./evolucaoBotoes";
+import { ChevronLeft, Save, Shirt, Users, Sparkles, Coins } from "lucide-react";
+import { cachePerfil, CORES_PADRAO, salvarTimeLocal, type Perfil, type TimeLocal } from "../online/auth";
+import { atualizarPerfilClube } from "@/lib/botao/api";
+import { FORMACAO_DEFAULT, FORMACOES, formacaoById, type Tatica } from "./formacoes";
+import { custoProximoNivel, estrelasNivel, MAX_NIVEL_BOTAO, podeEvoluir, type NiveisBotoes } from "./evolucaoBotoes";
 import { TEAMS } from "../data/teams";
 
 type Props = {
+  /** Perfil do Supabase. null = modo sem login ("meu time" local). */
   perfil: Perfil | null;
+  /** Time local (sem sessão) — preenche os campos quando não há perfil. */
+  timeLocal?: TimeLocal | null;
+  /** Persiste o time local quando não há sessão (Futebol sem login). */
+  onSalvarTimeLocal?: ((t: TimeLocal) => void) | undefined;
   onPronto: (p?: Perfil) => void;
   onBack: () => void;
   /** Evolução dos botões + identidade visual (§7-§11). Ligado à carreira. */
@@ -42,112 +28,38 @@ type Props = {
   } | undefined;
 };
 
-type Modo = "login" | "cadastro" | "editar";
-
 /**
- * Módulo de conta/login estável (PS2-style). Faz login automático quando o
- * usuário já tem sessão ativa (via useBotaoAuth). Permite:
- *  - Criar conta / logar / deslogar
- *  - Personalizar time (nome, sigla, cores, número)
- *  - Escolher tática/formação (1-2-2, 1-3-1, 1-1-3, 1-2-1-1, 2-2-1)
- *  - EVOLUIR os 5 botões de campo (habilidade única, preço progressivo — §7-§10)
- *  - Escolher o escudo/símbolo e a cor de acento dos botões (§11)
- *  - Excluir conta (exclusão TOTAL via RPC excluir_conta_total)
- * Tudo é salvo no Supabase (botao_usuarios + RPC atualizar_perfil_clube).
+ * Módulo "Meu Time" (PS2-style). O LOGIN NÃO mora mais aqui: entrou na conta?
+ * Edita e salva o perfil no Supabase. Sem sessão? Edita o time local do
+ * navegador — o Futebol roda sem login; quem quer conta sincronizada/online
+ * faz login na Cidadela dos Clássicos.
  */
-export function ProfileSetup({ perfil, onPronto, onBack, evolucao }: Props) {
-  const modoInicial: Modo = perfil ? "editar" : "login";
-  const [modo, setModo] = useState<Modo>(modoInicial);
-
-  // --- campos de auth ---
-  const [email, setEmail] = useState(perfil?.email ?? "");
-  const [senha, setSenha] = useState("");
+export function ProfileSetup({ perfil, timeLocal = null, onSalvarTimeLocal, onPronto, onBack, evolucao }: Props) {
+  // --- campos do time (perfil da sessão OU time local) ---
   const [nome, setNome] = useState(perfil?.nome ?? "");
-  const [time, setTime] = useState(perfil?.time_personalizado ?? "Meu Time");
-  const [abreviacao, setAbreviacao] = useState(perfil?.abreviacao_time ?? "MTI");
-  const [numero, setNumero] = useState(perfil?.numero_jogador ?? 10);
-  const [cores, setCores] = useState<string[]>(
-    perfil?.cores && perfil.cores.length === 3 ? perfil.cores : CORES_PADRAO,
+  const [time, setTime] = useState(perfil?.time_personalizado ?? timeLocal?.nome ?? "Meu Time");
+  const [abreviacao, setAbreviacao] = useState(
+    perfil?.abreviacao_time ?? timeLocal?.abreviacao ?? "MTI",
   );
-
+  const [numero, setNumero] = useState(perfil?.numero_jogador ?? timeLocal?.numero ?? 10);
+  const [cores, setCores] = useState<string[]>(
+    perfil?.cores && perfil.cores.length === 3
+      ? perfil.cores
+      : timeLocal?.cores ?? CORES_PADRAO,
+  );
   // --- personalização PS2 ---
-  const [tatica, setTatica] = useState<Tatica>((perfil?.tatica as Tatica) ?? FORMACAO_DEFAULT);
+  const [tatica, setTatica] = useState<Tatica>(
+    (perfil?.tatica as Tatica) ?? timeLocal?.tatica ?? FORMACAO_DEFAULT,
+  );
 
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-  const supabaseConfigErro = getSupabaseConfigError();
 
   const formacao = formacaoById(tatica);
 
   const validarCoresUnicas = (c: string[]) => c[0] !== c[1] && c[1] !== c[2] && c[0] !== c[2];
 
-  const submitAuth = async () => {
-    if (cooldown > 0) {
-      setErro(`Aguarde ${cooldown}s antes de tentar novamente.`);
-      return;
-    }
-    setErro(null);
-    setSalvando(true);
-    try {
-      if (modo === "login") {
-        const p = await entrar(email, senha);
-        if (!p) {
-          throw new Error("Login feito, mas o perfil não foi encontrado. Tente novamente.");
-        }
-        cachePerfil(p);
-        onPronto(p);
-      } else {
-        if (!validarCoresUnicas(cores)) {
-          throw new Error("As três cores devem ser diferentes.");
-        }
-        const p = await cadastrar({ email, senha, nome, time, abreviacao, numero, cores });
-        // Criação via trigger usa defaults de tatica/botoes. Atualiza em seguida.
-        if (p.user_id) {
-          const atualizado = await atualizarPerfilClube(p.user_id, {
-            tatica,
-            botoes: [...formacao.nomesPadrao],
-          });
-          if (atualizado) {
-            const perfilFinal: Perfil = {
-              ...p,
-              tatica: atualizado.tatica ?? tatica,
-              botoes_nomes: atualizado.botoes_nomes ?? [...formacao.nomesPadrao],
-            };
-            cachePerfil(perfilFinal);
-            onPronto(perfilFinal);
-            return;
-          }
-        }
-        cachePerfil(p);
-        onPronto(p);
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";
-      setErro(msg);
-      if (
-        msg.includes("Too Many Requests") ||
-        msg.includes("429") ||
-        msg.includes("email rate limit")
-      ) {
-        setCooldown(60);
-        const interval = setInterval(() => {
-          setCooldown((prev) => {
-            if (prev <= 1) {
-              clearInterval(interval);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
-    } finally {
-      setSalvando(false);
-    }
-  };
-
   const salvarEdicao = async () => {
-    if (!perfil?.user_id) return;
     if (!validarCoresUnicas(cores)) {
       setErro("As três cores devem ser diferentes.");
       return;
@@ -155,27 +67,42 @@ export function ProfileSetup({ perfil, onPronto, onBack, evolucao }: Props) {
     setErro(null);
     setSalvando(true);
     try {
-      const atualizado = await atualizarPerfilClube(perfil.user_id, {
-        nome,
-        time,
-        abreviacao,
-        cores,
-        tatica,
-        botoes: [...formacao.nomesPadrao],
-      });
-      if (!atualizado) throw new Error("Não foi possível salvar.");
-      const perfilFinal: Perfil = {
-        ...perfil,
-        nome: atualizado.nome,
-        time_personalizado: atualizado.time_personalizado,
-        abreviacao_time: atualizado.abreviacao_time,
-        cores: atualizado.cores,
-        numero_jogador: perfil.numero_jogador,
-        tatica: atualizado.tatica ?? tatica,
-        botoes_nomes: atualizado.botoes_nomes ?? [...formacao.nomesPadrao],
-      };
-      cachePerfil(perfilFinal);
-      onPronto(perfilFinal);
+      if (perfil?.user_id) {
+        // Logado (via Cidadela): salva no Supabase.
+        const atualizado = await atualizarPerfilClube(perfil.user_id, {
+          nome,
+          time,
+          abreviacao,
+          cores,
+          tatica,
+          botoes: [...formacao.nomesPadrao],
+        });
+        if (!atualizado) throw new Error("Não foi possível salvar.");
+        const perfilFinal: Perfil = {
+          ...perfil,
+          nome: atualizado.nome,
+          time_personalizado: atualizado.time_personalizado,
+          abreviacao_time: atualizado.abreviacao_time,
+          cores: atualizado.cores,
+          numero_jogador: perfil.numero_jogador,
+          tatica: atualizado.tatica ?? tatica,
+          botoes_nomes: atualizado.botoes_nomes ?? [...formacao.nomesPadrao],
+        };
+        cachePerfil(perfilFinal);
+        onPronto(perfilFinal);
+      } else {
+        // Sem sessão: "meu time" local (Futebol roda sem login).
+        const local: TimeLocal = {
+          nome: time,
+          abreviacao,
+          numero,
+          cores,
+          tatica,
+          botoesNomes: [...formacao.nomesPadrao],
+        };
+        salvarTimeLocal(local);
+        onSalvarTimeLocal?.(local);
+      }
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
@@ -183,133 +110,8 @@ export function ProfileSetup({ perfil, onPronto, onBack, evolucao }: Props) {
     }
   };
 
-  const excluirConta = async () => {
-    if (!perfil?.user_id) return;
-    if (
-      !confirm(
-        "Tem certeza que deseja EXCLUIR sua conta? Todos os dados (time, troféus, soberania, campanhas) serão apagados. Esta ação NÃO pode ser desfeita.",
-      )
-    ) {
-      return;
-    }
-    setSalvando(true);
-    try {
-      // Exclusão TOTAL (RPC excluir_conta_total): perfil, carteira, ledger,
-      // carreira, Cidadela e o próprio registro de autenticação.
-      await excluirContaUsuario(perfil.user_id);
-      limparCache();
-      onPronto(undefined);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao excluir conta.");
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  const deslogar = async () => {
-    await supabase.auth.signOut();
-    limparCache();
-    onPronto(undefined);
-  };
-
-  // ===================== Tela de LOGIN/CADASTRO =====================
-  if (modo === "login" || modo === "cadastro") {
-    return (
-      <div className="mx-auto max-w-lg space-y-5">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="btn-ghost p-2" title="Voltar">
-            <ChevronLeft className="size-4" />
-          </button>
-          <div>
-            <h2 className="font-display text-3xl">{modo === "login" ? "Entrar" : "Criar conta"}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sua conta guarda o time personalizado, tática, troféus e libera o modo online.
-            </p>
-          </div>
-        </div>
-
-        <div className="panel space-y-4">
-          {supabaseConfigErro && (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              {supabaseConfigErro} O modo offline continua disponível sem login.
-            </p>
-          )}
-
-          <Campo label="Email">
-            <input
-              className="field-input"
-              type="email"
-              maxLength={100}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-            />
-          </Campo>
-
-          <Campo label="Senha">
-            <input
-              className="field-input"
-              type="password"
-              maxLength={72}
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder="mínimo 6 caracteres"
-            />
-          </Campo>
-
-          {modo === "cadastro" && (
-            <PersonalizacaoClube
-              nome={nome}
-              setNome={setNome}
-              time={time}
-              setTime={setTime}
-              abreviacao={abreviacao}
-              setAbreviacao={setAbreviacao}
-              numero={numero}
-              setNumero={setNumero}
-              cores={cores}
-              setCores={setCores}
-            />
-          )}
-
-          {erro && <p className="text-sm text-destructive">{erro}</p>}
-
-          <button
-            onClick={submitAuth}
-            disabled={salvando || cooldown > 0 || !!supabaseConfigErro}
-            className="btn-primary w-full disabled:opacity-60"
-          >
-            {modo === "login" ? <LogIn className="size-4" /> : <UserPlus className="size-4" />}
-            {salvando
-              ? "Aguarde..."
-              : cooldown > 0
-                ? `Aguarde ${cooldown}s`
-                : modo === "login"
-                  ? "Entrar"
-                  : "Criar conta"}
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            className="btn-ghost"
-            onClick={() => {
-              setErro(null);
-              setModo(modo === "login" ? "cadastro" : "login");
-            }}
-          >
-            {modo === "login" ? "Não tenho conta" : "Já tenho conta"}
-          </button>
-        </div>
-
-        {modo === "cadastro" && (
-          <PersonalizacaoTatica tatica={tatica} setTatica={setTatica} formacao={formacao} />
-        )}
-      </div>
-    );
-  }
-
-  // ===================== Tela de EDIÇÃO (logado) =====================
+  // ===================== Tela do MEU TIME (login/saída/exclusão:
+  // ===================== pertencem à Cidadela dos Clássicos) =====================
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -318,16 +120,13 @@ export function ProfileSetup({ perfil, onPronto, onBack, evolucao }: Props) {
             <ChevronLeft className="size-4" />
           </button>
           <div>
-            <h2 className="font-display text-3xl">Meu Clube</h2>
+            <h2 className="font-display text-3xl">Meu Time</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Personalize seu time, tática e botões. Salvo no servidor.
+              {perfil?.user_id
+                ? "Personalize seu time, tática e botões. Salvo na sua conta."
+                : "Personalize seu time, tática e botões. Salvo neste navegador — sem login."}
             </p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={deslogar} className="btn-ghost" title="Sair da conta">
-            Sair
-          </button>
         </div>
       </div>
 
@@ -391,26 +190,6 @@ export function ProfileSetup({ perfil, onPronto, onBack, evolucao }: Props) {
           abreviacao={abreviacao}
         />
       )}
-
-      {/* Zona de perigo */}
-      <div className="panel space-y-3 border-destructive/40">
-        <SectionTitle icon={<Trash2 className="size-4 text-destructive" />}>
-          Zona de perigo
-        </SectionTitle>
-        <p className="text-sm text-muted-foreground">
-          Excluir a conta apaga definitivamente time, troféus, soberania e campanhas.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={excluirConta}
-            disabled={salvando}
-            className="btn-ghost text-destructive disabled:opacity-60"
-          >
-            <Trash2 className="size-4" />
-            Excluir conta
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
+import { AuthScreen } from "@/components/botao/components/AuthScreen";
+import type { Perfil } from "@/components/botao/online/auth";
 import { InfoModal } from "@/components/InfoModal";
 import { SEO_CONTENT } from "@/data/seoContent";
 import {
@@ -120,7 +122,10 @@ function CidadelaCompView() {
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
-  const { perfil } = useBotaoAuth();
+  // Login da Cidadela: se não houver sessão, pede conta no hub (o Futebol
+  // continua jogável como visitante). "Loguei" → aplicarPerfil do hook.
+  const [continuarComoVisitante, setContinuarComoVisitante] = useState(false);
+  const { perfil, carregando: carregandoAuth, aplicarPerfil: aplicarPerfilAuth } = useBotaoAuth();
   // Celular central: carreira + handlers vêm do hook único (mesma fiação do
   // Modo Carreira — responder/escolher/excluir persistem no Supabase).
   const {
@@ -179,6 +184,26 @@ function CidadelaCompView() {
     setPerfilCidadela(atualizado);
     setMostrarProfissoes(false);
   };
+
+  const handleLoginCidadela = (p?: Perfil) => {
+    if (p) {
+      aplicarPerfilAuth(p);
+      setContinuarComoVisitante(false);
+      return;
+    }
+    setContinuarComoVisitante(true);
+  };
+
+  // Auto-login na Cidadela: sessão detectada pelo hook já entra direto. Sem
+  // sessão e o visitante ainda não decidiu, mostra o pedido de conta no hub.
+  const exigeLoginCidadela =
+    !carregandoAuth &&
+    !perfil &&
+    !continuarComoVisitante &&
+    !conviteMesaId &&
+    !conviteCampCodigo &&
+    !conviteMesaTrilhaId &&
+    !activeGame;
 
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
   const closeModal = () => setActiveModal(null);
@@ -338,6 +363,35 @@ function CidadelaCompView() {
 
   return (
     <>
+      {/* LOGIN DA CIDADELA: sem sessão o hub pede conta (auto-login quando há
+          sessão já acontece no useBotaoAuth). O visitante pode seguir sem
+          conta — o Futebol roda local, "meu time" sem login. */}
+      {exigeLoginCidadela && (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4">
+          <main className="painel my-auto w-full max-w-lg rounded-3xl p-5 shadow-2xl md:p-8">
+            <header className="mb-4 flex flex-col items-center text-center">
+              <CidadelaEmblem className="mb-3 h-14 w-14 drop-shadow-lg" />
+              <h1 className="texto-marca text-3xl font-black tracking-tight">
+                Cidadela dos Clássicos
+              </h1>
+              <p className="mt-2 text-sm font-medium text-muted-foreground">
+                Entre na sua conta para sincronizar seu clube, a carreira e o
+                modo online. Sem conta? O Futebol continua jogável como visitante.
+              </p>
+            </header>
+            <AuthScreen onPronto={handleLoginCidadela} />
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => handleLoginCidadela(undefined)}
+                className="btn-ghost text-sm text-muted-foreground hover:text-foreground"
+              >
+                Continuar como visitante (jogar sem login)
+              </button>
+            </div>
+          </main>
+        </div>
+      )}
+      {!exigeLoginCidadela && (
       <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
         <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
           <header className="mb-6 flex flex-col items-center text-center">
@@ -422,6 +476,7 @@ function CidadelaCompView() {
           </div>
         </footer>
       </div>
+      )}
 
       {/* Modais de Informação */}
       <InfoModal
@@ -491,7 +546,7 @@ function CidadelaCompView() {
 }
 
 const PASSOS_TOUR_FUTEBOL: PassoTour[] = [
-  { alvo: "perfil", titulo: "Meu Clube / Conta", texto: "Aqui você entra na sua conta e personaliza seu time: cores, tática e nomes dos botões." },
+  { alvo: "perfil", titulo: "Meu Time", texto: "Personalize seu time: cores, tática e nomes dos botões — sem precisar de login." },
   { alvo: "carreira", titulo: "Carreira no Campus", texto: "Aqui fica a sua carreira: partidas do Brasileirão, Copa do Brasil, classificação e economia." },
   { alvo: "trofeus", titulo: "Sala de troféus", texto: "Seus títulos e conquistas ficam guardados aqui." },
   { alvo: "celular", titulo: "Seu celular", texto: "Mensagens do clube, recompensas em SOV, missões e notícias chegam aqui." },

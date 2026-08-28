@@ -4,6 +4,7 @@
  * (contatos/rede/missões/banco/perfil) → campeonato → F5 em pontos-chave.
  */
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const BASE = process.env.E2E_BASE ?? "http://127.0.0.1:3417";
 const EMAIL = "openhands.rookie.e2e@gmail.com";
@@ -52,24 +53,12 @@ const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 
 try {
-  // login
+  // login — portão da Cidadela (o Futebol não tem login interno)
   await page.goto(`${BASE}/cidadela`, { waitUntil: "networkidle2", timeout: 60000 });
-  await clicarTexto(page, "button", "Aceitar");
-  await esperarTexto(page, /Futebol|Estádio/i);
+  await loginPelaCidadela(page, EMAIL, SENHA);
+  await sleep(500);
   await clicarTexto(page, "button, a, [role=button]", "Futebol");
-  await esperarTexto(page, /Amistoso|Meu Clube|Carreira/i);
-  await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-  await sleep(1000);
-  await page.evaluate((e, s) => {
-    const inp = [...document.querySelectorAll("input")].find((i) => (i.placeholder ?? "").toLowerCase().includes("email"));
-    const pw = document.querySelector("input[type=password]");
-    const setter = (el, v) => { Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); };
-    if (inp) setter(inp, e);
-    if (pw) setter(pw, s);
-  }, EMAIL, SENHA);
-  await sleep(400);
-  await clicarTexto(page, "button", "Entrar");
-  await esperarTexto(page, /Rookie|Voltar/i, 40);
+  await esperarTexto(page, /Amistoso|Carreira/i);
   ok(true, "login pelo UI");
 
   // Carreira → hub — fluxo enxuto idêntico ao e2e comprovado (data-testid=entrar-em-campo)

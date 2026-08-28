@@ -6,6 +6,7 @@
  *   E2E_EMAIL=... E2E_PASSWORD=... node testes/e2e-auditoria-universal.mjs
  */
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 
 const BASE = "http://127.0.0.1:3417";
 const SUPA = "https://hkzhksauilonqppipjyc.supabase.co";
@@ -90,37 +91,11 @@ async function esperarTexto(page, regex, timeoutMs = 20000) {
 
 async function entrar(page) {
   await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2", timeout: 60000 });
-  await clicarTexto(page, "button", "Aceitar");
-  let body = await esperarTexto(page, /Futebol|Amistoso|Carreira no Campus/i, 30000);
-  if (!/Carreira no Campus|Amistoso/i.test(body)) {
-    await clicarTexto(page, "button, a, [role=button]", "Futebol");
-    body = await esperarTexto(page, /Amistoso|Carreira no Campus/i, 30000);
-  }
-  await clicarTexto(page, "button, a, [role=button]", "Meu Clube");
-  await sleep(1500);
-  const body2 = await texto(page);
-  if (/Não tenho conta|Entrar/i.test(body2) && !/Rookie/i.test(body2)) {
-    await page.evaluate((email, senha) => {
-      const set = (i, v) => {
-        const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-        s.call(i, v);
-        i.dispatchEvent(new Event("input", { bubbles: true }));
-      };
-      const i = [...document.querySelectorAll("input")].find((x) => (x.placeholder ?? "").includes("@"));
-      if (i) set(i, email);
-      const p = document.querySelector("input[type=password]");
-      if (p) set(p, senha);
-    }, EMAIL, SENHA);
-    await clicarTexto(page, "button", "Entrar");
-    await esperarTexto(page, /Rookie|editar/i, 20000);
-  }
-  await page.click("button[title='Voltar']").catch(() => {});
-  await esperarTexto(page, /Carreira|Futebol/i, 15000);
-  const corpoHub = await texto(page);
-  if (!/Meu Clube|Carreira no Campus|Amistoso/i.test(corpoHub)) {
-    await clicarTexto(page, "button, a, [role=button]", "Futebol");
-    await esperarTexto(page, /Carreira no Campus|Amistoso/i, 15000);
-  }
+  // Portão de conta é a CIDADELA. Sem sessão ela pede login; com sessão, o
+  // hub abre direto (com o card Futebol/Estádio).
+  await loginPelaCidadela(page, EMAIL, SENHA);
+  await clicarTexto(page, "button, a, [role=button]", "Futebol").catch(() => {});
+  await esperarTexto(page, /Carreira no Campus|Amistoso/i, 30000);
   await clicarTexto(page, "button, a, [role=button]", "Carreira");
   await esperarTexto(page, /CAMPANHA ATUAL|CONTINUAR|INICIAR|Rodada|ENTRAR EM CAMPO/i, 15000);
   const corpo = await texto(page);

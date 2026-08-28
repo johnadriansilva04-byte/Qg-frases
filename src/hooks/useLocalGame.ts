@@ -51,8 +51,19 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
 
   const commit = useCallback((move: Move) => {
     setState((cur) => {
-      // Se há movimento pendente esperando captura, completa o movimento primeiro
+      // Se há movimento pendente esperando captura, completa o movimento primeiro.
+      // O alvo NUNCA pode ser peça própria: só peças do adversário que estejam
+      // fora de moinho (ou qualquer um se todas estiverem em moinho) são válidas.
       if (pendingMove) {
+        if (move.remove !== null) {
+          const boardComPosta = [...cur.board];
+          if (pendingMove.from !== null) boardComPosta[pendingMove.from] = 0;
+          boardComPosta[pendingMove.to] = cur.turn;
+          const alvosValidos = removableTargets(boardComPosta, opponent(cur.turn));
+          if (!alvosValidos.includes(move.remove)) {
+            return cur;
+          }
+        }
         const completeMove = { ...pendingMove, remove: move.remove };
         const next = applyCapture(cur, completeMove);
         setLog((l: string[]) => [describeMove(completeMove, cur.turn, cur.ply), ...l].slice(0, 60));

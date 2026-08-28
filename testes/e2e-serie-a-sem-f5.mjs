@@ -7,6 +7,7 @@
  *  - Chegando em serie-a, cria a sala "Copa Universal — 32" e verifica.
  */
 import puppeteer from "puppeteer-core";
+import { loginPelaCidadela } from "./e2e-lib.mjs";
 const BASE = "http://127.0.0.1:3417";
 const SUPA = "https://hkzhksauilonqppipjyc.supabase.co";
 const KEY = "sb_publishable_qT04tnP1_XEbAZ5EHw02FQ_CFDtX_LM";
@@ -58,11 +59,9 @@ const UID = auth.user.id;
 
 try {
   // Login via UI — o harness __e2e só é escrito com ?e2e=1 na URL.
+  // O portão de conta é a CIDADELA: sem sessão ela mostra o AuthScreen.
   await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2", timeout: 60000 });
-  await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => /Aceitar/i.test(x.innerText ?? ""));
-    b?.click();
-  });
+  await loginPelaCidadela(page, EMAIL, SENHA);
   await page.waitForFunction(() => /Estádio do Campus/.test(document.body.innerText), {
     timeout: 30000,
   }).catch(() => {});
@@ -71,30 +70,7 @@ try {
     b?.click();
   });
   await sleep(4500);
-  await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button,a")].find((x) => /Meu Clube/i.test(x.innerText ?? ""));
-    b?.click();
-  });
-  await sleep(1800);
   let t = await page.evaluate(() => document.body.innerText);
-  if (/Entrar/i.test(t) && !/Rookie/i.test(t)) {
-    await page.evaluate((email, senha) => {
-      const set = (i, v) => {
-        const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-        s.call(i, v);
-        i.dispatchEvent(new Event("input", { bubbles: true }));
-      };
-      const e = [...document.querySelectorAll("input")].find((x) => (x.placeholder ?? "").includes("@"));
-      if (e) set(e, email);
-      const p = document.querySelector("input[type=password]");
-      if (p) set(p, senha);
-    }, EMAIL, SENHA);
-    await page.evaluate(() => {
-      const b = [...document.querySelectorAll("button")].find((x) => /^Entrar$/i.test(x.innerText?.trim() ?? ""));
-      b?.click();
-    });
-    await sleep(4500);
-  }
   await page.waitForFunction(() => !!window.__e2e?.getCareer?.()?.coach?.nome, { timeout: 40000 }).catch(() => {});
   t = await page.evaluate(() => document.body.innerText);
   if (!(await page.evaluate(() => !!window.__e2e)) || !/hub|menu|carreira/i.test(t)) {

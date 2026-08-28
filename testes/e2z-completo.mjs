@@ -48,17 +48,15 @@ async function clicar(sel) {
 }
 
 try {
-  // ===== Login via UI =====
-  console.log("=== Login E2Z via UI ===");
+  // ===== Login via UI (Cidadela — o portão de conta) =====
+  console.log("=== Login E2Z via UI (Cidadela) ===");
   await page.goto(`${BASE}/cidadela?e2e=1`, { waitUntil: "networkidle2", timeout: 60000 });
   await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /Aceitar/i.test(x.innerText ?? "")); b?.click(); });
-  await page.waitForFunction(() => /Estádio do Campus/.test(document.body.innerText), { timeout: 30000 }).catch(() => {});
-  await page.evaluate(() => { const b = [...document.querySelectorAll("button,a")].find((x) => /Futebol/i.test(x.innerText ?? "")); b?.click(); });
-  await sleep(4000);
-  await page.evaluate(() => { const b = [...document.querySelectorAll("button,a")].find((x) => /Meu Clube/i.test(x.innerText ?? "")); b?.click(); });
-  await sleep(1800);
+  // Sem sessão, a Cidadela pede login (AuthScreen). Loga aqui — o Futebol
+  // não tem mais tela de login interna.
+  await page.waitForFunction(() => /Entrar|Criar conta/i.test(document.body.innerText), { timeout: 30000 }).catch(() => {});
   let t = await texto();
-  if (/Entrar/i.test(t) && !/E2Z/i.test(t)) {
+  if (/Entrar|Criar conta/i.test(t) && !/Bem-vindo de volta/i.test(t)) {
     await page.evaluate((email, senha) => {
       const set = (i, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set; s.call(i, v); i.dispatchEvent(new Event("input", { bubbles: true })); };
       const e = [...document.querySelectorAll("input")].find((x) => (x.placeholder ?? "").includes("@"));
@@ -69,6 +67,10 @@ try {
     await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /^Entrar$/i.test(x.innerText?.trim() ?? "")); b?.click(); });
     await sleep(4500);
   }
+  // Autenticado, a Cidadela mostra o hub → abre o Futebol.
+  await page.waitForFunction(() => /Estádio do Campus/.test(document.body.innerText), { timeout: 30000 }).catch(() => {});
+  await page.evaluate(() => { const b = [...document.querySelectorAll("button,a")].find((x) => /Futebol/i.test(x.innerText ?? "")); b?.click(); });
+  await sleep(4000);
   ok(true, "login E2Z na UI");
 
   // ===== FASE 2: tour/onboarding (profissão) =====
