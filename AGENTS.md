@@ -1,3 +1,56 @@
+## Futebol sem login (portão na Cidadela) + Trilha sem auto-captura (2026-08-28, 31ª passada)
+
+- **LOGIN SAIDO DO FUTEBOL (†)**: o Futebol roda 100% sem conta — "Meu Time"
+  (nome, sigla, cores, tática, nomes dos botões) vira estado local do
+  navegador (`carregarTimeLocal`/`salvarTimeLocal`/`limparTimeLocal` em
+  `online/auth.ts`, chave `qgfrases_time_local_v1`). ProfileSetup virou o
+  módulo "Meu Time": quebrados todos os campos/UI de login/cadastro/logout/
+  exclusão (`submitAuth`, `excluirConta`, `deslogar`, Modo login/cadastro).
+  BotaoGame não tem mais `handleLogout` nem auto-login; conta sem cadastro
+  mostra só toast e o jogo segue local.
+- **Cidadela é o PORTÃO de conta**: `src/routes/cidadela.tsx` renderiza
+  `AuthScreen` no hub quando `!perfil && !continuarComoVisitante && !convites
+  && !activeGame` (botão "Continuar como visitante (jogar sem login)").
+  `handleLoginCidadela(p?)` aplica o perfil ou marca visitante. O estado
+  `mostrarLoginCidadela` foi REMOVIDO (morto). `useBotaoAuth` já expõe
+  `aplicarPerfil`. Auto-login continua no hook (sessão detectada → entra).
+  Cards de Amistoso/Campeonato Online mostram "Entre na Cidadela".
+- **E2E: login virou `loginPelaCidadela`** (`testes/e2e-lib.mjs`): aceita
+  cookies → espera "Entrar|Criar conta" → preenche email/senha → "Entrar" →
+  espera "Estádio do Campus" → clica "Futebol". IMPORTANTE: o botão "Não
+  tenho conta" aparece SEMPRE no AuthScreen em modo login (alterna pro
+  CADASTRO) — o helper NÃO pode clicar nele para contas existentes; novos
+  cadastros usam "Criar conta" (e2e-carreira tem fluxo próprio).
+  Guarda em persistencia-unica agora exige `continuarComoVisitante` (não
+  mais o `mostrarLoginCidadela` morto).
+- **TRILHA — REGRAS FINAIS (NÃO mexer)**: captura só de peça INIMIGA (o
+  moinho da própria peça nunca é alvo: `removableTargets(board, opponent)` +
+  SQL `_trilha_remove_valido` + RPC `registrar_jogada_trilha` rejeitam via
+  `IS DISTINCT FROM v_vitima`); **fim de jogo com 2 peças** do adversário
+  (aniquilação `v_count_foe <= 2`) e **voo com 3 peças** (`<= 3` em
+  `_trilha_tem_movimento`). commit `a1142ee` (fim em 2, voo em 3) é o estado
+  certo apesar do texto da mensagem do usuário mencionar "3 peças" — o
+  voo com 3 exige que o fim NÃO seja em 3.
+- **Auto-captura travada em todas as camadas**: engine puro
+  (`removableTargets` só inimigo), `TrilhaBoard` (renderiza só alvos inimigos),
+  hook local (`captureTargets` inimigo) e SQL/RPC
+  (`_trilha_remove_valido` rejeita peça própria). **Defesa nova** em
+  `useLocalGame.commit` na captura pendente: revalida o alvo com
+  `removableTargets(boardComPosta, opponent(cur.turn))` antes de `applyCapture`
+  — chamada programática de `commit` com remoção da própria peça é descartada.
+- **BUILD FIX raiz (Vercel)**: `149f975` (revert do Devin) gravou os arquivos
+  da Trilha como UTF-16LE → rolldown "stream did not contain valid UTF-8".
+  O re-fix `a1142ee` restaurou UTF-8 puro + regras; deployments de produção
+  de `a1142ee` e `98d46c5` = SUCCESS (o único failure é o `149f975` do histórico).
+- **Verificação**: tsc 0; build OK; estruturais: persistencia-unica 122,
+  conta-sem-perfil 33, f5-partida 27, fluxo-usuario-novo 14, onclick-guard OK,
+  sov-consistencia 6, sessao-antiga 11, celular-anuncios 12,
+  gol-semantico-guarda 13, sov-invest 46; jiti: trilha 19, clube-financas 17,
+  evolucao-botoes 34, gol-semantico 14, historia 53, onboarding OK,
+  promocao-rebaixamento 136, transferencias 17, marketplace OK.
+  ⚠️ Vercel tem Deployment Protection ativo (login) nos domínios — o deploy
+  builda e completa (status success), mas a URL pede login.
+
 ## Campeonato Online provado (E2E) + código morto removido (2026-08-27, 30ª passada)
 
 - **CAMPEONATO ONLINE FUNCIONAL (prova REST real, produção)**: novo
