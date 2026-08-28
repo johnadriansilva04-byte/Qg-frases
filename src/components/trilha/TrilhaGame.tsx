@@ -302,7 +302,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
           <section>
             <h3 className="text-lg font-semibold mb-2">🏆 Condições de Vitória</h3>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li>Reduzir o adversário a 2 peças</li>
+              <li>Reduzir o adversário a 3 peças</li>
               <li>Bloquear todos os movimentos do adversário</li>
             </ul>
           </section>

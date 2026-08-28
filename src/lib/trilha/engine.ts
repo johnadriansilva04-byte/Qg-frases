@@ -261,7 +261,45 @@ export function applyMove(s: GameState, move: Move): GameState {
 
   // Condições de fim de jogo, avaliadas para quem vai jogar agora.
   if (next.phase === "moving") {
-    if (countOnBoard(next.board, foe) < 3) {
+    if (countOnBoard(next.board, foe) <= 3) {
+      next.phase = "over";
+      next.winner = actor;
+      next.reason = "annihilation";
+      if (gameEndCallback) gameEndCallback(actor, "annihilation");
+    } else if (!hasAnyMove(next)) {
+      next.phase = "over";
+      next.winner = actor;
+      next.reason = "blockade";
+      if (gameEndCallback) gameEndCallback(actor, "blockade");
+    }
+  }
+
+  return next;
+}
+
+/**
+ * Completa uma captura no sistema de duas etapas.
+ * `s` já contém o movimento que fechou o moinho (peça posta, mão debitada) e
+ * `move.remove` é a peça inimiga neutralizada. Aplicável apenas com moinho pendente.
+ */
+export function applyCapture(s: GameState, move: Move): GameState {
+  const next = cloneState(s);
+  const actor = next.turn;
+  const foe = opponent(actor);
+
+  if (move.remove !== null) {
+    next.board[move.remove] = 0;
+    next.captured[actor] += 1;
+  }
+
+  next.ply += 1;
+  next.turn = foe;
+  if (next.hand[1] === 0 && next.hand[2] === 0 && next.phase === "placing") {
+    next.phase = "moving";
+  }
+
+  if (next.phase === "moving") {
+    if (countOnBoard(next.board, foe) <= 3) {
       next.phase = "over";
       next.winner = actor;
       next.reason = "annihilation";
