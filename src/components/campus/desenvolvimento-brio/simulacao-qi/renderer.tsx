@@ -10,10 +10,10 @@ import React from "react";
 import type { EstruturaPainel, PanelLight } from "./types";
 
 /** Conversão nível de tamanho (0..5) → raio/medida da forma. */
-const SIZE_SCALE = [10, 13, 17, 22, 28, 36];
+const SIZE_SCALE = [14, 18, 24, 30, 38, 48];
 
 /** Cores (tons de cinza, como o I-RAVEN) por nível de cor (0..3). */
-const COLOR_SHADES = ["#222222", "#555555", "#888888", "#bbbbbb"];
+const COLOR_SHADES = ["#1f2937", "#4b5563", "#6b7280", "#9ca3af"];
 
 const TYPES = ["circle", "rectangle", "triangle", "pentagon", "cross", "star"];
 
@@ -107,8 +107,9 @@ export function PanelDeterministicoSVG({ panel, className }: { panel: PanelLight
   const maxY = Math.max(...ys);
   const spanX = Math.max(maxX - minX, 1);
   const spanY = Math.max(maxY - minY, 1);
-  const margin = 22;
-  const scale = Math.min((100 - margin * 2) / spanX, (100 - margin * 2) / spanY, 1);
+  // Margem mais justa deixa as figuras maiores dentro da célula.
+  const margin = 14;
+  const scale = Math.min((100 - margin * 2) / spanX, (100 - margin * 2) / spanY, 1.15);
   const map = (px: number, py: number): [number, number] => {
     const cx = ((px - (minX + maxX) / 2) * scale) + 50;
     const cy = ((py - (minY + maxY) / 2) * scale) + 50;
@@ -120,10 +121,10 @@ export function PanelDeterministicoSVG({ panel, className }: { panel: PanelLight
         const f = forms[i];
         if (!f) return null;
         const [x, y] = map(e[4], e[5]);
-        const sizeInBox = f.size * (100 / 260); // normaliza o tamanho ao viewBox
+        const sizeInBox = f.size * (100 / 210); // normaliza o tamanho ao viewBox (maior)
         return (
           <g key={i} transform={`translate(${x}, ${y})`}>
-            <FormaSVG kind={f.kind} size={Math.max(sizeInBox, 6)} fill={f.fill} angle={f.angle} />
+            <FormaSVG kind={f.kind} size={Math.max(sizeInBox, 8)} fill={f.fill} angle={f.angle} />
           </g>
         );
       })}

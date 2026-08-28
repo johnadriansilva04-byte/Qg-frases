@@ -87,43 +87,45 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
         <h2 className="text-lg font-black text-foreground">Teste de QI — Matrizes de Raciocínio</h2>
       </div>
 
-      {/* Matriz 3x3 (SVG responsivo) */}
-      <div
-        className="w-full max-w-[420px] overflow-hidden rounded-lg border border-border bg-white"
-        dangerouslySetInnerHTML={{ __html: renderMatrix(problem) }}
-      />
+      <div className="grid w-full grid-cols-1 items-start justify-items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Matriz 3x3 (SVG responsivo) — maior e com moldura limpa */}
+        <div
+          className="w-full max-w-[520px] overflow-hidden rounded-xl border-2 border-emerald-500/30 bg-gradient-to-b from-white to-slate-50 shadow-xl shadow-emerald-500/5"
+          dangerouslySetInnerHTML={{ __html: renderMatrix(problem) }}
+        />
 
-      {/* Opções clicáveis */}
-      <div className="w-full">
-        <h3 className="mb-2 text-center text-sm font-semibold text-muted-foreground">
-          Selecione a peça que completa a matriz:
-        </h3>
-        <div className="grid grid-cols-4 gap-2">
-          {problem.options.map((opt, idx) => {
-            const isSelected = selected === idx;
-            const isCorrect = idx === problem.answerIndex;
-            const ring = showAnswer
-              ? isCorrect
-                ? "ring-2 ring-emerald-500"
+        {/* Opções clicáveis — ao lado da matriz em telas largas */}
+        <div className="w-full">
+          <h3 className="mb-3 text-center text-sm font-semibold text-muted-foreground">
+            Selecione a peça que completa a matriz:
+          </h3>
+          <div className="mx-auto grid max-w-[420px] grid-cols-4 gap-2 lg:max-w-none">
+            {problem.options.map((opt, idx) => {
+              const isSelected = selected === idx;
+              const isCorrect = idx === problem.answerIndex;
+              const ring = showAnswer
+                ? isCorrect
+                  ? "ring-2 ring-emerald-500"
+                  : isSelected
+                    ? "ring-2 ring-red-500"
+                    : ""
                 : isSelected
-                  ? "ring-2 ring-red-500"
-                  : ""
-              : isSelected
-                ? "ring-2 ring-blue-500"
-                : "";
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelect(idx)}
-                disabled={showAnswer}
-                className={`overflow-hidden rounded-md border border-border bg-white transition hover:border-emerald-500 disabled:cursor-default ${ring}`}
-                aria-label={`Opção ${idx + 1}`}
-              >
-                <span dangerouslySetInnerHTML={{ __html: renderPanel(opt) }} />
-              </button>
-            );
-          })}
+                  ? "ring-2 ring-blue-500"
+                  : "";
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelect(idx)}
+                  disabled={showAnswer}
+                  className={`overflow-hidden rounded-lg border border-border bg-white transition hover:border-emerald-500 hover:shadow-lg disabled:cursor-default ${ring}`}
+                  aria-label={`Opção ${idx + 1}`}
+                >
+                  <span className="block w-full" dangerouslySetInnerHTML={{ __html: renderPanel(opt) }} />
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

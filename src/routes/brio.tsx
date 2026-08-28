@@ -32,21 +32,12 @@ const SECTIONS = [
   },
   {
     icon: "brain",
-    title: "Exercícios de QI",
+    title: "Teste de QI",
     description:
-      "Treinamento e prática: matrizes de raciocínio lógico com explicação das regras e recompensas em SALVE.",
-    link: "/teste-qi",
+      "Módulo de raciocínio não verbal: Exercícios (treinamento com explicação das regras e recompensas em SALVE) e Simulação (avaliação de 32 questões em 25 minutos).",
+    link: "/teste-de-qi",
     color: "from-emerald-500 to-teal-500",
     bgColor: "bg-emerald-500/10",
-  },
-  {
-    icon: "gauge",
-    title: "Simulação de Teste de QI",
-    description:
-      "Avaliação experimental: 32 questões inéditas, 25 minutos, dificuldade progressiva, sem feedback e resultado apenas ao final.",
-    link: "/simulacao-qi",
-    color: "from-indigo-500 to-violet-500",
-    bgColor: "bg-indigo-500/10",
   },
   {
     icon: "flask",
@@ -103,7 +94,7 @@ function Brio() {
           </div>
           <p className="text-lg md:text-xl text-slate-300 mb-2">Conhecimento e Ferramentas</p>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            Acesse a Biblioteca e o Cartório. Desenvolva seu conhecimento.
+            Acesse a Biblioteca, o Cartório e o Teste de QI. Desenvolva seu conhecimento.
           </p>
         </header>
 
@@ -190,18 +181,7 @@ function Brio() {
                         </defs>
                       </svg>
                     )}
-                    {section.icon === "gauge" && (
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="w-10 h-10 md:w-12 md:h-12">
-                        <path d="M12 5a9 9 0 0 1 8.7 11H15l-3-4-3 4H3.3A9 9 0 0 1 12 5Z" fill="url(#gaugeGrad)" />
-                        <path d="M12 13l3 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                        <defs>
-                          <linearGradient id="gaugeGrad" x1="3" y1="5" x2="21" y2="16" gradientUnits="userSpaceOnUse">
-                            <stop stopColor="#6366f1" />
-                            <stop offset="1" stopColor="#8b5cf6" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                    )}
+                    
                   </div>
                   <div className="flex-1">
                     <h2 className="text-xl md:text-2xl font-bold mb-2 group-hover:text-amber-400 transition-colors">

@@ -20,6 +20,7 @@ import { Route as NoticiasRouteImport } from './routes/noticias'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as SimulacaoQiRouteImport } from './routes/simulacao-qi'
 import { Route as TermosRouteImport } from './routes/termos'
+import { Route as TesteDeQiRouteImport } from './routes/teste-de-qi'
 import { Route as TesteQiRouteImport } from './routes/teste-qi'
 
 const IndexRoute = IndexRouteImport.update({
@@ -77,6 +78,11 @@ const TermosRoute = TermosRouteImport.update({
   path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TesteDeQiRoute = TesteDeQiRouteImport.update({
+  id: '/teste-de-qi',
+  path: '/teste-de-qi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TesteQiRoute = TesteQiRouteImport.update({
   id: '/teste-qi',
   path: '/teste-qi',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/privacidade': typeof PrivacidadeRoute
   '/simulacao-qi': typeof SimulacaoQiRoute
   '/termos': typeof TermosRoute
+  '/teste-de-qi': typeof TesteDeQiRoute
   '/teste-qi': typeof TesteQiRoute
 }
 export interface FileRoutesByTo {
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/privacidade': typeof PrivacidadeRoute
   '/simulacao-qi': typeof SimulacaoQiRoute
   '/termos': typeof TermosRoute
+  '/teste-de-qi': typeof TesteDeQiRoute
   '/teste-qi': typeof TesteQiRoute
 }
 export interface FileRoutesById {
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/privacidade': typeof PrivacidadeRoute
   '/simulacao-qi': typeof SimulacaoQiRoute
   '/termos': typeof TermosRoute
+  '/teste-de-qi': typeof TesteDeQiRoute
   '/teste-qi': typeof TesteQiRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/privacidade'
     | '/simulacao-qi'
     | '/termos'
+    | '/teste-de-qi'
     | '/teste-qi'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/privacidade'
     | '/simulacao-qi'
     | '/termos'
+    | '/teste-de-qi'
     | '/teste-qi'
   id:
     | '__root__'
@@ -168,6 +179,7 @@ export interface FileRouteTypes {
     | '/privacidade'
     | '/simulacao-qi'
     | '/termos'
+    | '/teste-de-qi'
     | '/teste-qi'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +195,7 @@ export interface RootRouteChildren {
   PrivacidadeRoute: typeof PrivacidadeRoute
   SimulacaoQiRoute: typeof SimulacaoQiRoute
   TermosRoute: typeof TermosRoute
+  TesteDeQiRoute: typeof TesteDeQiRoute
   TesteQiRoute: typeof TesteQiRoute
 }
 
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/teste-de-qi': {
+      id: '/teste-de-qi'
+      path: '/teste-de-qi'
+      fullPath: '/teste-de-qi'
+      preLoaderRoute: typeof TesteDeQiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/teste-qi': {
       id: '/teste-qi'
       path: '/teste-qi'
@@ -287,6 +307,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacidadeRoute: PrivacidadeRoute,
   SimulacaoQiRoute: SimulacaoQiRoute,
   TermosRoute: TermosRoute,
+  TesteDeQiRoute: TesteDeQiRoute,
   TesteQiRoute: TesteQiRoute,
 }
 export const routeTree = rootRouteImport

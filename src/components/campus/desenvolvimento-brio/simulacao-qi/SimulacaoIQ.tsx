@@ -422,6 +422,7 @@ function TelaInicial({
 }) {
   return (
     <div className="qi-inicio">
+      <span className="qi-badge">SIMULAÇÃO · AVALIAÇÃO</span>
       <h1 className="qi-titulo">SIMULAÇÃO DE TESTE DE QI</h1>
       <ul className="qi-info">
         <li><strong>32</strong> questões</li>
@@ -474,7 +475,8 @@ function TelaProva({
     <div className="qi-prova">
       <header className="qi-topo">
         <div className="qi-contador">
-          Questão {pos} / {total}
+          <b>Questão {pos}</b>
+          <span>/ {total}</span>
         </div>
         <div className="qi-tempo" data-expirou={expirou}>
           <Clock size={14} aria-hidden="true" />
@@ -483,24 +485,33 @@ function TelaProva({
       </header>
 
       {q && (
-        <>
-          <div className="qi-matrix-wrap">
-            <MatrixSVG panels={q.matrix} className="qi-matrix--prova" />
+        <div className="qi-corpo">
+          <div className="qi-coluna-matriz">
+            <div className="qi-matrix-wrap">
+              <MatrixSVG panels={q.matrix} className="qi-matrix--prova" />
+            </div>
+            <div className="qi-hint-num">
+              <span>{String(pos).padStart(2, "0")}</span>
+              <span className="qi-dot" aria-hidden="true" />
+              <span>?</span>
+            </div>
+            <div className="qi-categoria" aria-hidden="true">
+              {q.category}
+            </div>
           </div>
-          <div className="qi-hint-num">
-            <span>{String(pos).padStart(2, "0")}</span>
-            <span className="qi-dot" aria-hidden="true" />
-            <span>?</span>
+
+          <div className="qi-coluna-opcoes">
+            <p className="qi-instrucao">Escolha a peça que completa a figura:</p>
+            <OptionsGrid
+              options={q.options}
+              labels={[...LABELS]}
+              selectedIndex={selectedIndex}
+              onSelect={onSelect}
+              disabled={expirou}
+            />
+            <div aria-hidden="true" className="hidden" data-qi-options-count={q.options.length} />
           </div>
-          <OptionsGrid
-            options={q.options}
-            labels={[...LABELS]}
-            selectedIndex={selectedIndex}
-            onSelect={onSelect}
-            disabled={expirou}
-          />
-          <div aria-hidden="true" className="hidden" data-qi-options-count={q.options.length} />
-        </>
+        </div>
       )}
 
       <footer className="qi-rodape">
@@ -536,6 +547,7 @@ function TelaProva({
 function TelaResultado({ resultado, apenasLocal, onRefazer }: { resultado: ResultadoSimulacao; apenasLocal: boolean; onRefazer: () => void }) {
   return (
     <div className="qi-resultado" data-estado={resultado.status}>
+      <span className="qi-badge">RESULTADO</span>
       <h1 className="qi-titulo">
         {resultado.status === "expired" ? "TEMPO ESGOTADO" : "SIMULAÇÃO CONCLUÍDA"}
       </h1>

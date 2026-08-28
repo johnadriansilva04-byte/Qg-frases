@@ -1,3 +1,30 @@
+## Módulo "Teste de QI" unificado (landing /teste-de-qi) + UI profissional (2026-08-28, 32ª passada)
+
+- **UM card no /brio → landing `/teste-de-qi`** (nova rota `src/routes/teste-de-qi.tsx`,
+  no routeTree.gen): dentro dela dois sub-módulos — **Exercícios** (rota `/teste-qi`,
+  componente `IQTestComponent`, "ENSINO") e **Simulação** (rota `/simulacao-qi`,
+  componente `SimulacaoIQ`, "AVALIAÇÃO", 32 questões, 25 min). Nada mudou na
+  separação `mode` exercise/simulation no banco/motor.
+- **UI da simulação redesenhada** (`src/styles.css` bloco `.qi-simulacao`):
+  células da matriz CLARAS (branco→cinza claro em gradiente, nada de "quadrado
+  preto gigante"); figuras MAIORES via `renderer.tsx` (`SIZE_SCALE` 10→14..48,
+  margem 22→14, escala max 1.15, min size 8); **lado a lado** em telas largas
+  (`.qi-corpo` grid 2 colunas ≥900px: matriz esquerda + opções direita) e
+  empilhado no mobile; painéis com `backdrop-filter`, bordas arredondadas,
+  badge "SIMULAÇÃO · AVALIAÇÃO", timer/counter em destaque, botão FINALIZAR
+  âmbar, resultado em cartão. E2E `testes/e2e-simulacao-qi.mjs` (27 checks)
+  continua VERDE (labels, data-qi-option e classe `qi-option` preservados).
+- **Exercícios /teste-qi**: matriz maior (max-w 520px) com moldura esmeralda e
+  opções AO LADO da matriz em telas largas (`lg:grid-cols-[1fr_1fr]`).
+- **Migration idempotente**: `supabase/migrations/qi_simulacao.sql` ganhou
+  `DROP POLICY IF EXISTS` antes dos 4 `CREATE POLICY qi_attempts_proprias_*`
+  (corrige erro 42710 "policy already exists" ao reaplicar). ATENÇÃO:
+  `testes/gerador-qi-seed.mts` REGRAVA a migration — o bloco idempotente
+  também foi adicionado no template do gerador para não regredir.
+- **Verificação**: tsc 0; build OK; e2e-simulacao-qi 27/27; qi-embaralhar 10/10;
+  estruturais (persistencia-unica 122, conta-sem-perfil 33, sov-consistencia 6,
+  onclick-guard, fluxo-usuario-novo 14); SSR flow/botaogame/futebol OK.
+
 ## Simulação de Teste de QI vs EXERCÍCIOS — módulos 100% separados (2026-08-28)
 
 - **DOIS módulos, REGRA ABSOLUTA**: `teste-qi/` (componente `IQTestComponent`,

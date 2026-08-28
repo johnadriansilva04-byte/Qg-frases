@@ -4,7 +4,7 @@ import { SimulacaoIQ } from "@/components/campus/desenvolvimento-brio/simulacao-
 export const Route = createFileRoute("/simulacao-qi")({
   head: () => ({
     meta: [
-      { title: "Simulação de Teste de QI | Desenvolvimento do Brio" },
+      { title: "Simulação de Teste de QI | Teste de QI — Desenvolvimento do Brio" },
       {
         name: "description",
         content:
@@ -24,12 +24,15 @@ export const Route = createFileRoute("/simulacao-qi")({
 
 function SimulacaoQI() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="relative z-10 flex min-h-screen flex-col items-center px-3 py-4 md:py-6">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.3)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)]" />
+      <div className="absolute right-1/4 top-0 h-72 w-72 rounded-full bg-indigo-500/15 blur-3xl animate-pulse" />
+
+      <div className="relative z-10 flex min-h-screen flex-col items-center px-3 py-4 md:py-8">
         <SimulacaoIQ />
         <div className="mt-4 text-center">
-          <Link to="/brio" className="text-xs text-slate-500 transition-colors hover:text-indigo-400">
-            ← Voltar para o Desenvolvimento do Brio
+          <Link to="/teste-de-qi" className="text-xs text-slate-500 transition-colors hover:text-indigo-400">
+            ← Voltar para o módulo Teste de QI
           </Link>
         </div>
       </div>

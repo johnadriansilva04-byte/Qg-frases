@@ -2,7 +2,7 @@
 -- QI — SIMULAÇÃO (questões próprias de raciocínio não verbal)
 -- Banco de questões (EXERCÍCIOS × SIMULAÇÃO) + tentativas + RPCs
 -- de pontuação calculada NO SERVIDOR.
--- Gerado por testes/gerador-qi-seed.mts em 2026-08-28T20:58:39.251Z.
+-- Gerado por testes/gerador-qi-seed.mts em 2026-08-28T21:51:16.598Z.
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / ON CONFLICT).
 -- ============================================================
 
@@ -67,6 +67,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.qi_test_attempts TO authenticated
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.qi_test_attempts TO service_role;
 
 -- RLS: cada usuário vê/edita APENAS as próprias tentativas.
+-- Idempotente: DROP POLICY IF EXISTS permite reaplicar a migration sem erro 42710.
+DROP POLICY IF EXISTS qi_attempts_proprias_select ON public.qi_test_attempts;
+DROP POLICY IF EXISTS qi_attempts_proprias_insert ON public.qi_test_attempts;
+DROP POLICY IF EXISTS qi_attempts_proprias_update ON public.qi_test_attempts;
+DROP POLICY IF EXISTS qi_attempts_proprias_delete ON public.qi_test_attempts;
+
 CREATE POLICY qi_attempts_proprias_select ON public.qi_test_attempts
   FOR SELECT TO authenticated USING (user_id = auth.uid());
 CREATE POLICY qi_attempts_proprias_insert ON public.qi_test_attempts
