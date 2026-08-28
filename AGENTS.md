@@ -1,3 +1,70 @@
+## Simulação de Teste de QI vs EXERCÍCIOS — módulos 100% separados (2026-08-28)
+
+- **DOIS módulos, REGRA ABSOLUTA**: `teste-qi/` (componente `IQTestComponent`,
+  tela `/teste-qi` + modal no CampusHub — "EXERCÍCIOS", treinamento, com
+  explicação de regras e recompensa SALVE) e `simulacao-qi/` (rota
+  `/simulacao-qi` — "SIMULAÇÃO", 32 questões inéditas, 25 min, 6 alternativas
+  A-F em 3×2, sem feedback/dicas durante a prova, resultado só ao final).
+  NENHUMA questão aparece nos dois — separação por `mode` (`exercise`/
+  `simulation`) no BANCO (`qi_questions`) E no motor. `sim-*` NUNCA no banco
+  de exercícios; `ex-*` NUNCA na prova.
+- **Banco**: `supabase/migrations/qi_simulacao.sql` (ordem 14 no README) —
+  seeds próprios 32 sim + 24 ex gerados por `testes/gerador-qi-seed.mts`
+  (o seed REGRAVA a migration + `banco-local.ts`; se rodar, conferir o diff
+  antes de commitar). `correct_option INTEGER CHECK (0..5)` (índice canônico
+  nas options). `qi_test_attempts` com RLS `user_id = auth.uid()` (REVOKE
+  anon/authenticated nas tabelas; GRANT SELECT q/UPDATE attempts p/ o dono;
+  `correct_option` NUNCA exposta por RPC — `qi_buscar_questoes` projeta sem
+  ela). RPCs: `qi_buscar_questoes(mode)` (ordena `difficulty_order ASC, id
+  ASC`), `qi_criar_tentativa` (32, ordenada), `qi_obter_tentativa_ativa`
+  (F5/retomada), `qi_salvar_respostas` (sessão), `qi_finalizar_simulacao`
+  (SCORE NO SERVIDOR: cruza respostas × gabarito do banco, idempotente,
+  `expired`/`submit`), `qi_listar_tentativas(n)`. **PRODUÇÃO: aplicar no SQL
+  Editor**; sem ela a UI degrada com segurança (fallback local determinístico
+  com aviso de não-persistência).
+- **PROGRESSÃO DE DIFICULDADE NÃO EMBARALHÁVEL**: `difficulty_order` 1..6
+  (1=1..6, 2=7..12, 3=13..18, 4=19..24, 5=25..28, 6=29..32). O motor ordena
+  SEMPRE `difficulty_order ASC` — a questão 1 é a mais fácil e a 32 a mais
+  difícil. O sistema pode randomizar só as ALTERNATIVAS, por tentativa.
+- **EMBARALHAMENTO determinístico (NÃO usar Math.random)**: `embaralhar.ts`
+  (FNV-1a + mulberry32 + Fisher-Yates) deriva a permutação do
+  `attempt_id`. A mesma tentativa (F5) re-deriva a MESMA ordem; tentativas
+  diferentes variam. A resposta é armazenada pelo **id estável da opção**
+  (`op-{idx}-{questionId}`), então o scoring (local E servidor) compara ids,
+  não posições. `OptionsGrid` renderiza `button[data-qi-option=A..F]` +
+  `data-qi-id` (usado pelos testes E2E).
+- **Persistência/F5 (local)**: `sessionStorage` `qi:simulacao:ativo:v1`
+  (`{attemptId, questions, startedAt}`), `qi:simulacao:resp:v1`,
+  `qi:simulacao:start:v1` POR ABA; relógio por `started_at` (nunca reinicia);
+  F5 restaura questão/respostas/relógio e NÃO cria nova tentativa. No
+  servidor, `qi_obter_tentativa_ativa` retoma a `in_progress` do user.
+  `qi:simulacao:expired:start` só é criado quando o servidor real acusa
+  tempo/expirada.
+- **Perfil dos jogos**: `ProfileSetup.tsx` → `PainelQi` ("QI / Inteligência"):
+  última simulação (acertos X/32, %, tempo, estimativa, data DD/MM/AAAA) +
+  HISTÓRICO por `attempt_id` (nunca apaga resultados), lido por RPC
+  `qi_listar_tentativas`. `calculateEstimatedResult` (scoring.ts) é a ÚNICA
+  função de conversão (fórmula `100 + (acertos − 16) × 2` → 0=68 … 32=132,
+  MESMA no servidor SQL) — nunca apresentar como "QI oficial".
+- **CampusHub/brio**: duas entradas visuais distintas (Exercícios de QI →
+  modal `IQTestComponent`; Simulação de Teste de QI → link `/simulacao-qi`).
+  Rotas: `/teste-qi` (exercícios, existente) e `/simulacao-qi` (SSR, `brio.tsx`
+  adiciona o card com ícone gauge).
+- **Testes**: `testes/e2e-simulacao-qi.mjs` (27 checks SHUFFLE-AWARE: clica
+  por `data-qi-option` e mapeia label→id; assert de acertos condicionado ao
+  gabarito real da tentativa — clicar "A" não é deterministicamente correto),
+  `testes/qi-embaralhar.test.mts` (10: hash estável, ids preservados, F5
+  mesma ordem, correta varia de posição, bancos DISJUNTOS 32+24, modes
+  corretos), `testes/gerador-qi-seed.mts` (gera 56 questões do seed).
+  E2E roda contra `testes/serve-build.mjs` (porta 3417) — SEMPRE matar
+  servidores velhos antes (servem HTML com hashes velhos → loading 0%).
+- **Validado em postgres local docker**: migration aplica limpa; anon/JWT
+  fora negado; `qi_criar_tentativa` 32 ordenadas; `qi_finalizar_simulacao`
+  com 32 respostas corretas → raw_score 32, 100%, estimativa 132, tempo
+  limitado a 1500s, idempotente; `qi_listar_tentativas` isola usuários;
+  finalizar tentativa de OUTRA conta → "tentativa não encontrada ou de outro
+  usuário".
+
 ## Futebol sem login (portão na Cidadela) + Trilha sem auto-captura (2026-08-28, 31ª passada)
 
 - **LOGIN SAIDO DO FUTEBOL (†)**: o Futebol roda 100% sem conta — "Meu Time"
