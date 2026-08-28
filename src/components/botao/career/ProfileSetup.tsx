@@ -1,5 +1,8 @@
-import { useState } from "react";
-import { ChevronLeft, Save, Shirt, Users, Sparkles, Coins } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BrainCircuit, ChevronLeft, Coins, Save, Shirt, Sparkles, Users } from "lucide-react";
+import { listarTentativas } from "@/components/campus/desenvolvimento-brio/simulacao-qi/api";
+import { formatarData, formatarTempo } from "@/components/campus/desenvolvimento-brio/simulacao-qi/scoring";
+import type { TentativaResumo } from "@/components/campus/desenvolvimento-brio/simulacao-qi/types";
 import { cachePerfil, CORES_PADRAO, salvarTimeLocal, type Perfil, type TimeLocal } from "../online/auth";
 import { atualizarPerfilClube } from "@/lib/botao/api";
 import { FORMACAO_DEFAULT, FORMACOES, formacaoById, type Tatica } from "./formacoes";
@@ -190,6 +193,9 @@ export function ProfileSetup({ perfil, timeLocal = null, onSalvarTimeLocal, onPr
           abreviacao={abreviacao}
         />
       )}
+
+      {/* QI / Inteligência — resultado da SIMULAÇÃO (linkado ao mesmo user_id dos jogos) */}
+      <PainelQi userId={perfil?.user_id ?? undefined} />
     </div>
   );
 }
@@ -544,6 +550,123 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
     <div className="flex items-center gap-2">
       <span className="text-primary">{icon}</span>
       <h3 className="font-display text-lg">{children}</h3>
+    </div>
+  );
+}
+
+const QI_STATUS_PT: Record<TentativaResumo["status"], string> = {
+  completed: "Concluída",
+  expired: "Tempo esgotado",
+  in_progress: "Em andamento",
+  abandoned: "Abandonada",
+};
+
+/**
+ * QI / Inteligência — mostra a ÚLTIMA simulação do usuário no MESMO perfil
+ * dos jogos (mesmo user_id). Não apaga resultados: lista o histórico por
+ * attempt_id. Fallback silencioso se a migration qi_simulacao.sql ainda não
+ * foi aplicada (mostra convite para /simulacao-qi).
+ */
+function PainelQi({ userId }: { userId?: string | undefined }) {
+  const [historico, setHistorico] = useState<TentativaResumo[] | null>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setHistorico([]);
+      return;
+    }
+    let ativo = true;
+    setCarregando(true);
+    void listarTentativas(10)
+      .then((h) => {
+        if (ativo) setHistorico(h ?? []);
+      })
+      .catch(() => {
+        if (ativo) setHistorico([]);
+      })
+      .finally(() => {
+        if (ativo) setCarregando(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [userId]);
+
+  const ultima = historico?.find((t) => t.status !== "in_progress") ?? historico?.[0] ?? null;
+  const restante = historico ? historico.slice(0, 5) : [];
+
+  if (!userId) {
+    return (
+      <div className="panel space-y-3">
+        <SectionTitle icon={<BrainCircuit className="size-4" />}>QI / Inteligência</SectionTitle>
+        <p className="text-xs text-muted-foreground">
+          Entre na Cidadela para salvar suas simulações neste perfil.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel space-y-3" data-testid="painel-qi-perfil">
+      <SectionTitle icon={<BrainCircuit className="size-4" />}>QI / Inteligência</SectionTitle>
+      {carregando && <p className="text-xs text-muted-foreground">Carregando…</p>}
+      {!carregando && historico !== null && historico.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Nenhuma simulação ainda. Faça a <a href="/simulacao-qi" className="text-primary underline">Simulação de Teste de QI</a>.
+        </p>
+      )}
+      {ultima && (
+        <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+          <p className="font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+            Última simulação · {formatarData(ultima.started_at)}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Acertos</span>
+              <span className="font-bold text-white" data-qi-perfil-acertos>
+                {ultima.raw_score} / {ultima.total_questions}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Percentual</span>
+              <span className="font-bold text-white">
+                {ultima.total_questions ? Math.round((ultima.raw_score / ultima.total_questions) * 100) : 0}%
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Tempo</span>
+              <span className="font-bold text-white">{formatarTempo(ultima.time_used_seconds)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Estimativa exp.</span>
+              <span className="font-bold text-indigo-300" data-qi-perfil-estimativa>
+                {ultima.estimated_result ?? "—"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restante.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+          <p className="font-display text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+            Histórico
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {restante.map((t) => (
+              <li key={t.attempt_id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">
+                  {formatarData(t.started_at)} · {QI_STATUS_PT[t.status] ?? t.status}
+                </span>
+                <span className="font-semibold text-white">
+                  {t.raw_score}/{t.total_questions} · {t.estimated_result ?? "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

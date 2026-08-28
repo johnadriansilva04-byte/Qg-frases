@@ -1401,3 +1401,345 @@ button.celular-card:hover {
 }
 .season-end-rise { animation: season-end-rise-kf 0.6s ease-out both; }
 .season-end-fall { animation: season-end-fall-kf 0.6s ease-out both; }
+
+/* ==================================================================
+   SIMULAÇÃO DE TESTE DE QI — módulo independente (EXERCÍCIOS ficam
+   no módulo I-RAVEN em teste-qi/). Interface limpa, séria, mobile.
+   ================================================================== */
+.qi-simulacao {
+  --qi-fg: oklch(0.9 0 0);
+  --qi-muted: oklch(0.72 0 0);
+  --qi-accent: oklch(0.76 0.15 145);
+  --qi-borda: oklch(0.32 0 0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 30rem;
+  margin-inline: auto;
+  padding: 1rem 0.75rem;
+  font-family: var(--font-display, ui-sans-serif, system-ui, sans-serif);
+  color: var(--qi-fg);
+  min-height: 100vh;
+}
+
+/* ---------- tela inicial ---------- */
+.qi-inicio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding-top: 1.25rem;
+  text-align: center;
+}
+.qi-titulo {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  margin: 0;
+}
+.qi-info {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  color: var(--qi-muted);
+}
+.qi-info strong {
+  color: var(--qi-fg);
+}
+.qi-aviso {
+  max-width: 26rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--qi-muted);
+  text-align: center;
+  margin: 0;
+}
+.qi-aviso--local {
+  border: 1px dashed oklch(0.65 0.13 80);
+  color: oklch(0.78 0.13 80);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.7rem;
+}
+.qi-erro {
+  max-width: 26rem;
+  font-size: 0.8rem;
+  color: oklch(0.7 0.18 25);
+  background: color-mix(in oklab, oklch(0.6 0.2 25) 12%, transparent);
+  border: 1px solid color-mix(in oklab, oklch(0.6 0.2 25) 35%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  text-align: center;
+}
+.qi-botao-primary {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display, ui-sans-serif, system-ui, sans-serif);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  color: oklch(0.98 0 0);
+  background: linear-gradient(180deg, oklch(0.62 0.16 145), oklch(0.45 0.12 145));
+  border-radius: 0.75rem;
+  padding: 0.85rem 2rem;
+  box-shadow: 0 6px 18px color-mix(in oklab, oklch(0.5 0.13 145) 35%, transparent);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.qi-botao-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.qi-botao-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- prova ---------- */
+.qi-prova {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+  align-items: center;
+}
+.qi-topo {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--qi-muted);
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid var(--qi-borda);
+}
+.qi-contador {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--qi-fg);
+}
+.qi-tempo {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: oklch(0.8 0.12 145);
+}
+.qi-tempo[data-expirou="true"] {
+  color: oklch(0.75 0.2 25);
+  animation: qi-piscar 0.8s ease-in-out infinite;
+}
+@keyframes qi-piscar {
+  50% { opacity: 0.45; }
+}
+.qi-matrix-wrap {
+  width: 100%;
+  max-width: 21rem;
+  padding: 0.2rem;
+}
+.qi-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.15rem;
+  width: 100%;
+  aspect-ratio: 1;
+}
+.qi-cell {
+  background: oklch(0.16 0 0);
+  border: 1px solid oklch(0.28 0 0);
+  border-radius: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+.qi-cell--gap {
+  border-style: dashed;
+  border-color: oklch(0.45 0.1 145 / 0.6);
+  background: color-mix(in oklab, oklch(0.5 0.12 145) 6%, oklch(0.14 0 0));
+}
+/* numeração sutil da lacuna (estilo prova de avaliação) */
+.qi-hint-num {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--qi-muted);
+  margin: 0.1rem 0;
+}
+.qi-dot {
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 99px;
+  background: currentColor;
+}
+
+/* 6 alternativas grandes em 3 colunas × 2 linhas ([A][B][C] / [D][E][F]) */
+.qi-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 21rem;
+}
+.qi-option {
+  appearance: none;
+  cursor: pointer;
+  border: 1.5px solid var(--qi-borda);
+  background: oklch(0.17 0 0);
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.3rem 0.3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.08s ease;
+  min-height: 5.4rem;
+}
+.qi-option:active { transform: scale(0.98); }
+.qi-option:hover:not(:disabled) { border-color: oklch(0.5 0.12 145 / 0.7); }
+.qi-option--sel {
+  border-color: var(--qi-accent);
+  background: color-mix(in oklab, oklch(0.55 0.14 145) 16%, oklch(0.17 0 0));
+  box-shadow: 0 0 0 2px color-mix(in oklab, oklch(0.55 0.14 145) 30%, transparent);
+}
+.qi-option:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.qi-option-letter {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--qi-muted);
+  border: 1px solid var(--qi-borda);
+  border-radius: 0.3rem;
+  padding: 0 0.35rem;
+  line-height: 1.2;
+}
+.qi-option--sel .qi-option-letter {
+  color: var(--qi-accent);
+  border-color: var(--qi-accent);
+}
+.qi-option-panel {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* rodapé de navegação */
+.qi-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 21rem;
+  margin-top: 0.35rem;
+}
+.qi-botao-sec {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid var(--qi-borda);
+  background: transparent;
+  color: var(--qi-fg);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: border-color 0.12s ease;
+}
+.qi-botao-sec:hover:not(:disabled) { border-color: var(--qi-accent); }
+.qi-botao-sec:disabled { opacity: 0.35; cursor: default; }
+.qi-respondidas {
+  font-size: 0.72rem;
+  color: var(--qi-muted);
+  white-space: nowrap;
+}
+.qi-botao-finalizar {
+  appearance: none;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: oklch(0.98 0 0);
+  background: oklch(0.52 0.16 25);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.9rem;
+}
+.qi-botao-finalizar:disabled { opacity: 0.5; cursor: default; }
+
+/* ---------- resultado ---------- */
+.qi-resultado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  width: 100%;
+  padding-top: 1.25rem;
+  text-align: center;
+}
+.qi-card-resultado {
+  width: 100%;
+  max-width: 22rem;
+  border: 1px solid var(--qi-borda);
+  border-radius: 0.9rem;
+  overflow: hidden;
+  background: oklch(0.15 0 0);
+}
+.qi-linha-resultado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid oklch(0.26 0 0);
+}
+.qi-linha-resultado:last-child { border-bottom: none; }
+.qi-rotulo {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--qi-muted);
+}
+.qi-valor {
+  font-size: 1.25rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--qi-fg);
+}
+.qi-valor--destacado {
+  color: var(--qi-accent);
+  font-size: 1.5rem;
+}
+.qi-resultado[data-estado="expired"] .qi-card-resultado {
+  border-color: color-mix(in oklab, oklch(0.6 0.2 25) 45%, var(--qi-borda));
+}
+
+/* responsivo pequeno */
+@media (min-width: 480px) {
+  .qi-option { min-height: 6rem; }
+  .qi-option-panel { aspect-ratio: 1.2; }
+}

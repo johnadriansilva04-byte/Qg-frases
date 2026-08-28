@@ -3,15 +3,16 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
   BookOpen,
+  BrainCircuit,
   CheckCircle2,
   Dna,
   FlaskConical,
+  Gauge,
   GraduationCap,
   Landmark,
   Lock,
   Sparkles,
   TrendingUp,
-  BrainCircuit,
 } from "lucide-react";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 import { salvareEstadoCidadelaHelper, salvareSovHelper } from "./campusHelpers";
@@ -254,10 +255,24 @@ export function CampusHub({ userId, perfil, onPerfilAtualizado, onVoltar }: Prop
           >
             <BrainCircuit className="h-5 w-5 text-emerald-500" />
             <div>
-              <p className="font-bold text-foreground">Desenvolvimento do Brio</p>
-              <p className="text-sm text-muted-foreground">Teste de QI procedural.</p>
+              <p className="font-bold text-foreground">Exercícios de QI</p>
+              <p className="text-sm text-muted-foreground">
+                Matrizes de raciocínio lógico com explicação das regras.
+              </p>
             </div>
           </button>
+          <Link
+            to="/simulacao-qi"
+            className="flex items-center gap-3 rounded-xl border border-indigo-500/50 bg-indigo-500/10 p-4 transition hover:border-indigo-500 hover:bg-indigo-500/20"
+          >
+            <Gauge className="h-5 w-5 text-indigo-400" />
+            <div>
+              <p className="font-bold text-foreground">Simulação de Teste de QI</p>
+              <p className="text-sm text-muted-foreground">
+                32 questões · 25 minutos · sem feedback · resultado no perfil.
+              </p>
+            </div>
+          </Link>
           <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-surface/30 p-4 opacity-60">
             <Lock className="h-5 w-5 text-muted-foreground" />
             <div>

@@ -59,6 +59,21 @@ migração é aplicada **manualmente** colando o conteúdo do arquivo no
     (botao_times.dono_user_id) e `sov_financial_system.sql`
     (record_transaction).** Sem ela, a vitrine de clubes simplesmente não
     existe no servidor (a UI mostra lista vazia).
+14. `qi_simulacao.sql` — **QI: SIMULAÇÃO + EXERCÍCIOS** (2026-08-28):
+    banco de questões próprio (`qi_questions`, mode `exercise`/`simulation`
+    separados de verdade no banco; simulação NUNCA usa questão de exercício e
+    vice-versa), 32 questões de simulação em `difficulty_order` 1..6 (ordem
+    ASC obrigatória, as 4 mais difíceis são sempre as últimas) + 24 de
+    exercício, e `qi_test_attempts` (tentativas por usuário com RLS
+    `user_id = auth.uid()`). RPCs: `qi_buscar_questoes(mode)` (retorna as
+    questões SEM `correct_option`), `qi_criar_tentativa` (cria prova de 32),
+    `qi_obter_tentativa_ativa` (F5/retomada), `qi_salvar_respostas`
+    (sessão), `qi_finalizar_simulacao` (pontuação calculada NO SERVIDOR,
+    resposta correta conferida contra o banco, idempotente) e
+    `qi_listar_tentativas`. Validação local docker: 56 seeds aplicam, fluxo
+    completo pontua 16/32 com respostas alternadas, RLS isola usuários e
+    nega anon. **Sem ela, a simulação degrada com segurança** (o app usa
+    banco local determinístico + resultado local avisando que não persiste).
 
 ## Como verificar se o SOV BANK está operacional
 
