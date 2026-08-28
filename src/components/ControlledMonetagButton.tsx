@@ -95,7 +95,7 @@ export function ControlledMonetagButton({
         disabled={isDisabled}
         className={`btn-primary ${className}`}
       >
-        {children || "Ver patrocinador"}
+        {children || "Cansou de jogar? Descubra algo novo."}
       </button>
 
       {/* Modal de confirmação */}

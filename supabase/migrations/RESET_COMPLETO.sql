@@ -10,7 +10,7 @@ DROP FUNCTION IF EXISTS public.criar_mesa_trilha(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.entrar_mesa_trilha(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.finalizar_partida_trilha(TEXT, UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.limpar_mesas_trilha_antigas() CASCADE;
-DROP FUNCTION IF EXISTS public.listar_mesas_trilha_disponive(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.listar_mesas_trilha_disponiveis(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.registrar_heartbeat_mesa_trilha(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.registrar_jogada_trilha(TEXT, INTEGER, INTEGER, INTEGER, INTEGER[], INTEGER, INTEGER, TEXT, BOOLEAN) CASCADE;
 DROP FUNCTION IF EXISTS public.tempo_restante_mesa_trilha(TEXT) CASCADE;

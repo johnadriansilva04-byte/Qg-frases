@@ -69,5 +69,35 @@ const celular = ler("src/components/botao/career/CelularConversas.tsx");
 expect(!celular.includes("\"Feira\""), "CelularConversas: 'Feira' renomeada");
 expect(celular.includes("Marketplace"), "CelularConversas: usa 'Marketplace'");
 
+// === CORREÇÃO ONCLICK: "Ver patrocínio" substituído por "Cansou de jogar? Descubra algo novo." ===
+const controlledMonetag = ler("src/components/ControlledMonetagButton.tsx");
+expect(!controlledMonetag.includes("Ver patrocinador"), "ControlledMonetagButton: 'Ver patrocinador' removido");
+expect(controlledMonetag.includes("Cansou de jogar"), "ControlledMonetagButton: novo texto presente");
+
+const loadingScreen = ler("src/components/botao/career/LoadingScreen.tsx");
+expect(!loadingScreen.includes("Ver patrocinador"), "LoadingScreen: 'Ver patrocinador' removido");
+expect(loadingScreen.includes("Cansou de jogar"), "LoadingScreen: novo texto presente");
+
+const authScreen = ler("src/components/botao/components/AuthScreen.tsx");
+expect(!authScreen.includes("Ver patrocinador"), "AuthScreen: 'Ver patrocinador' removido");
+expect(authScreen.includes("Cansou de jogar"), "AuthScreen: novo texto presente");
+
+const classificacao = ler("src/components/botao/career/ClassificacaoScreen.tsx");
+expect(!classificacao.includes("Ver patrocinador"), "ClassificacaoScreen: 'Ver patrocinador' removido");
+expect(classificacao.includes("Cansou de jogar"), "ClassificacaoScreen: novo texto presente");
+
+// === MatchEndAdCard: novo componente criado ===
+const matchEndCard = ler("src/components/MatchEndAdCard.tsx");
+expect(matchEndCard.includes("Cansou de jogar"), "MatchEndAdCard: componente criado com texto correto");
+expect(matchEndCard.includes("ControlledMonetagButton"), "MatchEndAdCard: usa ControlledMonetagButton");
+
+// === MatchEndScreen: card adicionado ===
+const matchEndScreen = ler("src/components/botao/components/MatchEndScreen.tsx");
+expect(matchEndScreen.includes("MatchEndAdCard"), "MatchEndScreen: card adicionado");
+
+// === TrilhaRPGScreen: card adicionado ===
+const trilhaRPG = ler("src/components/trilha/TrilhaRPGScreen.tsx");
+expect(trilhaRPG.includes("MatchEndAdCard"), "TrilhaRPGScreen: card adicionado");
+
 console.log(ok ? "== ONCLICK GUARD TESTES OK ==" : "== FALHAS ==");
 if (!ok) process.exit(1);

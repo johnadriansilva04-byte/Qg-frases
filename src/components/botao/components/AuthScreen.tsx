@@ -314,7 +314,7 @@ export function AuthScreen({ onPronto }: Props) {
             className="w-full text-xs"
             message="Uma página de patrocinador pode abrir. Deseja continuar?"
           >
-            Ver patrocinador
+            Cansou de jogar? Descubra algo novo.
           </ControlledMonetagButton>
         </div>
       )}

@@ -152,7 +152,7 @@ export function LoadingScreen({
               className="w-full text-xs"
               message={avisoSponsor.mensagem}
             >
-              Ver patrocinador
+              Cansou de jogar? Descubra algo novo.
             </ControlledMonetagButton>
           </div>
         )}

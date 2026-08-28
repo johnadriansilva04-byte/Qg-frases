@@ -1,5 +1,6 @@
 import { Trophy, TrendingUp, TrendingDown, Minus, Flag, Sparkles, CheckCircle2, Mic } from "lucide-react";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { MatchEndAdCard } from "@/components/MatchEndAdCard";
 
 export interface MatchEndData {
   /** Identificador único da partida (idempotência do patrocínio). */
@@ -191,6 +192,9 @@ export function MatchEndScreen({
             O jornalista da Cidadela quer suas declarações — seguras, sem anúncios até a coleta.
           </p>
         </div>
+
+        {/* Card de anúncio no fim de partida */}
+        <MatchEndAdCard />
       </div>
     </div>
   );

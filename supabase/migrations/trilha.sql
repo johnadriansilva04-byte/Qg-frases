@@ -254,7 +254,7 @@ BEGIN
   RETURN v_afetadas;
 END; $$;
 
--- JOGADA + TROCA DE TURNO
+-- JOGADA + TROCA DE TURNO + VERIFICAÇÃO DE FIM DE JOGO
 CREATE OR REPLACE FUNCTION public.registrar_jogada_trilha(
   p_mesa_id       TEXT,
   p_from          INTEGER,
@@ -275,6 +275,10 @@ DECLARE
   v_restante   INTEGER;
   v_player_num INTEGER;
   v_novo_turn  INTEGER;
+  v_p1_pieces  INTEGER;
+  v_p2_pieces  INTEGER;
+  v_vencedor_id UUID;
+  v_motivo     TEXT;
 BEGIN
   SELECT m.* INTO v_mesa
   FROM public.mesas_trilha m
@@ -331,6 +335,38 @@ BEGIN
          tempo_restante_segundos = v_restante
    WHERE m.mesa_id = p_mesa_id
   RETURNING m.* INTO v_mesa;
+
+  -- VERIFICAÇÃO DE FIM DE JOGO (apenas na fase de movimentação)
+  IF v_mesa.phase = 'moving' THEN
+    -- Conta peças de cada jogador
+    SELECT COUNT(*) INTO v_p1_pieces
+    FROM unnest(v_mesa.board) AS cell
+    WHERE cell = 1;
+
+    SELECT COUNT(*) INTO v_p2_pieces
+    FROM unnest(v_mesa.board) AS cell
+    WHERE cell = 2;
+
+    -- Aniquilação: jogador com menos de 3 peças perde (regra principal da Trilha)
+    IF v_p1_pieces < 3 THEN
+      v_vencedor_id := v_mesa.jogador_2_id;
+      v_motivo := 'aniquilacao';
+    ELSIF v_p2_pieces < 3 THEN
+      v_vencedor_id := v_mesa.jogador_1_id;
+      v_motivo := 'aniquilacao';
+    END IF;
+
+    -- Se houver vencedor, finaliza a partida
+    IF v_vencedor_id IS NOT NULL THEN
+      UPDATE public.mesas_trilha m
+         SET status = 'finalizado',
+             vencedor_id = v_vencedor_id,
+             motivo_finalizacao = v_motivo,
+             turn = NULL
+       WHERE m.mesa_id = p_mesa_id
+      RETURNING m.* INTO v_mesa;
+    END IF;
+  END IF;
 
   RETURN v_mesa;
 END; $$;

@@ -281,21 +281,21 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
       newBoard[to] = mesa.turn;
     }
 
-    // Remoção de peça
-    if (remove !== null) {
-      newBoard[remove] = 0;
-    }
-
     // Verificar mudança de fase
     if (newHandP1 === 0 && newHandP2 === 0 && mesa.phase === "placing") {
       newPhase = "moving";
     }
 
-    // Verificar trilha usando o motor do jogo
+    // Verificar trilha usando o motor do jogo (antes da remoção da peça capturada)
     const formedMill = millsFormedAt(newBoard, to, mesa.turn).length > 0;
     if (formedMill && remove === null) {
       // Se formou trilha e ainda não removeu peça, ativa modo de captura
       newPendingCapture = true;
+    }
+
+    // Remoção de peça (após verificar trilha)
+    if (remove !== null) {
+      newBoard[remove] = 0;
     }
 
     try {

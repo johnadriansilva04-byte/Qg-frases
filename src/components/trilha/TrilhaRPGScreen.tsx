@@ -1,5 +1,6 @@
 import { Trophy, Sparkles, ChevronRight, MessageSquare } from "lucide-react";
 import { useState } from "react";
+import { MatchEndAdCard } from "@/components/MatchEndAdCard";
 
 interface TrilhaRPGScreenProps {
   resultado: "vitoria" | "derrota" | "empate";
@@ -144,6 +145,9 @@ export function TrilhaRPGScreen({ resultado, fase, onContinue }: TrilhaRPGScreen
               Continuar
             </button>
           </div>
+
+          {/* Card de anúncio no fim de partida */}
+          <MatchEndAdCard />
         </div>
       </div>
     </div>
