@@ -313,6 +313,25 @@ BEGIN
     ELSE v_mesa.jogador_2_id
   END;
 
+  -- Validação de regras de jogo
+  -- Colocação: só permitida se o jogador ainda tem peças na mão
+  IF p_from IS NULL THEN
+    IF v_player_num = 1 AND (COALESCE(p_hand_p1, v_mesa.hand_p1) <= 0) THEN
+      RAISE EXCEPTION 'jogador 1 nao tem mais pecas para colocar';
+    END IF;
+    IF v_player_num = 2 AND (COALESCE(p_hand_p2, v_mesa.hand_p2) <= 0) THEN
+      RAISE EXCEPTION 'jogador 2 nao tem mais pecas para colocar';
+    END IF;
+  END IF;
+
+  -- Não permitir mão negativa
+  IF COALESCE(p_hand_p1, v_mesa.hand_p1) < 0 THEN
+    RAISE EXCEPTION 'hand_p1 nao pode ser negativo';
+  END IF;
+  IF COALESCE(p_hand_p2, v_mesa.hand_p2) < 0 THEN
+    RAISE EXCEPTION 'hand_p2 nao pode ser negativo';
+  END IF;
+
   -- Atualiza estatísticas de captura se removeu peça
   IF p_remove IS NOT NULL THEN
     UPDATE public.mesas_trilha m

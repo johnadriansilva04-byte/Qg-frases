@@ -53,7 +53,12 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
       // Se há movimento pendente esperando captura, completa o movimento primeiro
       if (pendingMove) {
         const completeMove = { ...pendingMove, remove: move.remove };
-        const next = applyMove(cur, completeMove);
+        // Não usar applyMove pois a mão já foi decrementada no movimento parcial
+        const next = cloneState(cur);
+        next.board[completeMove.remove!] = 0;
+        next.captured[cur.turn] += 1;
+        next.ply += 1;
+        next.turn = opponent(cur.turn);
         setLog((l: string[]) => [describeMove(completeMove, cur.turn, cur.ply), ...l].slice(0, 60));
         setLastMove(completeMove);
         setPendingMove(null);
@@ -80,7 +85,10 @@ export function useLocalGame(difficulty: Difficulty, human: Player = 1): LocalGa
         const partial = cloneState(cur);
         if (move.from !== null) partial.board[move.from] = 0;
         partial.board[move.to] = actor;
-        // Não subtrai da mão aqui - isso será feito quando o movimento for completado
+        // Decrementa da mão imediatamente para não permitir colocar mais de 9 peças
+        if (move.from === null) {
+          partial.hand[actor] -= 1;
+        }
         setPendingMove(move);
         setLastMove(move);
         return partial;

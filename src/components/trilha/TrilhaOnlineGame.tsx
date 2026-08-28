@@ -269,7 +269,13 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
 
     // Aplicar jogada no board
     if (from === null) {
-      // Colocação
+      // Colocação: validar se o jogador ainda tem peças
+      if (mesa.turn === 1 && mesa.hand_p1 <= 0) {
+        return; // Não permite colocar sem peças
+      }
+      if (mesa.turn === 2 && mesa.hand_p2 <= 0) {
+        return; // Não permite colocar sem peças
+      }
       newBoard[to] = mesa.turn;
       if (mesa.turn === 1) {
         newHandP1--;
@@ -291,6 +297,7 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
     const formedMill = millsFormedAt(newBoard, to, mesa.turn).length > 0;
     if (formedMill && remove === null) {
       // Se formou trilha e ainda não removeu peça, ativa modo de captura
+      // Hand já foi decrementado na colocação acima, então não precisa decrementar novamente
       newPendingCapture = true;
     }
 
