@@ -392,7 +392,7 @@ function CidadelaCompView() {
   }
 
   if (activeGame === "botao") {
-    return <BotaoGame onBack={() => setActiveGame(null)} />;
+    return <BotaoGame onBack={() => setActiveGame(null)} initialHydrated />;
   }
 
   return (

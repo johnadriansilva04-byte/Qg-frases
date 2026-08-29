@@ -277,6 +277,8 @@ interface BotaoGameProps {
   mesaConviteInicial?: string | undefined;
   /** Link direto de campeonato (?camp=...): abre a sala do campeonato direto. */
   campCodigoInicial?: string | undefined;
+  /** Quando true, hidratação já feita externamente (FootballLoadingScreen). Suprime overlay. */
+  initialHydrated?: boolean | undefined;
 }
 
 /** Chave do resume pós-F5 (sessionStorage, por aba e por usuário). */
@@ -305,7 +307,7 @@ function bonusCampeao(dificuldade: Difficulty): number {
   return POINTS.CAMPEAO_BASE + bonus;
 }
 
-export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: BotaoGameProps = {}) {
+export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initialHydrated }: BotaoGameProps = {}) {
   const { perfil, aplicarPerfil, recarregar, contaSemCadastro } = useBotaoAuth();
   // Link direto (?mesa= / ?camp=): a tela inicial já é o fluxo da sala —
   // o convidado nunca precisa procurar a mesa/campeonato.
@@ -4278,7 +4280,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial }: Bot
       {/* Loading apenas ao entrar no jogo (loading=true). REMOVIDO de auth
           (carregando) e hidratação inicial (precisaHidratar) para não mostrar
           loading em F5 ou navegação normal. */}
-      {loading && (
+      {loading && !initialHydrated && (
         <LoadingScreen
           pronto={loadingReady}
           onCompleto={loadingOnComplete}
