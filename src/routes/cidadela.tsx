@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Target, Trophy, Crown, Grid3X3, IdCard } from "lucide-react";
 import { TrilhaGame } from "@/components/trilha/TrilhaGame";
 import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
@@ -15,8 +15,7 @@ import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
-import { AuthScreen } from "@/components/botao/components/AuthScreen";
-import type { Perfil } from "@/components/botao/online/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { InfoModal } from "@/components/InfoModal";
 import { SEO_CONTENT } from "@/data/seoContent";
 import {
@@ -125,7 +124,7 @@ function CidadelaCompView() {
   // Login da Cidadela: se não houver sessão, pede conta no hub (o Futebol
   // continua jogável como visitante). "Loguei" → aplicarPerfil do hook.
   const [continuarComoVisitante, setContinuarComoVisitante] = useState(false);
-  const { perfil, carregando: carregandoAuth, aplicarPerfil: aplicarPerfilAuth } = useBotaoAuth();
+  const { perfil, carregando: carregandoAuth } = useBotaoAuth();
   // Celular central: carreira + handlers vêm do hook único (mesma fiação do
   // Modo Carreira — responder/escolher/excluir persistem no Supabase).
   const {
@@ -185,25 +184,30 @@ function CidadelaCompView() {
     setMostrarProfissoes(false);
   };
 
-  const handleLoginCidadela = (p?: Perfil) => {
-    if (p) {
-      aplicarPerfilAuth(p);
-      setContinuarComoVisitante(false);
-      return;
+  // Login único global: ao entrar sem conta, abre o AuthModal UMA vez
+  // por aba (guard no AuthProvider). O visitante pode fechar e seguir local.
+  const { pedirLogin, aoContinuarSemConta } = useAuth();
+  const jaPediuRef = useRef(false);
+  useEffect(() => {
+    if (
+      !carregandoAuth &&
+      !perfil &&
+      !continuarComoVisitante &&
+      !conviteMesaId &&
+      !conviteCampCodigo &&
+      !conviteMesaTrilhaId &&
+      !activeGame &&
+      !jaPediuRef.current
+    ) {
+      jaPediuRef.current = true;
+      pedirLogin("cidadela");
     }
-    setContinuarComoVisitante(true);
-  };
+  }, [carregandoAuth, perfil, continuarComoVisitante, conviteMesaId, conviteCampCodigo, conviteMesaTrilhaId, activeGame, pedirLogin]);
 
-  // Auto-login na Cidadela: sessão detectada pelo hook já entra direto. Sem
-  // sessão e o visitante ainda não decidiu, mostra o pedido de conta no hub.
-  const exigeLoginCidadela =
-    !carregandoAuth &&
-    !perfil &&
-    !continuarComoVisitante &&
-    !conviteMesaId &&
-    !conviteCampCodigo &&
-    !conviteMesaTrilhaId &&
-    !activeGame;
+  // Quando o visitante escolhe "Continuar sem conta" no AuthModal global
+  useEffect(() => {
+    return aoContinuarSemConta(() => setContinuarComoVisitante(true));
+  }, [aoContinuarSemConta]);
 
   const openModal = (type: "sobre" | "como" | "soberania") => setActiveModal(type);
   const closeModal = () => setActiveModal(null);
@@ -363,35 +367,6 @@ function CidadelaCompView() {
 
   return (
     <>
-      {/* LOGIN DA CIDADELA: sem sessão o hub pede conta (auto-login quando há
-          sessão já acontece no useBotaoAuth). O visitante pode seguir sem
-          conta — o Futebol roda local, "meu time" sem login. */}
-      {exigeLoginCidadela && (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4">
-          <main className="painel my-auto w-full max-w-lg rounded-3xl p-5 shadow-2xl md:p-8">
-            <header className="mb-4 flex flex-col items-center text-center">
-              <CidadelaEmblem className="mb-3 h-14 w-14 drop-shadow-lg" />
-              <h1 className="texto-marca text-3xl font-black tracking-tight">
-                Cidadela dos Clássicos
-              </h1>
-              <p className="mt-2 text-sm font-medium text-muted-foreground">
-                Entre na sua conta para sincronizar seu clube, a carreira e o
-                modo online. Sem conta? O Futebol continua jogável como visitante.
-              </p>
-            </header>
-            <AuthScreen onPronto={handleLoginCidadela} />
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => handleLoginCidadela(undefined)}
-                className="btn-ghost text-sm text-muted-foreground hover:text-foreground"
-              >
-                Continuar como visitante (jogar sem login)
-              </button>
-            </div>
-          </main>
-        </div>
-      )}
-      {!exigeLoginCidadela && (
       <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
         <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
           <header className="mb-6 flex flex-col items-center text-center">
@@ -476,8 +451,6 @@ function CidadelaCompView() {
           </div>
         </footer>
       </div>
-      )}
-
       {/* Modais de Informação */}
       <InfoModal
         isOpen={activeModal === "sobre"}
