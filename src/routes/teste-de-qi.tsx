@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AdSlot } from "@/components/AdSlot";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export const Route = createFileRoute("/teste-de-qi")({
   head: () => ({
@@ -50,6 +52,12 @@ const SUBMODULOS = [
 ];
 
 function TesteDeQI() {
+  const { perfil, pedirLogin } = useAuth();
+  // Login único: ao entrar sem conta, abre o modal UMA vez por aba
+  useEffect(() => {
+    if (perfil) return;
+    pedirLogin("teste-de-qi");
+  }, [perfil, pedirLogin]);
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* Efeito de grade cyberpunk */}

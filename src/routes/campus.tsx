@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { CelularFixo } from "@/components/CelularFixo";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useCelularCarreira } from "@/hooks/useCelularCarreira";
 import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
 import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
@@ -54,6 +56,12 @@ const SECTIONS: {
 
 function CampusView() {
   const { perfil } = useBotaoAuth();
+  const { pedirLogin } = useAuth();
+  // Login único: ao entrar sem conta, abre o modal UMA vez por aba
+  useEffect(() => {
+    if (perfil) return;
+    pedirLogin("campus");
+  }, [perfil, pedirLogin]);
   // Mesmo celular central do Modo Carreira/Cidadela — mesma fiação, sem
   // sistema paralelo: conversas, missões e handlers reais com persistência.
   const {
