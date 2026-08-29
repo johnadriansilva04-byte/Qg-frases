@@ -12,13 +12,13 @@ import { BrainCircuit, Lightbulb, Sparkles } from "lucide-react";
 import { RavenEngine } from "./engine";
 import { renderMatrix, renderPanel } from "./renderer/svgRenderer";
 import { explainProblem, EDUCATIONAL_DISCLAIMER, type RuleExplanation } from "./pedagogy";
-import { computeSalveReward, SALVE_CURRENCY, type SalveReward } from "./rewards";
+import { computeSovReward, SOV_CURRENCY, type SovReward } from "./rewards";
 import type { GeneratedProblem } from "./types";
 
 interface IQTestComponentProps {
   onProblemComplete?: (correct: boolean, timeTaken: number) => void;
   /** Chamado com o total de SALVE ganho em cada desafio (0 em caso de erro). */
-  onReward?: (amount: number, rewards: SalveReward[]) => void;
+  onReward?: (amount: number, rewards: SovReward[]) => void;
   showSolution?: boolean;
 }
 
@@ -34,7 +34,7 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
   const [selected, setSelected] = useState<number | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [explanations, setExplanations] = useState<RuleExplanation[]>([]);
-  const [lastRewards, setLastRewards] = useState<SalveReward[]>([]);
+  const [lastRewards, setLastRewards] = useState<SovReward[]>([]);
   const [streak, setStreak] = useState(0);
   const [startTime, setStartTime] = useState(0);
 
@@ -59,7 +59,7 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
     const newStreak = correct ? streak + 1 : 0;
     setStreak(newStreak);
 
-    const rewards = computeSalveReward({ correct, firstTry: true, hintsUsed: 0, streak: newStreak });
+    const rewards = computeSovReward({ correct, firstTry: true, hintsUsed: 0, streak: newStreak });
     setLastRewards(rewards);
     const total = rewards.reduce((s, r) => s + r.amount, 0);
     if (total > 0 && onReward) onReward(total, rewards);
@@ -142,7 +142,7 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
             {correct ? "✓ Correto!" : "✗ Incorreto — veja a explicação abaixo."}
             {correct && salveTotal > 0 && (
               <span className="ml-2 text-amber-400">
-                +{salveTotal} {SALVE_CURRENCY.symbol}
+                +{salveTotal} {SOV_CURRENCY.symbol}
               </span>
             )}
           </div>
@@ -150,11 +150,11 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
           {lastRewards.length > 0 && correct && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
               <p className="mb-1 flex items-center gap-1 font-bold uppercase tracking-wide">
-                <Sparkles className="h-3 w-3" /> Recompensas em {SALVE_CURRENCY.name}
+                <Sparkles className="h-3 w-3" /> Recompensas em {SOV_CURRENCY.name}
               </p>
               {lastRewards.map((r, i) => (
                 <p key={i}>
-                  +{r.amount} {SALVE_CURRENCY.symbol} — {r.reason}
+                  +{r.amount} {SOV_CURRENCY.symbol} — {r.reason}
                 </p>
               ))}
             </div>

@@ -9,11 +9,11 @@
 import React from "react";
 import type { EstruturaPainel, PanelLight } from "./types";
 
-/** Conversão nível de tamanho (0..5) → raio/medida da forma. */
-const SIZE_SCALE = [30, 38, 48, 60, 74, 88];
+/** Conversão nível de tamanho (0..5) → raio/medida da forma (aumentado para clareza). */
+const SIZE_SCALE = [36, 46, 58, 72, 88, 106];
 
-/** Cores (tons de cinza, como o I-RAVEN) por nível de cor (0..3). */
-const COLOR_SHADES = ["#111827", "#374151", "#6b7280", "#9ca3af"];
+/** Cores com alto contraste para acessibilidade visual. */
+const COLOR_SHADES = ["#030712", "#1f2937", "#4b5563", "#9ca3af"];
 
 const TYPES = ["circle", "rectangle", "triangle", "pentagon", "cross", "star"];
 

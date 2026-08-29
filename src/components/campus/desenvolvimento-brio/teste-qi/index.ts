@@ -9,12 +9,12 @@ export { renderMatrix, renderPanel, renderOptions, mountProblem } from "./render
 export { explainRule, explainProblem, EDUCATIONAL_DISCLAIMER } from "./pedagogy";
 export type { RuleExplanation } from "./pedagogy";
 export {
-  SALVE_CURRENCY,
-  SALVE_REWARDS,
-  computeSalveReward,
+  SOV_CURRENCY,
+  SOV_REWARDS,
+  computeSovReward,
   sessionCompletionReward,
   settleRewards,
 } from "./rewards";
-export type { ChallengeResult, SalveReward, SalveWallet } from "./rewards";
+export type { ChallengeResult, SovReward, SovWallet } from "./rewards";
 export * from "./types";
 export * from "./constants";

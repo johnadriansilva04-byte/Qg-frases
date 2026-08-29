@@ -16,12 +16,39 @@
  * - O resultado é vinculado ao mesmo user_id dos jogos.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock, TimerOff } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Info, TimerOff, X } from "lucide-react";
 import { backendQiAtivo, buscarQuestoes, criarTentativa, finalizarSimulacao, gabaritoLocalOptionId, obterTentativaAtiva, salvarRespostas } from "./api";
 import { embaralharOpcoes } from "./embaralhar";
 import { MatrixSVG, OptionsGrid } from "./renderer";
 import { formatarTempo } from "./scoring";
 import { SIMULACAO, type QuestaoRender, type ResultadoSimulacao } from "./types";
+
+/** Persiste o melhor resultado QI no localStorage para exibição no perfil. */
+function persistirPerfilQi(resultado: ResultadoSimulacao) {
+  try {
+    const chave = "qi:perfil:melhor";
+    const anterior = JSON.parse(localStorage.getItem(chave) || "null") as {
+      estimated_result: number; percentual: number; raw_score: number; total: number; data: string
+    } | null;
+    if (!anterior || resultado.estimated_result > anterior.estimated_result) {
+      localStorage.setItem(chave, JSON.stringify({
+        estimated_result: resultado.estimated_result,
+        percentual: resultado.percentual,
+        raw_score: resultado.raw_score,
+        total: resultado.total_questions,
+        data: new Date().toISOString(),
+      }));
+    }
+  } catch { /* quota */ }
+}
+
+/** Lê o melhor resultado QI salvo (para exibir no perfil). */
+export function obterPerfilQi(): { estimated_result: number; percentual: number; raw_score: number; total: number; data: string } | null {
+  try {
+    const raw = localStorage.getItem("qi:perfil:melhor");
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 const AVISO_EXPERIMENTAL =
   "Esta é uma simulação experimental de raciocínio inspirada no estilo de avaliações não verbais. Não é um teste oficial da Mensa Brasil, não possui validade para admissão e não substitui uma avaliação psicológica.";
@@ -216,6 +243,7 @@ export function SimulacaoIQ() {
       const res = await finalizarSimulacao(estado.attemptId, todasAsRespostas, finalizacao);
       if (res) {
         clearLocalTentativa();
+        persistirPerfilQi(res);
         setResultado(res);
         setFase("resultado");
         return;
@@ -246,6 +274,13 @@ export function SimulacaoIQ() {
       time_limit_seconds: SIMULACAO.TIME_LIMIT_SECONDS,
     });
     clearLocalTentativa();
+    persistirPerfilQi({
+      ...({}),
+      estimated_result: Math.round(100 + (acertos - total / 2) * 2),
+      percentual,
+      raw_score: acertos,
+      total_questions: total,
+    } as ResultadoSimulacao);
     setApenasLocal(true);
     setFase("resultado");
   }
@@ -420,6 +455,8 @@ function TelaInicial({
   backend: boolean;
   onIniciar: () => void;
 }) {
+  const [metodologiaAberta, setMetodologiaAberta] = useState(false);
+  const [disclaimerAberto, setDisclaimerAberto] = useState(false);
   return (
     <div className="qi-inicio">
       <span className="qi-badge">SIMULAÇÃO · AVALIAÇÃO</span>
@@ -431,6 +468,30 @@ function TelaInicial({
         <li>Dificuldade progressiva</li>
         <li>Sem feedback durante a prova</li>
       </ul>
+
+      {/* Accordion: metodologia */}
+      <div className="qi-accordion">
+        <button
+          type="button"
+          className="qi-accordion-trigger"
+          onClick={() => setMetodologiaAberta(!metodologiaAberta)}
+        >
+          <span><Info size={13} aria-hidden="true" /> Ver detalhes da metodologia</span>
+          <ChevronDown size={14} style={{ transform: metodologiaAberta ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }} />
+        </button>
+        {metodologiaAberta && (
+          <div className="qi-accordion-content">
+            <p>Este teste utiliza figuras matriciais no formato de raciocínio não verbal,
+            similar às escalas Raven. As questões são ordenadas por dificuldade crescente
+            e avaliam capacidade de raciocínio abstrato, reconhecimento de padrões e
+            inferência lógica.</p>
+            <p>O resultado é uma estimativa experimental calculada internamente pela
+            plataforma e não possui equivalência direta com escalas psicométricas
+            profissionais.</p>
+          </div>
+        )}
+      </div>
+
       <p className="qi-aviso">{AVISO_EXPERIMENTAL}</p>
       {erro && <p className="qi-erro">{erro}</p>}
       {!backend && (
@@ -443,6 +504,28 @@ function TelaInicial({
       <button type="button" className="qi-botao-primary" disabled={carregando || !!erro} onClick={onIniciar}>
         {carregando ? "Carregando…" : "INICIAR SIMULAÇÃO"}
       </button>
+
+      {/* Disclaimer modal */}
+      {disclaimerAberto && (
+        <div className="qi-disclaimer-overlay" onClick={() => setDisclaimerAberto(false)}>
+          <div className="qi-disclaimer-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Sobre testes oficiais de QI</h3>
+            <p>Este teste é uma referência interna exclusiva da Cidadela dos Clássicos.
+            Ele não possui validade clínica ou acadêmica externa, e não deve ser
+            utilizado para diagnóstico ou avaliação psicológica profissional.</p>
+            <p>Para realizar testes de QI oficiais com validação psicométrica, consulte:
+            </p>
+            <p><a href="https://mensabrasil.org" target="_blank" rel="noopener noreferrer">
+              Mensa Brasil <ExternalLink size={11} aria-hidden="true" />
+            </a></p>
+            <p>Ou procure um profissional de psicologia habilitado para avaliação
+            neuropsicológica.</p>
+            <button type="button" className="qi-disclaimer-close" onClick={() => setDisclaimerAberto(false)}>
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -546,6 +629,7 @@ function TelaProva({
 }
 
 function TelaResultado({ resultado, apenasLocal, onRefazer }: { resultado: ResultadoSimulacao; apenasLocal: boolean; onRefazer: () => void }) {
+  const [disclaimerAberto, setDisclaimerAberto] = useState(false);
   return (
     <div className="qi-resultado" data-estado={resultado.status}>
       <span className="qi-badge">RESULTADO</span>
@@ -577,18 +661,48 @@ function TelaResultado({ resultado, apenasLocal, onRefazer }: { resultado: Resul
       {resultado.status === "expired" && (
         <p className="qi-aviso"><TimerOff size={14} aria-hidden="true" /> O tempo limite foi atingido.</p>
       )}
+
+      {/* Disclaimer discreto */}
       <p className="qi-aviso">
-        Este resultado é experimental e pertence exclusivamente a esta simulação. Não
-        representa um resultado oficial da Mensa Brasil nem uma avaliação psicológica válida.
+        Este resultado é uma referência interna da Cidadela dos Clássicos.
+        Não possui validade clínica ou acadêmica externa.
+        <button
+          type="button"
+          style={{ background: "none", border: "none", color: "oklch(0.62 0 0)", textDecoration: "underline", cursor: "pointer", font: "inherit", fontSize: "inherit", padding: 0, marginLeft: 4 }}
+          onClick={() => setDisclaimerAberto(true)}
+        >
+          Saiba mais
+        </button>
       </p>
+
       {apenasLocal && (
         <p className="qi-aviso qi-aviso--local">
-          Resultado calculado localmente (a migration ainda não persiste no servidor).
+          <span className="qi-aviso-dot" aria-hidden="true" />
+          Resultado calculado localmente (o servidor não está disponível).
         </p>
       )}
       <button type="button" className="qi-botao-primary" onClick={onRefazer}>
         NÚCLEO DA SIMULAÇÃO
       </button>
+
+      {/* Disclaimer modal */}
+      {disclaimerAberto && (
+        <div className="qi-disclaimer-overlay" onClick={() => setDisclaimerAberto(false)}>
+          <div className="qi-disclaimer-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Sobre testes oficiais de QI</h3>
+            <p>Este resultado é uma referência interna exclusiva da Cidadela dos Clássicos.
+            Ele não possui validade clínica ou acadêmica externa.</p>
+            <p>Para testes oficiais, consulte:</p>
+            <p><a href="https://mensabrasil.org" target="_blank" rel="noopener noreferrer">
+              Mensa Brasil <ExternalLink size={11} aria-hidden="true" />
+            </a></p>
+            <p>Ou procure um profissional de psicologia habilitado.</p>
+            <button type="button" className="qi-disclaimer-close" onClick={() => setDisclaimerAberto(false)}>
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
