@@ -49,8 +49,8 @@ export function CampeonatoHub({
             <input className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 focus:border-emerald-400/50 focus:outline-none" value={nomeSala} onChange={(e) => setNomeSala(e.target.value)} placeholder="Campeonato Online" maxLength={40} />
           </Field>
           <Field label="Formato">
-            <div className="grid grid-cols-2 gap-2">
-              {([["pontos", "Pontos Corridos", "Todos vs todos"], ["mata-mata", "Mata-Mata", "Eliminatório"]] as const).map(([id, label, desc]) => (
+            <div className="grid grid-cols-3 gap-2">
+              {([["pontos", "Pontos Corridos", "Todos vs todos"], ["mata-mata", "Mata-Mata", "Eliminatório"], ["grupos", "Grupos + Elim.", "Grupos → 2 avançam → chave"]] as const).map(([id, label, desc]) => (
                 <button key={id} onClick={() => setFormato(id)} className={`rounded-xl border p-3 text-left transition ${formato === id ? "border-emerald-400/60 bg-emerald-400/10" : "border-white/10 hover:border-white/20"}`}>
                   <p className="text-sm font-bold text-white">{label}</p>
                   <p className="text-[11px] text-white/40">{desc}</p>
@@ -139,6 +139,7 @@ export function CampeonatoHub({
                   <p className="text-[11px] text-white/40">
                     <span className="font-mono">{c.codigo}</span> · {numPart}/{c.max_jogadores} jogadores · {vagas} vagas
                     {c.formato === "mata-mata" && <span className="ml-1 text-amber-300"> · Mata-Mata</span>}
+                    {c.formato === "grupos" && <span className="ml-1 text-amber-300"> · Grupos + Elim.</span>}
                   </p>
                 </div>
                 <div className="text-right">

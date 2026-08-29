@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Users, Trophy, Play, Plus, RefreshCw, Link2, Crown, Swords } from "lucide-react";
+import { ArrowLeft, Users, Trophy, Play, Plus, RefreshCw, Link2, Crown, Swords, Target } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
+import { TrilhaChampionship } from "./TrilhaChampionship";
 
 interface Mesa {
   mesa_id: string;
@@ -30,6 +31,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
   const [mesaAtual, setMesaAtual] = useState<string | null>(null);
   const [supabaseNotConfigured, setSupabaseNotConfigured] = useState(false);
   const [toastLink, setToastLink] = useState<string | null>(null);
+  const [showChampionship, setShowChampionship] = useState(false);
   const entradaLinkTentada = useRef<string | null>(null);
 
   useEffect(() => {
@@ -156,6 +158,10 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
     return `${horas}h atrás`;
   };
 
+  if (showChampionship) {
+    return <TrilhaChampionship onBack={() => setShowChampionship(false)} />;
+  }
+
   if (mesaAtual) {
     return <TrilhaOnlineGame mesaId={mesaAtual} onBack={() => setMesaAtual(null)} />;
   }
@@ -221,6 +227,26 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
             </button>
           </div>
         </div>
+
+        {/* Campeonato Online */}
+        <section className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.03] p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-display text-lg font-black text-white flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-amber-400" /> Campeonato Online
+              </h2>
+              <p className="text-sm text-white/40">
+                Pontos Corridos ou Grupos + Eliminatórias. Crie, convide e dispute!
+              </p>
+            </div>
+            <button
+              onClick={() => setShowChampionship(true)}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:from-amber-500 hover:to-amber-400 active:scale-[0.97]"
+            >
+              <Trophy className="h-4 w-4" /> Abrir
+            </button>
+          </div>
+        </section>
 
         {/* Criar sala — simples: nome + formato, sem dificuldade. */}
         <section className="mb-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">

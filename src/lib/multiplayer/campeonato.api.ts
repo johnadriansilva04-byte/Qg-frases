@@ -27,8 +27,8 @@ export type BotCampeonato = {
   power: number;
 };
 
-/** Formato do campeonato: 'pontos' (todos vs todos) ou 'mata-mata' (eliminação). */
-export type FormatoCampeonato = "pontos" | "mata-mata";
+/** Formato do campeonato: 'pontos' (todos vs todos), 'mata-mata' (eliminação direta) ou 'grupos' (fase de grupos + eliminatórias). */
+export type FormatoCampeonato = "pontos" | "mata-mata" | "grupos";
 
 export type ConfrontoCampeonato = {
   rodada: number;

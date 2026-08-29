@@ -9,9 +9,11 @@ import { legalDestinations, legalPlacements, canFly, millsFormedAt, removableTar
 interface TrilhaOnlineGameProps {
   mesaId: string;
   onBack?: () => void;
+  /** Called when the game ends (for championship integration). */
+  onFinish?: (winnerId: string | null) => void;
 }
 
-export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
+export function TrilhaOnlineGame({ mesaId, onBack, onFinish }: TrilhaOnlineGameProps) {
   const [mesa, setMesa] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<number | null>(null);
@@ -491,6 +493,14 @@ export function TrilhaOnlineGame({ mesaId, onBack }: TrilhaOnlineGameProps) {
             <p className="text-muted-foreground">
               {mesa.motivo_finalizacao === 'abandono' ? 'O oponente abandonou a partida.' : 'Partida finalizada.'}
             </p>
+            {onFinish && (
+              <button
+                onClick={() => onFinish(mesa.vencedor_id ?? null)}
+                className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Continuar
+              </button>
+            )}
           </div>
         )}
 

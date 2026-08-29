@@ -643,7 +643,7 @@ function SalaCampeonato({
           ? "Finalizado"
           : "Cancelado";
 
-  const formatoLabel = camp.formato === "mata-mata" ? "Mata-Mata" : "Pontos Corridos";
+  const formatoLabel = camp.formato === "mata-mata" ? "Mata-Mata" : camp.formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos";
 
   return (
     <main className="relative mx-auto w-full max-w-4xl px-4 py-6">
@@ -667,7 +667,7 @@ function SalaCampeonato({
                   <span className="font-mono">{camp.codigo}</span>
                   <span className="text-slate-700">·</span>
                   <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
-                    camp.formato === "mata-mata" ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300"
+                    camp.formato === "mata-mata" ? "bg-amber-500/15 text-amber-300" : camp.formato === "grupos" ? "bg-purple-500/15 text-purple-300" : "bg-sky-500/15 text-sky-300"
                   }`}>{formatoLabel}</span>
                   <span className="text-slate-700">·</span>
                   <span>{statusLabel}</span>
@@ -884,8 +884,7 @@ function SalaCampeonato({
                   </span>
                   <div className="h-px flex-1 bg-gradient-to-l from-cyan-500/30 to-transparent" />
                 </div>
-                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
-                  {camp.formato === "mata-mata" ? (
+                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">                    {(camp.formato === "mata-mata" || camp.formato === "grupos") ? (
                     <MataMataBracket
                       confrontos={confrontos}
                       participantes={participantes}
