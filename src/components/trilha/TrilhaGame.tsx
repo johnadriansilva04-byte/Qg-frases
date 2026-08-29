@@ -119,76 +119,101 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
 
 function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack: (() => void) | undefined; onSelectCareer: () => void; onSelectOnline: () => void }) {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1a] via-[#0d1525] to-[#0a0f1a]">
+      <header className="flex items-center justify-between border-b border-slate-700/40 px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
-            <h2 className="texto-marca text-lg sm:text-xl">TRILHA</h2>
-            <p className="text-xs text-muted-foreground">Jogo de estratégia tática da FEB</p>
+            <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
+              TRILHA <span className="text-emerald-400 text-xs font-bold ml-1">FEB</span>
+            </h2>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Estratégia Tática</p>
           </div>
         </div>
         {onBack ? (
           <button
             onClick={onBack}
-            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 border border-slate-600/40 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
           >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Voltar à Cidadela</span>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Voltar</span>
           </button>
         ) : null}
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="text-center mb-8">
-          <Target className="h-16 w-16 text-primary mx-auto mb-4" />
-          <h1 className="text-3xl font-bold mb-2">Escolha o Modo de Jogo</h1>
-          <p className="text-muted-foreground">Selecione como você quer jogar Trilha</p>
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:py-12">
+        {/* Hero */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-5">
+            <Target className="h-10 w-10 text-emerald-400" />
+          </div>
+          <h1 className="font-display text-3xl sm:text-4xl font-black text-white mb-3 tracking-tight">
+            Escolha o Campo de Batalha
+          </h1>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">
+            Trilha — jogo de estratégia mental onde formações de três peças neutralizam o inimigo.
+          </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        {/* Mode cards */}
+        <div className="grid gap-5 md:grid-cols-2 max-w-2xl mx-auto">
+          {/* Career mode */}
           <button
             onClick={onSelectCareer}
-            className="p-6 bg-muted/50 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/10 transition-all text-left"
+            className="group relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-950/60 p-6 text-left transition-all duration-300 hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.1)] active:scale-[0.98]"
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-primary/20 rounded-lg">
-                <Trophy className="h-8 w-8 text-primary" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Trophy className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-black text-white tracking-wide">Modo Carreira</h3>
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-blue-400/70 font-bold">Offline · IA</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold">Modo Carreira</h3>
-                <p className="text-sm text-muted-foreground">Offline</p>
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Enfrente a IA em fases progressivas. Do Recruta ao General — complete todas as fases para se tornar o Mestre da Trilha.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-400">
+                <Gamepad2 className="h-3.5 w-3.5" />
+                <span>3 Fases · Sistema de Troféus</span>
               </div>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Jogue contra a IA e avance pelas fases do campeonato. Complete todos os níveis para se tornar o Mestre da Trilha!
-            </p>
-            <div className="flex items-center gap-2 text-sm font-medium text-primary">
-              <Gamepad2 className="h-4 w-4" />
-              <span>Sistema de Fases e Troféus</span>
             </div>
           </button>
 
+          {/* Online mode */}
           <button
             onClick={onSelectOnline}
-            className="p-6 bg-muted/50 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/10 transition-all text-left"
+            className="group relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 to-slate-950/60 p-6 text-left transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.1)] active:scale-[0.98]"
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-primary/20 rounded-lg">
-                <Users className="h-8 w-8 text-primary" />
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Users className="h-6 w-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-black text-white tracking-wide">Modo Online</h3>
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-emerald-400/70 font-bold">Multijogador</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold">Modo Online</h3>
-                <p className="text-sm text-muted-foreground">Multijogador</p>
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Desafie outros jogadores em tempo real. Crie mesas, convide amigos e prove sua estratégia.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                <Users className="h-3.5 w-3.5" />
+                <span>1v1 · Salas Privadas</span>
               </div>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Jogue contra outros jogadores em tempo real. Crie mesas ou entre em partidas já existentes.
-            </p>
-            <div className="flex items-center gap-2 text-sm font-medium text-primary">
-              <Users className="h-4 w-4" />
-              <span>Jogue contra oponentes reais</span>
             </div>
           </button>
+        </div>
+
+        {/* Rules hint */}
+        <div className="mt-8 text-center">
+          <p className="text-[10px] text-slate-600">
+            9 peças por jogador · 24 interseções · 16 trilhas possíveis · Derrote o adversário reduzindo-o a 2 peças
+          </p>
         </div>
       </main>
     </div>
@@ -197,8 +222,8 @@ function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack: (()
 
 function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRules: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-lg max-w-lg w-full p-6 shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-700/50">
         <div className="text-center mb-6">
           <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-3xl font-bold mb-2">Bem-vindo à Trilha!</h2>
@@ -206,7 +231,7 @@ function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRu
         </div>
 
         <div className="space-y-4 mb-6">
-          <div className="bg-primary/10 p-4 rounded-lg">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
             <h3 className="font-semibold text-primary mb-2 flex items-center gap-2">
               <Target className="h-5 w-5" />
               Sistema de Fases
@@ -229,13 +254,13 @@ function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRu
         <div className="space-y-3">
           <button
             onClick={onStart}
-            className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-emerald-400 transition-all active:scale-[0.98]"
           >
-            Já sei jogar - Começar
+            Já sei jogar — Começar
           </button>
           <button
             onClick={onShowRules}
-            className="w-full bg-secondary/70 text-foreground px-6 py-3 rounded-lg font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+            className="w-full border border-slate-600/40 bg-slate-800/60 text-slate-300 px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700/60 hover:text-white transition-all flex items-center justify-center gap-2"
           >
             <BookOpen className="h-4 w-4" />
             Quero aprender as regras
@@ -248,8 +273,8 @@ function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRu
 
 function RulesModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-700/50">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
@@ -257,7 +282,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
           </h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="text-slate-500 hover:text-white transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -266,7 +291,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-2">🎯 Objetivo</h3>
-            <p className="text-muted-foreground">
+            <p className="text-slate-400">
               Forme "trilhas" (três peças em linha reta) para capturar peças do inimigo. 
               Reduza o adversário a 2 peças ou bloqueie todos os movimentos dele para vencer.
             </p>
@@ -274,7 +299,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
           <section>
             <h3 className="text-lg font-semibold mb-2">📦 Fase de Colocação</h3>
-            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+            <ul className="list-disc list-inside space-y-1 text-slate-400">
               <li>Cada jogador coloca 9 peças, uma por vez</li>
               <li>Clique em uma interseção vazia para colocar sua peça</li>
               <li>Forme uma trilha para capturar uma peça inimiga</li>
@@ -283,7 +308,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
           <section>
             <h3 className="text-lg font-semibold mb-2">♟️ Fase de Movimentação</h3>
-            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+            <ul className="list-disc list-inside space-y-1 text-slate-400">
               <li>Selecione sua peça clicando nela</li>
               <li>Clique em uma interseção adjacente vazia para mover</li>
               <li>Quando restar apenas 3 peças, você pode "voar" para qualquer casa vazia</li>
@@ -292,7 +317,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
           <section>
             <h3 className="text-lg font-semibold mb-2">⚔️ Captura</h3>
-            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+            <ul className="list-disc list-inside space-y-1 text-slate-400">
               <li>Ao formar uma trilha, você deve remover uma peça inimiga</li>
               <li>Não pode remover peças que estão em trilhas (a menos que todas estejam)</li>
               <li>Clique na peça inimiga que deseja capturar</li>
@@ -301,7 +326,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
           <section>
             <h3 className="text-lg font-semibold mb-2">🏆 Condições de Vitória</h3>
-            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+            <ul className="list-disc list-inside space-y-1 text-slate-400">
               <li>Reduzir o adversário a 2 peças</li>
               <li>Bloquear todos os movimentos do adversário</li>
             </ul>
@@ -320,9 +345,9 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
         <button
           onClick={onClose}
-          className="w-full mt-6 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+          className="w-full mt-6 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-emerald-400 transition-all active:scale-[0.98]"
         >
-          Entendi! Começar Jogo
+          Entendi — Começar Jogo
         </button>
       </div>
     </div>
@@ -334,8 +359,8 @@ function TrophiesModal({ onClose, phases }: { onClose: () => void; phases: Retur
   const progress = phases.getProgressToNextTrophy();
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-700/50">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Award className="h-6 w-6 text-yellow-500" />
@@ -643,42 +668,44 @@ function TrilhaGameBoard({
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1a] via-[#0d1525] to-[#0a0f1a]">
+      <header className="flex items-center justify-between border-b border-slate-700/40 px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
-            <h2 className="texto-marca text-lg sm:text-xl">A TRILHA</h2>
-            <p className="text-xs text-muted-foreground">
-              Jogo de estratégia tática · FEB vs Eixo
+            <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
+              A TRILHA <span className="text-emerald-400 text-xs font-bold ml-1">FEB</span>
+            </h2>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+              Estratégia Tática · FEB vs Eixo
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {currentPhaseConfig && (
-            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-              <Target className="h-4 w-4" />
+            <div className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <Target className="h-3.5 w-3.5" />
               {currentPhaseConfig.name}
             </div>
           )}
-          <div className="bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-            <Trophy className="h-4 w-4" />
+          <div className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5">
+            <Trophy className="h-3.5 w-3.5" />
             {phases.progress.consecutiveWins} / {currentPhaseConfig?.requiredWins || 7}
           </div>
           <button
             data-tour="trilha-trofeus"
             onClick={onShowTrophies}
-            className="flex items-center gap-2 bg-secondary/70 text-foreground hover:bg-secondary px-4 py-2 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 border border-slate-600/40 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
           >
-            <Award className="h-4 w-4" />
+            <Award className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Troféus</span>
           </button>
           {onBack ? (
             <button
               onClick={onBack}
-              className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 border border-slate-600/40 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
             >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Voltar à Cidadela</span>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Voltar</span>
             </button>
           ) : null}
         </div>
@@ -687,10 +714,10 @@ function TrilhaGameBoard({
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="font-display text-2xl font-black text-white tracking-tight">
               {currentPhaseConfig?.name || "Campanha"}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-slate-400">
               {phases.isAllPhasesComplete 
                 ? "Parabéns! Você completou todas as fases!" 
                 : `Ganhe ${currentPhaseConfig?.requiredWins || 7} jogos consecutivos para avançar`}
@@ -698,18 +725,18 @@ function TrilhaGameBoard({
           </div>
           <button
             onClick={phases.resetPhases}
-            className="bg-secondary/70 text-foreground hover:bg-secondary px-4 py-2 rounded-lg font-medium transition-colors"
+            className="border border-slate-600/40 bg-slate-800/60 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
           >
-            Reiniciar Progresso
+            Reiniciar
           </button>
         </div>
 
         {phases.isAllPhasesComplete && (
-          <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
-            <Trophy className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
-            <h3 className="text-xl font-bold text-yellow-500">MESTRE DA TRILHA!</h3>
-            <p className="text-muted-foreground">
-              Você completou todas as 3 fases com {phases.progress.totalWins} vitórias totais!
+          <div className="mb-6 p-5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 border border-amber-500/30 rounded-2xl text-center shadow-lg shadow-amber-500/5">
+            <Trophy className="h-10 w-10 text-amber-400 mx-auto mb-3" />
+            <h3 className="font-display text-xl font-black text-amber-400 tracking-wide">MESTRE DA TRILHA!</h3>
+            <p className="text-xs text-amber-400/70 mt-1">
+              Todas as 3 fases conquistadas · {phases.progress.totalWins} vitórias
             </p>
           </div>
         )}
@@ -738,6 +765,7 @@ function TrilhaGameBoard({
             awaitingCapture={game.pendingCapture}
             onRestart={onReset}
             onResign={game.resign}
+            difficulty={difficulty}
           />
         </div>
       </main>
