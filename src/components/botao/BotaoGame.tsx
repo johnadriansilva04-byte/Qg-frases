@@ -3942,6 +3942,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "online") {
     return (
       <Shell>
+        <PracinhaGuide modulo="amistoso-online" userId={perfil?.user_id ?? null} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -3987,6 +3988,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "online-championship") {
     return (
       <Shell>
+        <PracinhaGuide modulo="campeonato-online" userId={perfil?.user_id ?? null} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -4032,6 +4034,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "profile") {
     return (
       <Shell>
+        <PracinhaGuide modulo="clube" userId={perfil?.user_id ?? null} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -4361,7 +4364,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
         )}
 
         {screen === "friendly-setup" && (
-          <Setup
+          <>
+            <PracinhaGuide modulo="amistoso" userId={perfil?.user_id ?? null} />
+            <Setup
             title="Amistoso"
             subtitle="Seu time personalizado vs adversário. Escolha o nível e o oponente."
             userTeam={userTeam}
@@ -4374,6 +4379,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
             onStart={() => setScreen("friendly-match")}
             onBack={() => setScreen("menu")}
           />
+          </>
         )}
 
         {screen === "hub" && tour && (
@@ -4517,7 +4523,12 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
 /* ================= sub-telas ================= */
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="botao-root min-h-screen py-5 relative">{children}</div>;
+  return (
+    <div className="botao-root min-h-screen py-5 relative">
+      {children}
+      <PracinhaChat />
+    </div>
+  );
 }
 
 function Header({
