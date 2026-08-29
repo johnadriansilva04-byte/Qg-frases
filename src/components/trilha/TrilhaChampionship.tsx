@@ -53,7 +53,7 @@ import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
 
 type SubView = "hub" | "criar" | "entrar" | "salas" | "sala" | "jogo";
 
-type MaxJogadores = 4 | 8 | 12 | 16 | 32;
+type MaxJogadores = 8 | 12 | 16 | 32;
 
 type Props = {
   onBack?: () => void;
@@ -461,20 +461,19 @@ export function TrilhaChampionship({ onBack }: Props) {
             </label>
 
             <label className="block">
-              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-white/40">Máximo de Jogadores</span>
-              <div className="grid grid-cols-4 gap-2">
-                {[4, 8, 12, 16, 32].map((n) => (
+              <span className="mb-1 block text-[9px] font-bold uppercase tracking-widest text-white/40">Vagas</span>
+              <div className="flex gap-1.5">
+                {[8, 12, 16, 32].map((n) => (
                   <button
                     key={n}
                     onClick={() => setMaxJogadores(n as MaxJogadores)}
-                    className={`rounded-xl border p-3 text-center transition ${
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
                       maxJogadores === n
                         ? "border-purple-400/60 bg-purple-400/10 text-white"
-                        : "border-white/10 text-white/40 hover:border-white/20"
+                        : "border-white/10 text-white/30 hover:border-white/20"
                     }`}
                   >
-                    <p className="font-display text-lg font-black">{n}</p>
-                    <p className="text-[9px] text-white/30">vagas</p>
+                    {n}
                   </button>
                 ))}
               </div>
