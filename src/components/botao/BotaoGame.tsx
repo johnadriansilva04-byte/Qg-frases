@@ -4561,65 +4561,81 @@ function Menu({
   onSaveCampaign: () => void;
   onBack?: () => void;
 }) {
+  const modes = [
+    { icon: <UserCircle className="size-5" />, title: "CLUBE", desc: "Identidade, tática e evolução dos botões.", onClick: onProfile, accent: "sky" as const, tour: "perfil" },
+    { icon: <Swords className="size-5" />, title: "AMISTOSO", desc: "Contra IA / Treino.", onClick: onFriendly, accent: "sky" as const },
+    { icon: <Globe className="size-5" />, title: "AMISTOSO ONLINE", desc: "Partida rápida 1v1.", onClick: onOnline, accent: "emerald" as const },
+    { icon: <Trophy className="size-5" />, title: "CAMPEONATO", desc: "Torneios e Mata-Mata.", onClick: onOnlineChampionship, accent: "amber" as const },
+    { icon: <Medal className="size-5" />, title: "CARREIRA", desc: "Modo Campanha.", onClick: onCareerMenu, accent: "fuchsia" as const, tour: "carreira" },
+    { icon: <Trophy className="size-5" />, title: "TROFÉUS", desc: `${progress.trophies.length} título(s) · ${progress.friendlies.w}V/${progress.friendlies.d}E/${progress.friendlies.l}D`, onClick: onTrophies, accent: "gold" as const, tour: "trofeus" },
+  ];
+
   return (
-    <div className="space-y-6">
-      {onBack && (
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="size-4" />
-          Voltar à Cidadela
-        </button>
-      )}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <MenuCard
-          icon={<UserCircle className="size-5" />}
-          title="Meu Time"
-          desc="Identidade do clube, tática e evolução dos botões — sem precisar de login."
-          onClick={onProfile}
-          accent="sky"
-          dataTour="perfil"
-        />
-        <MenuCard
-          icon={<Swords className="size-5" />}
-          title="Amistoso"
-          desc="Partida rápida contra qualquer time. Bom pra treinar o dedo."
-          onClick={onFriendly}
-          accent="sky"
-        />
-        <MenuCard
-          icon={<Globe className="size-5" />}
-          title="Amistoso Online"
-          desc="Partida em tempo real contra jogadores reais. Crie ou entre numa mesa."
-          onClick={onOnline}
-          accent="emerald"
-        />
-        <MenuCard
-          icon={<Trophy className="size-5" />}
-          title="Campeonato Online"
-          desc="Campeonato round-robin com até 8 jogadores. Pontos contam no ranking."
-          onClick={onOnlineChampionship}
-          accent="amber"
-        />
-        <MenuCard
-          icon={<Medal className="size-5" />}
-          title="Carreira no Campus"
-          desc="Brasileirão + Copa do Brasil. Suba de divisão e conquiste títulos no Campeonato do Campus."
-          onClick={onCareerMenu}
-          accent="fuchsia"
-          dataTour="carreira"
-        />
-        <MenuCard
-          icon={<Trophy className="size-5" />}
-          title="Sala de troféus"
-          desc={`${progress.trophies.length} título(s) · amistosos ${progress.friendlies.w}V ${progress.friendlies.d}E ${progress.friendlies.l}D`}
-          onClick={onTrophies}
-          accent="gold"
-          dataTour="trofeus"
-        />
+    <div className="relative w-full max-w-5xl mx-auto">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-16 left-1/4 h-[300px] w-[300px] rounded-full bg-emerald-500/4 blur-[100px]" />
+        <div className="absolute bottom-0 right-1/3 h-[250px] w-[250px] rounded-full bg-cyan-500/3 blur-[80px]" />
       </div>
-      <LeaderboardTreinadores compact />
+
+      <div className="relative z-10 grid gap-5 lg:grid-cols-[1.2fr_1fr] items-start">
+        {/* ── Left: Game Modes Grid ── */}
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent" />
+            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-500/50 font-bold">Modos de Jogo</span>
+            <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/30 to-transparent" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {modes.map((m) => (
+              <button
+                key={m.title}
+                onClick={m.onClick}
+                {...(m.tour ? { "data-tour": m.tour } : {})}
+                className={`group relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.97] ${
+                  m.accent === "emerald"
+                    ? "border-emerald-500/15 bg-gradient-to-br from-emerald-950/30 to-slate-950/60 hover:border-emerald-500/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.06)]"
+                    : m.accent === "amber"
+                      ? "border-amber-500/15 bg-gradient-to-br from-amber-950/30 to-slate-950/60 hover:border-amber-500/30 hover:shadow-[0_0_20px_rgba(245,158,11,0.06)]"
+                      : m.accent === "fuchsia"
+                        ? "border-fuchsia-500/15 bg-gradient-to-br from-fuchsia-950/30 to-slate-950/60 hover:border-fuchsia-500/30 hover:shadow-[0_0_20px_rgba(217,70,239,0.06)]"
+                        : m.accent === "gold"
+                          ? "border-amber-400/15 bg-gradient-to-br from-amber-900/20 to-slate-950/60 hover:border-amber-400/30 hover:shadow-[0_0_20px_rgba(251,191,36,0.06)]"
+                          : "border-sky-500/15 bg-gradient-to-br from-sky-950/30 to-slate-950/60 hover:border-sky-500/30 hover:shadow-[0_0_20px_rgba(14,165,233,0.06)]"
+                }`}
+              >
+                <div className={`flex size-9 items-center justify-center rounded-lg transition group-hover:scale-110 ${
+                  m.accent === "emerald"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : m.accent === "amber"
+                      ? "bg-amber-500/10 text-amber-400"
+                      : m.accent === "fuchsia"
+                        ? "bg-fuchsia-500/10 text-fuchsia-400"
+                        : m.accent === "gold"
+                          ? "bg-amber-400/10 text-amber-300"
+                          : "bg-sky-500/10 text-sky-400"
+                }`}>{m.icon}</div>
+                <p className="mt-2.5 font-display text-sm font-black tracking-wide text-white">{m.title}</p>
+                <p className="mt-0.5 text-[10px] text-slate-500 leading-snug">{m.desc}</p>
+                <div className="mt-2 flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-600 transition group-hover:text-white/30">
+                  <span>Abrir</span>
+                  <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right: Ranking Mundial ── */}
+        <div className="lg:sticky lg:top-20">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
+            <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Ranking</span>
+            <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+          </div>
+          <LeaderboardTreinadores compact />
+        </div>
+      </div>
     </div>
   );
 }
@@ -4639,8 +4655,7 @@ function MenuCard({
   onClick: () => void;
   destructive?: boolean;
   accent?: "gold" | "sky" | "emerald" | "fuchsia" | "amber";
-  /** Âncora do tour contextual (bolhas apontam para elementos reais). */
-  dataTour?: string;
+  dataTour?: string | undefined;
 }) {
   const accentMap = {
     gold: "menu-accent-gold",
