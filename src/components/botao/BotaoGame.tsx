@@ -259,7 +259,6 @@ type Screen =
   | "online"
   | "online-championship"
   | "coach-setup"
-  | "tournament-setup"
   | "hub"
   | "classificacao"
   | "calendario"
@@ -3949,16 +3948,28 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
             onHome={() => setScreen("menu")}
           />
           {!perfil ? (
-            <div className="panel text-center py-12">
-              <Globe className="mx-auto mb-4 h-12 w-12 text-primary" />
-              <h2 className="font-display text-2xl">Amistoso Online</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                O modo online precisa de conta. Entre na Cidadela dos Clássicos para
-                desafiar outros jogadores em tempo real.
-              </p>
-              <button onClick={() => setScreen("menu")} className="btn-primary mt-4">
-                Voltar
-              </button>
+            <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/40 to-slate-950/80 p-8 text-center backdrop-blur-sm">
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute -top-20 left-1/2 h-[300px] w-[300px] -translate-x-1/2 rounded-full bg-emerald-500/5 blur-[100px]" />
+              </div>
+              <div className="relative z-10 flex flex-col items-center gap-4">
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/25">
+                  <Globe className="size-8 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="font-display text-2xl font-black text-white">AMISTOSO ONLINE</h2>
+                  <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
+                    Partida rápida 1v1 contra jogadores reais em tempo real.
+                    Crie uma mesa ou entre usando um código.
+                  </p>
+                </div>
+                <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2">
+                  ⚠️ O modo online precisa de conta. Entre na Cidadela dos Clássicos para jogar.
+                </p>
+                <button onClick={() => setScreen("menu")} className="rounded-xl border border-white/10 bg-white/5 px-6 py-3 font-display text-sm font-bold text-white transition hover:bg-white/10">
+                  Voltar ao Menu
+                </button>
+              </div>
             </div>
           ) : (
             <OnlineMatchV3
@@ -3982,16 +3993,28 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
             onHome={() => setScreen("menu")}
           />
           {!perfil ? (
-            <div className="panel text-center py-12">
-              <Trophy className="mx-auto mb-4 h-12 w-12 text-primary" />
-              <h2 className="font-display text-2xl">Campeonato Online</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                O modo online precisa de conta. Entre na Cidadela dos Clássicos para
-                participar de campeonatos contra outros jogadores.
-              </p>
-              <button onClick={() => setScreen("menu")} className="btn-primary mt-4">
-                Voltar
-              </button>
+            <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-b from-amber-950/40 to-slate-950/80 p-8 text-center backdrop-blur-sm">
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute -top-20 left-1/2 h-[300px] w-[300px] -translate-x-1/2 rounded-full bg-amber-500/5 blur-[100px]" />
+              </div>
+              <div className="relative z-10 flex flex-col items-center gap-4">
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-amber-500/15 border border-amber-500/25">
+                  <Trophy className="size-8 text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="font-display text-2xl font-black text-white">CAMPEONATO ONLINE</h2>
+                  <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
+                    Torneios Mata-Mata e Pontos Corridos contra jogadores reais.
+                    Crie uma sala, convide amigos e dispute o título.
+                  </p>
+                </div>
+                <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2">
+                  ⚠️ O modo online precisa de conta. Entre na Cidadela dos Clássicos para participar.
+                </p>
+                <button onClick={() => setScreen("menu")} className="rounded-xl border border-white/10 bg-white/5 px-6 py-3 font-display text-sm font-bold text-white transition hover:bg-white/10">
+                  Voltar ao Menu
+                </button>
+              </div>
             </div>
           ) : (
             <OnlineChampionship
@@ -4348,21 +4371,6 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
           />
         )}
 
-        {screen === "tournament-setup" && (
-          <Setup
-            title="Carreira no Campus"
-            subtitle="Brasileirão (pontos corridos) + Copa do Brasil integrada. Continue jogando enquanto tiver SOV."
-            userTeam={userTeam}
-            rivalTeam={rivalTeam}
-            setRivalTeam={setRivalTeam}
-            difficulty={difficulty}
-            setDifficulty={setDifficulty}
-            progress={progress}
-            onStart={startTournament}
-            onBack={() => setScreen("menu")}
-          />
-        )}
-
         {screen === "hub" && tour && (
           <CareerHub
             tour={tour}
@@ -4565,7 +4573,7 @@ function Menu({
     { icon: <UserCircle className="size-5" />, title: "CLUBE", desc: "Identidade, tática e evolução dos botões.", onClick: onProfile, accent: "sky" as const, tour: "perfil" },
     { icon: <Swords className="size-5" />, title: "AMISTOSO", desc: "Contra IA / Treino.", onClick: onFriendly, accent: "sky" as const },
     { icon: <Globe className="size-5" />, title: "AMISTOSO ONLINE", desc: "Partida rápida 1v1.", onClick: onOnline, accent: "emerald" as const },
-    { icon: <Trophy className="size-5" />, title: "CAMPEONATO", desc: "Torneios e Mata-Mata.", onClick: onOnlineChampionship, accent: "amber" as const },
+    { icon: <Trophy className="size-5" />, title: "CAMPEONATO ONLINE", desc: "Torneios, Mata-Mata e campeonatos online.", onClick: onOnlineChampionship, accent: "amber" as const },
     { icon: <Medal className="size-5" />, title: "CARREIRA", desc: "Modo Campanha.", onClick: onCareerMenu, accent: "fuchsia" as const, tour: "carreira" },
     { icon: <Trophy className="size-5" />, title: "TROFÉUS", desc: `${progress.trophies.length} título(s) · ${progress.friendlies.w}V/${progress.friendlies.d}E/${progress.friendlies.l}D`, onClick: onTrophies, accent: "gold" as const, tour: "trofeus" },
   ];
@@ -4639,51 +4647,6 @@ function Menu({
     </div>
   );
 }
-
-function MenuCard({
-  icon,
-  title,
-  desc,
-  onClick,
-  destructive,
-  accent = "gold",
-  dataTour,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  onClick: () => void;
-  destructive?: boolean;
-  accent?: "gold" | "sky" | "emerald" | "fuchsia" | "amber";
-  dataTour?: string | undefined;
-}) {
-  const accentMap = {
-    gold: "menu-accent-gold",
-    sky: "menu-accent-sky",
-    emerald: "menu-accent-emerald",
-    fuchsia: "menu-accent-fuchsia",
-    amber: "menu-accent-amber",
-  };
-  return (
-    <button
-      onClick={onClick}
-      {...(dataTour ? { "data-tour": dataTour } : {})}
-      className={`menu-card group ${destructive ? "menu-card-destructive" : accentMap[accent]}`}
-    >
-      <span
-        className={`menu-card-icon ${destructive ? "menu-card-icon-destructive" : accentMap[accent]}`}
-      >
-        {icon}
-      </span>
-      <span className="mt-3 block font-display text-2xl leading-tight">{title}</span>
-      <span className="mt-1 block text-sm text-muted-foreground">{desc}</span>
-      <span className={`menu-card-cta ${destructive ? "text-destructive" : ""}`}>
-        {destructive ? "Excluir →" : "Entrar →"}
-      </span>
-    </button>
-  );
-}
-
 function Setup(props: {
   title: string;
   subtitle: string;
