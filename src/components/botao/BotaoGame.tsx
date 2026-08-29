@@ -360,6 +360,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   const [loading, setLoading] = useState(false);
   const [loadingReady, setLoadingReady] = useState(true);
   const [loadingOnComplete, setLoadingOnComplete] = useState<() => void>(() => () => {});
+  // forceLoading: bypasses initialHydrated check for user-initiated actions
+  // (playNext, iniciarCampanha, etc). hydration loading does NOT set this.
+  const [forceLoading, setForceLoading] = useState(false);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
 
   // Detecta se foi refresh direto (F5) vs navegação normal
@@ -752,8 +755,10 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
    * ao Supabase e inicialização da IA.
    */
   const runWithLoading = (onComplete: () => void, duracao = 2200) => {
+    setForceLoading(true);
     setLoadingOnComplete(() => () => {
       setLoading(false);
+      setForceLoading(false);
       onComplete();
     });
     setLoadingReady(true);
@@ -1473,7 +1478,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   const startTournament = () => {
     // Se não existir treinador ainda, entra no fluxo de criação primeiro
     if (!career || !career.coach.nome) {
-      setScreen("coach-setup");
+      setScreen("career-intro");
       return;
     }
     // Splash de carregamento: consulta Supabase + inicialização da IA + mesa.
@@ -4114,20 +4119,32 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
         <CareerIntro
           nomeJogador={perfil?.nome}
           onIniciar={(clubeId, nome) => {
-            // Aplicar clube escolhido e nome do treinador
-            if (clubeId && career) {
-              const oferta = ofertasIniciais.find(o => o.clubeId === clubeId);
-              if (oferta) {
-                persistCareer({
-                  ...career,
-                  clubeOrigemId: clubeId,
-                  coach: { ...career.coach, nome: nome || career.coach.nome || perfil?.nome || "Treinador" },
-                });
-              }
-            } else if (nome && career) {
-              persistCareer({ ...career, coach: { ...career.coach, nome } });
+            // Aplicar clube, nome e iniciar campanha completa
+            const base = career ?? EMPTY_CAREER;
+            const oferta = clubeId ? ofertasIniciais.find(o => o.clubeId === clubeId) : null;
+            const bonusAssinatura = oferta?.bonusAssinatura ?? 0;
+            const coachComSaldo = {
+              ...base.coach,
+              nome: nome || base.coach.nome || perfil?.nome || "Treinador",
+              sov: (perfil?.pontos_soberania ?? base.coach.sov) + bonusAssinatura,
+            };
+            const nova: CareerState = {
+              ...base,
+              coach: coachComSaldo,
+              clubeOrigemId: clubeId ?? base.clubeOrigemId,
+            };
+            persistCareer(nova);
+            // Registrar bônus de assinatura no ledger
+            if (oferta && perfil?.user_id) {
+              void registrarTransacaoSov(
+                perfil.user_id, bonusAssinatura, "reward",
+                `Bônus de assinatura — ${oferta.nome}`, "career",
+                { clubeId: oferta.clubeId, temporada: 1 },
+                { sourceEvent: "assinatura_clube", idempotencyKey: `assinatura:${perfil.user_id}:t1:${oferta.clubeId}` },
+              );
             }
-            setScreen("hub");
+            // Iniciar campanha (cria torneio, copa, etc)
+            runWithLoading(() => iniciarCampanha(nova));
           }}
           onBack={() => setScreen("career-menu")}
           ofertas={ofertasIniciais}
@@ -4136,19 +4153,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
     );
   }
 
-  if (screen === "coach-setup") {
-    return (
-      <Shell>
-        <CoachSetup
-          timeName={userTeam.name}
-          divisao={career?.divisao ?? "serie-c"}
-          nomeInicial={perfil?.nome}
-          ofertas={career?.clubeOrigemId ? [] : ofertasIniciais}
-          onFinish={finishCoachSetup}
-          onBack={() => setScreen("menu")}
-        />
-      </Shell>
-    );
+  // REMOVED: coach-setup dead code — flow now goes career-intro → hub
+  if (false && screen === "coach-setup") {
   }
 
   if (screen === "propriedade") {
@@ -4323,7 +4329,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
       {/* Loading apenas ao entrar no jogo (loading=true). REMOVIDO de auth
           (carregando) e hidratação inicial (precisaHidratar) para não mostrar
           loading em F5 ou navegação normal. */}
-      {loading && !initialHydrated && (
+      {(loading && (!initialHydrated || forceLoading)) && (
         <LoadingScreen
           pronto={loadingReady}
           onCompleto={loadingOnComplete}

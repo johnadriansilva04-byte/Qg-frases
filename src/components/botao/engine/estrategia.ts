@@ -320,8 +320,8 @@ export interface JogadaPlanejada {
   iy: number;
 }
 
-const NOISE: Record<Difficulty, number> = { amador: 0.22, profissional: 0.12, lenda: 0.04 };
-const FORCE: Record<Difficulty, number> = { amador: 0.86, profissional: 0.96, lenda: 1.06 };
+const NOISE: Record<Difficulty, number> = { amador: 0.22, profissional: 0.12, lenda: 0.018 };
+const FORCE: Record<Difficulty, number> = { amador: 0.86, profissional: 0.96, lenda: 1.12 };
 
 function golAdversario(side: Side): { x: number; y: number } {
   return {
@@ -369,7 +369,7 @@ function chuteNaBola(
   const gx = alvo.x - ball.x;
   const gy = alvo.y - ball.y;
   const gl = Math.hypot(gx, gy) || 1;
-  const toque = difficulty === "lenda" ? 0.5 : difficulty === "profissional" ? 0.55 : 0.6;
+  const toque = difficulty === "lenda" ? 0.38 : difficulty === "profissional" ? 0.55 : 0.6;
   const aimX = ball.x - (gx / gl) * (shooter.r + ball.r) * toque;
   const aimY = ball.y - (gy / gl) * (shooter.r + ball.r) * toque;
   const imp = impulsoPara(shooter, { x: aimX, y: aimY }, difficulty, teamPower, risco);
