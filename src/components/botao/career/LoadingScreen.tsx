@@ -74,6 +74,7 @@ export function LoadingScreen({
 
   // Anima a barra de 0 a 100% suavemente (ease-out).
   useEffect(() => {
+    doneRef.current = false; // reset para re-animação quando onCompleto muda
     startRef.current = performance.now();
     const tick = (now: number) => {
       const t = Math.min(1, (now - startRef.current) / duracao);
