@@ -3942,7 +3942,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "online") {
     return (
       <Shell>
-        <PracinhaGuide modulo="amistoso-online" userId={perfil?.user_id ?? null} />
+        <PracinhaGuide modulo="amistoso-online" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -3988,7 +3988,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "online-championship") {
     return (
       <Shell>
-        <PracinhaGuide modulo="campeonato-online" userId={perfil?.user_id ?? null} />
+        <PracinhaGuide modulo="campeonato-online" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -4034,7 +4034,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "profile") {
     return (
       <Shell>
-        <PracinhaGuide modulo="clube" userId={perfil?.user_id ?? null} />
+        <PracinhaGuide modulo="clube" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -4066,7 +4066,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "career-menu") {
     return (
       <Shell>
-        <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} />
+        <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
         {/* O veredito de fim de temporada também cobre o menu da carreira —
             sem isso, quem navegava para cá após a última partida perdia a
             tela de encerramento (ela só renderizava sobre o hub). */}
@@ -4116,6 +4116,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
           nomeJogador={perfil?.nome}
           onIniciar={() => setScreen("coach-setup")}
           onBack={() => setScreen("career-menu")}
+          ofertas={ofertasIniciais}
         />
       </Shell>
     );
@@ -4359,13 +4360,13 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
               onSaveCampaign={handleSaveCampaign}
               {...(onBack ? { onBack } : {})}
             />
-            <PracinhaGuide modulo="futebol" userId={perfil?.user_id ?? null} />
+            <PracinhaGuide modulo="futebol" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
           </>
         )}
 
         {screen === "friendly-setup" && (
           <>
-            <PracinhaGuide modulo="amistoso" userId={perfil?.user_id ?? null} />
+            <PracinhaGuide modulo="amistoso" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
             <Setup
             title="Amistoso"
             subtitle="Seu time personalizado vs adversário. Escolha o nível e o oponente."
@@ -4384,7 +4385,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
 
         {screen === "hub" && tour && (
           <>
-            <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} />
+            <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
             <CareerHub
             tour={tour}
             userTeam={userTeam}

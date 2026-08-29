@@ -16,6 +16,8 @@ import { PRACINHA_TOURS, type TourModule, type TourStep } from "./pracinhaTourDa
 interface Props {
   modulo: TourModule;
   userId: string | null;
+  /** Se true, o tour NÃO aparece (conta já tem carreira/histórico). */
+  contaExistente?: boolean;
   /** Chave global para persistir módulos visitados no localStorage. */
   storageKey?: string;
 }
@@ -45,7 +47,7 @@ function salvarVisitados(key: string, mods: string[]) {
  * 3. Ao finalizar → marca como visitado e desaparece.
  * 4. Botão "?" no canto re-executa o tour (override).
  */
-export function PracinhaGuide({ modulo, userId, storageKey = DEFAULT_STORAGE_KEY }: Props) {
+export function PracinhaGuide({ modulo, userId, contaExistente = false, storageKey = DEFAULT_STORAGE_KEY }: Props) {
   const [tourAtivo, setTourAtivo] = useState(false);
   const [indice, setIndice] = useState(0);
   const [destacar, setDestacar] = useState<string | null>(null);
@@ -57,14 +59,15 @@ export function PracinhaGuide({ modulo, userId, storageKey = DEFAULT_STORAGE_KEY
     [userId, storageKey],
   );
 
-  // Verificar se é primeira visita
+  // Verificar se é primeira visita (só contas novas)
   useEffect(() => {
+    if (contaExistente) return; // conta já tem carreira — não mostra tour
     const visitados = carregarVisitados(storageKeyResolved);
     if (!visitados.includes(modulo) && passos.length > 0) {
       setTourAtivo(true);
       setIndice(0);
     }
-  }, [modulo, passos.length, storageKeyResolved]);
+  }, [modulo, passos.length, storageKeyResolved, contaExistente]);
 
   // Avançar para o próximo passo
   const avancar = useCallback(() => {
