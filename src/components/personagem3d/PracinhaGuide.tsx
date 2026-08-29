@@ -9,7 +9,7 @@
  * Se o módulo já foi visitado, NÃO aparece.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, X, Volume2 } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { PracinhaCharacter3D } from "./PracinhaCharacter3D";
 import { PRACINHA_TOURS, type TourModule, type TourStep } from "./pracinhaTourData";
 
@@ -51,7 +51,6 @@ export function PracinhaGuide({ modulo, userId, contaExistente = false, storageK
   const [tourAtivo, setTourAtivo] = useState(false);
   const [indice, setIndice] = useState(0);
   const [destacar, setDestacar] = useState<string | null>(null);
-  const [rearmado, setRearmado] = useState(false);
 
   const passos = useMemo(() => PRACINHA_TOURS[modulo] ?? [], [modulo]);
   const storageKeyResolved = useMemo(
@@ -98,17 +97,7 @@ export function PracinhaGuide({ modulo, userId, contaExistente = false, storageK
     setDestacar(null);
   }, [modulo, storageKeyResolved]);
 
-  // Re-armar tour (botão "?" no canto)
-  const rearmar = useCallback(() => {
-    const visitados = carregarVisitados(storageKeyResolved);
-    const idx = visitados.indexOf(modulo);
-    if (idx !== -1) visitados.splice(idx, 1);
-    salvarVisitados(storageKeyResolved, visitados);
-    setTourAtivo(true);
-    setIndice(0);
-    setDestacar(passos[0]?.alvo ?? null);
-    setRearmado(true);
-  }, [modulo, storageKeyResolved, passos]);
+
 
   // Aplicar highlight no elemento alvo
   useEffect(() => {
@@ -147,16 +136,7 @@ export function PracinhaGuide({ modulo, userId, contaExistente = false, storageK
 
   return (
     <>
-      {/* Botão de re-armar tour (canto inferior esquerdo) */}
-      {!tourAtivo && (
-        <button
-          onClick={rearmar}
-          title="Pedir ajuda ao Pracinha"
-          className="fixed bottom-20 left-4 z-[70] flex size-10 items-center justify-center rounded-full border border-amber-500/30 bg-gradient-to-br from-amber-900/40 to-slate-950/80 text-amber-400 shadow-lg shadow-amber-500/10 transition-all hover:scale-110 hover:border-amber-500/50 hover:shadow-amber-500/20"
-        >
-          <Volume2 className="size-4" />
-        </button>
-      )}
+
 
       {/* Overlay de destaque (fosco escuro) */}
       {tourAtivo && (

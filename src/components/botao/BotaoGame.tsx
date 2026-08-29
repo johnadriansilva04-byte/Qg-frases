@@ -248,7 +248,7 @@ import { SeasonEndScreen } from "./career/SeasonEndScreen";
 import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 import { carregarPerfilCidadela } from "@/lib/cidadela/profissoes";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
-import { PracinhaGuide, PracinhaChat } from "@/components/personagem3d";
+import { PracinhaGuide } from "@/components/personagem3d";
 
 type Screen =
   | "menu"
@@ -4527,7 +4527,6 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="botao-root min-h-screen py-5 relative">
       {children}
-      <PracinhaChat />
     </div>
   );
 }
