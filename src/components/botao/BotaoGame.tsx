@@ -248,6 +248,7 @@ import { SeasonEndScreen } from "./career/SeasonEndScreen";
 import { registrarEventoMissao } from "@/lib/cidadela/pracinhaCore";
 import { carregarPerfilCidadela } from "@/lib/cidadela/profissoes";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
+import { PracinhaGuide, PracinhaChat } from "@/components/personagem3d";
 
 type Screen =
   | "menu"
@@ -4062,6 +4063,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "career-menu") {
     return (
       <Shell>
+        <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} />
         {/* O veredito de fim de temporada também cobre o menu da carreira —
             sem isso, quem navegava para cá após a última partida perdia a
             tela de encerramento (ela só renderizava sobre o hub). */}
@@ -4339,20 +4341,23 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
         />
 
         {screen === "menu" && (
-          <Menu
-            progress={progress}
-            onFriendly={() => setScreen("friendly-setup")}
-            onOnline={() => setScreen("online")}
-            onOnlineChampionship={() => setScreen("online-championship")}
-            onCareerMenu={() => setScreen("career-menu")}
-            onTrophies={() => setScreen("trophies")}
-            onProfile={() => setScreen("profile")}
-            hasTour={!!tour && tour.phase !== "fim"}
-            onResume={() => setScreen("hub")}
-            onDeleteCampaign={handleDeleteCampaign}
-            onSaveCampaign={handleSaveCampaign}
-            {...(onBack ? { onBack } : {})}
-          />
+          <>
+            <Menu
+              progress={progress}
+              onFriendly={() => setScreen("friendly-setup")}
+              onOnline={() => setScreen("online")}
+              onOnlineChampionship={() => setScreen("online-championship")}
+              onCareerMenu={() => setScreen("career-menu")}
+              onTrophies={() => setScreen("trophies")}
+              onProfile={() => setScreen("profile")}
+              hasTour={!!tour && tour.phase !== "fim"}
+              onResume={() => setScreen("hub")}
+              onDeleteCampaign={handleDeleteCampaign}
+              onSaveCampaign={handleSaveCampaign}
+              {...(onBack ? { onBack } : {})}
+            />
+            <PracinhaGuide modulo="futebol" userId={perfil?.user_id ?? null} />
+          </>
         )}
 
         {screen === "friendly-setup" && (
@@ -4372,7 +4377,9 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
         )}
 
         {screen === "hub" && tour && (
-          <CareerHub
+          <>
+            <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} />
+            <CareerHub
             tour={tour}
             userTeam={userTeam}
             career={career}
@@ -4398,6 +4405,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
               (career?.ofertasTransferencia ?? []).filter((o) => o.respondida === "pendente").length
             }
           />
+          </>
         )}
 
         {screen === "classificacao" && tour && (
