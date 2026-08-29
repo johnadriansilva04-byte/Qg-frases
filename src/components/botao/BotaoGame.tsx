@@ -1117,8 +1117,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   const handleNewCareer = async () => {
     if (!perfil?.user_id) {
       // Offline: entrada triunfal → setup (treinador direto).
-      if (!career?.coach.nome) setScreen("coach-setup");
-      else setScreen("career-intro");
+      setScreen("career-intro");
       return;
     }
 
@@ -4114,7 +4113,22 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
       <Shell>
         <CareerIntro
           nomeJogador={perfil?.nome}
-          onIniciar={() => setScreen("coach-setup")}
+          onIniciar={(clubeId, nome) => {
+            // Aplicar clube escolhido e nome do treinador
+            if (clubeId && career) {
+              const oferta = ofertasIniciais.find(o => o.clubeId === clubeId);
+              if (oferta) {
+                persistCareer({
+                  ...career,
+                  clubeOrigemId: clubeId,
+                  coach: { ...career.coach, nome: nome || career.coach.nome || perfil?.nome || "Treinador" },
+                });
+              }
+            } else if (nome && career) {
+              persistCareer({ ...career, coach: { ...career.coach, nome } });
+            }
+            setScreen("hub");
+          }}
           onBack={() => setScreen("career-menu")}
           ofertas={ofertasIniciais}
         />

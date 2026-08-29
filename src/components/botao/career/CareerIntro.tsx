@@ -29,7 +29,7 @@ import { DIVISAO_LABEL } from "./competitionApi";
 
 type Props = {
   nomeJogador?: string | undefined;
-  onIniciar: (clubeId?: string) => void;
+  onIniciar: (clubeId?: string, nome?: string) => void;
   onBack?: (() => void) | undefined;
   /** Ofertas reais do banco (via ofertasIniciais). */
   ofertas?: OfertaClube[];
@@ -39,6 +39,7 @@ export function CareerIntro({ nomeJogador, onIniciar, onBack, ofertas = [] }: Pr
   const [step, setStep] = useState(0);
   const [animateIn, setAnimateIn] = useState(false);
   const [clubeEscolhido, setClubeEscolhido] = useState<OfertaClube | null>(null);
+  const [nomeTreinador, setNomeTreinador] = useState(nomeJogador || "");
 
   const NOME = nomeJogador || "Treinador";
 
@@ -69,7 +70,7 @@ export function CareerIntro({ nomeJogador, onIniciar, onBack, ofertas = [] }: Pr
 
   const handleConfirmar = () => {
     if (clubeEscolhido) {
-      onIniciar(clubeEscolhido.clubeId);
+      onIniciar(clubeEscolhido.clubeId, nomeTreinador.trim() || undefined);
     } else {
       onIniciar();
     }
@@ -220,10 +221,36 @@ export function CareerIntro({ nomeJogador, onIniciar, onBack, ofertas = [] }: Pr
           </div>
 
           {/* CTA */}
-          <button onClick={handleConfirmar} className="w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-4 text-lg font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/30 transition-all hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.98]">
-            ⚽ Entrar em Campo
+          <button onClick={() => { setAnimateIn(false); setTimeout(() => { setStep(3); setAnimateIn(true); }, 300); }} className="w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-4 text-lg font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/30 transition-all hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.98]">
+            Continuar
           </button>
-          <p className="mt-3 text-xs text-slate-600 text-center">Sua jornada como técnico começa agora.</p>
+        </div>
+      )}
+
+      {/* ═══════ Step 3: Nome do Treinador ═══════ */}
+      {step === 3 && clubeEscolhido && (
+        <div className={`relative z-10 w-full max-w-lg transition-all duration-700 ${animateIn ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
+          <div className="text-center mb-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-400/80 mb-2">Passo 3 · Identidade</p>
+            <h2 className="font-display text-2xl font-black text-white">Quem é você, treinador?</h2>
+            <p className="text-sm text-slate-400 mt-1">{clubeEscolhido.nome} precisa saber seu nome.</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-6">
+            <label className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Nome completo</label>
+            <input
+              type="text"
+              value={nomeTreinador}
+              onChange={(e) => setNomeTreinador(e.target.value)}
+              placeholder="Ex: João Silva"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white font-display text-lg placeholder:text-slate-600 focus:border-emerald-500/40 focus:outline-none"
+              autoFocus
+            />
+            {nomeTreinador.trim().length >= 2 && (
+              <button onClick={handleConfirmar} className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-4 text-lg font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/30 transition-all hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.98]">
+                ⚽ Iniciar Temporada
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
