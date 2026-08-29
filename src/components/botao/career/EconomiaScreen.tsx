@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Minus, TrendingUp, Wallet, ArrowRightLeft, Building2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  TrendingUp,
+  Wallet,
+  ArrowRightLeft,
+  Building2,
+  PiggyBank,
+  Activity,
+  Zap,
+} from "lucide-react";
 import type { BolsaState, CareerState, PosicaoBolsa } from "./types";
 import { ATIVOS, custoCompra, patrimonioJogador, ativoInfo } from "./bolsaEngine";
 import type { AtivoId } from "./types";
@@ -11,36 +23,25 @@ import {
 
 type Props = {
   career: CareerState;
-  /** Usuário autenticado (necessário para transferências Bank↔Invest). */
   userId: string | null;
   onComprar: (ativoId: AtivoId, quantidade: number) => void;
   onVender: (ativoId: AtivoId, quantidade: number) => void;
-  /** Abre o Mercado de Clubes (AÇÕES) — subseção da Bolsa. */
   onAbrirMercadoClubes?: (() => void) | undefined;
   onBack: () => void;
 };
 
-/** IOF de 10% sobre retirada Invest→Bank (e sobre dividendos/vendas). */
 const IOF_RETIRADA = 0.10;
 
-/**
- * BOLSA DE VALORES da Cidadela (tela própria, §17). Duas carteiras do MESMO
- * jogador — SOV Bank (líquido) e SOV Invest (alocado em investimento) — com
- * transferências contabilizadas (0% Bank→Invest, IOF 10% Invest→Bank).
- * Estrutura: AÇÕES (Mercado de Clubes) + ATIVOS DE RENDA (renda recorrente).
- */
 export function EconomiaScreen({ career, userId, onComprar, onVender, onAbrirMercadoClubes, onBack }: Props) {
   const bolsa = useMemo(() => (career.bolsa ? career.bolsa : null), [career.bolsa]);
   const patrimonio = useMemo(() => patrimonioJogador(career), [career]);
   const [feedback, setFeedback] = useState<string | null>(null);
-  // Saldos reais das duas carteiras (fonte autoritativa = user_wallets).
   const [saldos, setSaldos] = useState<{ bank: number; invest: number } | null>(null);
   const [valorTransfer, setValorTransfer] = useState("");
   const [transferindo, setTransferindo] = useState(false);
 
   const patrimonioCidadela = bolsa?.patrimonioCidadela ?? 10_000_000;
 
-  // Carrega os saldos reais das carteiras (autoritativo). null = indisponível.
   const recarregarSaldos = () => {
     if (!userId) return;
     void obterSaldosInvest(userId).then((s) => {
@@ -72,26 +73,18 @@ export function EconomiaScreen({ career, userId, onComprar, onVender, onAbrirMer
       if (direcao === "bank_para_invest") {
         setFeedback(`${fmtSOV(valor)} SOV: SOV Bank → SOV Invest (taxa 0%).`);
       } else {
-        setFeedback(
-          `${fmtSOV(valor)} SOV solicitado · IOF 10% = ${fmtSOV(res.taxa)} · líquido ${fmtSOV(res.liquido)} no SOV Bank.`,
-        );
+        setFeedback(`${fmtSOV(valor)} SOV solicitado · IOF 10% = ${fmtSOV(res.taxa)} · líquido ${fmtSOV(res.liquido)} no SOV Bank.`);
       }
     } finally {
       setTransferindo(false);
     }
   };
 
-  const acao = (
-    tipo: "compra" | "venda",
-    pos: PosicaoBolsa | undefined,
-    info: (typeof ATIVOS)[number],
-    qtd: number,
-  ) => {
+  const acao = (tipo: "compra" | "venda", pos: PosicaoBolsa | undefined, info: (typeof ATIVOS)[number], qtd: number) => {
     const bolsaAtual = career.bolsa;
     if (!bolsaAtual) return;
     if (tipo === "compra") {
       const custo = custoCompra(bolsaAtual, info.ativoId, qtd);
-      // A compra é paga com o SOV INVEST (carteira de investimento).
       if (saldos && saldos.invest < custo) {
         setFeedback("Saldo insuficiente no SOV Invest — transfira do SOV Bank.");
         return;
@@ -108,227 +101,209 @@ export function EconomiaScreen({ career, userId, onComprar, onVender, onAbrirMer
   const investSaldo = saldos?.invest ?? null;
 
   return (
-    <div className="space-y-5">
-      {/* Cabeçalho da tela própria: título + voltar (§17). */}
-      <div className="flex items-center justify-between gap-3">
-        <button onClick={onBack} className="btn-ghost flex items-center gap-2 text-sm">
-          <ArrowLeft className="size-4" /> Voltar ao Hub
-        </button>
-        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-muted-foreground">
-          Bolsa de Valores da Cidadela
-        </span>
+    <div className="relative w-full max-w-5xl mx-auto px-4 py-6">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-16 left-1/3 h-[300px] w-[300px] rounded-full bg-emerald-500/4 blur-[100px]" />
+        <div className="absolute bottom-0 right-1/4 h-[250px] w-[250px] rounded-full bg-amber-500/3 blur-[80px]" />
       </div>
 
-      {/* As DUAS carteiras do jogador (SOV Bank líquido + SOV Invest). */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="sovereignty-panel p-4">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-            <Wallet className="size-4" /> SOV Bank
-          </p>
-          <p className="mt-2 font-display text-2xl">{fmtSOV(bankSaldo)} SOV</p>
-          <p className="text-xs text-muted-foreground">
-            Saldo líquido total (pessoal + caixa do clube)
-          </p>
-          <p className="mt-1 text-[10px] text-muted-foreground/70">
-            Pessoal: {fmtSOV(bankSaldo - (career.clubeCaixa ?? 0))} SOV · Caixa do clube:{" "}
-            {fmtSOV(career.clubeCaixa ?? 0)} SOV
-          </p>
-        </div>
-        <div className="sovereignty-panel p-4">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-sky-300">
-            <TrendingUp className="size-4" /> SOV Invest
-          </p>
-          <p className="mt-2 font-display text-2xl">
-            {investSaldo === null ? "—" : `${fmtSOV(investSaldo)} SOV`}
-          </p>
-          <p className="text-xs text-muted-foreground">Disponível para investir</p>
-          <p className="mt-1 text-[10px] text-muted-foreground/70">
-            Patrimônio em ativos (valor de mercado): {fmtSOV(patrimonio.investido)} SOV — não é saldo.
-          </p>
-        </div>
-      </div>
-
-      {/* Transferências entre as carteiras do MESMO jogador (nada nasce/some). */}
-      {userId && (
-        <div className="panel !p-4">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            <ArrowRightLeft className="size-4" /> Transferir entre carteiras
-          </p>
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              value={valorTransfer}
-              onChange={(e) => setValorTransfer(e.target.value)}
-              placeholder="Valor em SOV"
-              className="phone-input flex-1"
-            />
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => transferir("bank_para_invest")}
-              disabled={transferindo}
-              className="btn-primary rounded-lg py-2 text-xs disabled:opacity-40"
-            >
-              Bank → Invest · 0%
+      <div className="relative z-10 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition hover:bg-white/10">
+              <ArrowLeft className="size-4 text-white" />
             </button>
-            <button
-              onClick={() => transferir("invest_para_bank")}
-              disabled={transferindo}
-              className="rounded-lg border border-sky-900/50 bg-sky-950/30 py-2 text-xs font-bold text-sky-300 disabled:opacity-40"
-            >
-              Invest → Bank · IOF 10%
-            </button>
+            <div className="flex items-center gap-2">
+              <Activity className="size-5 text-emerald-400" />
+              <h2 className="font-display text-xl font-black text-white">Bolsa de Valores</h2>
+            </div>
           </div>
-          <p className="mt-2 text-[10px] text-muted-foreground/70">
-            Transferência interna: o dinheiro não nasce nem some. Só a retirada
-            Invest → Bank cobra IOF de 10% (registrado no ledger).
-          </p>
         </div>
-      )}
 
-      {/* AÇÕES — Mercado de Clubes (subseção da Bolsa). */}
-      <div className="panel !p-4">
-        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <Building2 className="size-4" /> Ações
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Participações em clubes: preço, quantidade, valorização e dividendos
-          por período. Compra e venda de cotas de clubes da Cidadela.
-        </p>
-        {onAbrirMercadoClubes && (
-          <button onClick={onAbrirMercadoClubes} className="btn-primary mt-3 w-full rounded-lg py-2 text-xs">
-            Abrir Mercado de Clubes
-          </button>
-        )}
-      </div>
-
-      {/* ATIVOS DE RENDA (renda recorrente por rodada). */}
-      <div>
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          Ativos de Renda
-        </p>
-        <p className="mb-3 text-[11px] text-muted-foreground/80">
-          Geram renda recorrente (dividendos) a cada {3} rodadas, pagos no SOV
-          Invest (líquido de IOF 10%).
-        </p>
-      </div>
-
-      {/* Patrimônio da Cidadela (índice do ecossistema). */}
-      <div className="sovereignty-panel p-4">
-        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-amber-300">
-          <TrendingUp className="size-4" /> Patrimônio da Cidadela
-        </p>
-        <p className="mt-2 font-display text-2xl">{fmtSOV(patrimonioCidadela)} SOV</p>
-        <p className="text-xs text-muted-foreground">
-          Índice econômico do ecossistema — valor de mercado, não saldo de ninguém
-        </p>
-      </div>
-
-      {feedback && (
-        <div className="rounded-xl border border-cyan-300/30 bg-cyan-950/30 px-3 py-2 text-xs text-cyan-200">
-          {feedback}
-        </div>
-      )}
-
-      {/* Ativos (§23-25). */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {ATIVOS.map((info) => {
-          if (!bolsa) return null;
-          const preco = bolsa.precos[info.ativoId];
-          const anterior = bolsa.precosAnteriores[info.ativoId] ?? preco;
-          const variacao = anterior === 0 ? 0 : ((preco - anterior) / anterior) * 100;
-          const pos = bolsa.carteira.find((p) => p.ativoId === info.ativoId);
-          const historico = bolsa.historicoPrecos[info.ativoId] ?? [];
-          return (
-            <div key={info.ativoId} className="panel !p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{info.emoji}</span>
-                  <div>
-                    <p className="text-sm font-bold">{info.nome}</p>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                      {info.setor}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-display text-lg">{fmtSOV(preco)}</p>
-                  <VariacaoBadge valor={variacao} />
-                </div>
+        {/* Wallets */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 to-slate-950/60 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Wallet className="size-4 text-emerald-400" />
+              <span className="text-[9px] uppercase tracking-[0.2em] text-emerald-400/70 font-bold">SOV Bank</span>
+            </div>
+            <p className="font-display text-2xl font-black text-white">{fmtSOV(bankSaldo)} SOV</p>
+            <p className="text-[10px] text-slate-500 mt-1">Saldo líquido total</p>
+            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[9px]">
+              <div className="rounded-lg bg-slate-900/40 px-2 py-1">
+                <span className="text-slate-600">Pessoal: </span>
+                <span className="font-bold text-white">{fmtSOV(bankSaldo - (career.clubeCaixa ?? 0))}</span>
               </div>
-
-              {/* Sparkline simples (histórico real persistido). */}
-              <div className="mt-2 flex items-end gap-[2px]" title="Histórico de preços (últimas rodadas)">
-                {historico.map((p, i) => {
-                  const min = Math.min(...historico);
-                  const max = Math.max(...historico);
-                  const h = max === min ? 2 : 4 + Math.round(((p - min) / (max - min)) * 16);
-                  return (
-                    <span
-                      key={i}
-                      className="w-[5px] rounded-sm bg-emerald-500/70"
-                      style={{ height: `${h}px` }}
-                    />
-                  );
-                })}
-              </div>
-
-              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {pos ? `Você tem ${pos.quantidade} cota${pos.quantidade !== 1 ? "s" : ""}` : "Sem posição"}
-                </span>
-                <span>Dividendo: {(info.dividendYield * 100).toFixed(1)}%/rodada</span>
-              </div>
-
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => acao("compra", pos, info, 1)}
-                  className="btn-primary rounded-lg py-1.5 text-xs"
-                >
-                  Comprar
-                </button>
-                <button
-                  onClick={() => acao("compra", pos, info, 5)}
-                  className="btn-primary rounded-lg py-1.5 text-xs"
-                >
-                  +5
-                </button>
-                <button
-                  onClick={() => pos && pos.quantidade > 0 && acao("venda", pos, info, pos.quantidade)}
-                  disabled={!pos || pos.quantidade === 0}
-                  className="rounded-lg border border-rose-900/50 bg-rose-950/30 py-1.5 text-xs font-bold text-rose-300 disabled:opacity-30"
-                >
-                  Vender tudo
-                </button>
+              <div className="rounded-lg bg-slate-900/40 px-2 py-1">
+                <span className="text-slate-600">Clube: </span>
+                <span className="font-bold text-white">{fmtSOV(career.clubeCaixa ?? 0)}</span>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Histórico de dividendos/compras (§25). */}
-      {bolsa && bolsa.transacoes.length > 0 && (
-        <div className="panel !p-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Últimas operações
-          </p>
-          <div className="mt-2 space-y-1.5">
-            {bolsa.transacoes.slice(0, 6).map((t) => (
-              <div key={t.id} className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span>{ativoInfo(t.ativoId).emoji}</span>
-                  <span className="capitalize">{t.tipo}</span> ·{" "}
-                  {t.quantidade} cota{t.quantidade !== 1 ? "s" : ""}
-                </span>
-                <span className={t.tipo === "compra" ? "text-rose-300" : "text-emerald-300"}>
-                  {t.tipo === "compra" ? "-" : "+"}{fmtSOV(t.valor)} SOV
-                </span>
-              </div>
-            ))}
+          </div>
+          <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-950/30 to-slate-950/60 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="size-4 text-sky-400" />
+              <span className="text-[9px] uppercase tracking-[0.2em] text-sky-400/70 font-bold">SOV Invest</span>
+            </div>
+            <p className="font-display text-2xl font-black text-white">
+              {investSaldo === null ? "—" : `${fmtSOV(investSaldo)} SOV`}
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1">Disponível para investir</p>
+            <p className="text-[9px] text-slate-600 mt-1">Patrimônio em ativos: {fmtSOV(patrimonio.investido)} SOV</p>
           </div>
         </div>
-      )}
+
+        {/* Transfer panel */}
+        {userId && (
+          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ArrowRightLeft className="size-4 text-slate-400" />
+              <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Transferir entre carteiras</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                value={valorTransfer}
+                onChange={(e) => setValorTransfer(e.target.value)}
+                placeholder="Valor SOV"
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-400/50 focus:outline-none"
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => transferir("bank_para_invest")}
+                disabled={transferindo}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/20 px-3 py-2.5 text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/25 disabled:opacity-40"
+              >
+                <PiggyBank className="size-3.5" /> Bank → Invest · 0%
+              </button>
+              <button
+                onClick={() => transferir("invest_para_bank")}
+                disabled={transferindo}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-sky-500/15 border border-sky-500/20 px-3 py-2.5 text-xs font-bold text-sky-300 transition hover:bg-sky-500/25 disabled:opacity-40"
+              >
+                <Wallet className="size-3.5" /> Invest → Bank · IOF 10%
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Assets grid */}
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Zap className="size-4 text-amber-400" />
+            <span className="text-[9px] uppercase tracking-[0.2em] text-amber-400/70 font-bold">Ativos de Renda</span>
+            <span className="text-[9px] text-slate-600">· dividendos a cada 3 rodadas</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ATIVOS.map((info) => {
+              if (!bolsa) return null;
+              const preco = bolsa.precos[info.ativoId];
+              const anterior = bolsa.precosAnteriores[info.ativoId] ?? preco;
+              const variacao = anterior === 0 ? 0 : ((preco - anterior) / anterior) * 100;
+              const pos = bolsa.carteira.find((p) => p.ativoId === info.ativoId);
+              const historico = bolsa.historicoPrecos[info.ativoId] ?? [];
+
+              return (
+                <div key={info.ativoId} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">{info.emoji}</span>
+                      <div>
+                        <p className="text-sm font-bold text-white">{info.nome}</p>
+                        <p className="text-[9px] uppercase tracking-wider text-slate-600">{info.setor}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display text-lg font-black text-white">{fmtSOV(preco)}</p>
+                      <VariacaoBadge valor={variacao} />
+                    </div>
+                  </div>
+
+                  {/* Sparkline */}
+                  {historico.length > 0 && (
+                    <div className="mt-2 flex items-end gap-[2px]">
+                      {historico.map((p, i) => {
+                        const min = Math.min(...historico);
+                        const max = Math.max(...historico);
+                        const h = max === min ? 2 : 4 + Math.round(((p - min) / (max - min)) * 16);
+                        return (
+                          <span key={i} className="w-[5px] rounded-sm bg-emerald-500/60" style={{ height: `${h}px` }} />
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500">
+                    <span>{pos ? `${pos.quantidade} cota${pos.quantidade !== 1 ? "s" : ""}` : "Sem posição"}</span>
+                    <span>Dividendo: {(info.dividendYield * 100).toFixed(1)}%/rod</span>
+                  </div>
+
+                  <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+                    <button onClick={() => acao("compra", pos, info, 1)} className="rounded-lg bg-emerald-500/15 border border-emerald-500/20 py-1.5 text-[10px] font-bold text-emerald-300 transition hover:bg-emerald-500/25">
+                      Comprar
+                    </button>
+                    <button onClick={() => acao("compra", pos, info, 5)} className="rounded-lg bg-emerald-500/10 border border-emerald-500/15 py-1.5 text-[10px] font-bold text-emerald-300/70 transition hover:bg-emerald-500/20">
+                      +5
+                    </button>
+                    <button
+                      onClick={() => pos && pos.quantidade > 0 && acao("venda", pos, info, pos.quantidade)}
+                      disabled={!pos || pos.quantidade === 0}
+                      className="rounded-lg bg-rose-500/10 border border-rose-500/15 py-1.5 text-[10px] font-bold text-rose-300/70 transition hover:bg-rose-500/15 disabled:opacity-30"
+                    >
+                      Vender
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Mercado de Clubes link */}
+        {onAbrirMercadoClubes && (
+          <button onClick={onAbrirMercadoClubes} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/15 bg-gradient-to-r from-amber-950/30 to-slate-950/60 px-4 py-3.5 text-sm font-bold text-amber-300 transition hover:border-amber-500/30">
+            <Building2 className="size-4" /> Abrir Mercado de Clubes
+          </button>
+        )}
+
+        {/* Recent operations */}
+        {bolsa && bolsa.transacoes.length > 0 && (
+          <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+            <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-bold mb-3">Últimas operações</p>
+            <div className="space-y-1.5">
+              {bolsa.transacoes.slice(0, 6).map((t) => (
+                <div key={t.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span>{ativoInfo(t.ativoId).emoji}</span>
+                    <span className="text-slate-400 capitalize">{t.tipo}</span>
+                    <span className="text-slate-600">· {t.quantidade} cota{t.quantidade !== 1 ? "s" : ""}</span>
+                  </span>
+                  <span className={`font-bold ${t.tipo === "compra" ? "text-rose-300" : "text-emerald-300"}`}>
+                    {t.tipo === "compra" ? "-" : "+"}{fmtSOV(t.valor)} SOV
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Cidadela index */}
+        <div className="rounded-2xl border border-amber-500/10 bg-slate-950/40 p-4 text-center">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600">Patrimônio da Cidadela</p>
+          <p className="font-display text-xl font-black text-amber-300">{fmtSOV(patrimonioCidadela)} SOV</p>
+          <p className="text-[9px] text-slate-600">Índice econômico do ecossistema</p>
+        </div>
+
+        {feedback && (
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 text-xs text-cyan-300">
+            {feedback}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -336,18 +311,18 @@ export function EconomiaScreen({ career, userId, onComprar, onVender, onAbrirMer
 function VariacaoBadge({ valor }: { valor: number }) {
   if (Math.abs(valor) < 0.01) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-xs text-slate-400">
-        <Minus className="size-3" /> 0%
+      <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500">
+        <Minus className="size-2.5" /> 0%
       </span>
     );
   }
   return valor > 0 ? (
-    <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-400">
-      <ArrowUpRight className="size-3" /> +{valor.toFixed(1)}%
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-400">
+      <ArrowUpRight className="size-2.5" /> +{valor.toFixed(1)}%
     </span>
   ) : (
-    <span className="inline-flex items-center gap-0.5 text-xs font-bold text-rose-400">
-      <ArrowDownRight className="size-3" /> {valor.toFixed(1)}%
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-400">
+      <ArrowDownRight className="size-2.5" /> {valor.toFixed(1)}%
     </span>
   );
 }

@@ -4717,66 +4717,84 @@ function Setup(props: {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:flex sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="font-display text-3xl">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        </div>
-        <button onClick={sorteio} className="btn-ghost shrink-0 gap-2">
-          <Shuffle className="size-4" /> Sortear
-        </button>
+    <div className="relative w-full max-w-2xl mx-auto px-4 py-6">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-16 left-1/3 h-[300px] w-[300px] rounded-full bg-sky-500/4 blur-[100px]" />
+        <div className="absolute bottom-0 right-1/4 h-[250px] w-[250px] rounded-full bg-emerald-500/3 blur-[80px]" />
       </div>
 
-      <div>
-        <p className="mb-2 font-display text-xs tracking-[0.2em] text-muted-foreground uppercase">
-          Dificuldade
-        </p>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {DIFFICULTIES.map((d) => {
-            const unlocked = isUnlocked(progress, d.id);
-            return (
-              <button
-                key={d.id}
-                disabled={!unlocked}
-                onClick={() => setDifficulty(d.id)}
-                className={`diff-card ${difficulty === d.id ? "diff-card-active" : ""} ${unlocked ? "" : "opacity-50"}`}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="font-display text-lg">{d.label}</span>
-                  {!unlocked && <Lock className="size-4 shrink-0" />}
-                </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {unlocked ? d.desc : "Ganhe 3 títulos no nível anterior."}
-                </span>
-              </button>
-            );
-          })}
+      <div className="relative z-10 space-y-5">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition hover:bg-white/10">
+            <ArrowLeft className="size-4 text-white" />
+          </button>
+          <div>
+            <h2 className="font-display text-xl font-black text-white">{title}</h2>
+            <p className="text-xs text-slate-500">{subtitle}</p>
+          </div>
         </div>
-      </div>
 
-      <div className="mb-4">
-        <label className="block text-sm font-medium mb-2">Seu Time</label>
-        <div className="flex items-center gap-3 p-3 bg-accent/10 rounded-lg">
-          <TeamBadge team={userTeam} size="sm" />
-          <span className="font-display text-lg">{userTeam.name}</span>
+        {/* Difficulty */}
+        <div>
+          <p className="mb-2 text-[9px] uppercase tracking-[0.2em] text-slate-600 font-bold">Dificuldade</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {DIFFICULTIES.map((d) => {
+              const unlocked = isUnlocked(progress, d.id);
+              return (
+                <button
+                  key={d.id}
+                  disabled={!unlocked}
+                  onClick={() => setDifficulty(d.id)}
+                  className={`rounded-xl border p-3 text-left transition-all duration-200 ${
+                    difficulty === d.id
+                      ? "border-emerald-500/40 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.06)]"
+                      : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                  } ${unlocked ? "" : "opacity-40"}`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="font-display text-sm font-bold text-white">{d.label}</span>
+                    {!unlocked && <Lock className="size-3.5 text-slate-600" />}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] text-slate-500">
+                    {unlocked ? d.desc : "Ganhe 3 títulos no nível anterior."}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
-      {showRival && (
-        <TeamPicker
-          label="Adversário"
-          value={rivalTeam}
-          onChange={setRivalTeam}
-          exclude={userTeam.id}
-        />
-      )}
 
-      <div className="flex gap-3">
-        <button onClick={onBack} className="btn-ghost">
-          Voltar
-        </button>
-        <button onClick={onStart} className="btn-primary flex-1">
-          Começar
+        {/* Teams */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="rounded-2xl border border-sky-500/15 bg-gradient-to-br from-sky-950/30 to-slate-950/60 p-4 text-center">
+            <p className="text-[8px] uppercase tracking-widest text-sky-400/60 mb-1">Seu Time</p>
+            <TeamBadge team={userTeam} size="md" />
+            <p className="mt-1 font-display text-sm font-bold text-white">{userTeam.name}</p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="font-display text-2xl font-black text-white/20">×</span>
+            <button onClick={sorteio} className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-bold text-slate-500 transition hover:border-white/20 hover:text-white">
+              <Shuffle className="size-3" /> Sortear
+            </button>
+          </div>
+          {showRival ? (
+            <div className="rounded-2xl border border-rose-500/15 bg-gradient-to-br from-rose-950/30 to-slate-950/60 p-4 text-center">
+              <p className="text-[8px] uppercase tracking-widest text-rose-400/60 mb-1">Adversário</p>
+              <TeamPicker label="" value={rivalTeam} onChange={setRivalTeam} exclude={userTeam.id} />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-center">
+              <p className="text-[8px] uppercase tracking-widest text-slate-600 mb-1">Adversário</p>
+              <p className="text-sm text-slate-500">Aleatório</p>
+            </div>
+          )}
+        </div>
+
+        {/* Start button */}
+        <button onClick={onStart} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4 text-lg font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/30 transition-all hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.98]">
+          ⚽ Começar
         </button>
       </div>
     </div>
