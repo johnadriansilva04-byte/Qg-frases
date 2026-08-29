@@ -14,6 +14,7 @@ import { ProfissaoSelect } from "@/components/cidadela/ProfissaoSelect";
 import { CampusHub } from "@/components/campus/CampusHub";
 import { EmpresarioHub } from "@/components/comercial/EmpresarioHub";
 import { LaboratorioHub } from "@/components/laboratorio/LaboratorioHub";
+import { FootballLoadingScreen } from "@/components/botao/FootballLoadingScreen";
 import { useBotaoAuth } from "@/components/botao/online/useBotaoAuth";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { InfoModal } from "@/components/InfoModal";
@@ -213,10 +214,10 @@ function CidadelaCompView() {
   const closeModal = () => setActiveModal(null);
 
   const handleGameSelect = (game: Game) => {
-    // Futebol entra DIRETO na tela principal do jogo — a verificação de sessão
-    // e o auto-login acontecem dentro do BotaoGame (sem loading duplicado).
+    // Futebol: mostra tela de loading temática ANTES de abrir o BotaoGame.
+    // Isso evita o flash feio de menu → loading → menu.
     if (game === "botao") {
-      setActiveGame("botao");
+      setLoadingGame(game);
       return;
     }
     if (game === "trilha") {
@@ -318,6 +319,17 @@ function CidadelaCompView() {
         onCompleto={() => {
           setLoadingGame(null);
           setActiveGame("trilha");
+        }}
+      />
+    );
+  }
+
+  if (loadingGame === "botao") {
+    return (
+      <FootballLoadingScreen
+        onCompleto={() => {
+          setLoadingGame(null);
+          setActiveGame("botao");
         }}
       />
     );
