@@ -4140,17 +4140,11 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
                 { sourceEvent: "assinatura_clube", idempotencyKey: `assinatura:${perfil.user_id}:t1:${oferta.clubeId}` },
               );
             }
-            // Iniciar campanha (cria torneio, copa, etc) com loading
-            setLoading(true);
-            setForceLoading(true);
-            setLoadingReady(true);
-            setLoadingOnComplete(() => () => {
-              setLoading(false);
-              setForceLoading(false);
-              iniciarCampanha(nova).catch((e) => {
-                console.error("[CareerIntro] iniciarCampanha failed:", e);
-                setToast("Erro ao criar campanha. Tente novamente.");
-              });
+            // Chamar iniciarCampanha DIRETAMENTE — o LoadingScreen global
+            // não renderiza aqui porque o return antecipado impede.
+            iniciarCampanha(nova).catch((e) => {
+              console.error("[CareerIntro] iniciarCampanha failed:", e);
+              setToast("Erro ao criar campanha. Tente novamente.");
             });
           }}
           onBack={() => setScreen("career-menu")}
