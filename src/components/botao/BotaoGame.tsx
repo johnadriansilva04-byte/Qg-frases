@@ -4615,7 +4615,21 @@ function Menu({
   ];
 
   return (
-    <div className="relative w-full max-w-5xl mx-auto">
+    <div className="relative w-full max-w-5xl mx-auto px-4 py-4">
+      {/* Header with back button */}
+      {onBack && (
+        <div className="mb-4 flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Cidadela</span>
+          </button>
+          <h2 className="font-display text-xl font-black text-white">Futebol</h2>
+        </div>
+      )}
+
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-16 left-1/4 h-[300px] w-[300px] rounded-full bg-emerald-500/4 blur-[100px]" />
