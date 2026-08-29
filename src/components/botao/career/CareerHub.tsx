@@ -243,7 +243,7 @@ export function CareerHub({
                   className="group flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/30 transition-all hover:from-emerald-500 hover:to-emerald-400 hover:shadow-emerald-500/20 active:scale-[0.97]"
                 >
                   <Zap className="size-4" />
-                  Iniciar Temporada
+                  Entrar em Campo
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
                 </button>
               </div>
