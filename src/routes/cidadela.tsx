@@ -301,10 +301,10 @@ function CidadelaCompView() {
     );
   }
 
-  // §link-trilha: link direto de mesa de trilha — o convidado cai direto no lobby da trilha online.
+  // §link-trilha: link direto de mesa de trilha — abre o lobby online direto na mesa.
   if (conviteMesaTrilhaId) {
     return (
-      <TrilhaOnlineLobby
+      <TrilhaGame
         mesaInicial={conviteMesaTrilhaId}
         onBack={() => setConviteMesaTrilhaId(null)}
       />

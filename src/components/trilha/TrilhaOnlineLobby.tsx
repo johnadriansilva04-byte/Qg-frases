@@ -15,9 +15,9 @@ interface Mesa {
 type Formato = "normal" | "eliminacao";
 
 interface TrilhaOnlineLobbyProps {
-  onBack?: () => void;
+  onBack?: (() => void) | undefined;
   /** Link direto (?mesaTrilha=...): entra direto na mesa especificada. */
-  mesaInicial?: string;
+  mesaInicial?: string | undefined;
 }
 
 export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProps = {}) {

@@ -19,11 +19,13 @@ const TUTORIAL_KEY = "trilha_tutorial_seen";
 
 interface TrilhaGameProps {
   onBack?: () => void;
+  /** Link direto (?mesaTrilha=...): abre o lobby online direto na mesa. */
+  mesaInicial?: string;
 }
 
 type ViewMode = "menu" | "amistoso" | "campeonato" | "online";
 
-export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
+export function TrilhaGame({ onBack, mesaInicial }: TrilhaGameProps = {}) {
   const [seed, setSeed] = useState(0);
   const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem(TUTORIAL_KEY));
   const [showRules, setShowRules] = useState(false);
@@ -60,7 +62,7 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   const handleSelectOnline = () => setViewMode("online");
   const handleBackToMenu = () => setViewMode("menu");
 
-  if (viewMode === "online") return <TrilhaOnlineLobby onBack={handleBackToMenu} />;
+  if (viewMode === "online") return <TrilhaOnlineLobby onBack={handleBackToMenu} mesaInicial={mesaInicial ?? undefined} />;
 
   if (loading) return <TrilhaLoadingScreen onCompleto={() => {}} />;
 
