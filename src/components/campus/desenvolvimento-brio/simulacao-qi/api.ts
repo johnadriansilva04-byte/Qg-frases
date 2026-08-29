@@ -37,9 +37,12 @@ async function rpcExiste(nome: string): Promise<boolean> {
 }
 
 let dbAtivo: boolean | null = null;
+let dbAtivoExpiry = 0;
+const DB_ATIVO_CACHE_MS = 60_000; // re-verifica a cada 60s
 export async function backendQiAtivo(): Promise<boolean> {
-  if (dbAtivo === null) {
+  if (dbAtivo === null || Date.now() > dbAtivoExpiry) {
     dbAtivo = await rpcExiste("qi_buscar_questoes");
+    dbAtivoExpiry = Date.now() + DB_ATIVO_CACHE_MS;
   }
   return dbAtivo;
 }
