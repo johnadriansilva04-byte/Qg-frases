@@ -182,21 +182,23 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
+      <header className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
-            <h2 className="texto-marca text-lg sm:text-xl">TRILHA ONLINE</h2>
-            <p className="text-xs text-muted-foreground">Mesas 1×1</p>
+            <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
+              TRILHA <span className="text-purple-400 text-[10px] font-bold ml-1.5 bg-purple-500/10 px-1.5 py-0.5 rounded">ONLINE</span>
+            </h2>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Mesas 1×1</p>
           </div>
         </div>
         {onBack ? (
           <button
             onClick={onBack}
-            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
           >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Voltar à Cidadela</span>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Menu</span>
           </button>
         ) : null}
       </header>
@@ -204,15 +206,15 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
       <main className="mx-auto max-w-4xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-display text-2xl">Lobby de Trilha</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="font-display text-2xl font-black text-white tracking-tight">Lobby de Trilha</h1>
+            <p className="text-sm text-white/40">
               Escolha uma mesa disponível ou crie a sua própria.
             </p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => void carregarMesas()}
-              className="flex items-center gap-2 bg-secondary/70 text-foreground hover:bg-secondary px-4 py-2 rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
             >
               <RefreshCw className="h-4 w-4" />
               <span>Atualizar</span>
@@ -221,28 +223,28 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
         </div>
 
         {/* Criar sala — simples: nome + formato, sem dificuldade. */}
-        <section className="mb-6 rounded-xl border border-slate-800/70 bg-gradient-to-br from-slate-900/40 to-slate-950/60 p-5">
+        <section className="mb-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
           <h2 className="mb-3 font-display text-lg">Criar Nova Mesa</h2>
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-sm font-medium">Nome da sala (opcional)</label>
+              <label className="mb-1 block text-sm font-medium text-white/70">Nome da sala (opcional)</label>
               <input
                 value={nomeSala}
                 onChange={(e) => setNomeSala(e.target.value)}
                 placeholder="Ex.: Trilha com os amigos"
                 maxLength={40}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-white/80 placeholder-white/25"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium">Formato</label>
+              <label className="mb-1 block text-sm font-medium text-white/70">Formato</label>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setFormato("normal")}
                   className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
                     formato === "normal"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary/60 hover:bg-secondary"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white/[0.04] border border-white/10 text-white/50 hover:bg-white/[0.08]"
                   }`}
                 >
                   <Swords className="h-4 w-4" /> Mesa (1 x 1)
@@ -252,25 +254,24 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                   className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
                     formato === "eliminacao"
                       ? "bg-amber-500 text-slate-950"
-                      : "bg-secondary/60 hover:bg-secondary"
+                      : "bg-white/[0.04] border border-white/10 text-white/50 hover:bg-white/[0.08]"
                   }`}
                 >
                   <Crown className="h-4 w-4" /> Campeonato eliminatório
                 </button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-xs text-white/30">
                 Eliminatório: campeonato formato de eliminação — quem perder sai.
               </p>
             </div>
             <button
               onClick={() => void criarMesa()}
               disabled={criandoMesa}
-              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               <span>{criandoMesa ? "Criando..." : "Criar Mesa"}</span>
-            </button>
-            <p className="text-xs text-muted-foreground">
+            </button>              <p className="text-xs text-white/30">
               Ao criar, o link da sala é copiado automaticamente — compartilhe com seu adversário.
             </p>
           </div>
@@ -278,17 +279,17 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
 
         {/* Mesas disponíveis */}
         <section>
-          <h2 className="mb-3 font-display text-lg">Mesas Disponíveis</h2>
+          <h2 className="mb-3 font-display text-lg font-black text-white tracking-tight">Mesas Disponíveis</h2>
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground">
+            <div className="py-8 text-center text-white/30">
               <RefreshCw className="mx-auto mb-2 h-6 w-6 animate-spin" />
               <p>Carregando mesas...</p>
             </div>
           ) : mesas.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              <Users className="mx-auto mb-2 h-12 w-12 opacity-50" />
+            <div className="py-8 text-center text-white/30">
+              <Users className="mx-auto mb-2 h-12 w-12 opacity-30" />
               <p>Nenhuma mesa aberta no momento.</p>
-              <p className="text-sm">Crie a sua e compartilhe o link!</p>
+              <p className="text-sm text-white/20">Crie a sua e compartilhe o link!</p>
             </div>
           ) : (
             <div className="grid gap-3">
@@ -297,7 +298,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                 return (
                   <div
                     key={mesa.mesa_id}
-                    className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 transition-colors ${ehElim ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/70" : "border-slate-800 bg-muted/40 hover:border-primary/50"}`}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 transition-colors ${ehElim ? "border-amber-500/30 bg-amber-500/[0.04] hover:border-amber-500/50" : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"}`}
                   >
                     <div className="flex items-center gap-3">
                       <div className={`rounded-lg p-2.5 ${ehElim ? "bg-amber-500/20" : "bg-primary/20"}`}>
@@ -308,10 +309,10 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                         )}
                       </div>
                       <div>
-                        <h3 className="font-semibold">
+                        <h3 className="font-semibold text-white/90">
                           {mesa.nome_sala?.trim() || `Mesa de ${mesa.jogador_1_id.slice(0, 8)}`}
                         </h3>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-white/35">
                           {ehElim ? "Campeonato eliminatório" : "Mesa 1×1"} ·{" "}
                           ID: {mesa.jogador_1_id.slice(0, 8)} · {formatarTempo(mesa.criado_em)}
                         </p>
@@ -320,7 +321,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => copiarLink(mesa.mesa_id)}
-                        className="flex items-center gap-1 rounded-lg bg-secondary/60 px-3 py-2 text-xs hover:bg-secondary"
+                        className="flex items-center gap-1 rounded-lg bg-white/[0.04] border border-white/10 px-3 py-2 text-xs text-white/50 hover:bg-white/[0.08] hover:text-white/70"
                         data-testid="copiar-link-trilha"
                       >
                         <Link2 className="h-3.5 w-3.5" /> Link
@@ -328,7 +329,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                       <button
                         onClick={() => void entrarMesa(mesa.mesa_id)}
                         disabled={entrandoMesa === mesa.mesa_id}
-                        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Play className="h-4 w-4" />
                         <span>{entrandoMesa === mesa.mesa_id ? "Entrando..." : "Entrar"}</span>
@@ -342,7 +343,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
         </section>
 
         {toastLink && (
-          <p className="mt-4 break-all rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs">
+          <p className="mt-4 break-all rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-3 text-xs text-emerald-400/80">
             Link copiado: {toastLink}
           </p>
         )}

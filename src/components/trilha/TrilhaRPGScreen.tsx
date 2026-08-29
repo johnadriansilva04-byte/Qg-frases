@@ -1,4 +1,4 @@
-import { Trophy, Sparkles, ChevronRight, MessageSquare } from "lucide-react";
+import { Trophy, Sparkles, ChevronRight, MessageSquare, X } from "lucide-react";
 import { useState } from "react";
 import { MatchEndAdCard } from "@/components/MatchEndAdCard";
 
@@ -12,78 +12,57 @@ export function TrilhaRPGScreen({ resultado, fase, onContinue }: TrilhaRPGScreen
   const [mostrarInteracao, setMostrarInteracao] = useState(false);
 
   const getTitulo = () => {
-    if (resultado === "vitoria") {
-      return "Vitória Estratégica!";
-    } else if (resultado === "derrota") {
-      return "Derrota Tática";
-    }
+    if (resultado === "vitoria") return "Vitória Estratégica!";
+    if (resultado === "derrota") return "Derrota Tática";
     return "Empate";
   };
 
   const getDescricao = () => {
-    if (resultado === "vitoria") {
-      return "Sua estratégia foi impecável. O Pracinha reconhece seu talento tático.";
-    } else if (resultado === "derrota") {
-      return "O oponente superou sua estratégia desta vez. Aprenda com a derrota.";
-    }
+    if (resultado === "vitoria") return "Sua estratégia foi impecável. O Pracinha reconhece seu talento tático.";
+    if (resultado === "derrota") return "O oponente superou sua estratégia desta vez. Aprenda com a derrota.";
     return "Um confronto equilibrado. Ambos os lados mostraram determinação.";
   };
 
-  const getNPC = () => {
-    if (resultado === "vitoria") {
-      return {
-        nome: "Pracinha",
-        cargo: "Guardião da Cidadela",
-        avatar: "🤖",
-        mensagem: "Excelente movimentação! Sua tática impressionou o comando. Continue assim e alcançará patentes superiores.",
-      };
-    }
-    return {
-      nome: "Pracinha",
-      cargo: "Guardião da Cidadela",
-      avatar: "🤖",
-      mensagem: "Nem toda batalha é vencida. Analise seus movimentos e ajuste sua estratégia. A persistência é a chave.",
-    };
-  };
+  const getNPC = () => ({
+    nome: "Pracinha",
+    cargo: "Guardião da Cidadela",
+    avatar: "🤖",
+    mensagem: resultado === "vitoria"
+      ? "Excelente movimentação! Sua tática impressionou o comando. Continue assim e alcançará patentes superiores."
+      : "Nem toda batalha é vencida. Analise seus movimentos e ajuste sua estratégia. A persistência é a chave.",
+  });
 
   const npc = getNPC();
+  const isVictory = resultado === "vitoria";
 
   if (mostrarInteracao) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
         <div className="max-w-lg w-full">
-          <div className="bg-surface/80 backdrop-blur-xl border border-emerald-500/30 rounded-2xl p-6 sm:p-8 shadow-2xl">
-            {/* NPC Avatar */}
+          <div className="bg-gradient-to-b from-[#0f172a] to-[#1e293b] border border-emerald-500/20 rounded-2xl p-6 sm:p-8 shadow-2xl">
             <div className="flex items-center gap-4 mb-6">
-              <div className="bg-emerald-500/20 p-4 rounded-full">
-                <span className="text-4xl">{npc.avatar}</span>
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <span className="text-3xl">{npc.avatar}</span>
               </div>
               <div>
-                <h2 className="font-display text-xl font-bold text-foreground">{npc.nome}</h2>
-                <p className="text-sm text-emerald-400">{npc.cargo}</p>
+                <h2 className="font-display text-lg font-black text-white tracking-wide">{npc.nome}</h2>
+                <p className="text-xs text-emerald-400 font-bold uppercase tracking-wider">{npc.cargo}</p>
               </div>
             </div>
-
-            {/* Mensagem do NPC */}
-            <div className="bg-surface/50 rounded-lg p-4 mb-6 border border-border/50">
-              <p className="text-foreground leading-relaxed">{npc.mensagem}</p>
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-6">
+              <p className="text-sm text-white/80 leading-relaxed">{npc.mensagem}</p>
             </div>
-
-            {/* Botão de interação com ControlledMonetagButton */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <button
-                onClick={() => {
-                  // Aqui seria o ControlledMonetagButton
-                  onContinue();
-                }}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                onClick={() => onContinue()}
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 text-sm"
               >
-                <MessageSquare className="w-5 h-5" />
+                <MessageSquare className="w-4 h-4" />
                 Conhecer Novo Contato
               </button>
               <button
                 onClick={onContinue}
-                className="w-full bg-secondary/70 hover:bg-secondary text-foreground font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+                className="w-full bg-white/[0.04] border border-white/10 text-white/60 hover:bg-white/[0.08] hover:text-white/80 font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm"
               >
                 Voltar ao Quartel
               </button>
@@ -95,59 +74,50 @@ export function TrilhaRPGScreen({ resultado, fase, onContinue }: TrilhaRPGScreen
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
       <div className="max-w-lg w-full">
-        <div className="bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-6 sm:p-8 shadow-2xl">
-          {/* Conteúdo de resultado */}
-          <div className="text-center mb-6">
-            <div className="flex justify-center mb-4">
-              <div className={`${resultado === "vitoria" ? "bg-yellow-500/20" : resultado === "derrota" ? "bg-red-500/20" : "bg-blue-500/20"} p-4 rounded-full`}>
-                <Trophy className={`w-16 h-16 ${resultado === "vitoria" ? "text-yellow-500" : resultado === "derrota" ? "text-red-500" : "text-blue-500"}`} />
-              </div>
-            </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground mb-2">
-              {getTitulo()}
-            </h1>
-            <p className="text-lg sm:text-xl text-primary font-semibold mb-2">
-              Fase {fase}
-            </p>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              {getDescricao()}
-            </p>
+        <div className="bg-gradient-to-b from-[#0f172a] to-[#1e293b] border border-white/[0.08] rounded-2xl p-6 sm:p-8 shadow-2xl">
+          {/* Icon */}
+          <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-5 ${isVictory ? "bg-amber-500/15 border border-amber-500/25" : resultado === "derrota" ? "bg-red-500/15 border border-red-500/25" : "bg-blue-500/15 border border-blue-500/25"}`}>
+            <Trophy className={`w-10 h-10 ${isVictory ? "text-amber-400" : resultado === "derrota" ? "text-red-400" : "text-blue-400"}`} />
           </div>
+
+          {/* Title */}
+          <h1 className="text-2xl font-black text-white tracking-tight mb-1">{getTitulo()}</h1>
+          <p className="text-sm font-bold text-white/50 mb-4">Fase {fase}</p>
+          <p className="text-xs text-white/40 leading-relaxed mb-6">{getDescricao()}</p>
 
           {/* Stats */}
-          <div className="bg-surface/50 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <Sparkles className="w-5 h-5 text-yellow-500" />
-              <span className="font-semibold text-foreground">Progresso</span>
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-bold text-white/70 uppercase tracking-wider">Progresso</span>
             </div>
-            <div className="flex items-center justify-center gap-3">
-              <span className="text-lg font-bold text-primary">
-                {resultado === "vitoria" ? "+10 XP" : resultado === "derrota" ? "+2 XP" : "+5 XP"}
-              </span>
-            </div>
+            <span className="text-lg font-black text-white/80">
+              {isVictory ? "+10 XP" : resultado === "derrota" ? "+2 XP" : "+5 XP"}
+            </span>
           </div>
 
-          {/* Botões de ação */}
-          <div className="space-y-3">
+          {/* Buttons */}
+          <div className="space-y-2">
             <button
               onClick={() => setMostrarInteracao(true)}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 text-sm"
             >
               Interagir com o Pracinha
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-4 h-4" />
             </button>
             <button
               onClick={onContinue}
-              className="w-full bg-secondary/70 hover:bg-secondary text-foreground font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+              className="w-full bg-white/[0.04] border border-white/10 text-white/60 hover:bg-white/[0.08] hover:text-white/80 font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm"
             >
               Continuar
             </button>
           </div>
 
-          {/* Card de anúncio no fim de partida */}
-          <MatchEndAdCard />
+          <div className="mt-4">
+            <MatchEndAdCard />
+          </div>
         </div>
       </div>
     </div>

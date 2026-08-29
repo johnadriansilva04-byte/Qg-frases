@@ -1,6 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2 } from "lucide-react";
-import { armarSponsor } from "@/lib/sponsorGate";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2, Swords, Crown, ChevronRight, Zap } from "lucide-react";
 import { marcarRitualPendente } from "@/components/botao/career/trilhaIntegracao";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
@@ -22,92 +21,79 @@ interface TrilhaGameProps {
   onBack?: () => void;
 }
 
+type ViewMode = "menu" | "amistoso" | "campeonato" | "online";
+
 export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   const [seed, setSeed] = useState(0);
-  const [showTutorial, setShowTutorial] = useState(() => {
-    const seen = localStorage.getItem(TUTORIAL_KEY);
-    return !seen;
-  });
+  const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem(TUTORIAL_KEY));
   const [showRules, setShowRules] = useState(false);
   const [showTrophies, setShowTrophies] = useState(false);
-  const [showModeSelection, setShowModeSelection] = useState(true);
-  const [gameMode, setGameMode] = useState<"career" | "online" | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("menu");
   const [loading, setLoading] = useState(false);
+  const [champDifficulty, setChampDifficulty] = useState<Difficulty>("recruta");
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
   const { markFirstGamePlayed } = useAdManager("/trilha");
 
-  // Inicia fases automaticamente se não começou
   useEffect(() => {
-    if (!phases.progress.started) {
-      phases.startPhases();
-    }
+    if (!phases.progress.started) phases.startPhases();
   }, [phases]);
 
-  const difficulty = (currentPhaseConfig?.difficulty || "recruta") as Difficulty;
+  useEffect(() => {
+    if (currentPhaseConfig) setChampDifficulty(currentPhaseConfig.difficulty as Difficulty);
+  }, [currentPhaseConfig]);
 
-  const handleStartGame = () => {
-    localStorage.setItem(TUTORIAL_KEY, "true");
-    setShowTutorial(false);
-  };
+  const handleStartTutorial = () => { localStorage.setItem(TUTORIAL_KEY, "true"); setShowTutorial(false); };
+  const handleShowRules = () => { setShowTutorial(false); setShowRules(true); };
+  const handleCloseRules = () => { setShowRules(false); localStorage.setItem(TUTORIAL_KEY, "true"); };
 
-  const handleShowRules = () => {
-    setShowTutorial(false);
-    setShowRules(true);
-  };
-
-  const handleCloseRules = () => {
-    setShowRules(false);
-    localStorage.setItem(TUTORIAL_KEY, "true");
-  };
-
-  const handleSelectCareerMode = () => {
+  const handleSelectAmistoso = () => {
     setLoading(true);
-    setTimeout(() => {
-      setGameMode("career");
-      setShowModeSelection(false);
-      setLoading(false);
-    }, 2000);
+    setTimeout(() => { setViewMode("amistoso"); setLoading(false); }, 1500);
   };
 
-  const handleSelectOnlineMode = () => {
-    setGameMode("online");
-    setShowModeSelection(false);
+  const handleSelectCampeonato = () => {
+    setLoading(true);
+    setTimeout(() => { setViewMode("campeonato"); setLoading(false); }, 1500);
   };
 
-  const handleBackToModeSelection = () => {
-    setGameMode(null);
-    setShowModeSelection(true);
-  };
+  const handleSelectOnline = () => setViewMode("online");
+  const handleBackToMenu = () => setViewMode("menu");
 
-  // Se estiver no modo online, renderiza o lobby online
-  if (gameMode === "online") {
-    return <TrilhaOnlineLobby onBack={handleBackToModeSelection} />;
-  }
+  if (viewMode === "online") return <TrilhaOnlineLobby onBack={handleBackToMenu} />;
 
-  // Tela de loading
-  if (loading) {
-    return <TrilhaLoadingScreen onCompleto={() => {}} />;
-  }
+  if (loading) return <TrilhaLoadingScreen onCompleto={() => {}} />;
 
   return (
     <>
-      {showTutorial && <TutorialModal onStart={handleStartGame} onShowRules={handleShowRules} />}
+      {showTutorial && <TutorialModal onStart={handleStartTutorial} onShowRules={handleShowRules} />}
       {showRules && <RulesModal onClose={handleCloseRules} />}
       {showTrophies && <TrophiesModal onClose={() => setShowTrophies(false)} phases={phases} />}
-      {showModeSelection && (
+
+      {viewMode === "menu" && (
         <ModeSelection
           onBack={onBack}
-          onSelectCareer={handleSelectCareerMode}
-          onSelectOnline={handleSelectOnlineMode}
+          onSelectAmistoso={handleSelectAmistoso}
+          onSelectCampeonato={handleSelectCampeonato}
+          onSelectOnline={handleSelectOnline}
+          onShowRules={() => setShowRules(true)}
         />
       )}
-      {!showModeSelection && gameMode === "career" && (
-        <TrilhaGameBoard
-          key={`${difficulty}-${seed}`}
-          difficulty={difficulty}
-          onReset={() => setSeed((s) => s + 1)}
-          onBack={handleBackToModeSelection}
+
+      {viewMode === "amistoso" && (
+        <AmistosoBoard
+          key={`amistoso-${seed}`}
+          onReset={() => setSeed(s => s + 1)}
+          onBack={handleBackToMenu}
+        />
+      )}
+
+      {viewMode === "campeonato" && (
+        <CampeonatoBoard
+          key={`champ-${champDifficulty}-${seed}`}
+          difficulty={champDifficulty}
+          onReset={() => setSeed(s => s + 1)}
+          onBack={handleBackToMenu}
           phases={phases}
           currentPhaseConfig={currentPhaseConfig}
           onShowTrophies={() => setShowTrophies(true)}
@@ -117,102 +103,125 @@ export function TrilhaGame({ onBack }: TrilhaGameProps = {}) {
   );
 }
 
-function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack: (() => void) | undefined; onSelectCareer: () => void; onSelectOnline: () => void }) {
+/* ───────────── Mode Selection ───────────── */
+
+function ModeSelection({ onBack, onSelectAmistoso, onSelectCampeonato, onSelectOnline, onShowRules }: {
+  onBack?: (() => void) | undefined;
+  onSelectAmistoso: () => void;
+  onSelectCampeonato: () => void;
+  onSelectOnline: () => void;
+  onShowRules: () => void;
+}) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1a] via-[#0d1525] to-[#0a0f1a]">
-      <header className="flex items-center justify-between border-b border-slate-700/40 px-4 py-3 sm:px-5 sm:py-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
+      {/* Ambient glow */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute top-[-20%] left-[10%] w-[500px] h-[500px] rounded-full bg-emerald-500/[0.03] blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[15%] w-[400px] h-[400px] rounded-full bg-blue-500/[0.03] blur-[100px]" />
+      </div>
+
+      <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
             <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
-              TRILHA <span className="text-emerald-400 text-xs font-bold ml-1">FEB</span>
+              TRILHA <span className="text-emerald-400 text-[10px] font-bold ml-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded">FEB</span>
             </h2>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Estratégia Tática</p>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Estratégia Tática</p>
           </div>
         </div>
-        {onBack ? (
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 border border-slate-600/40 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
-          >
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Voltar</span>
+            <span className="hidden sm:inline">Voltar</span>
           </button>
-        ) : null}
+        )}
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:py-12">
+      <main className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:py-16">
         {/* Hero */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-5">
-            <Target className="h-10 w-10 text-emerald-400" />
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-5 shadow-lg shadow-emerald-500/5">
+            <Target className="h-8 w-8 text-emerald-400" />
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-black text-white mb-3 tracking-tight">
-            Escolha o Campo de Batalha
+            Campo de Batalha
           </h1>
-          <p className="text-sm text-slate-400 max-w-md mx-auto">
-            Trilha — jogo de estratégia mental onde formações de três peças neutralizam o inimigo.
+          <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+            Nine Men's Morris — 9 peças, 24 interseções, 16 trilhas.
+            <br />
+            <span className="text-slate-500">Forme trilhas. Capture tropas. Domine o campo.</span>
           </p>
         </div>
 
         {/* Mode cards */}
-        <div className="grid gap-5 md:grid-cols-2 max-w-2xl mx-auto">
-          {/* Career mode */}
+        <div className="space-y-4 max-w-xl mx-auto">
+          {/* Amistoso */}
           <button
-            onClick={onSelectCareer}
-            className="group relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-950/60 p-6 text-left transition-all duration-300 hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.1)] active:scale-[0.98]"
+            onClick={onSelectAmistoso}
+            className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-5 sm:p-6 text-left transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_rgba(16,185,129,0.06)] active:scale-[0.99]"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Trophy className="h-6 w-6 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="font-display text-lg font-black text-white tracking-wide">Modo Carreira</h3>
-                  <p className="text-[10px] uppercase tracking-[0.15em] text-blue-400/70 font-bold">Offline · IA</p>
-                </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative z-10 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
+                <Swords className="h-7 w-7 text-emerald-400" />
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Enfrente a IA em fases progressivas. Do Recruta ao General — complete todas as fases para se tornar o Mestre da Trilha.
-              </p>
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-400">
-                <Gamepad2 className="h-3.5 w-3.5" />
-                <span>3 Fases · Sistema de Troféus</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display text-lg font-black text-white tracking-wide">Amistoso</h3>
+                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Partida rápida 1v1 contra a IA. Treine estratégias sem pressão.</p>
               </div>
+              <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all shrink-0" />
             </div>
           </button>
 
-          {/* Online mode */}
+          {/* Campeonato */}
+          <button
+            onClick={onSelectCampeonato}
+            className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-5 sm:p-6 text-left transition-all duration-300 hover:border-blue-500/30 hover:shadow-[0_0_40px_rgba(59,130,246,0.06)] active:scale-[0.99]"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative z-10 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
+                <Trophy className="h-7 w-7 text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display text-lg font-black text-white tracking-wide">Campeonato</h3>
+                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Fases progressivas com IA. Do Recruta ao General — torne-se Mestre da Trilha.</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] font-bold text-blue-400/80 bg-blue-500/10 px-2 py-0.5 rounded">3 Fases</span>
+                  <span className="text-[10px] font-bold text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded">Troféus</span>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all shrink-0" />
+            </div>
+          </button>
+
+          {/* Online */}
           <button
             onClick={onSelectOnline}
-            className="group relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 to-slate-950/60 p-6 text-left transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.1)] active:scale-[0.98]"
+            className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-5 sm:p-6 text-left transition-all duration-300 hover:border-purple-500/30 hover:shadow-[0_0_40px_rgba(168,85,247,0.06)] active:scale-[0.99]"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Users className="h-6 w-6 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="font-display text-lg font-black text-white tracking-wide">Modo Online</h3>
-                  <p className="text-[10px] uppercase tracking-[0.15em] text-emerald-400/70 font-bold">Multijogador</p>
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative z-10 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
+                <Users className="h-7 w-7 text-purple-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display text-lg font-black text-white tracking-wide">Online</h3>
+                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Desafie outros jogadores em tempo real. Crie mesas e compartilhe o link.</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] font-bold text-purple-400/80 bg-purple-500/10 px-2 py-0.5 rounded">1v1</span>
+                  <span className="text-[10px] font-bold text-purple-400/80 bg-purple-500/10 px-2 py-0.5 rounded">Tempo Real</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Desafie outros jogadores em tempo real. Crie mesas, convide amigos e prove sua estratégia.
-              </p>
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                <Users className="h-3.5 w-3.5" />
-                <span>1v1 · Salas Privadas</span>
-              </div>
+              <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-purple-400 group-hover:translate-x-1 transition-all shrink-0" />
             </div>
           </button>
         </div>
 
         {/* Rules hint */}
-        <div className="mt-8 text-center">
-          <p className="text-[10px] text-slate-600">
-            9 peças por jogador · 24 interseções · 16 trilhas possíveis · Derrote o adversário reduzindo-o a 2 peças
+        <div className="mt-10 text-center">
+          <p className="text-[11px] text-slate-600">
+            9 peças por jogador · 24 interseções · 16 trilhas · Derrote reduzindo a 2 peças
           </p>
         </div>
       </main>
@@ -220,217 +229,146 @@ function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack: (()
   );
 }
 
-function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRules: () => void }) {
+/* ───────────── Amistoso (Friendly) ───────────── */
+
+function AmistosoBoard({ onReset, onBack }: { onReset: () => void; onBack?: () => void }) {
+  const game = useLocalGame("recruta", 1);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [gameEnded, setGameEnded] = useState(false);
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
+  const [gameResult, setGameResult] = useState<"victory" | "defeat" | "draw">("victory");
+  const { markFirstGamePlayed } = useAdManager("/trilha");
+
+  useEffect(() => {
+    if (game.state.phase === "over" && !gameEnded && game.state.winner) {
+      const result = game.state.winner === 1 ? "victory" : "defeat";
+      const score = getTrilhaScore("recruta", result);
+      addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty: "recruta", result, score });
+      markFirstGamePlayed();
+      marcarRitualPendente(result === "victory" ? "vitoria" : "derrota");
+      setFinalScore(score);
+      setGameResult(result);
+      setShowAdModal(true);
+      setGameEnded(true);
+    }
+    if (game.state.phase !== "over") setGameEnded(false);
+  }, [game.state.phase, game.state.winner, gameEnded, markFirstGamePlayed]);
+
+  const targets = useMemo(() => {
+    if (game.state.phase === "placing") return new Set(legalPlacements(game.state));
+    if (selected !== null) return new Set(legalDestinations(game.state, selected));
+    return new Set<number>();
+  }, [game.state, selected]);
+
+  const captureTargets = useMemo(() => new Set(game.captureTargets), [game.captureTargets]);
+
+  const handleNodeClick = useCallback((node: number) => {
+    if (game.thinking || game.state.phase === "over") return;
+    if (game.pendingCapture) {
+      if (captureTargets.has(node)) {
+        game.commit({ from: game.lastMove?.from ?? null, to: game.lastMove?.to ?? 0, remove: node });
+      }
+      return;
+    }
+    if (game.state.phase === "placing") {
+      if (targets.has(node)) game.commit({ from: null, to: node, remove: null });
+      return;
+    }
+    if (game.state.turn === 1) {
+      if (selected === null) {
+        if (game.state.board[node] === 1) setSelected(node);
+      } else {
+        if (node === selected) setSelected(null);
+        else if (targets.has(node)) { game.commit({ from: selected, to: node, remove: null }); setSelected(null); }
+        else if (game.state.board[node] === 1) setSelected(node);
+      }
+    }
+  }, [game, selected, targets, captureTargets]);
+
+  const status = useMemo(() => {
+    const s = game.state;
+    if (s.phase === "over") {
+      if (s.winner === 1) return "🏆 Vitória! O inimigo foi neutralizado.";
+      if (s.reason === "blockade") return "💀 Derrota — suas tropas ficaram cercadas.";
+      return "💀 Derrota — tropa reduzida abaixo do mínimo.";
+    }
+    if (game.pendingCapture) return "⚡ TRILHA FECHADA! Selecione a peça inimiga a neutralizar.";
+    if (game.thinking) return "⏳ Inimigo calcula...";
+    if (s.turn !== 1) return "Aguardando oponente.";
+    if (s.phase === "placing") return `📍 Desdobre uma peça. Reserva: ${s.hand[1]}.`;
+    if (canFly(s, 1)) return "✈️ Voo livre: salte para qualquer interseção.";
+    if (selected === null) return "🎯 Selecione uma peça para manobrar.";
+    return "➡️ Escolha o destino adjacente.";
+  }, [game.state, game.thinking, game.pendingCapture, selected]);
+
+  const handleWatchVideo = async (): Promise<boolean> => {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        let newScore = finalScore;
+        if (gameResult === "victory") newScore = finalScore * 2;
+        else if (gameResult === "defeat") newScore = finalScore + 2;
+        addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty: "recruta", result: gameResult, score: newScore });
+        resolve(true);
+      }, 1000);
+    });
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-700/50">
-        <div className="text-center mb-6">
-          <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-3xl font-bold mb-2">Bem-vindo à Trilha!</h2>
-          <p className="text-muted-foreground">Jogo de estratégia tática da FEB</p>
-        </div>
-
-        <div className="space-y-4 mb-6">
-          <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
-            <h3 className="font-semibold text-primary mb-2 flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Sistema de Fases
-            </h3>
-            <ul className="text-sm space-y-2 text-muted-foreground">
-              <li>🎯 <strong>Fase 1:</strong> Ganhe 7 jogos consecutivos (Recruta)</li>
-              <li>⚔️ <strong>Fase 2:</strong> Ganhe 10 jogos consecutivos (Sargento)</li>
-              <li>🏆 <strong>Fase 3:</strong> Ganhe 15 jogos consecutivos (General)</li>
-            </ul>
-          </div>
-
-          <div className="bg-muted/50 p-4 rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              Ao perder, seu contador de vitórias consecutivas reseta. 
-              Complete todas as fases para se tornar o <strong>Mestre da Trilha</strong>!
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
+      <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
+              AMISTOSO
+            </h2>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-emerald-500/70 font-bold">Partida Rápida</p>
           </div>
         </div>
-
-        <div className="space-y-3">
-          <button
-            onClick={onStart}
-            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-emerald-400 transition-all active:scale-[0.98]"
-          >
-            Já sei jogar — Começar
-          </button>
-          <button
-            onClick={onShowRules}
-            className="w-full border border-slate-600/40 bg-slate-800/60 text-slate-300 px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700/60 hover:text-white transition-all flex items-center justify-center gap-2"
-          >
-            <BookOpen className="h-4 w-4" />
-            Quero aprender as regras
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RulesModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-700/50">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            Como Jogar Trilha
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-500 hover:text-white transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          <section>
-            <h3 className="text-lg font-semibold mb-2">🎯 Objetivo</h3>
-            <p className="text-slate-400">
-              Forme "trilhas" (três peças em linha reta) para capturar peças do inimigo. 
-              Reduza o adversário a 2 peças ou bloqueie todos os movimentos dele para vencer.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-semibold mb-2">📦 Fase de Colocação</h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-400">
-              <li>Cada jogador coloca 9 peças, uma por vez</li>
-              <li>Clique em uma interseção vazia para colocar sua peça</li>
-              <li>Forme uma trilha para capturar uma peça inimiga</li>
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-semibold mb-2">♟️ Fase de Movimentação</h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-400">
-              <li>Selecione sua peça clicando nela</li>
-              <li>Clique em uma interseção adjacente vazia para mover</li>
-              <li>Quando restar apenas 3 peças, você pode "voar" para qualquer casa vazia</li>
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-semibold mb-2">⚔️ Captura</h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-400">
-              <li>Ao formar uma trilha, você deve remover uma peça inimiga</li>
-              <li>Não pode remover peças que estão em trilhas (a menos que todas estejam)</li>
-              <li>Clique na peça inimiga que deseja capturar</li>
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-semibold mb-2">🏆 Condições de Vitória</h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-400">
-              <li>Reduzir o adversário a 2 peças</li>
-              <li>Bloquear todos os movimentos do adversário</li>
-            </ul>
-          </section>
-
-          <section className="bg-primary/10 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-2 text-primary">💡 Dicas</h3>
-            <ul className="list-disc list-inside space-y-1 text-sm">
-              <li>Tente formar trilhas duplas (duas trilhas ao mesmo tempo)</li>
-              <li>Bloqueie as trilhas do adversário</li>
-              <li>Proteja suas peças em trilhas</li>
-              <li>Planeje seus movimentos com antecedência</li>
-            </ul>
-          </section>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="w-full mt-6 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-emerald-400 transition-all active:scale-[0.98]"
-        >
-          Entendi — Começar Jogo
+        <button onClick={onBack} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Menu</span>
         </button>
-      </div>
-    </div>
-  );
-}
+      </header>
 
-function TrophiesModal({ onClose, phases }: { onClose: () => void; phases: ReturnType<typeof useTrilhaPhases> }) {
-  const nextTrophy = phases.getNextTrophy();
-  const progress = phases.getProgressToNextTrophy();
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-700/50">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Award className="h-6 w-6 text-yellow-500" />
-            Sala de Troféus
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
-        <div className="mb-6 p-4 bg-muted rounded-lg">
-          <div className="flex justify-between items-center mb-2">
-            <span className="font-medium">Próximo Troféu</span>
-            <span className="text-sm text-muted-foreground">
-              {nextTrophy ? nextTrophy.name : "Todos conquistados!"}
-            </span>
-          </div>
-          <div className="w-full bg-secondary rounded-full h-3">
-            <div 
-              className="bg-primary h-3 rounded-full transition-all duration-500" 
-              style={{ width: `${progress.percentage}%` }}
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="flex gap-6 items-start flex-col lg:flex-row">
+          <div className="flex flex-1 flex-col items-center w-full">
+            <TrilhaBoard
+              state={game.state}
+              perspective={1}
+              selected={selected}
+              targets={targets}
+              captureTargets={captureTargets}
+              lastMove={game.lastMove}
+              interactive={!game.thinking}
+              onNodeClick={handleNodeClick}
             />
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            {nextTrophy ? `${progress.current} / ${progress.required}` : "Parabéns!"}
-          </p>
+          <HQPanel
+            state={game.state}
+            myPlayer={1}
+            p1={{ name: "Pracinhas da FEB", slot: 1, subtitle: "Você" }}
+            p2={{ name: "Comando Inimigo", slot: 2, subtitle: "Recruta" }}
+            status={status}
+            log={game.log}
+            awaitingCapture={game.pendingCapture}
+            onRestart={onReset}
+            onResign={game.resign}
+          />
         </div>
+      </main>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {phases.trophies.map((trophy) => (
-            <div
-              key={trophy.id}
-              className={`p-4 rounded-lg border text-center ${
-                trophy.achieved
-                  ? "bg-yellow-500/10 border-yellow-500/30"
-                  : "bg-muted/50 border-muted opacity-50"
-              }`}
-            >
-              <div className={`text-4xl mb-2 ${trophy.achieved ? "" : "grayscale"}`}>
-                {trophy.icon}
-              </div>
-              <h3 className={`font-semibold ${trophy.color}`}>{trophy.name}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{trophy.description}</p>
-              {trophy.achieved && (
-                <div className="mt-2 text-xs font-medium text-green-500">✓ Conquistado</div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Total de vitórias: <span className="font-bold text-foreground">{phases.progress.totalWins}</span>
-          </p>
-        </div>
-      </div>
+      <GameEndAdModal isOpen={showAdModal} result={gameResult} baseScore={finalScore} onWatchVideo={handleWatchVideo} onClose={() => setShowAdModal(false)} />
+      {gameEnded && !showAdModal && <MatchEndAdCard />}
     </div>
   );
 }
 
-function TrilhaGameBoard({
-  difficulty,
-  onReset,
-  onBack,
-  phases,
-  currentPhaseConfig,
-  onShowTrophies,
+/* ───────────── Campeonato (Championship) ───────────── */
+
+function CampeonatoBoard({
+  difficulty, onReset, onBack, phases, currentPhaseConfig, onShowTrophies,
 }: {
   difficulty: Difficulty;
   onReset: () => void;
@@ -440,304 +378,142 @@ function TrilhaGameBoard({
   onShowTrophies: () => void;
 }) {
   const game = useLocalGame(difficulty, 1);
-  const { markFirstGamePlayed } = useAdManager("/trilha");
-  
   const [selected, setSelected] = useState<number | null>(null);
   const [gameEnded, setGameEnded] = useState(false);
   const [showAdModal, setShowAdModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
   const [gameResult, setGameResult] = useState<"victory" | "defeat" | "draw">("victory");
   const [showVictoryScreen, setShowVictoryScreen] = useState(false);
+  const { markFirstGamePlayed } = useAdManager("/trilha");
 
-  // Salvar resultado no ranking quando o jogo termina
   useEffect(() => {
     if (game.state.phase === "over" && !gameEnded && game.state.winner) {
       const result = game.state.winner === 1 ? "victory" : "defeat";
       const score = getTrilhaScore(difficulty, result);
-      addRankingEntry({
-        date: new Date().toISOString(),
-        game: "trilha",
-        difficulty,
-        result,
-        score,
-      });
-
-      // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
+      addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty, result, score });
       markFirstGamePlayed();
-      // Ritual da Trilha: mesmo universo do Modo Carreira — marcar o resultado
-      // para o BotaoGame integrar na carreira (SOV, sombra, rede social).
       marcarRitualPendente(result === "victory" ? "vitoria" : "derrota");
 
-      // Registrar vitória/derrota no sistema de fases
-      console.log('[TrilhaGame] Resultado:', result, 'Fase atual:', phases.progress.currentPhase);
       if (result === "victory") {
         phases.recordWin();
-        console.log('[TrilhaGame] Vitória registrada, nova fase após delay:', phases.progress.currentPhase);
-
-        // Mostrar tela de vitória se completou uma fase
-        if (phases.phaseJustCompleted) {
-          setShowVictoryScreen(true);
-        } else {
-          // Se não completou fase, mostra modal de anúncio normal
-          setFinalScore(score);
-          setGameResult(result);
-          setShowAdModal(true);
-        }
+        if (phases.phaseJustCompleted) setShowVictoryScreen(true);
+        else { setFinalScore(score); setGameResult(result); setShowAdModal(true); }
       } else {
         phases.recordLoss();
         setFinalScore(score);
         setGameResult(result);
         setShowAdModal(true);
       }
-
       setGameEnded(true);
     }
-    if (game.state.phase !== "over") {
-      setGameEnded(false);
-    }
+    if (game.state.phase !== "over") setGameEnded(false);
   }, [game.state.phase, game.state.winner, difficulty, gameEnded, phases, markFirstGamePlayed]);
-  
+
   const targets = useMemo(() => {
-    if (game.state.phase === "placing") {
-      return new Set(legalPlacements(game.state));
-    }
-    if (selected !== null) {
-      return new Set(legalDestinations(game.state, selected));
-    }
+    if (game.state.phase === "placing") return new Set(legalPlacements(game.state));
+    if (selected !== null) return new Set(legalDestinations(game.state, selected));
     return new Set<number>();
   }, [game.state, selected]);
 
-  const captureTargets = useMemo(() => {
-    return new Set(game.captureTargets);
-  }, [game.captureTargets]);
+  const captureTargets = useMemo(() => new Set(game.captureTargets), [game.captureTargets]);
 
-  const handleNodeClick = (node: number) => {
+  const handleNodeClick = useCallback((node: number) => {
     if (game.thinking || game.state.phase === "over") return;
-    
-    // Se está esperando captura
     if (game.pendingCapture) {
       if (captureTargets.has(node)) {
-        // Toca som de captura
-        playCaptureSound();
-        // Usa o movimento pendente do lastMove
-        const from = game.lastMove?.from || null;
-        const to = game.lastMove?.to ?? 0; // Usa 0 como fallback se for undefined
-        game.commit({ from, to, remove: node });
+        game.commit({ from: game.lastMove?.from ?? null, to: game.lastMove?.to ?? 0, remove: node });
       }
       return;
     }
-
-    // Fase de colocação de peças
     if (game.state.phase === "placing") {
-      if (targets.has(node)) {
-        game.commit({ from: null, to: node, remove: null });
-      }
+      if (targets.has(node)) game.commit({ from: null, to: node, remove: null });
       return;
     }
-
-    // Fase de movimentação - apenas turno do jogador
     if (game.state.turn === 1) {
       if (selected === null) {
-        // Selecionar peça para mover
-        if (game.state.board[node] === 1) {
-          setSelected(node);
-        }
+        if (game.state.board[node] === 1) setSelected(node);
       } else {
-        // Já tem peça selecionada
-        if (node === selected) {
-          // Deselecionar
-          setSelected(null);
-        } else if (targets.has(node)) {
-          // Mover para destino válido
-          game.commit({ from: selected, to: node, remove: null });
-          setSelected(null);
-        } else if (game.state.board[node] === 1) {
-          // Selecionar outra peça própria
-          setSelected(node);
-        }
+        if (node === selected) setSelected(null);
+        else if (targets.has(node)) { game.commit({ from: selected, to: node, remove: null }); setSelected(null); }
+        else if (game.state.board[node] === 1) setSelected(node);
       }
     }
-  };
-
-  const playCaptureSound = () => {
-    // Cria um som simples usando Web Audio API
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = 800;
-      oscillator.type = 'square';
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.1);
-    } catch (e) {
-      // Fallback silencioso se Web Audio API não estiver disponível
-      console.log('Audio not available');
-    }
-  };
+  }, [game, selected, targets, captureTargets]);
 
   const status = useMemo(() => {
     const s = game.state;
     if (s.phase === "over") {
-      if (s.winner === 1) return "Vitória brasileira! O inimigo bateu em retirada.";
-      const motive =
-        s.reason === "blockade"
-          ? "Suas tropas ficaram cercadas sem manobra."
-          : s.reason === "resign"
-            ? "Cessar-fogo solicitado."
-            : "Sua tropa foi reduzida abaixo do mínimo operacional.";
-      return `Derrota. ${motive}`;
+      if (s.winner === 1) return "🏆 Vitória! O inimigo foi neutralizado.";
+      if (s.reason === "blockade") return "💀 Derrota — suas tropas ficaram cercadas.";
+      return "💀 Derrota — tropa reduzida abaixo do mínimo.";
     }
-    if (game.pendingCapture)
-      return "TRILHA FECHADA! Selecione a peça inimiga a neutralizar.";
-    if (game.thinking) return "Rádio em silêncio... o estado-maior inimigo calcula a resposta.";
-    if (s.turn !== 1) return "Aguardando o inimigo.";
-    if (s.phase === "placing") return `Desdobre um pracinha. Reserva: ${s.hand[1]}.`;
-    const flying = canFly(s, 1);
-    if (flying) return "Esquadrão em voo: salte para qualquer interseção vazia.";
-    if (selected === null)
-      return "Selecione um pracinha para manobrar.";
-    return "Escolha a interseção adjacente de destino.";
-  }, [
-    game.state,
-    game.thinking,
-    game.pendingCapture,
-    selected,
-  ]);
+    if (game.pendingCapture) return "⚡ TRILHA FECHADA! Selecione a peça inimiga.";
+    if (game.thinking) return "⏳ Inimigo calcula...";
+    if (s.turn !== 1) return "Aguardando oponente.";
+    if (s.phase === "placing") return `📍 Desdobre uma peça. Reserva: ${s.hand[1]}.`;
+    if (canFly(s, 1)) return "✈️ Voo livre: salte para qualquer interseção.";
+    if (selected === null) return "🎯 Selecione uma peça para manobrar.";
+    return "➡️ Escolha o destino adjacente.";
+  }, [game.state, game.thinking, game.pendingCapture, selected]);
 
   const profile = AI_PROFILES[difficulty];
 
   const handleWatchVideo = async (): Promise<boolean> => {
-    // Simular carregamento do anúncio do Google AdSense
-    // Na implementação real, isso usaria a API do Google AdSense para rewarded ads
-    return new Promise((resolve) => {
-      // Simular delay de carregamento do anúncio
+    return new Promise(resolve => {
       setTimeout(() => {
-        // Calcular novos pontos baseados no resultado
         let newScore = finalScore;
-        
-        if (gameResult === "victory") {
-          // Vitória: 3 pontos → 6 pontos (dobro)
-          newScore = finalScore * 2;
-        } else if (gameResult === "defeat") {
-          // Derrota: -3 pontos → -1 ponto (recupera 2)
-          newScore = finalScore + 2;
-        } else if (gameResult === "draw") {
-          // Empate: 1 ponto → 2 pontos (dobro)
-          newScore = finalScore * 2;
-        }
-        
-        // Atualizar o ranking com os novos pontos
-        addRankingEntry({
-          date: new Date().toISOString(),
-          game: "trilha",
-          difficulty,
-          result: gameResult,
-          score: newScore,
-        });
-        
-        // Aqui seria a lógica real do Google AdSense
-        // Por enquanto, retorna true para simular sucesso
-        // Quando integrado com AdSense real, verificaria se o anúncio foi carregado
+        if (gameResult === "victory") newScore = finalScore * 2;
+        else if (gameResult === "defeat") newScore = finalScore + 2;
+        addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty, result: gameResult, score: newScore });
         resolve(true);
       }, 1000);
     });
   };
 
-  const handleCloseAdModal = () => {
-    setShowAdModal(false);
-  };
-
-  const handleNextPhase = () => {
-    setShowVictoryScreen(false);
-    phases.clearPhaseCompleted();
-    onReset(); // Reinicia o jogo com a nova dificuldade
-  };
-
-  const handleContinueSameLevel = () => {
-    setShowVictoryScreen(false);
-    phases.clearPhaseCompleted();
-    onReset(); // Reinicia no mesmo nível
-  };
+  const handleNextPhase = () => { setShowVictoryScreen(false); phases.clearPhaseCompleted(); onReset(); };
+  const handleContinueSameLevel = () => { setShowVictoryScreen(false); phases.clearPhaseCompleted(); onReset(); };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1a] via-[#0d1525] to-[#0a0f1a]">
-      <header className="flex items-center justify-between border-b border-slate-700/40 px-4 py-3 sm:px-5 sm:py-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
+      <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
             <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
-              A TRILHA <span className="text-emerald-400 text-xs font-bold ml-1">FEB</span>
+              CAMPEONATO <span className="text-blue-400 text-[10px] font-bold ml-1.5 bg-blue-500/10 px-1.5 py-0.5 rounded">FEB</span>
             </h2>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-              Estratégia Tática · FEB vs Eixo
-            </p>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Fase Progressiva</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {currentPhaseConfig && (
             <div className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <Target className="h-3.5 w-3.5" />
+              <Zap className="h-3 w-3" />
               {currentPhaseConfig.name}
             </div>
           )}
           <div className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5">
-            <Trophy className="h-3.5 w-3.5" />
+            <Trophy className="h-3 w-3" />
             {phases.progress.consecutiveWins} / {currentPhaseConfig?.requiredWins || 7}
           </div>
-          <button
-            data-tour="trilha-trofeus"
-            onClick={onShowTrophies}
-            className="flex items-center gap-2 border border-slate-600/40 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
-          >
+          <button onClick={onShowTrophies} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
             <Award className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Troféus</span>
           </button>
-          {onBack ? (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 border border-slate-600/40 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
-            >
+          {onBack && (
+            <button onClick={onBack} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Voltar</span>
+              <span className="hidden sm:inline">Menu</span>
             </button>
-          ) : null}
+          )}
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-2xl font-black text-white tracking-tight">
-              {currentPhaseConfig?.name || "Campanha"}
-            </h1>
-            <p className="text-xs text-slate-400">
-              {phases.isAllPhasesComplete 
-                ? "Parabéns! Você completou todas as fases!" 
-                : `Ganhe ${currentPhaseConfig?.requiredWins || 7} jogos consecutivos para avançar`}
-            </p>
-          </div>
-          <button
-            onClick={phases.resetPhases}
-            className="border border-slate-600/40 bg-slate-800/60 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
-          >
-            Reiniciar
-          </button>
-        </div>
-
         {phases.isAllPhasesComplete && (
           <div className="mb-6 p-5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 border border-amber-500/30 rounded-2xl text-center shadow-lg shadow-amber-500/5">
             <Trophy className="h-10 w-10 text-amber-400 mx-auto mb-3" />
             <h3 className="font-display text-xl font-black text-amber-400 tracking-wide">MESTRE DA TRILHA!</h3>
-            <p className="text-xs text-amber-400/70 mt-1">
-              Todas as 3 fases conquistadas · {phases.progress.totalWins} vitórias
-            </p>
+            <p className="text-xs text-amber-400/70 mt-1">Todas as 3 fases conquistadas · {phases.progress.totalWins} vitórias</p>
           </div>
         )}
 
@@ -754,12 +530,11 @@ function TrilhaGameBoard({
               onNodeClick={handleNodeClick}
             />
           </div>
-
           <HQPanel
             state={game.state}
             myPlayer={1}
             p1={{ name: "Pracinhas da FEB", slot: 1, subtitle: "Você" }}
-            p2={{ name: `Comando inimigo`, slot: 2, subtitle: profile.label }}
+            p2={{ name: "Comando Inimigo", slot: 2, subtitle: profile.label }}
             status={status}
             log={game.log}
             awaitingCapture={game.pendingCapture}
@@ -770,26 +545,165 @@ function TrilhaGameBoard({
         </div>
       </main>
 
-      {/* Modal de anúncio para dobrar pontos após fim de jogo */}
-      <GameEndAdModal
-        isOpen={showAdModal}
-        result={gameResult}
-        baseScore={finalScore}
-        onWatchVideo={handleWatchVideo}
-        onClose={handleCloseAdModal}
-      />
-
-      {/* Card de anúncio no fim de partida (career mode) */}
+      <GameEndAdModal isOpen={showAdModal} result={gameResult} baseScore={finalScore} onWatchVideo={handleWatchVideo} onClose={() => setShowAdModal(false)} />
       {gameEnded && !showAdModal && !showVictoryScreen && <MatchEndAdCard />}
-
-      {/* Tela de vitória ao completar fase */}
       {showVictoryScreen && phases.phaseJustCompleted && (
-        <TrilhaRPGScreen
-          resultado="vitoria"
-          fase={currentPhaseConfig?.difficulty || "recruta"}
-          onContinue={handleContinueSameLevel}
-        />
+        <TrilhaRPGScreen resultado="vitoria" fase={currentPhaseConfig?.difficulty || "recruta"} onContinue={handleContinueSameLevel} />
       )}
+    </div>
+  );
+}
+
+/* ───────────── Modals ───────────── */
+
+function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRules: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-white/[0.08]">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-4">
+            <Target className="h-8 w-8 text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Bem-vindo à Trilha!</h2>
+          <p className="text-sm text-slate-400">Nine Men's Morris — estratégia tática</p>
+        </div>
+        <div className="space-y-3 mb-6">
+          <div className="bg-white/[0.03] border border-white/[0.06] p-4 rounded-xl">
+            <h3 className="font-semibold text-white mb-2 flex items-center gap-2 text-sm">
+              <Target className="h-4 w-4 text-emerald-400" />
+              Objetivo
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">Forme trilhas (3 peças em linha) para capturar peças inimigas. Reduza o adversário a 2 peças ou bloqueie seus movimentos.</p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] p-4 rounded-xl">
+            <h3 className="font-semibold text-white mb-2 flex items-center gap-2 text-sm">
+              <Gamepad2 className="h-4 w-4 text-blue-400" />
+              Modos
+            </h3>
+            <ul className="text-xs text-slate-400 space-y-1">
+              <li>• <strong className="text-white">Amistoso:</strong> partida rápida contra IA</li>
+              <li>• <strong className="text-white">Campeonato:</strong> fases progressivas com troféus</li>
+              <li>• <strong className="text-white">Online:</strong> desafie outros jogadores</li>
+            </ul>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <button onClick={onStart} className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-emerald-400 transition-all active:scale-[0.98]">
+            Começar
+          </button>
+          <button onClick={onShowRules} className="w-full border border-white/10 bg-white/[0.04] text-slate-300 px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-white/[0.08] hover:text-white transition-all flex items-center justify-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            Ver regras completas
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RulesModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-white/[0.08]">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-emerald-400" />
+            Regras da Trilha
+          </h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-5">
+          <section>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">🎯 Objetivo</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">Forme "trilhas" (3 peças em linha reta) para capturar peças inimigas. Reduza o adversário a 2 peças ou bloqueie todos os movimentos dele.</p>
+          </section>
+          <section>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">📦 Fase 1 — Colocação</h3>
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li>Cada jogador coloca 9 peças, uma por vez</li>
+              <li>Clique numa interseção vazia para colocar</li>
+              <li>Forme uma trilha para capturar uma peça inimiga</li>
+            </ul>
+          </section>
+          <section>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">♟️ Fase 2 — Movimentação</h3>
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li>Selecione sua peça e clique num destino adjacente vazio</li>
+              <li>Com 3 peças restantes, pode "voar" para qualquer casa vazia</li>
+            </ul>
+          </section>
+          <section>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">⚔️ Captura</h3>
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li>Ao fechar uma trilha, capture uma peça inimiga</li>
+              <li>Não pode capturar peças em trilhas (a menos que todas estejam)</li>
+            </ul>
+          </section>
+          <section>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">🏆 Vitória</h3>
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li>Reduzir o adversário a 2 peças</li>
+              <li>Bloquear todos os movimentos do adversário</li>
+            </ul>
+          </section>
+        </div>
+        <button onClick={onClose} className="w-full mt-6 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-emerald-400 transition-all active:scale-[0.98]">
+          Entendi — Vamos jogar!
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TrophiesModal({ onClose, phases }: { onClose: () => void; phases: ReturnType<typeof useTrilhaPhases> }) {
+  const nextTrophy = phases.getNextTrophy();
+  const progress = phases.getProgressToNextTrophy();
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-white/[0.08]">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Award className="h-5 w-5 text-amber-400" />
+            Troféus
+          </h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors"><X className="h-5 w-5" /></button>
+        </div>
+
+        {nextTrophy && (
+          <div className="mb-6 p-4 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Próximo Troféu</span>
+              <span className="text-xs text-slate-400">{nextTrophy.name}</span>
+            </div>
+            <div className="w-full bg-white/[0.06] rounded-full h-2">
+              <div className="bg-gradient-to-r from-amber-500 to-yellow-400 h-2 rounded-full transition-all duration-500" style={{ width: `${progress.percentage}%` }} />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5">{progress.current} / {progress.required}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {phases.trophies.map(trophy => (
+            <div key={trophy.id} className={`p-3 rounded-xl border text-center transition-all ${trophy.achieved ? "bg-amber-500/[0.06] border-amber-500/20" : "bg-white/[0.02] border-white/[0.04] opacity-40"}`}>
+              <div className={`text-3xl mb-1.5 ${trophy.achieved ? "" : "grayscale"}`}>{trophy.icon}</div>
+              <h3 className={`text-xs font-bold ${trophy.color}`}>{trophy.name}</h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">{trophy.description}</p>
+              {trophy.achieved && <div className="mt-1.5 text-[10px] font-bold text-emerald-400">✓ Conquistado</div>}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 text-center">
+          <p className="text-xs text-slate-500">
+            Total de vitórias: <span className="font-bold text-white">{phases.progress.totalWins}</span>
+          </p>
+        </div>
+
+        <button onClick={onClose} className="w-full mt-5 border border-white/10 bg-white/[0.04] text-slate-300 px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-white/[0.08] hover:text-white transition-all">
+          Fechar
+        </button>
+      </div>
     </div>
   );
 }
