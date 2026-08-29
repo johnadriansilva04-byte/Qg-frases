@@ -4379,6 +4379,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
               onResume={() => setScreen("hub")}
               onDeleteCampaign={handleDeleteCampaign}
               onSaveCampaign={handleSaveCampaign}
+              {...(onBack != null ? { onBack } : {})}
             />
           </>
         )}
