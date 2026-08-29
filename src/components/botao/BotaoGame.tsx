@@ -4144,15 +4144,13 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
             setLoading(true);
             setForceLoading(true);
             setLoadingReady(true);
-            setLoadingOnComplete(() => async () => {
+            setLoadingOnComplete(() => () => {
               setLoading(false);
               setForceLoading(false);
-              try {
-                await iniciarCampanha(nova);
-              } catch (e) {
+              iniciarCampanha(nova).catch((e) => {
                 console.error("[CareerIntro] iniciarCampanha failed:", e);
                 setToast("Erro ao criar campanha. Tente novamente.");
-              }
+              });
             });
           }}
           onBack={() => setScreen("career-menu")}
