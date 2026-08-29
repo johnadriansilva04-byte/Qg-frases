@@ -1,7 +1,7 @@
 /**
  * Módulo "Teste de QI" — motor procedural completo traduzido do I-RAVEN
  * (100% cliente, sem Python), com explicações pedagógicas e recompensas
- * em SALVE ($SOVEREIGN).
+ * em SOV (Soberania).
  */
 export { IQTestComponent } from "./IQTestComponent";
 export { RavenEngine } from "./engine";

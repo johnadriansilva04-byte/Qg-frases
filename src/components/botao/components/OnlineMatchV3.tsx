@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, RefreshCw, Users, ArrowLeft } from "lucide-react";
+import { Plus, RefreshCw, Users, ArrowLeft, Coins } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useJogador } from "@/hooks/useJogador";
 import { useBotaoAuth } from "../online/useBotaoAuth";
@@ -183,210 +183,254 @@ export function OnlineMatchV3({
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-8">
-      <div className="flex items-center gap-3 mb-6">
-        {onBack && (
-          <button onClick={onBack} className="btn-ghost">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        )}
-        <h2 className="font-display text-2xl">Mesas Online v3</h2>
+    <main className="mx-auto w-full max-w-4xl px-4 py-6 relative">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-16 left-1/4 h-[300px] w-[300px] rounded-full bg-emerald-500/4 blur-[100px]" />
+        <div className="absolute bottom-0 right-1/3 h-[250px] w-[250px] rounded-full bg-cyan-500/3 blur-[80px]" />
       </div>
-      {toastLink && (
-        <div className="mb-4 rounded-xl border border-sky-400/40 bg-sky-400/10 p-3 text-xs text-sky-200">
-          Link de convite copiado: <span className="break-all font-mono">{toastLink}</span>
-          <button onClick={() => setToastLink(null)} className="ml-2 underline">fechar</button>
-        </div>
-      )}
-      {erroMesa && (
-        <div className="mb-4 rounded-xl border border-rose-400/40 bg-rose-400/10 p-3 text-xs text-rose-200">
-          {erroMesa}
-          <button onClick={() => setErroMesa(null)} className="ml-2 underline">fechar</button>
-        </div>
-      )}
 
-      <section className="surface mb-6 space-y-4 p-5">
-        <h2 className="text-xl">Seu time</h2>
-        {meuTime && (
-          <div className="flex items-center gap-3 p-3 border rounded-lg">
-            <span
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border"
-              style={{ background: meuTime.cores[0] }}
-            >
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-full"
-                style={{ background: meuTime.cores[1] }}
-              >
-                <span className="h-4 w-4 rounded-full" style={{ background: meuTime.cores[2] }} />
-              </span>
-            </span>
-            <div>
-              <p className="font-display text-lg">{meuTime.nome}</p>
-              <p className="text-sm text-muted-foreground">
-                {meuTime.abreviacao} · {perfil?.nome ?? "Treinador"}
-              </p>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="surface mb-6 space-y-4 p-5">
-        <h2 className="text-xl">Criar mesa</h2>
-        <p className="text-sm text-muted-foreground">
-          SOV disponível: <span className="font-semibold text-amber-300">{soberaniaAtual}</span>
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm font-medium">Apostar SOV:</label>
-          <input
-            type="number"
-            min={0}
-            max={soberaniaAtual}
-            value={apostaSoberania}
-            onChange={(e) =>
-              setApostaSoberania(
-                Math.max(0, Math.min(soberaniaAtual, Number(e.target.value) || 0)),
-              )
-            }
-            className="w-28 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-          />
-          <div className="flex gap-1">
-            {[5, 10, 25].map((v) => (
-              <button
-                key={v}
-                onClick={() => setApostaSoberania(Math.min(soberaniaAtual, v))}
-                className="btn-ghost px-2 py-1 text-xs"
-              >
-                {v}
-              </button>
-            ))}
-            <button
-              onClick={() => setApostaSoberania(0)}
-              className="btn-ghost px-2 py-1 text-xs"
-            >
-              Limpar
-            </button>
-          </div>
-          {apostaSoberania > 0 && (
-            <span className="text-xs text-emerald-400">
-              Vence: +{apostaSoberania} · Perde: -{Math.min(apostaSoberania, soberaniaAtual)}
-            </span>
-          )}
-        </div>
-        {/* §9: data de liberação (opcional) — a mesa só abre para convidados a partir dela. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm font-medium">Liberação (opcional):</label>
-          <input
-            type="datetime-local"
-            value={dataLiberacao}
-            onChange={(e) => setDataLiberacao(e.target.value)}
-            className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-          />
-          {dataLiberacao && (
-            <button onClick={() => setDataLiberacao("")} className="btn-ghost px-2 py-1 text-xs">
-              Abrir agora
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          {onBack && (
+            <button onClick={onBack} className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition hover:bg-white/10">
+              <ArrowLeft className="size-4 text-white" />
             </button>
           )}
-          {dataLiberacao && (
-            <span className="text-xs text-sky-300">
-              Mesa bloqueada até {new Date(dataLiberacao).toLocaleString("pt-BR")}
-            </span>
-          )}
+          <div>
+            <h2 className="font-display text-2xl font-black text-white">AMISTOSO ONLINE</h2>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500">Partida 1v1 · Tempo Real</p>
+          </div>
         </div>
-        <button
-          onClick={() => novaMesa.mutate()}
-          disabled={novaMesa.isPending || !perfil}
-          className="btn-primary"
-        >
-          <Plus className="mr-1 h-4 w-4" /> {novaMesa.isPending ? "Criando..." : "Abrir mesa"}
-        </button>
-        {!perfil && (
-          <p className="text-sm text-red-500">Você precisa estar logado para criar uma mesa.</p>
-        )}
-      </section>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl">Mesas disponíveis</h2>
-          <button className="btn-ghost text-sm" onClick={() => recarregarMesas()}>
-            <RefreshCw className="mr-1 h-4 w-4" /> Atualizar
-          </button>
-        </div>
-        {mesas.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma mesa disponível. Seja o primeiro a abrir.
-          </p>
+        {/* Toasts */}
+        {toastLink && (
+          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200 flex items-center gap-2">
+            <span>🔗</span>
+            <span className="break-all font-mono">{toastLink}</span>
+            <button onClick={() => setToastLink(null)} className="ml-auto text-emerald-400 hover:text-white">fechar</button>
+          </div>
         )}
-        {mesas.map((mesa) => {
-          const souJogador1 = mesa.jogador_1_id === userId;
-          const souParticipante = souJogador1 || mesa.jogador_2_id === userId;
-          const bloqueada =
-            mesa.data_liberacao != null && new Date(mesa.data_liberacao).getTime() > Date.now();
-          return (
-            <article key={mesa.id} className="surface flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-lg leading-tight">Mesa {mesa.mesa_id}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {bloqueada
-                    ? `Bloqueada até ${new Date(mesa.data_liberacao!).toLocaleString("pt-BR")}`
-                    : mesa.status === "aguardando"
-                      ? "Aguardando adversário"
-                      : mesa.status === "em_andamento"
-                        ? `Em jogo · ${mesa.placar_j1} x ${mesa.placar_j2}`
-                        : `Finalizado · ${mesa.placar_j1} x ${mesa.placar_j2}`}
-                </p>
-                {/* §11: link direto de convite para a mesa. */}
-                <button
-                  onClick={() => {
-                    const link = linkConviteMesa(mesa.mesa_id);
-                    void navigator.clipboard?.writeText(link).catch(() => {});
-                    setToastLink(link);
-                  }}
-                  className="mt-1 text-[11px] text-sky-300 underline underline-offset-2 hover:text-sky-200"
-                >
-                  Copiar link de convite
-                </button>
-              </div>
-              {souParticipante ? (
-                <div className="flex flex-col items-end gap-1.5">
-                  <button
-                    onClick={() => {
-                      setMesaId(mesa.mesa_id);
-                      setScreen("jogo");
-                    }}
-                    className="btn-primary"
+        {erroMesa && (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200 flex items-center gap-2">
+            <span>⚠️</span>
+            <span className="flex-1">{erroMesa}</span>
+            <button onClick={() => setErroMesa(null)} className="text-red-400 hover:text-white">fechar</button>
+          </div>
+        )}
+
+        <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr] items-start">
+          {/* ── Left Column: Seu Time + Criar Mesa ── */}
+          <div className="space-y-5">
+            {/* Seu Time */}
+            {meuTime && (
+              <div className="rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-950/30 to-slate-950/60 p-5">
+                <p className="text-[9px] uppercase tracking-[0.2em] text-emerald-500/60 font-bold mb-3">Seu Time</p>
+                <div className="flex items-center gap-4">
+                  <div
+                    className="flex size-14 items-center justify-center rounded-xl border border-white/10"
+                    style={{ background: meuTime.cores[0] }}
                   >
-                    Reentrar
-                  </button>
-                  {souJogador1 && (
-                    <button
-                      onClick={() => {
-                        setMesaId(mesa.mesa_id);
-                        setScreen("admin");
-                      }}
-                      className="btn-ghost text-xs"
-                      data-testid={`admin-${mesa.mesa_id}`}
+                    <span
+                      className="flex size-10 items-center justify-center rounded-lg"
+                      style={{ background: meuTime.cores[1] }}
                     >
-                      Administrar mesa
+                      <span className="size-5 rounded-full" style={{ background: meuTime.cores[2] }} />
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-display text-lg font-black text-white">{meuTime.nome}</p>
+                    <p className="text-xs text-slate-400">
+                      {meuTime.abreviacao} · {perfil?.nome ?? "Treinador"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Criar Mesa */}
+            <div className="rounded-2xl border border-sky-500/15 bg-gradient-to-br from-sky-950/30 to-slate-950/60 p-5 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-sky-500/15 border border-sky-500/20">
+                  <Plus className="size-4 text-sky-400" />
+                </div>
+                <h3 className="font-display text-sm font-black text-white uppercase tracking-wider">Criar Mesa</h3>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <Coins className="size-3.5 text-amber-400" />
+                <span>Saldo: <span className="font-bold text-amber-300">{soberaniaAtual} SOV</span></span>
+              </div>
+
+              {/* Aposta */}
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-bold mb-2">Apostar SOV</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={soberaniaAtual}
+                    value={apostaSoberania}
+                    onChange={(e) => setApostaSoberania(Math.max(0, Math.min(soberaniaAtual, Number(e.target.value) || 0)))}
+                    className="w-24 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-bold focus:border-sky-500/40 focus:outline-none"
+                  />
+                  <div className="flex gap-1">
+                    {[5, 10, 25].map((v) => (
+                      <button key={v} onClick={() => setApostaSoberania(Math.min(soberaniaAtual, v))} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-bold text-slate-400 transition hover:border-white/20 hover:text-white">
+                        {v}
+                      </button>
+                    ))}
+                    <button onClick={() => setApostaSoberania(0)} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 transition hover:border-white/20 hover:text-white">
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+                {apostaSoberania > 0 && (
+                  <p className="mt-1.5 text-[10px] text-emerald-400/80">
+                    Vence: +{apostaSoberania} · Perde: -{Math.min(apostaSoberania, soberaniaAtual)}
+                  </p>
+                )}
+              </div>
+
+              {/* Data de liberação */}
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-bold mb-2">Liberação (opcional)</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={dataLiberacao}
+                    onChange={(e) => setDataLiberacao(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-sky-500/40 focus:outline-none"
+                  />
+                  {dataLiberacao && (
+                    <button onClick={() => setDataLiberacao("")} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-bold text-slate-400 transition hover:border-white/20 hover:text-white">
+                      Abrir agora
                     </button>
                   )}
                 </div>
-              ) : mesa.status === "aguardando" ? (
-                <button
-                  onClick={() => entrar.mutate(mesa)}
-                  disabled={entrar.isPending}
-                  className="btn-primary"
-                >
-                  <Users className="mr-1 h-4 w-4" /> Entrar
-                </button>
-              ) : (
-                <span className="text-xs uppercase tracking-widest text-muted-foreground">
-                  Mesa ocupada
-                </span>
+                {dataLiberacao && (
+                  <p className="mt-1.5 text-[10px] text-sky-300/80">
+                    Bloqueada até {new Date(dataLiberacao).toLocaleString("pt-BR")}
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={() => novaMesa.mutate()}
+                disabled={novaMesa.isPending || !perfil}
+                className="w-full rounded-xl bg-gradient-to-r from-sky-600 to-sky-500 px-5 py-3 font-display text-sm font-black uppercase tracking-wider text-white transition-all hover:from-sky-500 hover:to-sky-400 active:scale-[0.98] disabled:opacity-50"
+              >
+                {novaMesa.isPending ? "Criando..." : "+ Abrir Mesa"}
+              </button>
+              {!perfil && (
+                <p className="text-xs text-red-400/80 text-center">Precisa estar logado.</p>
               )}
-            </article>
-          );
-        })}
-      </section>
+            </div>
+          </div>
+
+          {/* ── Right Column: Mesas Disponíveis ── */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent w-8" />
+                <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-500/50 font-bold">Mesas Abertas</span>
+                <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/30 to-transparent w-8" />
+              </div>
+              <button onClick={() => recarregarMesas()} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-slate-400 transition hover:border-white/20 hover:text-white">
+                <RefreshCw className="size-3" /> Atualizar
+              </button>
+            </div>
+
+            {mesas.length === 0 ? (
+              <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-8 text-center">
+                <p className="text-sm text-slate-600">Nenhuma mesa disponível.</p>
+                <p className="text-xs text-slate-700 mt-1">Seja o primeiro a abrir uma partida.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {mesas.map((mesa) => {
+                  const souJogador1 = mesa.jogador_1_id === userId;
+                  const souParticipante = souJogador1 || mesa.jogador_2_id === userId;
+                  const bloqueada = mesa.data_liberacao != null && new Date(mesa.data_liberacao).getTime() > Date.now();
+                  const statusCor = mesa.status === "aguardando" ? "emerald" : mesa.status === "em_andamento" ? "amber" : "slate";
+                  return (
+                    <div key={mesa.id} className={`rounded-2xl border p-4 transition-all ${
+                      statusCor === "emerald" ? "border-emerald-500/15 bg-gradient-to-r from-emerald-950/20 to-slate-950/60" :
+                      statusCor === "amber" ? "border-amber-500/15 bg-gradient-to-r from-amber-950/20 to-slate-950/60" :
+                      "border-white/5 bg-white/[0.02]"
+                    }`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-display text-sm font-black text-white">Mesa {mesa.mesa_id}</h3>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                              statusCor === "emerald" ? "bg-emerald-500/15 text-emerald-400" :
+                              statusCor === "amber" ? "bg-amber-500/15 text-amber-400" :
+                              "bg-slate-500/15 text-slate-400"
+                            }`}>
+                              {bloqueada ? "Bloqueada" : mesa.status === "aguardando" ? "Aberta" : mesa.status === "em_andamento" ? "Em jogo" : "Finalizada"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {bloqueada
+                              ? `Liberação: ${new Date(mesa.data_liberacao!).toLocaleString("pt-BR")}`
+                              : mesa.status === "em_andamento"
+                                ? `Placar: ${mesa.placar_j1} x ${mesa.placar_j2}`
+                                : (mesa.aposta_sov ?? 0) > 0 ? `Aposta: ${mesa.aposta_sov} SOV` : "Sem aposta"}
+                          </p>
+                          <button
+                            onClick={() => {
+                              const link = linkConviteMesa(mesa.mesa_id);
+                              void navigator.clipboard?.writeText(link).catch(() => {});
+                              setToastLink(link);
+                            }}
+                            className="mt-1.5 text-[10px] text-sky-400/70 hover:text-sky-300 transition"
+                          >
+                            📋 Copiar link de convite
+                          </button>
+                        </div>
+
+                        {souParticipante ? (
+                          <div className="flex flex-col items-end gap-1.5">
+                            <button
+                              onClick={() => { setMesaId(mesa.mesa_id); setScreen("jogo"); }}
+                              className="rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white transition-all hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.97]"
+                            >
+                              Reentrar
+                            </button>
+                            {souJogador1 && (
+                              <button
+                                onClick={() => { setMesaId(mesa.mesa_id); setScreen("admin"); }}
+                                className="text-[10px] text-slate-500 hover:text-white transition"
+                                data-testid={`admin-${mesa.mesa_id}`}
+                              >
+                                Admin
+                              </button>
+                            )}
+                          </div>
+                        ) : mesa.status === "aguardando" && !bloqueada ? (
+                          <button
+                            onClick={() => entrar.mutate(mesa)}
+                            disabled={entrar.isPending}
+                            className="rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white transition-all hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.97] disabled:opacity-50"
+                          >
+                            <Users className="mr-1 inline size-3" /> Entrar
+                          </button>
+                        ) : (
+                          <span className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">
+                            {bloqueada ? "🔒" : "Ocupada"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

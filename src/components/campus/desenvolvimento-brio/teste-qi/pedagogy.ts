@@ -79,5 +79,5 @@ export function explainProblem(problem: GeneratedProblem): RuleExplanation[] {
 /** Mensagem de abertura reforçando o caráter educativo (sem laudo). */
 export const EDUCATIONAL_DISCLAIMER =
   'Este é um exercício de raciocínio lógico para treino e conscientização. ' +
-  'Ele não mede nem certifica QI. Cada acerto rende SALVE ($SOVEREIGN) — ' +
+  'Ele não mede nem certifica QI. Cada acerto rende SOV (Soberania) — ' +
   'e cada erro vem com uma explicação para você aprender o padrão.';

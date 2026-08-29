@@ -4,7 +4,7 @@
  * Usa o RavenEngine (types/rules/engine/distractors) para gerar problemas
  * reais de matrizes 3x3 com 7 distratores imparciais, renderiza via SVG
  * responsivo e, após cada resposta, mostra a explicação pedagógica das
- * regras ocultas e concede recompensas em SALVE ($SOVEREIGN).
+ * regras ocultas e concede recompensas em SOV (Soberania).
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -17,7 +17,7 @@ import type { GeneratedProblem } from "./types";
 
 interface IQTestComponentProps {
   onProblemComplete?: (correct: boolean, timeTaken: number) => void;
-  /** Chamado com o total de SALVE ganho em cada desafio (0 em caso de erro). */
+  /** Chamado com o total de SOV ganho em cada desafio (0 em caso de erro). */
   onReward?: (amount: number, rewards: SovReward[]) => void;
   showSolution?: boolean;
 }
@@ -78,7 +78,7 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
   }
 
   const correct = selected !== null && selected === problem.answerIndex;
-  const salveTotal = lastRewards.reduce((s, r) => s + r.amount, 0);
+  const sovTotal = lastRewards.reduce((s, r) => s + r.amount, 0);
 
   return (
     <div className="flex flex-col items-center gap-4 p-2 md:p-4">
@@ -140,9 +140,9 @@ export const IQTestComponent: React.FC<IQTestComponentProps> = ({
             }`}
           >
             {correct ? "✓ Correto!" : "✗ Incorreto — veja a explicação abaixo."}
-            {correct && salveTotal > 0 && (
+            {correct && sovTotal > 0 && (
               <span className="ml-2 text-amber-400">
-                +{salveTotal} {SOV_CURRENCY.symbol}
+                +{sovTotal} {SOV_CURRENCY.symbol}
               </span>
             )}
           </div>

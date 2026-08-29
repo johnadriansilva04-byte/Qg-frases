@@ -30,8 +30,8 @@ const SUBMODULOS = [
     title: "Exercícios",
     subtitulo: "Treinamento · Modo Ensino",
     description:
-      "Pratique no seu ritmo: o motor gera matrizes de raciocínio lógico, você escolhe a peça que completa a figura e, logo após responder, recebe a explicação pedagógica das regras ocultas e recompensas em SALVE.",
-    bullets: ["Geradas na hora, sempre novas", "Explicação das regras a cada resposta", "Recompensas em SALVE"],
+      "Pratique no seu ritmo: o motor gera matrizes de raciocínio lógico, você escolhe a peça que completa a figura e, logo após responder, recebe a explicação pedagógica das regras ocultas e recompensas em SOV.",
+    bullets: ["Geradas na hora, sempre novas", "Explicação das regras a cada resposta", "Recompensas em SOV"],
     link: "/teste-qi",
     color: "from-emerald-500 to-teal-500",
     bgColor: "bg-emerald-500/10",

@@ -8,12 +8,12 @@ export const Route = createFileRoute("/teste-qi")({
       {
         name: "description",
         content:
-          "Exercícios de QI (modo ensino): matrizes de raciocínio lógico geradas proceduralmente (motor I-RAVEN), com explicação das regras ocultas e recompensas em SALVE.",
+          "Exercícios de QI (modo ensino): matrizes de raciocínio lógico geradas proceduralmente (motor I-RAVEN), com explicação das regras ocultas e recompensas em SOV.",
       },
       { property: "og:title", content: "Exercícios de QI | Teste de QI" },
       {
         property: "og:description",
-        content: "Desafios de raciocínio lógico com explicações pedagógicas e recompensas em SALVE.",
+        content: "Desafios de raciocínio lógico com explicações pedagógicas e recompensas em SOV.",
       },
       { property: "og:url", content: "https://pracinha.online/teste-qi" },
       { property: "og:image", content: "https://pracinha.online/og-image.png" },
@@ -38,7 +38,7 @@ function TesteQI() {
             TESTE DE QI
           </h1>
           <p className="text-sm text-slate-400">
-            Treine no seu ritmo · matrizes de raciocínio lógico · explicação das regras · recompensas em SALVE
+            Treine no seu ritmo · matrizes de raciocínio lógico · explicação das regras · recompensas em SOV
           </p>
         </header>
 
