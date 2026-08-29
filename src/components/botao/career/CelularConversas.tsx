@@ -25,7 +25,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { SovMarket } from "@/components/financial/SovMarket";
 import { SovBankApp } from "@/components/financial/SovBankApp";
 import { BolsaResumoCard } from "@/components/financial/BolsaResumoCard";
-import { AuthScreen } from "../components/AuthScreen";
 import {
   carregarChatCidadela,
   enviarMensagemCidadela,
@@ -86,8 +85,6 @@ type Props = {
   onVoltar: () => void;
   userId?: string | null | undefined;
   nomeJogador?: string | null | undefined;
-  /** Callback quando login é realizado no celular */
-  onLogin?: ((perfil: Perfil) => void) | undefined;
   /** Perfil da Cidadela para notificações */
   perfilCidadela?: CidadelaPerfil | null;
   /** História principal (John Adrian) — alimenta o app Arquivo. */
@@ -119,7 +116,6 @@ export function CelularConversas({
   onVoltar,
   userId = null,
   nomeJogador = null,
-  onLogin,
   perfilCidadela,
   historia,
   onRegistrarPosicao,
@@ -148,7 +144,6 @@ export function CelularConversas({
   // IDs de conversas já abertas nesta sessão — limpa o indicador de "não lida"
   // ao abrir, evitando um ponto verde travado que nunca some.
   const [lidas, setLidas] = useState<Set<string>>(new Set());
-  const [mostrarLogin, setMostrarLogin] = useState(false);
   const [jogadoresOnline, setJogadoresOnline] = useState<JogadorOnline[]>([]);
   const [carregandoJogadores, setCarregandoJogadores] = useState(false);
   const [pesquisaJogador, setPesquisaJogador] = useState("");
@@ -176,19 +171,6 @@ export function CelularConversas({
     notificacoes: "Alertas",
   };
 
-  // Mostrar login se não tiver userId e onLogin estiver disponível
-  useEffect(() => {
-    if (!userId && onLogin) {
-      setMostrarLogin(true);
-    } else {
-      setMostrarLogin(false);
-    }
-  }, [userId, onLogin]);
-
-  const handleLogin = (perfil?: Perfil | undefined) => {
-    setMostrarLogin(false);
-    if (perfil) onLogin?.(perfil);
-  };
   // a partir do estado real — nunca gera mensagem automática sem evento.
   const convPatrocinador: ConversaCelular | null = desafioPatrocinador && !desafioPatrocinador.concluido
     ? {
@@ -340,33 +322,6 @@ export function CelularConversas({
       setFeedback("Mensagem não enviada. Verifique sua conexão.");
     }
   };
-
-  // Se estiver mostrando login, renderiza AuthScreen dentro do celular
-  if (mostrarLogin) {
-    return (
-      <div className="mx-auto max-w-md px-4 py-6">
-        <div className="phone-frame">
-          <div className="phone-notch" />
-          <div className="phone-screen">
-            <div className="phone-chat-head">
-              <button onClick={onVoltar} className="phone-back" aria-label="Voltar">
-                <ChevronLeft className="size-5" />
-              </button>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-white">Login da Cidadela</p>
-                <p className="truncate text-[10px] text-slate-400">Entre para acessar o celular</p>
-              </div>
-              <Smartphone className="size-4 text-slate-400" />
-            </div>
-            <div className="phone-chat-body p-4">
-              <AuthScreen onPronto={handleLogin} />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
 
   if (conversaAtiva && (aba === "contatos" || aba === "mensagens")) {
     return (

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Smartphone, X, MessageSquare, Users, ClipboardList, Store, Bot } from "lucide-react";
 import { CelularConversas } from "./botao/career/CelularConversas";
-import type { Perfil } from "./botao/online/auth";
 import type { CidadelaPerfil } from "@/lib/cidadela/profissoes";
 import { useTempoCidadao } from "@/lib/cidadela/tempoCidadao";
 import { tocarSom } from "@/lib/notificacao";
@@ -10,7 +9,6 @@ import { useNotificacaoGrupo, type UltimaMensagemGrupo } from "@/lib/cidadela/gr
 type Props = {
   userId?: string | null;
   nomeJogador?: string | null;
-  onLogin?: ((perfil: Perfil) => void) | undefined;
   conversas?: any[];
   desafioPatrocinador?: any;
   feed?: any[];
@@ -44,7 +42,6 @@ type Props = {
 export function CelularFixo({
   userId = null,
   nomeJogador = null,
-  onLogin,
   conversas = [],
   desafioPatrocinador = null,
   feed = [],
@@ -183,7 +180,6 @@ export function CelularFixo({
             onVoltar={() => setAberto(false)}
             userId={userId}
             nomeJogador={nomeJogador}
-            onLogin={onLogin}
             perfilCidadela={perfilCidadela}
             historia={historia}
             onRegistrarPosicao={onRegistrarPosicao}

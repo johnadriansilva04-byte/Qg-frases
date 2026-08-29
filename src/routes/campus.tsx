@@ -53,7 +53,7 @@ const SECTIONS: {
 ];
 
 function CampusView() {
-  const { perfil, aplicarPerfil } = useBotaoAuth();
+  const { perfil } = useBotaoAuth();
   // Mesmo celular central do Modo Carreira/Cidadela — mesma fiação, sem
   // sistema paralelo: conversas, missões e handlers reais com persistência.
   const {
@@ -235,7 +235,6 @@ function CampusView() {
       <CelularFixo
         userId={perfil?.user_id ?? null}
         nomeJogador={career?.coach.apelido || career?.coach.nome || perfil?.nome || null}
-        onLogin={aplicarPerfil}
         conversas={career?.conversas ?? []}
         desafioPatrocinador={career?.desafioPatrocinador ?? null}
         feed={career?.feedCidadela ?? []}
