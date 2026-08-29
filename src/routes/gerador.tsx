@@ -147,10 +147,7 @@ function GeradorView() {
     <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
       <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
         <header className="mb-6 text-center">
-          <Link to="/" className="text-xs font-semibold text-muted-foreground hover:text-primary">
-            ← Voltar para a Cidadela
-          </Link>
-          <h1 className="texto-marca mt-3 text-4xl font-black tracking-tight md:text-5xl">
+          <h1 className="texto-marca text-4xl font-black tracking-tight md:text-5xl">
             ✨ Gerador de Texto
           </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground md:text-base">

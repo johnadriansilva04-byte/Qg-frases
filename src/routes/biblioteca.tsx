@@ -76,9 +76,6 @@ function Biblioteca() {
       <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
         <main className="painel w-full max-w-5xl rounded-3xl p-5 shadow-2xl md:p-8">
           <header className="mb-6 text-center">
-            <Link to="/campus" className="text-xs font-semibold text-muted-foreground hover:text-primary">
-              ← Voltar para o Campus
-            </Link>
             <h1 className="texto-marca mt-3 text-3xl font-black md:text-4xl">Cartório da Cidadela</h1>
             <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
               A Bibliotecária lavra contratos, petições e quitações com o selo da casa.
@@ -97,9 +94,6 @@ function Biblioteca() {
     <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
       <main className="painel w-full max-w-5xl rounded-3xl p-5 shadow-2xl md:p-8">
         <header className="mb-8 text-center">
-          <Link to="/campus" className="text-xs font-semibold text-muted-foreground hover:text-primary">
-            ← Voltar para o Campus
-          </Link>
           <h1 className="texto-marca mt-3 text-3xl font-black md:text-5xl">Biblioteca</h1>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground md:text-base">
             Biblioteca de livros selecionados para quem gosta de ler

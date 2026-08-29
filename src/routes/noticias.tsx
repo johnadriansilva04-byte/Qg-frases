@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Newspaper, X, ExternalLink, Clock, ArrowLeft } from "lucide-react";
+import { Newspaper, ExternalLink, Clock } from "lucide-react";
 import { AdSlot } from "@/components/AdSlot";
 
 interface NewsItem {
@@ -112,10 +112,7 @@ function Noticias() {
             <Newspaper className="w-5 h-5 text-primary" />
             <h1 className="font-bold text-foreground">Notícias</h1>
           </div>
-          <Link to="/" className="btn-ghost flex items-center gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </Link>
+
         </div>
       </div>
 

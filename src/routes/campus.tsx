@@ -212,18 +212,7 @@ function CampusView() {
           })}
         </div>
 
-        {/* Voltar */}
-        <div className="text-center mb-8">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-amber-400 transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 64 64" fill="none" className="w-4 h-4">
-              <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Voltar para página inicial
-          </Link>
-        </div>
+        <div className="mb-8" />
 
         {/* Footer */}
         <footer className="text-center text-xs text-slate-500">

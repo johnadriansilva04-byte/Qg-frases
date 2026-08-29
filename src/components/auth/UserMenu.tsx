@@ -28,7 +28,7 @@ export function UserMenu() {
       {/* Botão avatar */}
       <button
         onClick={() => (perfil ? setAberto(!aberto) : pedirLogin("user-menu"))}
-        className="flex size-9 items-center justify-center rounded-full border border-border bg-background text-sm font-bold text-foreground shadow-md transition hover:border-primary/50 hover:shadow-lg"
+        className="flex size-10 items-center justify-center rounded-full border border-border bg-background text-sm font-bold text-foreground shadow-md transition hover:border-primary/50 hover:shadow-lg"
         title={perfil ? perfil.nome : "Entrar"}
       >
         {iniciais ? (

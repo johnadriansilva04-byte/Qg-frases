@@ -30,15 +30,6 @@ function TesteQI() {
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center p-4 md:p-8">
         <header className="mb-6 w-full text-center">
-          <Link
-            to="/teste-de-qi"
-            className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1.5 text-xs text-slate-400 transition hover:border-emerald-500/40 hover:text-emerald-300"
-          >
-            <svg width="12" height="12" viewBox="0 0 64 64" fill="none">
-              <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Teste de QI
-          </Link>
           <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[10px] font-black tracking-widest text-emerald-300">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
             EXERCÍCIOS · ENSINO
@@ -55,11 +46,7 @@ function TesteQI() {
           <IQTestComponent showSolution={true} />
         </main>
 
-        <div className="mt-6 text-center">
-          <Link to="/teste-de-qi" className="text-sm text-slate-400 transition-colors hover:text-emerald-400">
-            ← Voltar para o módulo Teste de QI
-          </Link>
-        </div>
+
       </div>
     </div>
   );

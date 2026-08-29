@@ -68,15 +68,6 @@ function TesteDeQI() {
 
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-4 md:p-8">
         <header className="mb-10 text-center md:mb-14">
-          <Link
-            to="/"
-            className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-4 py-1.5 text-xs text-slate-400 transition hover:text-amber-400 hover:border-amber-500/40"
-          >
-            <svg width="12" height="12" viewBox="0 0 64 64" fill="none">
-              <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Página inicial
-          </Link>
           <div className="mb-4 inline-flex items-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 shadow-lg shadow-amber-500/30">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
@@ -186,14 +177,7 @@ function TesteDeQI() {
           <AdSlot rotulo="Banner Rodapé" />
         </div>
 
-        <div className="mt-8 text-center">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-amber-400">
-            <svg width="16" height="16" viewBox="0 0 64 64" fill="none">
-              <path d="M40 12 L24 32 L40 52" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Voltar para a página inicial
-          </Link>
-        </div>
+        <div className="mb-8" />
       </div>
     </div>
   );

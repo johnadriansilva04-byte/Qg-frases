@@ -30,11 +30,7 @@ function SimulacaoQI() {
 
       <div className="relative z-10 flex min-h-screen flex-col items-center px-3 py-4 md:py-8">
         <SimulacaoIQ />
-        <div className="mt-4 text-center">
-          <Link to="/teste-de-qi" className="text-xs text-slate-500 transition-colors hover:text-indigo-400">
-            ← Voltar para o módulo Teste de QI
-          </Link>
-        </div>
+
       </div>
     </div>
   );
