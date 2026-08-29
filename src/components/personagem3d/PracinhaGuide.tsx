@@ -59,14 +59,27 @@ export function PracinhaGuide({ modulo, userId, contaExistente = false, storageK
   );
 
   // Verificar se é primeira visita (só contas novas)
+  // Verifica se QUALQUER módulo já foi visitado — se sim, é conta existente.
   useEffect(() => {
-    if (contaExistente) return; // conta já tem carreira — não mostra tour
+    if (contaExistente) return; // prop direta: conta já tem carreira
+    // Checagem robusta: percorre TODAS as chaves do localStorage que
+    // começam com o prefixo do storage. Se QUALQUER uma tiver registros,
+    // significa que o usuário já passou pelo tour anteriormente.
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(storageKey)) {
+          const mods: string[] = JSON.parse(localStorage.getItem(k) || "[]");
+          if (mods.length > 0) return; // já visitou algum módulo antes
+        }
+      }
+    } catch { /* ignore */ }
     const visitados = carregarVisitados(storageKeyResolved);
     if (!visitados.includes(modulo) && passos.length > 0) {
       setTourAtivo(true);
       setIndice(0);
     }
-  }, [modulo, passos.length, storageKeyResolved, contaExistente]);
+  }, [modulo, passos.length, storageKeyResolved, contaExistente, storageKey]);
 
   // Avançar para o próximo passo
   const avancar = useCallback(() => {
