@@ -16,7 +16,15 @@ const TIPS = [
   { title: "Copa do Brasil", body: "O mata-mata da Cidadela. 16 times, 4 fases, 1 campeão." },
 ];
 
-export function FootballLoadingScreen({ onCompleto }: { onCompleto: () => void }) {
+export function FootballLoadingScreen({
+  onCompleto,
+  waitFor,
+}: {
+  onCompleto: () => void;
+  /** Promise externa (ex: hidratação do perfil) que deve ser aguardada
+      junto com a animação antes de chamar onCompleto. */
+  waitFor?: Promise<unknown> | undefined;
+}) {
   const [pct, setPct] = useState(0);
   const [tipIdx, setTipIdx] = useState(0);
   const startRef = useRef<number>(0);
@@ -24,25 +32,43 @@ export function FootballLoadingScreen({ onCompleto }: { onCompleto: () => void }
   const doneRef = useRef(false);
   const DURACAO = 2800;
 
-  // Animação da barra
+  // Animação da barra + aguardo de promise externa
   useEffect(() => {
     startRef.current = performance.now();
+    let externalDone = !waitFor; // sem promise = pronto imediatamente
+    let animDone = false;
+    const tryFinish = () => {
+      if (animDone && externalDone && !doneRef.current) {
+        doneRef.current = true;
+        onCompleto();
+      }
+    };
+    // Aguarda a promise externa (hidratação do perfil)
+    if (waitFor) {
+      waitFor.then(() => {
+        externalDone = true;
+        tryFinish();
+      }).catch(() => {
+        externalDone = true;
+        tryFinish();
+      });
+    }
     const tick = (now: number) => {
       const t = Math.min(1, (now - startRef.current) / DURACAO);
       const eased = 1 - Math.pow(1 - t, 3);
       setPct(Math.round(eased * 100));
       if (t < 1) {
         rafRef.current = requestAnimationFrame(tick);
-      } else if (!doneRef.current) {
-        doneRef.current = true;
-        onCompleto();
+      } else {
+        animDone = true;
+        tryFinish();
       }
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [onCompleto]);
+  }, [onCompleto, waitFor]);
 
   // Rotação de dicas
   useEffect(() => {

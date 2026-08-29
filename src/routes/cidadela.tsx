@@ -27,6 +27,8 @@ import {
   type ProfissaoId,
 } from "@/lib/cidadela/profissoes";
 import { useCelularCarreira } from "@/hooks/useCelularCarreira";
+import { loadProgressFromSupabase } from "@/components/botao/storage";
+import { loadCareerFromSupabase } from "@/components/botao/career/careerRemote";
 import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
 import { BolsaResumoCard } from "@/components/financial/BolsaResumoCard";
 
@@ -185,6 +187,11 @@ function CidadelaCompView() {
     setMostrarProfissoes(false);
   };
 
+  // Promessa de hidratação disparada ao clicar em Futebol — o FootballLoadingScreen
+  // aguarda junto com a animação, para que o BotaoGame monte com dados já prontos
+  // (sem flash do LoadingScreen interno).
+  const [hidratacaoFutebol, setHidratacaoFutebol] = useState<Promise<unknown> | null>(null);
+
   // Login único global: ao entrar sem conta, abre o AuthModal UMA vez
   // por aba (guard no AuthProvider). O visitante pode fechar e seguir local.
   const { pedirLogin, aoContinuarSemConta } = useAuth();
@@ -215,8 +222,17 @@ function CidadelaCompView() {
 
   const handleGameSelect = (game: Game) => {
     // Futebol: mostra tela de loading temática ANTES de abrir o BotaoGame.
-    // Isso evita o flash feio de menu → loading → menu.
+    // Dispara hidratação em paralelo — o FootballLoadingScreen aguarda
+    // a promise para que o BotaoGame monte com dados já prontos.
     if (game === "botao") {
+      if (perfil?.user_id) {
+        setHidratacaoFutebol(
+          Promise.all([
+            loadProgressFromSupabase(perfil.user_id),
+            loadCareerFromSupabase(perfil.user_id),
+          ]).catch(() => {}),
+        );
+      }
       setLoadingGame(game);
       return;
     }
@@ -327,7 +343,9 @@ function CidadelaCompView() {
   if (loadingGame === "botao") {
     return (
       <FootballLoadingScreen
+        waitFor={hidratacaoFutebol ?? undefined}
         onCompleto={() => {
+          setHidratacaoFutebol(null);
           setLoadingGame(null);
           setActiveGame("botao");
         }}
