@@ -23,7 +23,7 @@ type Props = {
 
 export function ClubeEvolucao({ evolucao, cores, abreviacao, onBack }: Props) {
   const { niveis, saldoSov, simbolo, cor, evoluindo, carreiraAtiva, onEvoluir, onIdentidade } = evolucao;
-  const corAtiva = cor || cores[0] ?? CORES_PADRAO[0] ?? "#1e3a8a";
+  const corAtiva = cor || (cores[0] ?? CORES_PADRAO[0] ?? "#1e3a8a");
   const botoesNomes = ["Zagueiro", "Lateral-Esq", "Lateral-Dir", "Ponta", "Centroavante"];
 
   return (
