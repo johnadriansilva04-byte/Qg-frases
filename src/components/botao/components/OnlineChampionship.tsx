@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, RefreshCw, Users, Crown, Play, Link2, Coins, Bot, Zap } from "lucide-react";
+import { ArrowLeft, Users, Crown, Play, Link2, Bot, Zap } from "lucide-react";
 import { useBotaoAuth } from "../online/useBotaoAuth";
 import { useJogador } from "@/hooks/useJogador";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +53,7 @@ import type { MatchResult } from "@/components/botao/types";
 import { obterSaldoSov } from "@/lib/financial/sovApi";
 import { loadProgressFromSupabase, saveProgressToSupabase } from "@/components/botao/storage";
 import { useAdManager } from "@/lib/adManager";
-import { CampeonatoHub } from "./CampeonatoHub";
+import { OnlineLobbyLayout, type LobbyRoom, nomeAmigavel } from "@/components/online/OnlineLobbyLayout";
 import { MataMataBracket } from "./MataMataBracket";
 
 /** Saldo mínimo de SOV para criar/entrar no Campeonato Online (regra §5). */
@@ -560,27 +560,88 @@ export function OnlineChampionship({
     );
   }
 
-  // ============ Hub modular ============
+  // ============ Hub — shared lobby layout ============
+  const lobbyRooms: LobbyRoom[] = abertos.map((c) => {
+    const numPart = Array.isArray(c.participantes) ? c.participantes.length : 0;
+    return {
+      id: c.codigo,
+      name: c.nome,
+      status: c.status === "aguardando" ? "aguardando" : c.status === "em_andamento" ? "em_andamento" : "finalizado",
+      playerCount: numPart,
+      maxPlayers: c.max_jogadores,
+      meta: `${c.formato === "mata-mata" ? "Mata-Mata" : c.formato === "grupos" ? "Grupos" : "Pontos"}${(c.premio_sov ?? 0) > 0 ? ` · ${c.premio_sov} SOV` : ""}`,
+    };
+  });
+
+  const champCreateForm = (
+    <div className="space-y-3">
+      <div>
+        <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Nome da sala</p>
+        <input
+          value={nomeSala}
+          onChange={(e) => setNomeSala(e.target.value)}
+          placeholder="Campeonato Online"
+          maxLength={40}
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-white/30 focus:border-emerald-400/50 focus:outline-none"
+        />
+      </div>
+      <div>
+        <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Formato</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {([["pontos", "Pontos"], ["mata-mata", "Mata-Mata"], ["grupos", "Grupos"]] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setFormato(id)} className={`rounded-lg border p-2 text-center text-[10px] font-bold transition ${formato === id ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300" : "border-white/10 text-white/40 hover:border-white/20"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Vagas</p>
+        <div className="flex gap-1.5">
+          {[8, 12, 16, 32].map((n) => (
+            <button key={n} onClick={() => setMaxJogadores(n)} className={`rounded-md px-3 py-1.5 text-[10px] font-bold transition ${maxJogadores === n ? "bg-emerald-500 text-white" : "border border-white/10 text-white/40 hover:border-white/20"}`}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Prêmio (SOV)</p>
+        <input
+          type="number"
+          min={0}
+          value={premioSov}
+          onChange={(e) => setPremioSov(Math.max(0, Number(e.target.value) || 0))}
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white focus:border-amber-400/50 focus:outline-none"
+        />
+      </div>
+      <p className="text-[9px] text-white/20">Mínimo {SOV_MINIMO_CAMPEONATO} SOV para criar/entrar.</p>
+      <button onClick={handleCriar} disabled={criando || !perfil} className="w-full rounded-lg bg-emerald-500 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-400 disabled:opacity-50">
+        {criando ? "Criando..." : "+ Criar Campeonato"}
+      </button>
+      {!perfil && <p className="text-center text-[10px] text-red-400/80">Faça login para criar.</p>}
+    </div>
+  );
+
   return (
-    <CampeonatoHub
+    <OnlineLobbyLayout
+      title="CAMPEONATO ONLINE"
+      subtitle={`${SOV_MINIMO_CAMPEONATO} SOV mínimo · ${formato === "mata-mata" ? "Mata-Mata" : formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos"}`}
+      icon={<span className="text-sm">🏆</span>}
       onBack={onBack}
-      nomeSala={nomeSala}
-      setNomeSala={setNomeSala}
-      formato={formato}
-      setFormato={setFormato}
-      maxJogadores={maxJogadores}
-      setMaxJogadores={setMaxJogadores}
-      premioSov={premioSov}
-      setPremioSov={setPremioSov}
-      codigoEntrar={codigoEntrar}
-      setCodigoEntrar={setCodigoEntrar}
-      onCriar={handleCriar}
-      onEntrar={(c) => void handleEntrar(c)}
-      criando={criando}
-      perfil={perfil}
-      abertos={abertos}
-      onRecarregar={() => recarregarAbertos()}
-      erro={erro}
+      accent="amber"
+      createForm={champCreateForm}
+      joinCode={codigoEntrar}
+      setJoinCode={setCodigoEntrar}
+      onJoinByCode={(c) => void handleEntrar(c)}
+      joinDisabled={!perfil || !codigoEntrar.trim()}
+      rooms={lobbyRooms}
+      onJoinRoom={(id) => void handleEntrar(id)}
+      onRefresh={() => recarregarAbertos()}
+      toastLink={toastLink}
+      onDismissToast={() => setToastLink(null)}
+      error={erro}
+      onDismissError={() => setErro(null)}
     />
   );
 }
