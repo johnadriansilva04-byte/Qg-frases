@@ -288,6 +288,9 @@ export function TrilhaChampionship({ onBack }: Props) {
   }
 
   // ── Hub ──
+  // Check for existing championship in localStorage
+  const campExistente = view === "hub" ? carregarCampeonato() : null;
+
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-[#060910] via-[#0a1020] to-[#060910]">
       <header className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3">
@@ -298,6 +301,16 @@ export function TrilhaChampionship({ onBack }: Props) {
       <div className="flex-1 space-y-2 p-4 pb-8">
         {view === "hub" && (
           <>
+            {campExistente && (
+              <button onClick={() => { setCamp(campExistente); setView("sala"); }} className="flex w-full items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-left transition hover:border-amber-400/40 active:scale-[0.98]">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-400/15 text-amber-400"><Trophy className="size-5" /></div>
+                <div className="flex-1">
+                  <p className="text-sm font-black text-white">{campExistente.nome}</p>
+                  <p className="text-[10px] text-white/40">{campExistente.participantes.length} jogadores · {campExistente.status === "aguardando" ? "Aguardando" : campExistente.status === "em_grupos" ? `Rodada ${campExistente.grupos[0]?.rodadaAtual ?? 1}` : campExistente.status}</p>
+                </div>
+                <ChevronRight className="text-amber-400/40" />
+              </button>
+            )}
             <button onClick={() => setView("criar")} className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-emerald-400/40 active:scale-[0.98]">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-400"><Plus className="size-5" /></div>
               <div className="flex-1"><p className="text-sm font-black text-white">Criar Campeonato</p><p className="text-[10px] text-white/40">Defina nome, formato e convide jogadores</p></div>
@@ -347,7 +360,7 @@ export function TrilhaChampionship({ onBack }: Props) {
               <span className="mb-1 block text-[9px] font-bold uppercase tracking-widest text-white/40">Código ou Link</span>
               <input className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 font-mono focus:border-blue-400/50 focus:outline-none" value={codigoEntrar} onChange={(e) => setCodigoEntrar(e.target.value)} placeholder="Cole o link aqui..." />
             </label>
-            <button onClick={() => { if (!userId || !codigoEntrar.trim()) return; setErro("Para entrar, cole o link completo do campeonato."); }} disabled={!userId || !codigoEntrar.trim()} className="w-full rounded-lg bg-blue-500 py-3 text-sm font-bold text-white transition hover:bg-blue-400 disabled:opacity-50">Entrar</button>
+            <button onClick={() => { if (!userId || !codigoEntrar.trim()) return; const raw = codigoEntrar.trim(); let campId = raw; const urlMatch = raw.match(/campTrilha=([^&]+)/); if (urlMatch?.[1]) campId = decodeURIComponent(urlMatch[1]); const existente = carregarCampeonato(); if (existente && existente.id === campId) { try { const u = entrarCampeonatoTrilha(existente, { user_id: userId, nome: userName }); setCamp(u); setView("sala"); setErro(null); } catch (e) { setErro((e as Error).message); } } else { setErro("Campeonato não encontrado neste navegador. Peça ao criador para compartilhar o mesmo dispositivo."); } }} disabled={!userId || !codigoEntrar.trim()} className="w-full rounded-lg bg-blue-500 py-3 text-sm font-bold text-white transition hover:bg-blue-400 disabled:opacity-50">Entrar</button>
             {erro && <p className="text-xs text-red-400">{erro}</p>}
           </div>
         )}
