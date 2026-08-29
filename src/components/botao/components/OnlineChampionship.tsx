@@ -53,6 +53,8 @@ import type { MatchResult } from "@/components/botao/types";
 import { obterSaldoSov } from "@/lib/financial/sovApi";
 import { loadProgressFromSupabase, saveProgressToSupabase } from "@/components/botao/storage";
 import { useAdManager } from "@/lib/adManager";
+import { CampeonatoHub } from "./CampeonatoHub";
+import { MataMataBracket } from "./MataMataBracket";
 
 /** Saldo mínimo de SOV para criar/entrar no Campeonato Online (regra §5). */
 export const SOV_MINIMO_CAMPEONATO = 50;
@@ -558,133 +560,28 @@ export function OnlineChampionship({
     );
   }
 
-  // ============ Lista de salas abertas ============
+  // ============ Hub modular ============
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-8">
-      <div className="flex items-center gap-3 mb-6">
-        {onBack && (
-          <button onClick={onBack} className="btn-ghost">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        )}
-        <h2 className="font-display text-2xl">Campeonato Online</h2>
-      </div>
-
-      <section className="surface mb-6 space-y-4 p-5">
-        <h3 className="text-lg font-display">Criar sala</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Nome da sala</label>
-            <input
-              className="input w-full"
-              value={nomeSala}
-              onChange={(e) => setNomeSala(e.target.value)}
-              placeholder="Campeonato Online"
-              maxLength={40}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Formato</label>
-            <select
-              className="input w-full"
-              value={formato}
-              onChange={(e) => setFormato(e.target.value as FormatoCampeonato)}
-            >
-              <option value="pontos">Pontos Corridos (round-robin)</option>
-              <option value="mata-mata">Mata-mata (eliminatório)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Máximo de jogadores</label>
-            <select
-              className="input w-full"
-              value={maxJogadores}
-              onChange={(e) => setMaxJogadores(Number(e.target.value))}
-            >
-              {[2, 4, 6, 8, 12, 16, 20, 24, 32].map((n) => (
-                <option key={n} value={n}>
-                  {n} jogadores
-                </option>
-              ))}
-            </select>
-          </div>
-          {formato === "mata-mata" && (
-            <p className="text-xs text-amber-500">
-              Mata-mata: escape em cada rodada até a final. Ideal para experiência esportiva.
-            </p>
-          )}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              <Coins className="mr-1 inline size-4" /> Prêmio do campeão (SOV, opcional)
-            </label>
-            <input
-              className="input w-full"
-              type="number"
-              min={0}
-              max={10000}
-              value={premioSov}
-              onChange={(e) => setPremioSov(Math.max(0, Number(e.target.value) || 0))}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Para criar ou entrar no Campeonato Online é preciso ter pelo menos{" "}
-            {SOV_MINIMO_CAMPEONATO} SOV.
-          </p>
-          <button onClick={handleCriar} disabled={criando || !perfil} className="btn-primary">
-            <Plus className="mr-1 h-4 w-4" /> {criando ? "Criando..." : "Abrir sala"}
-          </button>
-          {!perfil && <p className="text-sm text-red-500">Faça login para criar um campeonato.</p>}
-        </div>
-      </section>
-
-      <section className="surface mb-6 space-y-4 p-5">
-        <h3 className="text-lg font-display">Entrar por código</h3>
-        <div className="flex gap-2">
-          <input
-            className="input flex-1"
-            value={codigoEntrar}
-            onChange={(e) => setCodigoEntrar(e.target.value)}
-            placeholder="CAMP-..."
-          />
-          <button onClick={() => void handleEntrar()} disabled={!perfil} className="btn-primary">
-            <Users className="mr-1 h-4 w-4" /> Entrar
-          </button>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-display">Salas abertas</h3>
-          <button className="btn-ghost text-sm" onClick={() => recarregarAbertos()}>
-            <RefreshCw className="mr-1 h-4 w-4" /> Atualizar
-          </button>
-        </div>
-        {abertos.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhuma sala aberta. Crie a primeira!</p>
-        )}
-        {abertos.map((c) => {
-          const numPart = Array.isArray(c.participantes) ? c.participantes.length : 0;
-          return (
-            <article key={c.id} className="surface flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-0 flex-1">
-                <h4 className="truncate text-lg leading-tight">{c.nome}</h4>
-                <p className="text-xs text-muted-foreground">
-                  Código <span className="font-mono">{c.codigo}</span> · {numPart}/{c.max_jogadores}{" "}
-                  jogadores
-                  {(c.premio_sov ?? 0) > 0 && (
-                    <span className="text-amber-300"> · prêmio {c.premio_sov} SOV</span>
-                  )}
-                </p>
-              </div>
-              <button onClick={() => void handleEntrar(c.codigo)} disabled={!perfil} className="btn-primary">
-                <Users className="mr-1 h-4 w-4" /> Entrar
-              </button>
-            </article>
-          );
-        })}
-        {erro && <p className="text-sm text-red-500">{erro}</p>}
-      </section>
-    </main>
+    <CampeonatoHub
+      onBack={onBack}
+      nomeSala={nomeSala}
+      setNomeSala={setNomeSala}
+      formato={formato}
+      setFormato={setFormato}
+      maxJogadores={maxJogadores}
+      setMaxJogadores={setMaxJogadores}
+      premioSov={premioSov}
+      setPremioSov={setPremioSov}
+      codigoEntrar={codigoEntrar}
+      setCodigoEntrar={setCodigoEntrar}
+      onCriar={handleCriar}
+      onEntrar={(c) => void handleEntrar(c)}
+      criando={criando}
+      perfil={perfil}
+      abertos={abertos}
+      onRecarregar={() => recarregarAbertos()}
+      erro={erro}
+    />
   );
 }
 
@@ -930,93 +827,12 @@ function SalaCampeonato({
 
           <section className="surface p-5">
             {camp.formato === "mata-mata" ? (
-              // ── Bracket visual profissional (mata-mata) ──
-              <div>
-                <h3 className="mb-4 font-display text-lg">Mata-mata</h3>
-                <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-slate-900/40 to-slate-950/60 p-6">
-                  {/* Fase ou Final */}
-                  {(() => {
-                    const prontos = participantes.length;
-                    const n = Math.max(2, prontos);
-                    if (prontos < 2) {
-                      return (
-                        <p className="text-sm text-muted-foreground">
-                          Precisa de pelo menos 2 jogadores para montar o chaveamento.
-                        </p>
-                      );
-                    }
-                    const etapes: string[] = [];
-                    let r = 1;
-                    while (Math.pow(2, r) <= n) {
-                      if (r === 1) etapes.push("Final");
-                      else if (r === 2) etapes.push("Semifinal");
-                      else if (r === 3) etapes.push("Quartas");
-                      else etapes.push(`${n >= 8 ? "Oitavas" : `Campo de ${n}`} de final`);
-                      r++;
-                    }
-                    return (
-                      <>
-                        <p className="mb-4 text-xs tracking-widest text-amber-400 uppercase">
-                          Chaveamento eliminatório {n > 4 ? `— ${etapes[etapes.length - 1]}` : ""}
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {Array.from({ length: Math.min(etapes.length, 4) }, (_, i) => (
-                            <div key={i} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-                              <p className="font-bold text-amber-300">{etapes[etapes.length - 1 - i]}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="mt-4 text-xs text-muted-foreground">
-                          {participantes.length} jogadores no chaveamento.
-                        </p>
-                      </>
-                    );
-                  })()}
-                </div>
-                {/* Confrontos da rodada atual */}
-                <div className="mt-6 space-y-3">
-                  {Array.from({ length: Math.max(totalRodadas, 1) }, (_, i) => i + 1).map((rod) => {
-                    const lista = confrontos.filter((c) => c.rodada === rod);
-                    return (
-                      <div key={rod} className="rounded-lg border border-slate-800/60 p-3">
-                        <p className="mb-2 text-xs tracking-wider text-amber-400 uppercase">
-                          {rod === 1 ? "Final" : rod === 2 ? "Semifinal" : rod === 3 ? "Quartas" : `Rodada ${rod}`}
-                        </p>
-                        <ul className="space-y-1.5 text-sm">
-                          {lista.map((c, idx) => {
-                            const envolvido = c.j1_id === userId || c.j2_id === userId;
-                            if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
-                            const abrevJ1 = abrevDoParticipante(camp, c.j1_id ?? "");
-                            const abrevJ2 = abrevDoParticipante(camp, c.j2_id ?? "");
-                            return (
-                              <li
-                                key={idx}
-                                className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 ${
-                                  envolvido
-                                    ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                                    : "border-slate-800"
-                                }`}
-                              >
-                                <span>
-                                  <span className="font-mono font-semibold">{abrevJ1}</span>
-                                  <span className="mx-1 text-slate-600">vs</span>
-                                  <span className="font-mono font-semibold">{abrevJ2}</span>
-                                  {c.bye && <span className="text-muted-foreground"> (bye)</span>}
-                                </span>
-                                <span className="font-mono">
-                                  {c.status === "finalizado" && !c.bye
-                                    ? `${c.pl_j1}×${c.pl_j2}`
-                                    : "—"}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <MataMataBracket
+                confrontos={confrontos}
+                participantes={participantes}
+                userId={userId}
+                totalRodadas={totalRodadas}
+              />
             ) : (
               // ── Visual tradicional round-robin ──
               <div>
