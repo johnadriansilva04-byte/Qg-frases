@@ -4140,8 +4140,20 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
                 { sourceEvent: "assinatura_clube", idempotencyKey: `assinatura:${perfil.user_id}:t1:${oferta.clubeId}` },
               );
             }
-            // Iniciar campanha (cria torneio, copa, etc)
-            runWithLoading(() => iniciarCampanha(nova));
+            // Iniciar campanha (cria torneio, copa, etc) com loading
+            setLoading(true);
+            setForceLoading(true);
+            setLoadingReady(true);
+            setLoadingOnComplete(() => async () => {
+              setLoading(false);
+              setForceLoading(false);
+              try {
+                await iniciarCampanha(nova);
+              } catch (e) {
+                console.error("[CareerIntro] iniciarCampanha failed:", e);
+                setToast("Erro ao criar campanha. Tente novamente.");
+              }
+            });
           }}
           onBack={() => setScreen("career-menu")}
           ofertas={ofertasIniciais}
