@@ -186,6 +186,8 @@ function CidadelaCompView() {
     } catch {
       /* storage indisponível */
     }
+    // Notifica o BackButton global sobre mudança de jogo
+    window.dispatchEvent(new CustomEvent("cidadela:game-changed"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGame]);
 

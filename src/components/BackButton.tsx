@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type BackButtonProps = {
   /** Rota de destino. Se omitido, detecta automaticamente a melhor rota pai. */
@@ -10,31 +10,71 @@ type BackButtonProps = {
 };
 
 /**
- * Botão de voltar padronizado: fixo no canto superior esquerdo, estilo card,
- * visível e profissional. Aparece em todas as páginas internas.
- * No desktop é um card com texto; no mobile, apenas ícone.
+ * Botão de voltar inteligente e global.
  *
- * Detecta a rota atual:
- *  - Em /cidadela (ou sub-rotas como jogos): volta para /cidadela?hub=1
- *  - Em qualquer outra rota interna: volta para /
+ * Comportamento:
+ *  - Na página raiz (/): NÃO renderiza.
+ *  - Na Cidadela com jogo ativo: volta para o hub (/cidadela).
+ *  - Na Cidadela no hub: volta para home (/).
+ *  - Em qualquer outra rota interna: volta para home (/).
+ *
+ * Utiliza um CustomEvent ("cidadela:game-changed") para sincronizar
+ * o estado do jogo ativo sem acoplamento direto entre componentes.
  */
 export function BackButton({ to, label }: BackButtonProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const pathname = location.pathname;
+
+  // Escuta mudanças do jogo ativo na Cidadela para re-renderizar
+  const [, setGameTick] = useState(0);
+  useEffect(() => {
+    const handler = () => setGameTick((t) => t + 1);
+    window.addEventListener("cidadela:game-changed", handler);
+    return () => window.removeEventListener("cidadela:game-changed", handler);
+  }, []);
+
+  // Determina se um jogo/módulo está ativo no sessionStorage
+  // (botao, trilha, campus, comercial, laboratorio)
+  const isGameActive = (() => {
+    try {
+      const salvo = window.sessionStorage.getItem("cidadela:jogo-ativo:v1");
+      return !!salvo && salvo !== "null";
+    } catch {
+      return false;
+    }
+  })();
+
+  // NÃO renderiza na página raiz
+  if (pathname === "/") return null;
 
   const handleBack = useCallback(() => {
     if (to) {
       navigate({ to });
       return;
     }
-    // Se estamos na Cidadela (ou em jogos internos), volta para o hub
-    // com ?hub=1 para sinalizar que deve mostrar a seleção de jogos.
-    if (location.pathname.startsWith("/cidadela")) {
-      navigate({ to: "/cidadela", search: { hub: "1" } });
+    // Na Cidadela (ou sub-rotas):
+    if (pathname.startsWith("/cidadela")) {
+      if (isGameActive) {
+        // Jogo ativo → volta para o hub (não para home)
+        navigate({ to: "/cidadela" });
+      } else {
+        // No hub → volta para home
+        navigate({ to: "/" });
+      }
     } else {
+      // Qualquer outra rota interna → volta para home
       navigate({ to: "/" });
     }
-  }, [navigate, to, location.pathname]);
+  }, [navigate, to, pathname, isGameActive]);
+
+  const destination = to
+    ? to
+    : pathname.startsWith("/cidadela") && !isGameActive
+      ? "/"
+      : pathname.startsWith("/cidadela")
+        ? "/cidadela"
+        : "/";
 
   const content = (
     <span className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3.5 py-2 text-sm font-semibold text-foreground shadow-lg backdrop-blur-sm transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-xl active:scale-95">
@@ -43,25 +83,18 @@ export function BackButton({ to, label }: BackButtonProps) {
     </span>
   );
 
-  if (to) {
-    return (
-      <Link
-        to={to}
-        className="fixed left-3 top-3 z-[80]"
-        aria-label="Voltar"
-      >
-        {content}
-      </Link>
-    );
-  }
-
   return (
-    <button
-      onClick={handleBack}
+    <Link
+      to={destination}
       className="fixed left-3 top-3 z-[80]"
       aria-label="Voltar"
+      onClick={(e) => {
+        // Prevenir navegação padrão do Link e usar navigate para controle total
+        e.preventDefault();
+        handleBack();
+      }}
     >
       {content}
-    </button>
+    </Link>
   );
 }
