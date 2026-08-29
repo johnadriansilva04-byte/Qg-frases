@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Target,
   Zap,
+  Bot,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -29,6 +30,7 @@ import {
   entrarCampeonatoTrilha,
   sairCampeonatoTrilha,
   iniciarCampeonatoTrilha,
+  registrarResultado,
   registrarResultadoEliminatorio,
   classificacaoGrupo,
   classificadosDosGrupos,
@@ -37,6 +39,9 @@ import {
   salvarCampeonato,
   carregarCampeonato,
   limparCampeonato,
+  preencherComRobots,
+  simularConfrontoBots,
+  isRobot,
   type CampeonatoTrilha,
   type FormatoTrilha,
   type ParticipanteTrilha,
@@ -47,6 +52,8 @@ import { TrilhaOnlineGame } from "./TrilhaOnlineGame";
 // ─────────────────────────── types ─────────────────────────────
 
 type SubView = "hub" | "criar" | "entrar" | "salas" | "sala" | "jogo";
+
+type MaxJogadores = 4 | 8 | 12 | 16 | 32;
 
 type Props = {
   onBack?: () => void;
@@ -71,7 +78,9 @@ export function TrilhaChampionship({ onBack }: Props) {
   // Criar
   const [nomeSala, setNomeSala] = useState("Campeonato Trilha");
   const [formato, setFormato] = useState<FormatoTrilha>("pontos");
+  const [maxJogadores, setMaxJogadores] = useState<MaxJogadores>(8);
   const [codigoEntrar, setCodigoEntrar] = useState("");
+  const [preenchendoBots, setPreenchendoBots] = useState(false);
 
   // Jogo ativo
   const [mesaAtiva, setMesaAtiva] = useState<string | null>(null);
@@ -110,6 +119,40 @@ export function TrilhaChampionship({ onBack }: Props) {
     }
   }, [camp]);
 
+  // Auto-simulate bot vs bot matches
+  const [simulating, setSimulating] = useState(false);
+  useEffect(() => {
+    if (!camp || camp.criador_id !== userId || camp.status !== "em_grupos" || simulating) return;
+    const botMatches: { j1: string; j2: string }[] = [];
+    camp.grupos.forEach((g) => {
+      const ids = g.participantes;
+      const jogados = new Set<string>();
+      for (const r of g.resultados) {
+        jogados.add([r.j1_id, r.j2_id].sort().join(":"));
+      }
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const ii = ids[i];
+          const jj = ids[j];
+          if (ii && jj && !jogados.has([ii, jj].sort().join(":"))) {
+            if (isRobot(ii) && isRobot(jj)) {
+              botMatches.push({ j1: ii, j2: jj });
+            }
+          }
+        }
+      }
+    });
+    if (botMatches.length === 0) return;
+    setSimulating(true);
+    let atualizado = { ...camp };
+    for (const match of botMatches) {
+      const resultado = simularConfrontoBots(match.j1, match.j2);
+      atualizado = registrarResultado(atualizado, match.j1, match.j2, resultado.vencedor_id, "bot-sim");
+    }
+    setCamp(atualizado);
+    setSimulating(false);
+  }, [camp, userId, simulating]);
+
   // ─── Handlers ───
 
   const handleCriar = useCallback(() => {
@@ -119,6 +162,17 @@ export function TrilhaChampionship({ onBack }: Props) {
     setView("sala");
     setErro(null);
   }, [userId, userName, nomeSala, formato]);
+
+  const handlePreencherBots = useCallback(() => {
+    if (!camp || camp.criador_id !== userId) return;
+    setPreenchendoBots(true);
+    try {
+      const atualizado = preencherComRobots(camp, maxJogadores);
+      setCamp(atualizado);
+      setErro(null);
+    } catch (e) { setErro((e as Error).message); }
+    setPreenchendoBots(false);
+  }, [camp, userId, maxJogadores]);
 
   const handleEntrar = useCallback(() => {
     if (!userId || !camp) return;
@@ -311,8 +365,7 @@ export function TrilhaChampionship({ onBack }: Props) {
 
   // ─── Tela da sala ───
   if (camp && view === "sala") {
-    return (
-      <SalaCampeonato
+    return (        <SalaCampeonato
         camp={camp}
         userId={userId}
         onBack={() => {
@@ -326,6 +379,8 @@ export function TrilhaChampionship({ onBack }: Props) {
         onJogar={handleJogarPartida}
         erro={erro}
         toastLink={toastLink}
+        onPreencherBots={handlePreencherBots}
+        preenchendoBots={preenchendoBots}
       />
     );
   }
@@ -405,6 +460,26 @@ export function TrilhaChampionship({ onBack }: Props) {
               </div>
             </label>
 
+            <label className="block">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-white/40">Máximo de Jogadores</span>
+              <div className="grid grid-cols-4 gap-2">
+                {[4, 8, 12, 16, 32].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setMaxJogadores(n as MaxJogadores)}
+                    className={`rounded-xl border p-3 text-center transition ${
+                      maxJogadores === n
+                        ? "border-purple-400/60 bg-purple-400/10 text-white"
+                        : "border-white/10 text-white/40 hover:border-white/20"
+                    }`}
+                  >
+                    <p className="font-display text-lg font-black">{n}</p>
+                    <p className="text-[9px] text-white/30">vagas</p>
+                  </button>
+                ))}
+              </div>
+            </label>
+
             <button onClick={handleCriar} disabled={!userId} className="w-full rounded-xl bg-emerald-500 py-3.5 font-display text-sm font-bold text-white transition hover:bg-emerald-400 disabled:opacity-50">
               Criar Campeonato
             </button>
@@ -448,6 +523,8 @@ function SalaCampeonato({
   onJogar,
   erro,
   toastLink,
+  onPreencherBots,
+  preenchendoBots,
 }: {
   camp: CampeonatoTrilha;
   userId: string;
@@ -458,9 +535,13 @@ function SalaCampeonato({
   onJogar: (tipo: "grupo" | "elim", j1: string, j2: string, grupoIdx?: number, elimIdx?: number) => void;
   erro: string | null;
   toastLink: string | null;
+  onPreencherBots?: () => void;
+  preenchendoBots?: boolean;
 }) {
   const isCriador = camp.criador_id === userId;
   const emGrupo = (uid: string) => camp.grupos.find((g) => g.participantes.includes(uid));
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
@@ -501,13 +582,14 @@ function SalaCampeonato({
               <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-white/30 font-bold">Jogadores ({camp.participantes.length})</p>
               <div className="grid grid-cols-2 gap-2">
                 {camp.participantes.map((p) => (
-                  <div key={p.user_id} className={`flex items-center gap-3 rounded-xl border p-3 ${p.user_id === camp.criador_id ? "border-amber-500/30 bg-amber-500/5" : "border-white/10 bg-white/[0.02]"}`}>
-                    <div className={`flex size-8 items-center justify-center rounded-lg text-xs ${p.user_id === camp.criador_id ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/15 text-emerald-400"}`}>
-                      {p.user_id === camp.criador_id ? <Crown className="size-3.5" /> : <Users className="size-3.5" />}
+                  <div key={p.user_id} className={`flex items-center gap-3 rounded-xl border p-3 ${p.user_id === camp.criador_id ? "border-amber-500/30 bg-amber-500/5" : p.bot ? "border-sky-500/15 bg-sky-500/5" : "border-white/10 bg-white/[0.02]"}`}>
+                    <div className={`flex size-8 items-center justify-center rounded-lg text-xs ${p.user_id === camp.criador_id ? "bg-amber-500/15 text-amber-400" : p.bot ? "bg-sky-500/15 text-sky-400" : "bg-emerald-500/15 text-emerald-400"}`}>
+                      {p.user_id === camp.criador_id ? <Crown className="size-3.5" /> : p.bot ? <Bot className="size-3.5" /> : <Users className="size-3.5" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-white">{p.nome}</p>
                       {p.user_id === camp.criador_id && <span className="text-[9px] text-amber-400/60">host</span>}
+                      {p.bot && <span className="text-[9px] text-sky-400/60">robot</span>}
                     </div>
                   </div>
                 ))}
@@ -523,6 +605,19 @@ function SalaCampeonato({
               <button onClick={onCopiarLink} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300 transition hover:border-emerald-500/40">
                 <Link2 className="size-4" /> Convidar
               </button>
+              {isCriador && (
+                <button
+                  onClick={() => {
+                    if (!camp) return;
+                    const maxJ = camp.participantes.length >= 32 ? 32 : camp.participantes.length >= 16 ? 16 : camp.participantes.length >= 12 ? 12 : 8;
+                    if (onPreencherBots) onPreencherBots();
+                  }}
+                  disabled={preenchendoBots}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-bold text-sky-300 transition hover:border-sky-500/30 disabled:opacity-50"
+                >
+                  <Bot className="size-4" /> {preenchendoBots ? "Preenchendo..." : "Preencher com Robots"}
+                </button>
+              )}
               {isCriador && camp.participantes.length >= 2 && (
                 <button onClick={onIniciar} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-500 hover:to-emerald-400">
                   <Play className="size-4" /> INICIAR

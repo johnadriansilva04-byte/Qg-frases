@@ -17,6 +17,7 @@ export type FormatoTrilha = "pontos" | "grupos";
 export type ParticipanteTrilha = {
   user_id: string;
   nome: string;
+  bot?: boolean;
 };
 
 export type ResultadoPartida = {
@@ -98,6 +99,91 @@ export function criarCampeonatoTrilha(
     rodadaAtual: 0,
     vencedor_id: null,
   };
+}
+
+// ─────────────────── robots ──────────────────────────────────
+
+/** Nomes de robots disponíveis para preencher vagas. */
+const BOT_NAMES = [
+  "TrilhaBot Alpha",
+  "TrilhaBot Beta",
+  "TrilhaBot Gamma",
+  "TrilhaBot Delta",
+  "TrilhaBot Epsilon",
+  "TrilhaBot Zeta",
+  "TrilhaBot Eta",
+  "TrilhaBot Theta",
+  "TrilhaBot Iota",
+  "TrilhaBot Kappa",
+  "TrilhaBot Lambda",
+  "TrilhaBot Mu",
+  "TrilhaBot Nu",
+  "TrilhaBot Xi",
+  "TrilhaBot Omicron",
+  "TrilhaBot Pi",
+  "TrilhaBot Rho",
+  "TrilhaBot Sigma",
+  "TrilhaBot Tau",
+  "TrilhaBot Upsilon",
+  "TrilhaBot Phi",
+  "TrilhaBot Chi",
+  "TrilhaBot Psi",
+  "TrilhaBot Omega",
+  "TrilhaBot Astra",
+  "TrilhaBot Nova",
+  "TrilhaBot Blaze",
+  "TrilhaBot Storm",
+  "TrilhaBot Frost",
+  "TrilhaBot Shadow",
+  "TrilhaBot Phantom",
+  "TrilhaBot Vector",
+];
+
+/** Preenche vagas vazias com robots. */
+export function preencherComRobots(
+  camp: CampeonatoTrilha,
+  maxJogadores: number,
+): CampeonatoTrilha {
+  if (camp.status !== "aguardando") throw new Error("Só é possível preencher antes de iniciar.");
+  const botsExistentes = camp.participantes.filter((p) => p.bot).length;
+  const vagas = maxJogadores - camp.participantes.length;
+  if (vagas <= 0) return camp;
+
+  const novosBots: ParticipanteTrilha[] = [];
+  for (let i = 0; i < vagas; i++) {
+    const nomeBot = BOT_NAMES[botsExistentes + i] ?? `Robot ${botsExistentes + i + 1}`;
+    novosBots.push({
+      user_id: `bot-${camp.id}-${botsExistentes + i}`,
+      nome: nomeBot,
+      bot: true,
+    });
+  }
+
+  return {
+    ...camp,
+    participantes: [...camp.participantes, ...novosBots],
+  };
+}
+
+/** Simula um confronto entre dois robots. Retorna vencedor_id (null = empate). */
+export function simularConfrontoBots(
+  j1_id: string,
+  j2_id: string,
+): { vencedor_id: string | null } {
+  // Simulação determinística baseada no hash do ID
+  const hash1 = j1_id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const hash2 = j2_id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const total = hash1 + hash2;
+  const rand = ((hash1 * 31 + hash2 * 17) % 100) / 100;
+  
+  if (rand < 0.45) return { vencedor_id: j1_id };
+  if (rand < 0.90) return { vencedor_id: j2_id };
+  return { vencedor_id: null }; // empate
+}
+
+/** Verifica se um user_id é um robot. */
+export function isRobot(userId: string): boolean {
+  return userId.startsWith("bot-");
 }
 
 export function entrarCampeonatoTrilha(

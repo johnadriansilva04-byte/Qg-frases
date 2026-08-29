@@ -30,7 +30,7 @@ interface Mesa {
   jogador_2_id?: string | null;
 }
 
-type Formato = "normal" | "eliminacao";
+type Formato = "normal";
 
 interface TrilhaOnlineLobbyProps {
   onBack?: (() => void) | undefined;
@@ -43,8 +43,6 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
   const [criandoMesa, setCriandoMesa] = useState(false);
   const [entrandoMesa, setEntrandoMesa] = useState<string | null>(null);
   const [nomeSala, setNomeSala] = useState("");
-  const [formato, setFormato] = useState<Formato>("normal");
-  const [comRobot, setComRobot] = useState(false);
   const [mesaAtual, setMesaAtual] = useState<string | null>(null);
   const [supabaseNotConfigured, setSupabaseNotConfigured] = useState(false);
   const [toastLink, setToastLink] = useState<string | null>(null);
@@ -124,7 +122,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
     try {
       const { data, error } = await supabase.rpc("criar_mesa_trilha", {
         p_nome: nomeSala.trim() || null,
-        p_formato: formato,
+        p_formato: "normal" as Formato,
         p_dificuldade: "recruta",
       });
       if (error) throw error;
@@ -273,7 +271,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
               </div>
               <div className="flex items-center gap-4 text-[10px] text-white/25">
                 <span className="flex items-center gap-1"><Zap className="size-3" /> Tempo real</span>
-                <span className="flex items-center gap-1"><Bot className="size-3" /> Com robot</span>
+                <span className="flex items-center gap-1"><Users className="size-3" /> 1×1</span>
               </div>
             </div>
           </button>
@@ -293,12 +291,12 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                 </div>
                 <div>
                   <p className="font-display text-base font-black text-white">Campeonato</p>
-                  <p className="text-[10px] text-white/30">Pontos Corridos ou Eliminatórias</p>
+                  <p className="text-[10px] text-white/30">8 · 12 · 16 · 32 jogadores</p>
                 </div>
               </div>
               <div className="flex items-center gap-4 text-[10px] text-white/25">
-                <span className="flex items-center gap-1"><Crown className="size-3" /> Bracket</span>
-                <span className="flex items-center gap-1"><Target className="size-3" /> Grupos</span>
+                <span className="flex items-center gap-1"><Crown className="size-3" /> Grupos</span>
+                <span className="flex items-center gap-1"><Bot className="size-3" /> Preencher com Robots</span>
               </div>
             </div>
           </button>
@@ -333,59 +331,12 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                   />
                 </div>
 
-                <div>
-                  <label className="mb-1.5 block text-[10px] uppercase tracking-widest text-white/30 font-bold">
-                    Formato
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setFormato("normal")}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition-all ${
-                        formato === "normal"
-                          ? "border-purple-500/40 bg-purple-500/10 text-purple-300"
-                          : "border-white/10 bg-white/[0.02] text-white/40 hover:border-white/20 hover:text-white/60"
-                      }`}
-                    >
-                      <Swords className="size-3.5" /> Mesa 1×1
-                    </button>
-                    <button
-                      onClick={() => setFormato("eliminacao")}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition-all ${
-                        formato === "eliminacao"
-                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                          : "border-white/10 bg-white/[0.02] text-white/40 hover:border-white/20 hover:text-white/60"
-                      }`}
-                    >
-                      <Crown className="size-3.5" /> Eliminação
-                    </button>
+                <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Swords className="size-4 text-purple-400" />
+                    <span className="text-xs font-bold text-purple-300">Mesa 1×1</span>
                   </div>
-                </div>
-
-                {/* Robot Fill Toggle */}
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
-                      comRobot ? "bg-amber-500/15" : "bg-white/5"
-                    }`}>
-                      <Bot className={`size-4 transition-colors ${comRobot ? "text-amber-400" : "text-white/30"}`} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-white">Jogar contra Robot</p>
-                      <p className="text-[10px] text-white/25">IA local enquanto espera adversário</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setComRobot(!comRobot)}
-                    className={`relative h-6 w-11 rounded-full transition-colors ${
-                      comRobot ? "bg-amber-500" : "bg-white/10"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
-                        comRobot ? "left-[22px]" : "left-0.5"
-                      }`}
-                    />
-                  </button>
+                  <p className="mt-1 text-[10px] text-white/25">Partida rápida contra um adversário</p>
                 </div>
 
                 <button
@@ -438,7 +389,6 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
               ) : (
                 <div className="space-y-2">
                   {mesas.map((mesa) => {
-                    const ehElim = (mesa.formato ?? "normal") === "eliminacao";
                     const temJogador2 = !!mesa.jogador_2_id;
                     return (
                       <div
@@ -446,19 +396,15 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                         className={`group flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5 transition-all ${
                           temJogador2
                             ? "border-emerald-500/30 bg-emerald-500/[0.04]"
-                            : ehElim
-                              ? "border-amber-500/20 bg-amber-500/[0.03] hover:border-amber-500/40"
-                              : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
+                            : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`rounded-lg p-2 ${
-                            temJogador2 ? "bg-emerald-500/15" : ehElim ? "bg-amber-500/15" : "bg-purple-500/15"
+                            temJogador2 ? "bg-emerald-500/15" : "bg-purple-500/15"
                           }`}>
                             {temJogador2 ? (
                               <Wifi className="h-4 w-4 text-emerald-400" />
-                            ) : ehElim ? (
-                              <Crown className="h-4 w-4 text-amber-400" />
                             ) : (
                               <Target className="h-4 w-4 text-purple-400" />
                             )}
@@ -468,7 +414,7 @@ export function TrilhaOnlineLobby({ onBack, mesaInicial }: TrilhaOnlineLobbyProp
                               {mesa.nome_sala?.trim() || `Mesa de ${mesa.jogador_1_id.slice(0, 6)}`}
                             </h3>
                             <p className="text-[10px] text-white/30">
-                              {ehElim ? "Eliminatório" : "PvP 1×1"} · {formatarTempo(mesa.criado_em)}
+                              PvP 1×1 · {formatarTempo(mesa.criado_em)}
                               {temJogador2 && <span className="ml-1 text-emerald-400/60">· Em jogo</span>}
                             </p>
                           </div>
