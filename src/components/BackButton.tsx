@@ -35,7 +35,6 @@ export function BackButton({ to, label }: BackButtonProps) {
   }, []);
 
   // Determina se um jogo/módulo está ativo no sessionStorage
-  // (botao, trilha, campus, comercial, laboratorio)
   const isGameActive = (() => {
     try {
       const salvo = window.sessionStorage.getItem("cidadela:jogo-ativo:v1");
@@ -45,36 +44,20 @@ export function BackButton({ to, label }: BackButtonProps) {
     }
   })();
 
-  // NÃO renderiza na página raiz
-  if (pathname === "/") return null;
+  // Determina o destino correto
+  const destination = (() => {
+    if (to) return to;
+    if (pathname.startsWith("/cidadela") && isGameActive) return "/cidadela";
+    if (pathname.startsWith("/cidadela")) return "/";
+    return "/";
+  })();
 
   const handleBack = useCallback(() => {
-    if (to) {
-      navigate({ to });
-      return;
-    }
-    // Na Cidadela (ou sub-rotas):
-    if (pathname.startsWith("/cidadela")) {
-      if (isGameActive) {
-        // Jogo ativo → volta para o hub (não para home)
-        navigate({ to: "/cidadela" });
-      } else {
-        // No hub → volta para home
-        navigate({ to: "/" });
-      }
-    } else {
-      // Qualquer outra rota interna → volta para home
-      navigate({ to: "/" });
-    }
-  }, [navigate, to, pathname, isGameActive]);
+    navigate({ to: destination });
+  }, [navigate, destination]);
 
-  const destination = to
-    ? to
-    : pathname.startsWith("/cidadela") && !isGameActive
-      ? "/"
-      : pathname.startsWith("/cidadela")
-        ? "/cidadela"
-        : "/";
+  // NÃO renderiza na página raiz
+  if (pathname === "/") return null;
 
   const content = (
     <span className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3.5 py-2 text-sm font-semibold text-foreground shadow-lg backdrop-blur-sm transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-xl active:scale-95">
@@ -89,7 +72,6 @@ export function BackButton({ to, label }: BackButtonProps) {
       className="fixed left-3 top-3 z-[80]"
       aria-label="Voltar"
       onClick={(e) => {
-        // Prevenir navegação padrão do Link e usar navigate para controle total
         e.preventDefault();
         handleBack();
       }}
