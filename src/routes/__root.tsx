@@ -9,6 +9,9 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { AuthProvider, useAuth } from "../components/auth/AuthProvider";
+import { AuthModal } from "../components/auth/AuthModal";
+import { UserMenu } from "../components/auth/UserMenu";
 
 import appCss from "../styles.css?url";
 import { CookieBanner } from "../components/CookieBanner";
@@ -169,11 +172,30 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <AuthShell />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
 
+function AuthShell() {
+  const { tipoModal, fecharLogin, aplicarPerfilGlobal, perfil } = useAuth();
+  return (
+    <>
+      <Outlet />
+      <UserMenu />
+      <AuthModal
+        tipo={tipoModal}
+        onFechar={fecharLogin}
+        onLogin={(p) => {
+          if (p) aplicarPerfilGlobal(p);
+          else fecharLogin();
+        }}
+        perfil={perfil}
+      />
       <CookieBanner />
       <SponsorNotice />
-    </QueryClientProvider>
+    </>
   );
 }
