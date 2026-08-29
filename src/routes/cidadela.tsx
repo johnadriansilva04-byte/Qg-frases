@@ -158,10 +158,20 @@ function CidadelaCompView() {
   // Sessão ativa da ABA: o jogo aberto (Estádio/Trilha) sobrevive a F5 via
   // sessionStorage (por aba) — uma aba/login novo sempre entra com estado
   // limpo. Chave antiga em localStorage é removida de vez.
+  // Quando ?hub=1 está na URL (volta do BackButton), força o hub — limpa
+  // o sessionStorage e não restaura nenhum jogo ativo.
   const JOGO_ATIVO_KEY = "cidadela:jogo-ativo:v1";
   useEffect(() => {
     window.localStorage.removeItem("cidadela_active_game");
     try {
+      // Se voltou pelo BackButton (?hub=1), limpa estado e mostra hub
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("hub") === "1") {
+        window.sessionStorage.removeItem(JOGO_ATIVO_KEY);
+        // Limpa o param da URL sem reload
+        window.history.replaceState({}, "", "/cidadela");
+        return;
+      }
       const salvo = window.sessionStorage.getItem(JOGO_ATIVO_KEY);
       if (salvo === "botao" || salvo === "trilha") setActiveGame(salvo);
     } catch {
