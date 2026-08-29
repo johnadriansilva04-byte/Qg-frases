@@ -141,7 +141,7 @@ import {
   venderAtivoInvest,
   pagarDividendoInvest,
 } from "@/lib/financial/sovInvestApi";
-import { atualizarPerfilClube } from "@/lib/botao/api";
+import { atualizarPerfilClube, carregarTourVisitados, marcarTourVisitado } from "@/lib/botao/api";
 import {
   aplicarRitualNaCarreira,
   consumirRitualPendente,
@@ -321,6 +321,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   const [allTeams, setAllTeams] = useState<Team[]>(TEAMS);
   const [emPartidaOnline, setEmPartidaOnline] = useState(false);
   const [tour, setTour] = useState<Tournament | null>(() => loadTournament());
+  const [tourVisitados, setTourVisitados] = useState<string[]>([]);
   const [career, setCareer] = useState<CareerState | null>(() => {
     const c = loadCareer();
     return c ? garantirContatosRpg(c) : c;
@@ -766,6 +767,14 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
     void duracao;
   };
 
+  /** Marca um módulo como visitado pelo Pracinha (Supabase + local state). */
+  const handleMarcarTourVisitado = useCallback((modulo: string) => {
+    setTourVisitados((prev) => prev.includes(modulo) ? prev : [...prev, modulo]);
+    if (perfil?.user_id) {
+      void marcarTourVisitado(perfil.user_id, modulo);
+    }
+  }, [perfil?.user_id]);
+
   const persist = (p: Progress) => {
     setProgress(p);
     saveProgress(p);
@@ -913,6 +922,8 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
 
         setTour(torneioAtivo);
         setCareer(careerHidratada);
+        // Carrega módulos visitados pelo Pracinha (tour onboarding)
+        carregarTourVisitados(userId).then(setTourVisitados).catch(() => {});
         // F5 no fim da temporada: o veredito é DERIVADO das ligas concluídas
         // (idempotente — após iniciar a nova temporada as ligas nascem zeradas
         // e a condição fica falsa). Sem isso, o refresh deixava a carreira
@@ -3946,7 +3957,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "online") {
     return (
       <Shell>
-        <PracinhaGuide modulo="amistoso-online" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+        <PracinhaGuide modulo="amistoso-online" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -3992,7 +4003,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "online-championship") {
     return (
       <Shell>
-        <PracinhaGuide modulo="campeonato-online" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+        <PracinhaGuide modulo="campeonato-online" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -4038,7 +4049,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "profile") {
     return (
       <Shell>
-        <PracinhaGuide modulo="clube" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+        <PracinhaGuide modulo="clube" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
         <div className="mx-auto w-full max-w-5xl px-4 pb-16">
           <Header
             progress={progress}
@@ -4070,7 +4081,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
   if (screen === "career-menu") {
     return (
       <Shell>
-        <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+        <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
         {/* O veredito de fim de temporada também cobre o menu da carreira —
             sem isso, quem navegava para cá após a última partida perdia a
             tela de encerramento (ela só renderizava sobre o hub). */}
@@ -4380,13 +4391,13 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
               onSaveCampaign={handleSaveCampaign}
               {...(onBack ? { onBack } : {})}
             />
-            <PracinhaGuide modulo="futebol" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+            <PracinhaGuide modulo="futebol" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
           </>
         )}
 
         {screen === "friendly-setup" && (
           <>
-            <PracinhaGuide modulo="amistoso" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+            <PracinhaGuide modulo="amistoso" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
             <Setup
             title="Amistoso"
             subtitle="Seu time personalizado vs adversário. Escolha o nível e o oponente."
@@ -4405,7 +4416,7 @@ export function BotaoGame({ onBack, mesaConviteInicial, campCodigoInicial, initi
 
         {screen === "hub" && tour && (
           <>
-            <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} contaExistente={!!career?.coach.nome} />
+            <PracinhaGuide modulo="carreira" userId={perfil?.user_id ?? null} visitados={tourVisitados} onMarcarVisitado={handleMarcarTourVisitado} />
             <CareerHub
             tour={tour}
             userTeam={userTeam}
