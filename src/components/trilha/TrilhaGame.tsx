@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2, Swords, Crown, ChevronRight, Zap } from "lucide-react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { ArrowLeft, Trophy, Target, BookOpen, X, Award, Users, Gamepad2 } from "lucide-react";
 import { marcarRitualPendente } from "@/components/botao/career/trilhaIntegracao";
 import { HQPanel } from "./HQPanel";
 import { TrilhaBoard } from "./TrilhaBoard";
@@ -23,79 +23,89 @@ interface TrilhaGameProps {
   mesaInicial?: string;
 }
 
-type ViewMode = "menu" | "amistoso" | "campeonato" | "online";
-
 export function TrilhaGame({ onBack, mesaInicial }: TrilhaGameProps = {}) {
   const [seed, setSeed] = useState(0);
-  const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem(TUTORIAL_KEY));
+  const [showTutorial, setShowTutorial] = useState(() => {
+    const seen = localStorage.getItem(TUTORIAL_KEY);
+    return !seen;
+  });
   const [showRules, setShowRules] = useState(false);
   const [showTrophies, setShowTrophies] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("menu");
+  const [showModeSelection, setShowModeSelection] = useState(true);
+  const [gameMode, setGameMode] = useState<"career" | "online" | null>(null);
   const [loading, setLoading] = useState(false);
-  const [champDifficulty, setChampDifficulty] = useState<Difficulty>("recruta");
   const phases = useTrilhaPhases();
   const currentPhaseConfig = phases.getCurrentPhaseConfig();
   const { markFirstGamePlayed } = useAdManager("/trilha");
 
   useEffect(() => {
-    if (!phases.progress.started) phases.startPhases();
+    if (!phases.progress.started) {
+      phases.startPhases();
+    }
   }, [phases]);
 
-  useEffect(() => {
-    if (currentPhaseConfig) setChampDifficulty(currentPhaseConfig.difficulty as Difficulty);
-  }, [currentPhaseConfig]);
+  const difficulty = (currentPhaseConfig?.difficulty || "recruta") as Difficulty;
 
-  const handleStartTutorial = () => { localStorage.setItem(TUTORIAL_KEY, "true"); setShowTutorial(false); };
-  const handleShowRules = () => { setShowTutorial(false); setShowRules(true); };
-  const handleCloseRules = () => { setShowRules(false); localStorage.setItem(TUTORIAL_KEY, "true"); };
-
-  const handleSelectAmistoso = () => {
-    setLoading(true);
-    setTimeout(() => { setViewMode("amistoso"); setLoading(false); }, 1500);
+  const handleStartGame = () => {
+    localStorage.setItem(TUTORIAL_KEY, "true");
+    setShowTutorial(false);
   };
 
-  const handleSelectCampeonato = () => {
-    setLoading(true);
-    setTimeout(() => { setViewMode("campeonato"); setLoading(false); }, 1500);
+  const handleShowRules = () => {
+    setShowTutorial(false);
+    setShowRules(true);
   };
 
-  const handleSelectOnline = () => setViewMode("online");
-  const handleBackToMenu = () => setViewMode("menu");
+  const handleCloseRules = () => {
+    setShowRules(false);
+    localStorage.setItem(TUTORIAL_KEY, "true");
+  };
 
-  if (viewMode === "online") return <TrilhaOnlineLobby onBack={handleBackToMenu} mesaInicial={mesaInicial ?? undefined} />;
+  const handleSelectCareerMode = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setGameMode("career");
+      setShowModeSelection(false);
+      setLoading(false);
+    }, 2000);
+  };
 
-  if (loading) return <TrilhaLoadingScreen onCompleto={() => {}} />;
+  const handleSelectOnlineMode = () => {
+    setGameMode("online");
+    setShowModeSelection(false);
+  };
+
+  const handleBackToModeSelection = () => {
+    setGameMode(null);
+    setShowModeSelection(true);
+  };
+
+  if (gameMode === "online") {
+    return <TrilhaOnlineLobby onBack={handleBackToModeSelection} mesaInicial={mesaInicial ?? undefined} />;
+  }
+
+  if (loading) {
+    return <TrilhaLoadingScreen onCompleto={() => {}} />;
+  }
 
   return (
     <>
-      {showTutorial && <TutorialModal onStart={handleStartTutorial} onShowRules={handleShowRules} />}
+      {showTutorial && <TutorialModal onStart={handleStartGame} onShowRules={handleShowRules} />}
       {showRules && <RulesModal onClose={handleCloseRules} />}
       {showTrophies && <TrophiesModal onClose={() => setShowTrophies(false)} phases={phases} />}
-
-      {viewMode === "menu" && (
+      {showModeSelection && (
         <ModeSelection
           onBack={onBack}
-          onSelectAmistoso={handleSelectAmistoso}
-          onSelectCampeonato={handleSelectCampeonato}
-          onSelectOnline={handleSelectOnline}
-          onShowRules={() => setShowRules(true)}
+          onSelectCareer={handleSelectCareerMode}
+          onSelectOnline={handleSelectOnlineMode}
         />
       )}
-
-      {viewMode === "amistoso" && (
-        <AmistosoBoard
-          key={`amistoso-${seed}`}
-          onReset={() => setSeed(s => s + 1)}
-          onBack={handleBackToMenu}
-        />
-      )}
-
-      {viewMode === "campeonato" && (
-        <CampeonatoBoard
-          key={`champ-${champDifficulty}-${seed}`}
-          difficulty={champDifficulty}
-          onReset={() => setSeed(s => s + 1)}
-          onBack={handleBackToMenu}
+      {!showModeSelection && gameMode === "career" && (
+        <TrilhaGameBoard
+          key={`${difficulty}-${seed}`}
+          difficulty={difficulty}
+          onReset={() => setSeed((s) => s + 1)}
+          onBack={handleBackToModeSelection}
           phases={phases}
           currentPhaseConfig={currentPhaseConfig}
           onShowTrophies={() => setShowTrophies(true)}
@@ -107,21 +117,9 @@ export function TrilhaGame({ onBack, mesaInicial }: TrilhaGameProps = {}) {
 
 /* ───────────── Mode Selection ───────────── */
 
-function ModeSelection({ onBack, onSelectAmistoso, onSelectCampeonato, onSelectOnline, onShowRules }: {
-  onBack?: (() => void) | undefined;
-  onSelectAmistoso: () => void;
-  onSelectCampeonato: () => void;
-  onSelectOnline: () => void;
-  onShowRules: () => void;
-}) {
+function ModeSelection({ onBack, onSelectCareer, onSelectOnline }: { onBack: (() => void) | undefined; onSelectCareer: () => void; onSelectOnline: () => void }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
-      {/* Ambient glow */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute top-[-20%] left-[10%] w-[500px] h-[500px] rounded-full bg-emerald-500/[0.03] blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[15%] w-[400px] h-[400px] rounded-full bg-blue-500/[0.03] blur-[100px]" />
-      </div>
-
       <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-3">
           <div>
@@ -139,88 +137,69 @@ function ModeSelection({ onBack, onSelectAmistoso, onSelectCampeonato, onSelectO
         )}
       </header>
 
-      <main className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:py-16">
-        {/* Hero */}
-        <div className="text-center mb-12">
+      <main className="relative z-10 mx-auto max-w-4xl px-4 py-8 sm:py-12">
+        <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-5 shadow-lg shadow-emerald-500/5">
             <Target className="h-8 w-8 text-emerald-400" />
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-black text-white mb-3 tracking-tight">
-            Campo de Batalha
-          </h1>
-          <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-            Nine Men's Morris — 9 peças, 24 interseções, 16 trilhas.
-            <br />
-            <span className="text-slate-500">Forme trilhas. Capture tropas. Domine o campo.</span>
-          </p>
+          <h1 className="font-display text-3xl sm:text-4xl font-black text-white mb-3 tracking-tight">Escolha o Modo de Jogo</h1>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">Selecione como você quer jogar Trilha</p>
         </div>
 
-        {/* Mode cards */}
-        <div className="space-y-4 max-w-xl mx-auto">
-          {/* Amistoso */}
+        <div className="grid gap-5 md:grid-cols-2 max-w-2xl mx-auto">
+          {/* Modo Carreira */}
           <button
-            onClick={onSelectAmistoso}
-            className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-5 sm:p-6 text-left transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_rgba(16,185,129,0.06)] active:scale-[0.99]"
+            onClick={onSelectCareer}
+            className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-6 text-left transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_rgba(16,185,129,0.06)] active:scale-[0.98]"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative z-10 flex items-center gap-5">
-              <div className="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
-                <Swords className="h-7 w-7 text-emerald-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-display text-lg font-black text-white tracking-wide">Amistoso</h3>
-                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Partida rápida 1v1 contra a IA. Treine estratégias sem pressão.</p>
-              </div>
-              <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all shrink-0" />
-            </div>
-          </button>
-
-          {/* Campeonato */}
-          <button
-            onClick={onSelectCampeonato}
-            className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-5 sm:p-6 text-left transition-all duration-300 hover:border-blue-500/30 hover:shadow-[0_0_40px_rgba(59,130,246,0.06)] active:scale-[0.99]"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative z-10 flex items-center gap-5">
-              <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
-                <Trophy className="h-7 w-7 text-blue-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-display text-lg font-black text-white tracking-wide">Campeonato</h3>
-                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Fases progressivas com IA. Do Recruta ao General — torne-se Mestre da Trilha.</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-[10px] font-bold text-blue-400/80 bg-blue-500/10 px-2 py-0.5 rounded">3 Fases</span>
-                  <span className="text-[10px] font-bold text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded">Troféus</span>
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <Trophy className="h-6 w-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-black text-white tracking-wide">Modo Carreira</h3>
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-emerald-400/70 font-bold">Offline · IA</p>
                 </div>
               </div>
-              <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all shrink-0" />
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Jogue contra a IA e avance pelas fases do campeonato. Complete todos os níveis para se tornar o Mestre da Trilha!
+              </p>
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                <Gamepad2 className="h-3.5 w-3.5" />
+                <span>Sistema de Fases e Troféus</span>
+              </div>
             </div>
           </button>
 
-          {/* Online */}
+          {/* Modo Online */}
           <button
             onClick={onSelectOnline}
-            className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-5 sm:p-6 text-left transition-all duration-300 hover:border-purple-500/30 hover:shadow-[0_0_40px_rgba(168,85,247,0.06)] active:scale-[0.99]"
+            className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] to-transparent p-6 text-left transition-all duration-300 hover:border-purple-500/30 hover:shadow-[0_0_40px_rgba(168,85,247,0.06)] active:scale-[0.98]"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative z-10 flex items-center gap-5">
-              <div className="w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
-                <Users className="h-7 w-7 text-purple-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-display text-lg font-black text-white tracking-wide">Online</h3>
-                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Desafie outros jogadores em tempo real. Crie mesas e compartilhe o link.</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-[10px] font-bold text-purple-400/80 bg-purple-500/10 px-2 py-0.5 rounded">1v1</span>
-                  <span className="text-[10px] font-bold text-purple-400/80 bg-purple-500/10 px-2 py-0.5 rounded">Tempo Real</span>
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <Users className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-black text-white tracking-wide">Modo Online</h3>
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-purple-400/70 font-bold">Multijogador</p>
                 </div>
               </div>
-              <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-purple-400 group-hover:translate-x-1 transition-all shrink-0" />
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Jogue contra outros jogadores em tempo real. Crie mesas ou entre em partidas já existentes.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-bold text-purple-400">
+                <Users className="h-3.5 w-3.5" />
+                <span>Jogue contra oponentes reais</span>
+              </div>
             </div>
           </button>
         </div>
 
-        {/* Rules hint */}
         <div className="mt-10 text-center">
           <p className="text-[11px] text-slate-600">
             9 peças por jogador · 24 interseções · 16 trilhas · Derrote reduzindo a 2 peças
@@ -231,146 +210,15 @@ function ModeSelection({ onBack, onSelectAmistoso, onSelectCampeonato, onSelectO
   );
 }
 
-/* ───────────── Amistoso (Friendly) ───────────── */
+/* ───────────── TrilhaGameBoard (Modo Carreira) ───────────── */
 
-function AmistosoBoard({ onReset, onBack }: { onReset: () => void; onBack?: () => void }) {
-  const game = useLocalGame("recruta", 1);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [gameEnded, setGameEnded] = useState(false);
-  const [showAdModal, setShowAdModal] = useState(false);
-  const [finalScore, setFinalScore] = useState(0);
-  const [gameResult, setGameResult] = useState<"victory" | "defeat" | "draw">("victory");
-  const { markFirstGamePlayed } = useAdManager("/trilha");
-
-  useEffect(() => {
-    if (game.state.phase === "over" && !gameEnded && game.state.winner) {
-      const result = game.state.winner === 1 ? "victory" : "defeat";
-      const score = getTrilhaScore("recruta", result);
-      addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty: "recruta", result, score });
-      markFirstGamePlayed();
-      marcarRitualPendente(result === "victory" ? "vitoria" : "derrota");
-      setFinalScore(score);
-      setGameResult(result);
-      setShowAdModal(true);
-      setGameEnded(true);
-    }
-    if (game.state.phase !== "over") setGameEnded(false);
-  }, [game.state.phase, game.state.winner, gameEnded, markFirstGamePlayed]);
-
-  const targets = useMemo(() => {
-    if (game.state.phase === "placing") return new Set(legalPlacements(game.state));
-    if (selected !== null) return new Set(legalDestinations(game.state, selected));
-    return new Set<number>();
-  }, [game.state, selected]);
-
-  const captureTargets = useMemo(() => new Set(game.captureTargets), [game.captureTargets]);
-
-  const handleNodeClick = useCallback((node: number) => {
-    if (game.thinking || game.state.phase === "over") return;
-    if (game.pendingCapture) {
-      if (captureTargets.has(node)) {
-        game.commit({ from: game.lastMove?.from ?? null, to: game.lastMove?.to ?? 0, remove: node });
-      }
-      return;
-    }
-    if (game.state.phase === "placing") {
-      if (targets.has(node)) game.commit({ from: null, to: node, remove: null });
-      return;
-    }
-    if (game.state.turn === 1) {
-      if (selected === null) {
-        if (game.state.board[node] === 1) setSelected(node);
-      } else {
-        if (node === selected) setSelected(null);
-        else if (targets.has(node)) { game.commit({ from: selected, to: node, remove: null }); setSelected(null); }
-        else if (game.state.board[node] === 1) setSelected(node);
-      }
-    }
-  }, [game, selected, targets, captureTargets]);
-
-  const status = useMemo(() => {
-    const s = game.state;
-    if (s.phase === "over") {
-      if (s.winner === 1) return "🏆 Vitória! O inimigo foi neutralizado.";
-      if (s.reason === "blockade") return "💀 Derrota — suas tropas ficaram cercadas.";
-      return "💀 Derrota — tropa reduzida abaixo do mínimo.";
-    }
-    if (game.pendingCapture) return "⚡ TRILHA FECHADA! Selecione a peça inimiga a neutralizar.";
-    if (game.thinking) return "⏳ Inimigo calcula...";
-    if (s.turn !== 1) return "Aguardando oponente.";
-    if (s.phase === "placing") return `📍 Desdobre uma peça. Reserva: ${s.hand[1]}.`;
-    if (canFly(s, 1)) return "✈️ Voo livre: salte para qualquer interseção.";
-    if (selected === null) return "🎯 Selecione uma peça para manobrar.";
-    return "➡️ Escolha o destino adjacente.";
-  }, [game.state, game.thinking, game.pendingCapture, selected]);
-
-  const handleWatchVideo = async (): Promise<boolean> => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        let newScore = finalScore;
-        if (gameResult === "victory") newScore = finalScore * 2;
-        else if (gameResult === "defeat") newScore = finalScore + 2;
-        addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty: "recruta", result: gameResult, score: newScore });
-        resolve(true);
-      }, 1000);
-    });
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
-      <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
-              AMISTOSO
-            </h2>
-            <p className="text-[10px] uppercase tracking-[0.25em] text-emerald-500/70 font-bold">Partida Rápida</p>
-          </div>
-        </div>
-        <button onClick={onBack} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Menu</span>
-        </button>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="flex gap-6 items-start flex-col lg:flex-row">
-          <div className="flex flex-1 flex-col items-center w-full">
-            <TrilhaBoard
-              state={game.state}
-              perspective={1}
-              selected={selected}
-              targets={targets}
-              captureTargets={captureTargets}
-              lastMove={game.lastMove}
-              interactive={!game.thinking}
-              onNodeClick={handleNodeClick}
-            />
-          </div>
-          <HQPanel
-            state={game.state}
-            myPlayer={1}
-            p1={{ name: "Pracinhas da FEB", slot: 1, subtitle: "Você" }}
-            p2={{ name: "Comando Inimigo", slot: 2, subtitle: "Recruta" }}
-            status={status}
-            log={game.log}
-            awaitingCapture={game.pendingCapture}
-            onRestart={onReset}
-            onResign={game.resign}
-          />
-        </div>
-      </main>
-
-      <GameEndAdModal isOpen={showAdModal} result={gameResult} baseScore={finalScore} onWatchVideo={handleWatchVideo} onClose={() => setShowAdModal(false)} />
-      {gameEnded && !showAdModal && <MatchEndAdCard />}
-    </div>
-  );
-}
-
-/* ───────────── Campeonato (Championship) ───────────── */
-
-function CampeonatoBoard({
-  difficulty, onReset, onBack, phases, currentPhaseConfig, onShowTrophies,
+function TrilhaGameBoard({
+  difficulty,
+  onReset,
+  onBack,
+  phases,
+  currentPhaseConfig,
+  onShowTrophies,
 }: {
   difficulty: Difficulty;
   onReset: () => void;
@@ -380,13 +228,14 @@ function CampeonatoBoard({
   onShowTrophies: () => void;
 }) {
   const game = useLocalGame(difficulty, 1);
+  const { markFirstGamePlayed } = useAdManager("/trilha");
+
   const [selected, setSelected] = useState<number | null>(null);
   const [gameEnded, setGameEnded] = useState(false);
   const [showAdModal, setShowAdModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
   const [gameResult, setGameResult] = useState<"victory" | "defeat" | "draw">("victory");
   const [showVictoryScreen, setShowVictoryScreen] = useState(false);
-  const { markFirstGamePlayed } = useAdManager("/trilha");
 
   useEffect(() => {
     if (game.state.phase === "over" && !gameEnded && game.state.winner) {
@@ -398,8 +247,13 @@ function CampeonatoBoard({
 
       if (result === "victory") {
         phases.recordWin();
-        if (phases.phaseJustCompleted) setShowVictoryScreen(true);
-        else { setFinalScore(score); setGameResult(result); setShowAdModal(true); }
+        if (phases.phaseJustCompleted) {
+          setShowVictoryScreen(true);
+        } else {
+          setFinalScore(score);
+          setGameResult(result);
+          setShowAdModal(true);
+        }
       } else {
         phases.recordLoss();
         setFinalScore(score);
@@ -408,7 +262,9 @@ function CampeonatoBoard({
       }
       setGameEnded(true);
     }
-    if (game.state.phase !== "over") setGameEnded(false);
+    if (game.state.phase !== "over") {
+      setGameEnded(false);
+    }
   }, [game.state.phase, game.state.winner, difficulty, gameEnded, phases, markFirstGamePlayed]);
 
   const targets = useMemo(() => {
@@ -419,18 +275,42 @@ function CampeonatoBoard({
 
   const captureTargets = useMemo(() => new Set(game.captureTargets), [game.captureTargets]);
 
+  const playCaptureSound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.frequency.value = 800;
+      oscillator.type = "square";
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch {
+      // silent fallback
+    }
+  }, []);
+
   const handleNodeClick = useCallback((node: number) => {
     if (game.thinking || game.state.phase === "over") return;
+
     if (game.pendingCapture) {
       if (captureTargets.has(node)) {
-        game.commit({ from: game.lastMove?.from ?? null, to: game.lastMove?.to ?? 0, remove: node });
+        playCaptureSound();
+        const from = game.lastMove?.from || null;
+        const to = game.lastMove?.to ?? 0;
+        game.commit({ from, to, remove: node });
       }
       return;
     }
+
     if (game.state.phase === "placing") {
       if (targets.has(node)) game.commit({ from: null, to: node, remove: null });
       return;
     }
+
     if (game.state.turn === 1) {
       if (selected === null) {
         if (game.state.board[node] === 1) setSelected(node);
@@ -440,40 +320,53 @@ function CampeonatoBoard({
         else if (game.state.board[node] === 1) setSelected(node);
       }
     }
-  }, [game, selected, targets, captureTargets]);
+  }, [game, selected, targets, captureTargets, playCaptureSound]);
 
   const status = useMemo(() => {
     const s = game.state;
     if (s.phase === "over") {
-      if (s.winner === 1) return "🏆 Vitória! O inimigo foi neutralizado.";
-      if (s.reason === "blockade") return "💀 Derrota — suas tropas ficaram cercadas.";
-      return "💀 Derrota — tropa reduzida abaixo do mínimo.";
+      if (s.winner === 1) return "Vitória brasileira! O inimigo bateu em retirada.";
+      const motive = s.reason === "blockade" ? "Suas tropas ficaram cercadas sem manobra." : s.reason === "resign" ? "Cessar-fogo solicitado." : "Sua tropa foi reduzida abaixo do mínimo operacional.";
+      return `Derrota. ${motive}`;
     }
-    if (game.pendingCapture) return "⚡ TRILHA FECHADA! Selecione a peça inimiga.";
-    if (game.thinking) return "⏳ Inimigo calcula...";
-    if (s.turn !== 1) return "Aguardando oponente.";
-    if (s.phase === "placing") return `📍 Desdobre uma peça. Reserva: ${s.hand[1]}.`;
-    if (canFly(s, 1)) return "✈️ Voo livre: salte para qualquer interseção.";
-    if (selected === null) return "🎯 Selecione uma peça para manobrar.";
-    return "➡️ Escolha o destino adjacente.";
+    if (game.pendingCapture) return "TRILHA FECHADA! Selecione a peça inimiga a neutralizar.";
+    if (game.thinking) return "Rádio em silêncio... o estado-maior inimigo calcula a resposta.";
+    if (s.turn !== 1) return "Aguardando o inimigo.";
+    if (s.phase === "placing") return `Desdobre um pracinha. Reserva: ${s.hand[1]}.`;
+    const flying = canFly(s, 1);
+    if (flying) return "Esquadrão em voo: salte para qualquer interseção vazia.";
+    if (selected === null) return "Selecione um pracinha para manobrar.";
+    return "Escolha a interseção adjacente de destino.";
   }, [game.state, game.thinking, game.pendingCapture, selected]);
 
   const profile = AI_PROFILES[difficulty];
 
   const handleWatchVideo = async (): Promise<boolean> => {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       setTimeout(() => {
         let newScore = finalScore;
         if (gameResult === "victory") newScore = finalScore * 2;
         else if (gameResult === "defeat") newScore = finalScore + 2;
+        else if (gameResult === "draw") newScore = finalScore * 2;
         addRankingEntry({ date: new Date().toISOString(), game: "trilha", difficulty, result: gameResult, score: newScore });
         resolve(true);
       }, 1000);
     });
   };
 
-  const handleNextPhase = () => { setShowVictoryScreen(false); phases.clearPhaseCompleted(); onReset(); };
-  const handleContinueSameLevel = () => { setShowVictoryScreen(false); phases.clearPhaseCompleted(); onReset(); };
+  const handleCloseAdModal = () => setShowAdModal(false);
+
+  const handleNextPhase = () => {
+    setShowVictoryScreen(false);
+    phases.clearPhaseCompleted();
+    onReset();
+  };
+
+  const handleContinueSameLevel = () => {
+    setShowVictoryScreen(false);
+    phases.clearPhaseCompleted();
+    onReset();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#080c16] via-[#0b1220] to-[#080c16]">
@@ -481,15 +374,17 @@ function CampeonatoBoard({
         <div className="flex items-center gap-3">
           <div>
             <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-white">
-              CAMPEONATO <span className="text-blue-400 text-[10px] font-bold ml-1.5 bg-blue-500/10 px-1.5 py-0.5 rounded">FEB</span>
+              A TRILHA <span className="text-emerald-400 text-[10px] font-bold ml-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded">FEB</span>
             </h2>
-            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Fase Progressiva</p>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">
+              Estratégia Tática · FEB vs Eixo
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {currentPhaseConfig && (
-            <div className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <Zap className="h-3 w-3" />
+            <div className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <Target className="h-3 w-3" />
               {currentPhaseConfig.name}
             </div>
           )}
@@ -497,25 +392,50 @@ function CampeonatoBoard({
             <Trophy className="h-3 w-3" />
             {phases.progress.consecutiveWins} / {currentPhaseConfig?.requiredWins || 7}
           </div>
-          <button onClick={onShowTrophies} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
+          <button
+            data-tour="trilha-trofeus"
+            onClick={onShowTrophies}
+            className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
+          >
             <Award className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Troféus</span>
           </button>
           {onBack && (
             <button onClick={onBack} className="flex items-center gap-2 border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]">
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Menu</span>
+              <span className="hidden sm:inline">Voltar</span>
             </button>
           )}
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl font-black text-white tracking-tight">
+              {currentPhaseConfig?.name || "Campanha"}
+            </h1>
+            <p className="text-xs text-slate-400">
+              {phases.isAllPhasesComplete
+                ? "Parabéns! Você completou todas as fases!"
+                : `Ganhe ${currentPhaseConfig?.requiredWins || 7} jogos consecutivos para avançar`}
+            </p>
+          </div>
+          <button
+            onClick={phases.resetPhases}
+            className="border border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
+          >
+            Reiniciar Progresso
+          </button>
+        </div>
+
         {phases.isAllPhasesComplete && (
           <div className="mb-6 p-5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 border border-amber-500/30 rounded-2xl text-center shadow-lg shadow-amber-500/5">
             <Trophy className="h-10 w-10 text-amber-400 mx-auto mb-3" />
             <h3 className="font-display text-xl font-black text-amber-400 tracking-wide">MESTRE DA TRILHA!</h3>
-            <p className="text-xs text-amber-400/70 mt-1">Todas as 3 fases conquistadas · {phases.progress.totalWins} vitórias</p>
+            <p className="text-xs text-amber-400/70 mt-1">
+              Você completou todas as 3 fases com {phases.progress.totalWins} vitórias totais!
+            </p>
           </div>
         )}
 
@@ -532,11 +452,12 @@ function CampeonatoBoard({
               onNodeClick={handleNodeClick}
             />
           </div>
+
           <HQPanel
             state={game.state}
             myPlayer={1}
             p1={{ name: "Pracinhas da FEB", slot: 1, subtitle: "Você" }}
-            p2={{ name: "Comando Inimigo", slot: 2, subtitle: profile.label }}
+            p2={{ name: "Comando inimigo", slot: 2, subtitle: profile.label }}
             status={status}
             log={game.log}
             awaitingCapture={game.pendingCapture}
@@ -547,10 +468,22 @@ function CampeonatoBoard({
         </div>
       </main>
 
-      <GameEndAdModal isOpen={showAdModal} result={gameResult} baseScore={finalScore} onWatchVideo={handleWatchVideo} onClose={() => setShowAdModal(false)} />
+      <GameEndAdModal
+        isOpen={showAdModal}
+        result={gameResult}
+        baseScore={finalScore}
+        onWatchVideo={handleWatchVideo}
+        onClose={handleCloseAdModal}
+      />
+
       {gameEnded && !showAdModal && !showVictoryScreen && <MatchEndAdCard />}
+
       {showVictoryScreen && phases.phaseJustCompleted && (
-        <TrilhaRPGScreen resultado="vitoria" fase={currentPhaseConfig?.difficulty || "recruta"} onContinue={handleContinueSameLevel} />
+        <TrilhaRPGScreen
+          resultado="vitoria"
+          fase={currentPhaseConfig?.difficulty || "recruta"}
+          onContinue={handleContinueSameLevel}
+        />
       )}
     </div>
   );
@@ -583,9 +516,8 @@ function TutorialModal({ onStart, onShowRules }: { onStart: () => void; onShowRu
               Modos
             </h3>
             <ul className="text-xs text-slate-400 space-y-1">
-              <li>• <strong className="text-white">Amistoso:</strong> partida rápida contra IA</li>
-              <li>• <strong className="text-white">Campeonato:</strong> fases progressivas com troféus</li>
-              <li>• <strong className="text-white">Online:</strong> desafie outros jogadores</li>
+              <li>• <strong className="text-white">Modo Carreira:</strong> contra IA, avance pelas fases</li>
+              <li>• <strong className="text-white">Modo Online:</strong> desafie outros jogadores em tempo real</li>
             </ul>
           </div>
         </div>
@@ -616,11 +548,11 @@ function RulesModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="space-y-5">
           <section>
-            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">🎯 Objetivo</h3>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">Objetivo</h3>
             <p className="text-xs text-slate-400 leading-relaxed">Forme "trilhas" (3 peças em linha reta) para capturar peças inimigas. Reduza o adversário a 2 peças ou bloqueie todos os movimentos dele.</p>
           </section>
           <section>
-            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">📦 Fase 1 — Colocação</h3>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">Fase 1 — Colocação</h3>
             <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
               <li>Cada jogador coloca 9 peças, uma por vez</li>
               <li>Clique numa interseção vazia para colocar</li>
@@ -628,21 +560,21 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             </ul>
           </section>
           <section>
-            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">♟️ Fase 2 — Movimentação</h3>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">Fase 2 — Movimentação</h3>
             <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
               <li>Selecione sua peça e clique num destino adjacente vazio</li>
               <li>Com 3 peças restantes, pode "voar" para qualquer casa vazia</li>
             </ul>
           </section>
           <section>
-            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">⚔️ Captura</h3>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">Captura</h3>
             <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
               <li>Ao fechar uma trilha, capture uma peça inimiga</li>
               <li>Não pode capturar peças em trilhas (a menos que todas estejam)</li>
             </ul>
           </section>
           <section>
-            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">🏆 Vitória</h3>
+            <h3 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">Vitória</h3>
             <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
               <li>Reduzir o adversário a 2 peças</li>
               <li>Bloquear todos os movimentos do adversário</li>
@@ -686,7 +618,7 @@ function TrophiesModal({ onClose, phases }: { onClose: () => void; phases: Retur
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {phases.trophies.map(trophy => (
+          {phases.trophies.map((trophy) => (
             <div key={trophy.id} className={`p-3 rounded-xl border text-center transition-all ${trophy.achieved ? "bg-amber-500/[0.06] border-amber-500/20" : "bg-white/[0.02] border-white/[0.04] opacity-40"}`}>
               <div className={`text-3xl mb-1.5 ${trophy.achieved ? "" : "grayscale"}`}>{trophy.icon}</div>
               <h3 className={`text-xs font-bold ${trophy.color}`}>{trophy.name}</h3>
