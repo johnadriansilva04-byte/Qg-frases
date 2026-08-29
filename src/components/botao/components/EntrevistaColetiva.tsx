@@ -233,7 +233,7 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
           </div>
           <button
             onClick={onFechar}
-            className="rounded-lg px-2 py-1 text-xs font-bold text-slate-500 transition hover:bg-slate-800 hover:text-white"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold text-sky-400 border border-sky-500/30 transition-all hover:bg-sky-500/15 hover:text-white hover:border-sky-400/50"
           >
             Pular
           </button>
@@ -298,7 +298,7 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
                   placeholder="Escreva sua resposta ao jornalista..."
                   maxLength={240}
                   disabled={carregando}
-                  className="flex-1 rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-500/60 disabled:opacity-40"
+                  className="flex-1 rounded-xl border-2 border-slate-600 bg-slate-800/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 disabled:opacity-40 transition-all"
                 />
                 <button
                   onClick={toggleGravacao}
@@ -316,7 +316,7 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
                 <button
                   onClick={() => responder(input)}
                   disabled={carregando || !input.trim()}
-                  className="rounded-xl bg-sky-600 px-3 text-white transition hover:bg-sky-500 disabled:opacity-40"
+                  className="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-3 py-2 text-white font-bold shadow-lg shadow-sky-500/30 transition hover:from-sky-400 hover:to-cyan-400 hover:shadow-sky-400/40 hover:scale-105 disabled:opacity-40"
                   aria-label="Enviar"
                 >
                   <Send className="size-4" />
@@ -329,7 +329,7 @@ export function EntrevistaColetiva({ career, dados, ganho, coachNome, onColetar,
                     key={s}
                     disabled={carregando || etapa === "final"}
                     onClick={() => responder(s)}
-                    className="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-left text-[11px] text-slate-300 transition hover:border-sky-500/50 hover:bg-slate-800 disabled:opacity-40"
+                    className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-left text-[11px] font-medium text-sky-300 transition-all hover:border-sky-400/60 hover:bg-sky-500/20 hover:text-white hover:shadow-md hover:shadow-sky-500/10 active:scale-[0.97] disabled:opacity-40"
                   >
                     {s}
                   </button>

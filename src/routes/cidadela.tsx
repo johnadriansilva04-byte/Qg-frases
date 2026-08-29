@@ -433,10 +433,10 @@ function CidadelaCompView() {
                     key={game.id}
                     onClick={() => isAvailable && handleGameSelect(game.id)}
                     disabled={!isAvailable}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all w-full text-left ${
+                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 w-full text-left ${
                       isAvailable
-                        ? "border-border bg-surface/50 hover:bg-primary/10 hover:border-primary cursor-pointer active:scale-[0.98]"
-                        : "border-border/50 bg-surface/30 opacity-60 cursor-not-allowed"
+                        ? "border-white/10 bg-gradient-to-r from-white/5 to-white/[0.02] hover:border-primary/50 hover:bg-primary/10 hover:shadow-lg hover:shadow-primary/10 cursor-pointer active:scale-[0.98] hover:-translate-y-0.5"
+                        : "border-white/5 bg-white/[0.02] opacity-50 cursor-not-allowed grayscale"
                     }`}
                   >
                     <div
