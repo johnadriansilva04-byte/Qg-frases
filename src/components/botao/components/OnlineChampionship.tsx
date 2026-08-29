@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, RefreshCw, Users, Crown, Play, Link2, Coins, Bot } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Users, Crown, Play, Link2, Coins, Bot, Zap } from "lucide-react";
 import { useBotaoAuth } from "../online/useBotaoAuth";
 import { useJogador } from "@/hooks/useJogador";
 import { supabase } from "@/integrations/supabase/client";
@@ -633,274 +633,339 @@ function SalaCampeonato({
   const totalRodadas = useMemo(() => confrontos.reduce((m, c) => Math.max(m, c.rodada), 0), [confrontos]);
   const vagas = camp.max_jogadores - participantes.length;
 
+  // ── Shared header ──
+  const statusLabel =
+    camp.status === "aguardando"
+      ? `${participantes.length}/${camp.max_jogadores} jogadores`
+      : camp.status === "em_andamento"
+        ? `Rodada ${camp.rodada_atual} de ${totalRodadas}`
+        : camp.status === "finalizado"
+          ? "Finalizado"
+          : "Cancelado";
+
+  const formatoLabel = camp.formato === "mata-mata" ? "Mata-Mata" : "Pontos Corridos";
+
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="btn-ghost">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h2 className="font-display text-2xl">{camp.nome}</h2>
-            <p className="text-xs text-muted-foreground">
-              Código <span className="font-mono">{camp.codigo}</span> ·{" "}
-              {camp.status === "aguardando"
-                ? `Aguardando (${participantes.length}/${camp.max_jogadores})`
-                : camp.status === "em_andamento"
-                  ? `Rodada ${camp.rodada_atual} de ${totalRodadas}`
-                  : camp.status === "finalizado"
-                    ? "Finalizado"
-                    : "Cancelado"}
-              {(camp.premio_sov ?? 0) > 0 && (
-                <span className="text-amber-300"> · prêmio {camp.premio_sov} SOV</span>
-              )}
-            </p>
-          </div>
-        </div>
+    <main className="relative mx-auto w-full max-w-4xl px-4 py-6">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-16 left-1/3 h-[300px] w-[300px] rounded-full bg-amber-500/4 blur-[100px]" />
+        <div className="absolute bottom-0 right-1/4 h-[250px] w-[250px] rounded-full bg-emerald-500/3 blur-[80px]" />
       </div>
 
-      {camp.status === "aguardando" && (
-        <>
-          <section className="surface mb-4 space-y-4 p-5">
+      <div className="relative z-10">
+        {/* ═══ Header da Sala ═══ */}
+        <div className="mb-5 rounded-2xl border border-white/10 bg-gradient-to-r from-slate-950/80 to-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <button onClick={onBack} className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition hover:bg-white/10">
+                <ArrowLeft className="size-4 text-white" />
+              </button>
+              <div className="min-w-0">
+                <h2 className="font-display text-xl font-black text-white truncate">{camp.nome}</h2>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                  <span className="font-mono">{camp.codigo}</span>
+                  <span className="text-slate-700">·</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
+                    camp.formato === "mata-mata" ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300"
+                  }`}>{formatoLabel}</span>
+                  <span className="text-slate-700">·</span>
+                  <span>{statusLabel}</span>
+                  {(camp.premio_sov ?? 0) > 0 && (
+                    <>
+                      <span className="text-slate-700">·</span>
+                      <span className="text-amber-300">🏆 {camp.premio_sov} SOV</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ STATUS: Aguardando ═══ */}
+        {camp.status === "aguardando" && (
+          <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+            {/* Left: Player Slots */}
             <div>
-              <p className="mb-2 text-sm text-muted-foreground">
-                Compartilhe o link direto: quem entra cai direto nesta sala. Mínimo de 2 para
-                iniciar.
-              </p>
-              <ul className="space-y-1 text-sm" data-testid="lista-participantes">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent" />
+                <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-500/50 font-bold">Jogadores</span>
+                <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/30 to-transparent" />
+              </div>
+              <div className="grid grid-cols-2 gap-2" data-testid="lista-participantes">
                 {participantes.map((p) => (
-                  <li key={p.user_id} className="flex items-center gap-2">
-                    {p.bot ? (
-                      <Bot className="h-4 w-4 text-sky-400" />
-                    ) : (
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                    )}{" "}
-                    {p.nome} · <span className="font-mono">{p.abreviacao ?? "MTI"}</span>
-                    {p.user_id === camp.criador_id && <Crown className="h-3.5 w-3.5 text-amber-300" />}
-                  </li>
+                  <div
+                    key={p.user_id}
+                    className={`flex items-center gap-3 rounded-xl border p-3 transition ${
+                      p.user_id === camp.criador_id
+                        ? "border-amber-500/30 bg-amber-500/5"
+                        : p.bot
+                          ? "border-sky-500/15 bg-sky-500/5"
+                          : "border-emerald-500/15 bg-emerald-500/5"
+                    }`}
+                  >
+                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm ${
+                      p.user_id === camp.criador_id
+                        ? "bg-amber-500/15 text-amber-400"
+                        : p.bot
+                          ? "bg-sky-500/15 text-sky-400"
+                          : "bg-emerald-500/15 text-emerald-400"
+                    }`}>
+                      {p.user_id === camp.criador_id ? <Crown className="size-4" /> : p.bot ? <Bot className="size-4" /> : <Users className="size-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-white">{p.nome}</p>
+                      <p className="text-[10px] text-slate-500">
+                        <span className="font-mono">{p.abreviacao ?? "MTI"}</span>
+                        {p.user_id === camp.criador_id && <span className="ml-1 text-amber-300/60">host</span>}
+                      </p>
+                    </div>
+                    <span className={`text-[9px] uppercase tracking-wider font-bold ${
+                      p.user_id === camp.criador_id ? "text-amber-400" : "text-emerald-400"
+                    }`}>Pronto</span>
+                  </div>
                 ))}
                 {Array.from({ length: Math.max(0, vagas) }).map((_, i) => (
-                  <li key={`vaga-${i}`} className="flex items-center gap-2 text-slate-600">
-                    <Users className="h-4 w-4" /> vaga aberta
-                  </li>
+                  <div key={`vaga-${i}`} className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-slate-900/30 p-3">
+                    <Users className="size-4 text-slate-700" />
+                    <span className="text-xs text-slate-700">Vaga aberta</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={onCopiarLink} className="btn-ghost" data-testid="copiar-link-camp">
-                <Link2 className="mr-1 h-4 w-4" /> Copiar link da sala
+
+            {/* Right: Controls */}
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
+                <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Controles</span>
+                <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+              </div>
+
+              {/* Invite button */}
+              <button
+                onClick={onCopiarLink}
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300 transition hover:border-emerald-500/40 hover:bg-emerald-500/15"
+                data-testid="copiar-link-camp"
+              >
+                <Link2 className="size-4" /> Copiar Link / Convidar Amigos
               </button>
-              {isCriador && vagas > 0 && (
-                <button
-                  onClick={onPreencherBots}
-                  disabled={preenchendoBots}
-                  className="btn-primary"
-                  data-testid="preencher-bots"
-                >
-                  <Bot className="mr-1 h-4 w-4" />{" "}
-                  {preenchendoBots ? "Preenchendo..." : `Preencher com Bots (${vagas} vagas)`}
-                </button>
-              )}
-              {isCriador && (
-                <button
-                  onClick={onIniciar}
-                  disabled={iniciando || participantes.length < 2}
-                  className="btn-primary"
-                  data-testid="iniciar-campeonato"
-                >
-                  <Play className="mr-1 h-4 w-4" /> {iniciando ? "Iniciando..." : "Iniciar campeonato"}
-                </button>
-              )}
-            </div>
-            {!isCriador && (
-              <p className="text-xs text-muted-foreground">Aguarde o criador iniciar o campeonato.</p>
-            )}
-          </section>
 
-          {/* Painel do administrador da sala (dono): visão completa. */}
-          {isCriador && (
-            <section className="surface mb-4 p-5" data-testid="admin-campeonato-panel">
-              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Administração da sala
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-                <div className="rounded-lg bg-slate-900/60 p-3">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Vagas</p>
-                  <p className="font-display text-xl text-white">
-                    {participantes.length}/{camp.max_jogadores}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-slate-900/60 p-3">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Humanos</p>
-                  <p className="font-display text-xl text-emerald-300">
-                    {participantes.filter((p) => !p.bot).length}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-slate-900/60 p-3">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Bots</p>
-                  <p className="font-display text-xl text-sky-300">
-                    {participantes.filter((p) => p.bot).length}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-slate-900/60 p-3">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Prêmio</p>
-                  <p className="font-display text-xl text-amber-300">{camp.premio_sov ?? 0} SOV</p>
-                </div>
-              </div>
-            </section>
-          )}
-        </>
-      )}
-
-      {camp.status === "em_andamento" && (
-        <>
-          <section className="surface mb-6 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-display text-lg">Sua próxima partida</p>
-                {meuConfrontoPendente ? (
-                  <p className="text-sm text-muted-foreground">
-                    Rodada {meuConfrontoPendente.rodada} ·{" "}
-                    {abrevDoParticipante(camp, meuConfrontoPendente.j1_id!)} x{" "}
-                    {abrevDoParticipante(camp, meuConfrontoPendente.j2_id!)}
-                    {participanteDo(
-                      camp,
-                      meuConfrontoPendente.j1_id === userId
-                        ? meuConfrontoPendente.j2_id
-                        : meuConfrontoPendente.j1_id,
-                    )?.bot && <span className="text-sky-300"> (bot — joga na hora)</span>}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Sem confronto pendente nesta rodada (bye ou já jogou). Aguarde a próxima rodada.
-                  </p>
-                )}
-              </div>
-              {meuConfrontoPendente && (
-                <button onClick={onJogar} className="btn-primary" data-testid="jogar-confronto">
-                  <Play className="mr-1 h-4 w-4" /> Jogar
-                </button>
-              )}
-            </div>
-          </section>
-
-          <section className="surface mb-6 p-5">
-            <h3 className="mb-3 font-display text-lg">Classificação</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[11px] tracking-wider text-muted-foreground uppercase">
-                  <th className="text-left font-normal">#</th>
-                  <th className="text-left font-normal">Jogador</th>
-                  <th className="w-8 font-normal">Pts</th>
-                  <th className="w-8 font-normal">J</th>
-                  <th className="w-10 font-normal">SG</th>
-                </tr>
-              </thead>
-              <tbody>
-                {classificacao.map((r, i) => (
-                  <tr key={r.user_id} className={r.user_id === userId ? "text-accent-foreground" : ""}>
-                    <td className="py-1">{i + 1}</td>
-                    <td className="py-1">
-                      <span className="font-mono">{r.abreviacao ?? "MTI"}</span>{" "}
-                      <span className="text-muted-foreground">
-                        {r.nome}
-                        {r.bot && <Bot className="ml-1 inline size-3 text-sky-400" />}
-                      </span>
-                    </td>
-                    <td className="text-center">{r.pontos ?? 0}</td>
-                    <td className="text-center">
-                      {
-                        confrontos.filter(
-                          (c) =>
-                            c.status === "finalizado" &&
-                            !c.bye &&
-                            (c.j1_id === r.user_id || c.j2_id === r.user_id),
-                        ).length
-                      }
-                    </td>
-                    <td className="text-center">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
-                  </tr>
+              {/* Stats */}
+              <div className="mb-3 grid grid-cols-4 gap-2">
+                {[
+                  { label: "Vagas", value: `${participantes.length}/${camp.max_jogadores}`, color: "text-white" },
+                  { label: "Humanos", value: String(participantes.filter((p) => !p.bot).length), color: "text-emerald-300" },
+                  { label: "Bots", value: String(participantes.filter((p) => p.bot).length), color: "text-sky-300" },
+                  { label: "Prêmio", value: `${camp.premio_sov ?? 0}`, color: "text-amber-300" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg border border-white/5 bg-slate-900/40 p-2 text-center">
+                    <p className="text-[8px] uppercase tracking-widest text-slate-600">{s.label}</p>
+                    <p className={`font-display text-sm font-black ${s.color}`}>{s.value}</p>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </section>
+              </div>
 
-          <section className="surface p-5">
-            {camp.formato === "mata-mata" ? (
-              <MataMataBracket
-                confrontos={confrontos}
-                participantes={participantes}
-                userId={userId}
-                totalRodadas={totalRodadas}
-              />
-            ) : (
-              // ── Visual tradicional round-robin ──
-              <div>
-                <h3 className="mb-3 font-display text-lg">Confrontos</h3>
-                <div className="space-y-3">
-                  {Array.from({ length: totalRodadas }, (_, i) => i + 1).map((rod) => {
-                    const lista = confrontos.filter((c) => c.rodada === rod);
-                    return (
-                      <div key={rod}>
-                        <p className="mb-1 text-xs tracking-wider text-muted-foreground uppercase">
-                          Rodada {rod}
-                        </p>
-                        <ul className="space-y-1 text-sm">
-                          {lista.map((c, idx) => {
-                            const envolvido = c.j1_id === userId || c.j2_id === userId;
-                            if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
-                            return (
-                              <li
-                                key={idx}
-                                className={`flex items-center justify-between gap-2 ${envolvido ? "text-accent-foreground" : ""}`}
-                              >
-                                <span>
-                                  {abrevDoParticipante(camp, c.j1_id ?? "")} x{" "}
-                                  {abrevDoParticipante(camp, c.j2_id ?? "")}
-                                  {c.bye && <span className="text-muted-foreground"> (bye)</span>}
-                                </span>
-                                <span className="font-mono text-muted-foreground">
-                                  {c.status === "finalizado" && !c.bye ? `${c.pl_j1} - ${c.pl_j2}` : "—"}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    );
-                  })}
+              {/* Host actions */}
+              {isCriador && (
+                <div className="space-y-2">
+                  {vagas > 0 && (
+                    <button
+                      onClick={onPreencherBots}
+                      disabled={preenchendoBots}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2.5 text-sm font-bold text-sky-300 transition hover:border-sky-500/30 disabled:opacity-50"
+                      data-testid="preencher-bots"
+                    >
+                      <Bot className="size-4" /> {preenchendoBots ? "Preenchendo..." : `Preencher com Bots (${vagas})`}
+                    </button>
+                  )}
+                  <button
+                    onClick={onIniciar}
+                    disabled={iniciando || participantes.length < 2}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-40 disabled:shadow-none"
+                    data-testid="iniciar-campeonato"
+                  >
+                    <Play className="size-4" /> {iniciando ? "Iniciando..." : "INICIAR CAMPEONATO"}
+                  </button>
+                </div>
+              )}
+              {!isCriador && (
+                <p className="mt-3 text-center text-xs text-slate-600">Aguarde o host iniciar o campeonato.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ STATUS: Em andamento ═══ */}
+        {camp.status === "em_andamento" && (
+          <div className="space-y-5">
+            {/* VS Card / Próxima partida */}
+            {meuConfrontoPendente ? (
+              <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-slate-950/60 to-cyan-950/30 p-5">
+                <div className="pointer-events-none absolute inset-0 opacity-[0.03]"
+                  style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 11px)" }}
+                />
+                <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-center sm:text-left">
+                    <p className="text-[9px] uppercase tracking-[0.3em] text-emerald-400/80 font-bold">Sua Próxima Partida</p>
+                    <p className="mt-1 font-display text-lg font-black text-white">
+                      {abrevDoParticipante(camp, meuConfrontoPendente.j1_id!)} <span className="text-white/30">×</span> {abrevDoParticipante(camp, meuConfrontoPendente.j2_id!)}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      Rodada {meuConfrontoPendente.rodada}
+                      {participanteDo(camp, meuConfrontoPendente.j1_id === userId ? meuConfrontoPendente.j2_id : meuConfrontoPendente.j1_id)?.bot && (
+                        <span className="text-sky-300"> · Bot</span>
+                      )}
+                    </p>
+                  </div>
+                  <button onClick={onJogar} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.97]" data-testid="jogar-confronto">
+                    <Zap className="size-4" /> Entrar em Campo
+                  </button>
                 </div>
               </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-5 text-center">
+                <p className="text-sm text-slate-500">Sem confronto pendente nesta rodada. Aguarde a próxima.</p>
+              </div>
             )}
-          </section>
-        </>
-      )}
 
-      {camp.status === "finalizado" && (
-        <section className="surface p-8 text-center">
-          <Crown className="mx-auto mb-3 h-10 w-10 text-yellow-500" />
-          <p className="font-display text-2xl">
-            Campeão: {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {souCamp
-              ? `Parabéns, você levou o título! +50 SOV${(camp.premio_sov ?? 0) > 0 ? ` e prêmio de ${camp.premio_sov} SOV` : ""}.`
-              : "Parabéns ao campeão!"}
-          </p>
-          <button onClick={onBack} className="btn-ghost mt-4">
-            Voltar às salas
-          </button>
-        </section>
-      )}
+            <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+              {/* Classification Table */}
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Classificação</span>
+                  <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="pb-2 text-left font-normal text-slate-600">#</th>
+                        <th className="pb-2 text-left font-normal text-slate-600">JOGADOR</th>
+                        <th className="pb-2 w-8 text-center font-normal text-slate-600">PTS</th>
+                        <th className="pb-2 w-8 text-center font-normal text-slate-600">J</th>
+                        <th className="pb-2 w-10 text-center font-normal text-slate-600">SG</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classificacao.map((r, i) => {
+                        const isUser = r.user_id === userId;
+                        return (
+                          <tr key={r.user_id} className={`border-b border-white/5 last:border-0 ${isUser ? "bg-emerald-500/5" : ""}`}>
+                            <td className="py-2 font-bold text-slate-400">{i + 1}º</td>
+                            <td className="py-2">
+                              <span className="font-mono font-bold text-white">{r.abreviacao ?? "MTI"}</span>
+                              <span className="ml-1.5 text-slate-500">
+                                {r.nome}
+                                {r.bot && <Bot className="ml-1 inline size-2.5 text-sky-400" />}
+                              </span>
+                            </td>
+                            <td className="py-2 text-center font-black text-amber-300">{r.pontos ?? 0}</td>
+                            <td className="py-2 text-center text-slate-400">
+                              {confrontos.filter((c) => c.status === "finalizado" && !c.bye && (c.j1_id === r.user_id || c.j2_id === r.user_id)).length}
+                            </td>
+                            <td className="py-2 text-center text-slate-400">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-      {erro && <p className="mt-4 text-sm text-red-500">{erro}</p>}
-      {toastLink && (
-        <p className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs break-all">
-          Link copiado: {toastLink}
-        </p>
-      )}
+              {/* Bracket / Confrontos */}
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/30 to-transparent" />
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-cyan-500/50 font-bold">
+                    {camp.formato === "mata-mata" ? "Chaveamento" : "Confrontos"}
+                  </span>
+                  <div className="h-px flex-1 bg-gradient-to-l from-cyan-500/30 to-transparent" />
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  {camp.formato === "mata-mata" ? (
+                    <MataMataBracket
+                      confrontos={confrontos}
+                      participantes={participantes}
+                      userId={userId}
+                      totalRodadas={totalRodadas}
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {Array.from({ length: totalRodadas }, (_, i) => i + 1).map((rod) => {
+                        const lista = confrontos.filter((c) => c.rodada === rod);
+                        return (
+                          <div key={rod}>
+                            <p className="mb-1 text-[10px] uppercase tracking-widest text-slate-600">Rodada {rod}</p>
+                            <ul className="space-y-1">
+                              {lista.map((c, idx) => {
+                                const envolvido = c.j1_id === userId || c.j2_id === userId;
+                                if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
+                                return (
+                                  <li key={idx} className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-xs ${envolvido ? "bg-emerald-500/5 text-white" : "text-slate-400"}`}>
+                                    <span>
+                                      <span className="font-mono font-bold">{abrevDoParticipante(camp, c.j1_id ?? "")}</span>
+                                      <span className="mx-1 text-slate-600">×</span>
+                                      <span className="font-mono font-bold">{abrevDoParticipante(camp, c.j2_id ?? "")}</span>
+                                      {c.bye && <span className="ml-1 text-slate-600">(bye)</span>}
+                                    </span>
+                                    <span className="font-mono text-slate-600">
+                                      {c.status === "finalizado" && !c.bye ? `${c.pl_j1} - ${c.pl_j2}` : "—"}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ STATUS: Finalizado (Pódio) ═══ */}
+        {camp.status === "finalizado" && (
+          <div className="flex flex-col items-center py-8">
+            {/* Triumphant crown */}
+            <div className="relative mb-4">
+              <div className="absolute inset-0 rounded-full bg-amber-400/20 blur-2xl" />
+              <div className="relative flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-400/20 to-amber-600/10 border border-amber-400/30">
+                <Crown className="size-10 text-amber-400" />
+              </div>
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.4em] text-amber-400/60 font-bold">Campeão</p>
+            <h2 className="mt-1 font-display text-3xl font-black text-white">
+              {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
+            </h2>
+            <p className="mt-2 text-sm text-slate-400">
+              {souCamp
+                ? `Parabéns! Você levou o título! +50 SOV${(camp.premio_sov ?? 0) > 0 ? ` + ${camp.premio_sov} SOV de prêmio` : ""}.`
+                : "Parabéns ao campeão!"}
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button onClick={onBack} className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-bold text-slate-400 transition hover:border-white/20 hover:text-white">
+                Voltar às Salas
+              </button>
+            </div>
+          </div>
+        )}
+
+        {erro && <p className="mt-4 text-sm text-red-400">{erro}</p>}
+        {toastLink && (
+          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs break-all text-emerald-300">
+            ✓ Link copiado: {toastLink}
+          </div>
+        )}
+      </div>
     </main>
   );
 }
+
 
 export default OnlineChampionship;
