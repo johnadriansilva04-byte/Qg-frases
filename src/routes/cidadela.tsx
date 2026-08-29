@@ -31,6 +31,7 @@ import { loadProgressFromSupabase } from "@/components/botao/storage";
 import { loadCareerFromSupabase } from "@/components/botao/career/careerRemote";
 import { missoesTrilha } from "@/components/botao/career/trilhaIntegracao";
 import { BolsaResumoCard } from "@/components/financial/BolsaResumoCard";
+import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
@@ -409,6 +410,7 @@ function CidadelaCompView() {
 
   return (
     <>
+      <BackButton />
       <div className="flex min-h-screen flex-col items-center gap-4 p-3 md:p-6">
         <main className="painel my-auto w-full max-w-3xl rounded-3xl p-5 shadow-2xl md:p-8">
           <header className="mb-6 flex flex-col items-center text-center">

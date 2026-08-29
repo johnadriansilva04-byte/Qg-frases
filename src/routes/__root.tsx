@@ -14,7 +14,6 @@ import { AuthModal } from "../components/auth/AuthModal";
 import { UserMenu } from "../components/auth/UserMenu";
 
 import appCss from "../styles.css?url";
-import { BackButton } from "../components/BackButton";
 import { CookieBanner } from "../components/CookieBanner";
 import { Sidebar } from "../components/Sidebar";
 import { SponsorNotice } from "../components/SponsorNotice";
@@ -185,7 +184,6 @@ function AuthShell() {
     <>
       <Outlet />
       <UserMenu />
-      <BackButton />
       <AuthModal
         tipo={tipoModal}
         onFechar={fecharLogin}
