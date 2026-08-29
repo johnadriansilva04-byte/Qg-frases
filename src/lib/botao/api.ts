@@ -556,29 +556,3 @@ export async function excluirContaUsuario(userId: string): Promise<boolean> {
   await supabase.auth.signOut();
   return true;
 }
-
-// ─── Pracinha Tour ──────────────────────────────────────────────
-
-/** Carrega módulos visitados pelo Pracinha (tour onboarding). */
-export async function carregarTourVisitados(userId: string): Promise<string[]> {
-  // tour_modulos_visitados é uma coluna adicionada em migration separada.
-  // Usamos any porque os tipos gerados do Supabase ainda não a conhecem.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.from("botao_usuarios") as any)
-    .select("tour_modulos_visitados")
-    .eq("user_id", userId)
-    .single();
-  if (error || !data) return [];
-  return (data as any).tour_modulos_visitados ?? [];
-}
-
-/** Marca um módulo como visitado pelo Pracinha (idempotente). */
-export async function marcarTourVisitado(userId: string, modulo: string): Promise<void> {
-  const atuais = await carregarTourVisitados(userId);
-  if (atuais.includes(modulo)) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase.from("botao_usuarios") as any)
-    .update({ tour_modulos_visitados: [...atuais, modulo] })
-    .eq("user_id", userId);
-  if (error) console.warn("[api] falha ao marcar tour visitado:", error);
-}

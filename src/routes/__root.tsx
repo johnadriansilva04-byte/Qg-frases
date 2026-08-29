@@ -16,7 +16,6 @@ import { UserMenu } from "../components/auth/UserMenu";
 import appCss from "../styles.css?url";
 import { BackButton } from "../components/BackButton";
 import { CookieBanner } from "../components/CookieBanner";
-import { PracinhaGuide } from "../components/PracinhaGuide";
 import { Sidebar } from "../components/Sidebar";
 import { SponsorNotice } from "../components/SponsorNotice";
 import { adManager } from "../lib/adManager";
