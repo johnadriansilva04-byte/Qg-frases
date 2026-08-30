@@ -421,84 +421,6 @@ export function OnlineChampionship({
     ],
   );
 
-  // Confrontos bot × bot da rodada atual: o DONO simula pelo motor (placar
-  // determinístico por poder dos clubes) e o servidor valida que os dois
-  // lados são bots antes de gravar.
-  const resolvendoBots = useRef(false);
-  useEffect(() => {
-    console.log('[Bot Sim Debug] useEffect triggered', { 
-      hasCampeonato: !!campeonato, 
-      status: campeonato?.status, 
-      isCriador: campeonato?.criador_id === userId,
-      userId,
-      mesaAtiva,
-      confrontoBot,
-      resolvendoBots: resolvendoBots.current
-    });
-    if (!campeonato || campeonato.status !== "em_andamento") return;
-    if (campeonato.criador_id !== userId) return;
-    if (mesaAtiva || confrontoBot || resolvendoBots.current) return;
-    
-    // Para grupos, simula todos os confrontos pendentes da fase atual
-    // (fase de grupos: rodada < 10000; eliminatórias: rodada >= 10000)
-    const rodadaAtual = campeonato.rodada_atual;
-    const isGrupos = campeonato.formato === "grupos";
-    const isFaseGrupos = isGrupos && rodadaAtual < 10000;
-    
-    const botxbot = ((campeonato.confrontos as ConfrontoCampeonato[]) ?? []).filter((c) => {
-      if (c.bye || c.status !== "pendente") return false;
-      
-      // Para grupos: filtra pela fase atual (grupos ou eliminatórias)
-      // Na fase de grupos: simula TODOS os confrontos pendentes com rodada < 10000
-      // Na fase eliminatória: simula TODOS os confrontos pendentes com rodada >= 10000
-      if (isGrupos) {
-        if (isFaseGrupos && c.rodada >= 10000) return false; // Ignora eliminatórias na fase de grupos
-        if (!isFaseGrupos && c.rodada < 10000) return false; // Ignora grupos na fase eliminatória
-      } else {
-        // Para pontos-corridos e mata-mata: apenas rodada atual
-        if (c.rodada !== rodadaAtual) return false;
-      }
-      
-      const p1 = participanteDo(campeonato, c.j1_id);
-      const p2 = participanteDo(campeonato, c.j2_id);
-      const isBotMatch = Boolean(p1?.bot && p2?.bot);
-      console.log('[Bot Sim Debug]', { 
-        rodada: c.rodada, 
-        j1: c.j1_id, 
-        j2: c.j2_id, 
-        p1Bot: p1?.bot, 
-        p2Bot: p2?.bot, 
-        isBotMatch,
-        isGrupos,
-        isFaseGrupos,
-        rodadaAtual
-      });
-      return isBotMatch;
-    });
-    
-    console.log('[Bot Sim Debug] Total botxbot matches:', botxbot.length);
-    if (botxbot.length === 0) return;
-    resolvendoBots.current = true;
-    void (async () => {
-      try {
-        for (const c of botxbot) {
-          const p1 = participanteDo(campeonato, c.j1_id);
-          const p2 = participanteDo(campeonato, c.j2_id);
-          const { golsJ1, golsJ2 } = simularConfrontoBots(
-            p1?.power ?? 50,
-            p2?.power ?? 50,
-            `${campeonato.id}:r${c.rodada}:${c.j1_id}x${c.j2_id}`,
-          );
-          await resolverConfrontoBots(campeonato.id, c.rodada, c.j1_id!, c.j2_id!, golsJ1, golsJ2);
-        }
-      } catch {
-        /* o servidor valida; em erro, tenta de novo na próxima atualização */
-      } finally {
-        resolvendoBots.current = false;
-        queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
-      }
-    })();
-  }, [campeonato, userId, mesaAtiva, confrontoBot, queryClient, codigo]);
 
   // Título do campeonato → troféu na sala de troféus (uma vez por campeonato).
   useEffect(() => {
@@ -710,12 +632,79 @@ function SalaCampeonato({
   toastLink: string | null;
 }) {
   const [expandirJogos, setExpandirJogos] = useState(false);
+  const resolvendoBots = useRef(false);
   
   const participantes = useMemo(
     () => (camp.participantes as ParticipanteCampeonato[]) ?? [],
     [camp.participantes],
   );
   const confrontos = useMemo(() => (camp.confrontos as ConfrontoCampeonato[]) ?? [], [camp.confrontos]);
+  
+  // Confrontos bot × bot da fase atual: o DONO simula pelo motor
+  useEffect(() => {
+    console.log('[Bot Sim Debug] SalaCampeonato useEffect triggered', { 
+      status: camp.status, 
+      isCriador: camp.criador_id === userId,
+      formato: camp.formato,
+      rodadaAtual: camp.rodada_atual
+    });
+    if (camp.status !== "em_andamento") return;
+    if (camp.criador_id !== userId) return;
+    if (resolvendoBots.current) return;
+    
+    const rodadaAtual = camp.rodada_atual;
+    const isGrupos = camp.formato === "grupos";
+    const isFaseGrupos = isGrupos && rodadaAtual < 10000;
+    
+    const botxbot = confrontos.filter((c) => {
+      if (c.bye || c.status !== "pendente") return false;
+      
+      if (isGrupos) {
+        if (isFaseGrupos && c.rodada >= 10000) return false;
+        if (!isFaseGrupos && c.rodada < 10000) return false;
+      } else {
+        if (c.rodada !== rodadaAtual) return false;
+      }
+      
+      const p1 = participanteDo(camp, c.j1_id);
+      const p2 = participanteDo(camp, c.j2_id);
+      const isBotMatch = Boolean(p1?.bot && p2?.bot);
+      console.log('[Bot Sim Debug]', { 
+        rodada: c.rodada, 
+        j1: c.j1_id, 
+        j2: c.j2_id, 
+        p1Bot: p1?.bot, 
+        p2Bot: p2?.bot, 
+        isBotMatch,
+        isGrupos,
+        isFaseGrupos,
+        rodadaAtual
+      });
+      return isBotMatch;
+    });
+    
+    console.log('[Bot Sim Debug] Total botxbot matches:', botxbot.length);
+    if (botxbot.length === 0) return;
+    resolvendoBots.current = true;
+    void (async () => {
+      try {
+        for (const c of botxbot) {
+          const p1 = participanteDo(camp, c.j1_id);
+          const p2 = participanteDo(camp, c.j2_id);
+          const { golsJ1, golsJ2 } = simularConfrontoBots(
+            p1?.power ?? 50,
+            p2?.power ?? 50,
+            `${camp.id}:r${c.rodada}:${c.j1_id}x${c.j2_id}`,
+          );
+          await resolverConfrontoBots(camp.id, c.rodada, c.j1_id!, c.j2_id!, golsJ1, golsJ2);
+        }
+      } catch {
+        /* o servidor valida; em erro, tenta de novo na próxima atualização */
+      } finally {
+        resolvendoBots.current = false;
+      }
+    })();
+  }, [camp, userId, confrontos]);
   
   // Próximos jogos da fase atual (pendentes)
   const proximosJogos = useMemo(() => {
