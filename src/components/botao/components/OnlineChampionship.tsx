@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Users, Crown, Play, Link2, Bot, Zap } from "lucide-react";
+import { ArrowLeft, Users, Crown, Play, Link2, Bot, Zap, Calendar, ChevronDown } from "lucide-react";
 import { useBotaoAuth } from "../online/useBotaoAuth";
 import { useJogador } from "@/hooks/useJogador";
 import { supabase } from "@/integrations/supabase/client";
@@ -429,13 +429,30 @@ export function OnlineChampionship({
     if (!campeonato || campeonato.status !== "em_andamento") return;
     if (campeonato.criador_id !== userId) return;
     if (mesaAtiva || confrontoBot || resolvendoBots.current) return;
-    const rodada = campeonato.rodada_atual;
+    
+    // Para grupos, simula todos os confrontos pendentes da fase atual
+    // (fase de grupos: rodada < 10000; eliminatórias: rodada >= 10000)
+    const rodadaAtual = campeonato.rodada_atual;
+    const isGrupos = campeonato.formato === "grupos";
+    const isFaseGrupos = isGrupos && rodadaAtual < 10000;
+    
     const botxbot = ((campeonato.confrontos as ConfrontoCampeonato[]) ?? []).filter((c) => {
-      if (c.rodada !== rodada || c.bye || c.status !== "pendente") return false;
+      if (c.bye || c.status !== "pendente") return false;
+      
+      // Para grupos: filtra pela fase atual (grupos ou eliminatórias)
+      if (isGrupos) {
+        if (isFaseGrupos && c.rodada >= 10000) return false; // Ignora eliminatórias na fase de grupos
+        if (!isFaseGrupos && c.rodada < 10000) return false; // Ignora grupos na fase eliminatória
+      } else {
+        // Para pontos-corridos e mata-mata: apenas rodada atual
+        if (c.rodada !== rodadaAtual) return false;
+      }
+      
       const p1 = participanteDo(campeonato, c.j1_id);
       const p2 = participanteDo(campeonato, c.j2_id);
       return Boolean(p1?.bot && p2?.bot);
     });
+    
     if (botxbot.length === 0) return;
     resolvendoBots.current = true;
     void (async () => {
@@ -446,9 +463,9 @@ export function OnlineChampionship({
           const { golsJ1, golsJ2 } = simularConfrontoBots(
             p1?.power ?? 50,
             p2?.power ?? 50,
-            `${campeonato.id}:r${rodada}:${c.j1_id}x${c.j2_id}`,
+            `${campeonato.id}:r${c.rodada}:${c.j1_id}x${c.j2_id}`,
           );
-          await resolverConfrontoBots(campeonato.id, rodada, c.j1_id!, c.j2_id!, golsJ1, golsJ2);
+          await resolverConfrontoBots(campeonato.id, c.rodada, c.j1_id!, c.j2_id!, golsJ1, golsJ2);
         }
       } catch {
         /* o servidor valida; em erro, tenta de novo na próxima atualização */
@@ -668,11 +685,32 @@ function SalaCampeonato({
   onCopiarLink: () => void;
   toastLink: string | null;
 }) {
+  const [expandirJogos, setExpandirJogos] = useState(false);
+  
   const participantes = useMemo(
     () => (camp.participantes as ParticipanteCampeonato[]) ?? [],
     [camp.participantes],
   );
   const confrontos = useMemo(() => (camp.confrontos as ConfrontoCampeonato[]) ?? [], [camp.confrontos]);
+  
+  // Próximos jogos da fase atual (pendentes)
+  const proximosJogos = useMemo(() => {
+    if (camp.status !== "em_andamento") return [];
+    const rodadaAtual = camp.rodada_atual;
+    const isGrupos = camp.formato === "grupos";
+    const isFaseGrupos = isGrupos && rodadaAtual < 10000;
+    
+    return confrontos.filter((c) => {
+      if (c.bye || c.status !== "pendente") return false;
+      if (isGrupos) {
+        if (isFaseGrupos && c.rodada >= 10000) return false;
+        if (!isFaseGrupos && c.rodada < 10000) return false;
+      } else {
+        if (c.rodada !== rodadaAtual) return false;
+      }
+      return true;
+    });
+  }, [camp.status, camp.formato, camp.rodada_atual, confrontos]);
   const classificacao = useMemo(
     () =>
       [...participantes].sort(
@@ -790,20 +828,20 @@ function SalaCampeonato({
                 {participantes.map((p) => (
                   <div
                     key={p.user_id}
-                    className={`flex items-center gap-3 rounded-xl border p-3 transition ${
+                    className={`flex items-center gap-3 rounded-xl border p-3 transition shadow-sm ${
                       p.user_id === camp.criador_id
-                        ? "border-amber-500/30 bg-amber-500/5"
+                        ? "border-amber-500/40 bg-gradient-to-r from-amber-950/30 to-amber-950/10 shadow-amber-500/10"
                         : p.bot
-                          ? "border-sky-500/15 bg-sky-500/5"
-                          : "border-emerald-500/15 bg-emerald-500/5"
+                          ? "border-sky-500/30 bg-gradient-to-r from-sky-950/30 to-sky-950/10 shadow-sky-500/10"
+                          : "border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 to-emerald-950/10 shadow-emerald-500/10"
                     }`}
                   >
-                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm ${
+                    <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg text-sm ${
                       p.user_id === camp.criador_id
-                        ? "bg-amber-500/15 text-amber-400"
+                        ? "bg-amber-500/20 text-amber-400"
                         : p.bot
-                          ? "bg-sky-500/15 text-sky-400"
-                          : "bg-emerald-500/15 text-emerald-400"
+                          ? "bg-sky-500/20 text-sky-400"
+                          : "bg-emerald-500/20 text-emerald-400"
                     }`}>
                       {p.user_id === camp.criador_id ? <Crown className="size-4" /> : p.bot ? <Bot className="size-4" /> : <Users className="size-4" />}
                     </div>
@@ -811,12 +849,12 @@ function SalaCampeonato({
                       <p className="truncate text-sm font-bold text-white">{p.nome}</p>
                       <p className="text-[10px] text-slate-500">
                         <span className="font-mono">{p.abreviacao ?? "MTI"}</span>
-                        {p.user_id === camp.criador_id && <span className="ml-1 text-amber-300/60">host</span>}
+                        {p.user_id === camp.criador_id && <span className="ml-1 text-amber-300/60">· HOST</span>}
                       </p>
                     </div>
-                    <span className={`text-[9px] uppercase tracking-wider font-bold ${
-                      p.user_id === camp.criador_id ? "text-amber-400" : "text-emerald-400"
-                    }`}>Pronto</span>
+                    <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+                      p.user_id === camp.criador_id ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400"
+                    }`}>PRONTO</span>
                   </div>
                 ))}
                 {Array.from({ length: Math.max(0, vagas) }).map((_, i) => (
@@ -831,30 +869,28 @@ function SalaCampeonato({
             {/* Right: Controls */}
             <div>
               <div className="mb-3 flex items-center gap-2">
-                <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
-                <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Controles</span>
-                <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+                <div className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
+                <span className="text-[9px] uppercase tracking-[0.3em] text-amber-400/70 font-bold">Controles</span>
+                <div className="h-px flex-1 bg-gradient-to-l from-amber-500/40 to-transparent" />
               </div>
 
               {/* Invite button */}
               <button
                 onClick={onCopiarLink}
-                className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300 transition hover:border-emerald-500/40 hover:bg-emerald-500/15"
-                data-testid="copiar-link-camp"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 to-amber-950/10 px-4 py-2.5 text-sm font-bold text-amber-300 transition hover:border-amber-500/50 hover:from-amber-950/40 shadow-amber-500/10"
               >
-                <Link2 className="size-4" /> Copiar Link / Convidar Amigos
+                <Link2 className="size-4" /> Copiar Link
               </button>
 
               {/* Stats */}
-              <div className="mb-3 grid grid-cols-4 gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 {[
-                  { label: "Vagas", value: `${participantes.length}/${camp.max_jogadores}`, color: "text-white" },
-                  { label: "Humanos", value: String(participantes.filter((p) => !p.bot).length), color: "text-emerald-300" },
-                  { label: "Bots", value: String(participantes.filter((p) => p.bot).length), color: "text-sky-300" },
-                  { label: "Prêmio", value: `${camp.premio_sov ?? 0}`, color: "text-amber-300" },
+                  { label: "Jogadores", value: String(participantes.length), color: "text-emerald-300", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+                  { label: "Bots", value: String(participantes.filter((p) => p.bot).length), color: "text-sky-300", bg: "bg-sky-500/10", border: "border-sky-500/20" },
+                  { label: "Prêmio", value: `${camp.premio_sov ?? 0}`, color: "text-amber-300", bg: "bg-amber-500/10", border: "border-amber-500/20" },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-lg border border-white/5 bg-slate-900/40 p-2 text-center">
-                    <p className="text-[8px] uppercase tracking-widest text-slate-600">{s.label}</p>
+                  <div key={s.label} className={`rounded-lg border ${s.border} ${s.bg} p-2 text-center shadow-sm`}>
+                    <p className="text-[8px] uppercase tracking-widest text-slate-500">{s.label}</p>
                     <p className={`font-display text-sm font-black ${s.color}`}>{s.value}</p>
                   </div>
                 ))}
@@ -867,7 +903,7 @@ function SalaCampeonato({
                     <button
                       onClick={onPreencherBots}
                       disabled={preenchendoBots}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2.5 text-sm font-bold text-sky-300 transition hover:border-sky-500/30 disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-950/30 to-sky-950/10 px-4 py-2.5 text-sm font-bold text-sky-300 transition hover:border-sky-500/50 hover:from-sky-950/40 shadow-sky-500/10 disabled:opacity-50"
                       data-testid="preencher-bots"
                     >
                       <Bot className="size-4" /> {preenchendoBots ? "Preenchendo..." : `Preencher com Bots (${vagas})`}
@@ -928,44 +964,90 @@ function SalaCampeonato({
               </div>
             )}
 
+            {/* Próximos Jogos - Expandível */}
+            {proximosJogos.length > 0 && (
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 overflow-hidden">
+                <button 
+                  onClick={() => setExpandirJogos(!expandirJogos)}
+                  className="flex w-full items-center justify-between px-4 py-3 transition hover:bg-white/5"
+                >
+                  <div className="flex items-center gap-2">
+                    <Calendar className="size-4 text-slate-400" />
+                    <span className="text-sm font-bold text-slate-300">Próximos Jogos</span>
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">{proximosJogos.length}</span>
+                  </div>
+                  <ChevronDown className={`size-4 text-slate-500 transition-transform ${expandirJogos ? "rotate-180" : ""}`} />
+                </button>
+                {expandirJogos && (
+                  <div className="border-t border-white/10 p-4 space-y-2">
+                    {proximosJogos.map((c, i) => {
+                      const p1 = participanteDo(camp, c.j1_id);
+                      const p2 = participanteDo(camp, c.j2_id);
+                      const isUserMatch = c.j1_id === userId || c.j2_id === userId;
+                      const isBotMatch = p1?.bot && p2?.bot;
+                      
+                      return (
+                        <div key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${isUserMatch ? "bg-emerald-500/10 border border-emerald-500/30" : "bg-white/5"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-mono font-bold ${isUserMatch ? "text-emerald-300" : "text-slate-300"}`}>
+                              {abrevDoParticipante(camp, c.j1_id!)}
+                            </span>
+                            <span className="text-white/30">×</span>
+                            <span className={`font-mono font-bold ${isUserMatch ? "text-emerald-300" : "text-slate-300"}`}>
+                              {abrevDoParticipante(camp, c.j2_id!)}
+                            </span>
+                            {isBotMatch && <Bot className="size-3 text-sky-400" />}
+                          </div>
+                          <span className="text-[10px] text-slate-500">
+                            {camp.formato === "grupos" && c.grupo ? `Grupo ${c.grupo}` : `Rodada ${c.rodada}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className={`grid gap-5 ${camp.formato === "grupos" ? "lg:grid-cols-1" : "lg:grid-cols-[1fr_1fr]"}`}>
               {/* Classification Table - ONLY for pontos-corridos and mata-mata formats */}
               {camp.formato !== "grupos" && (
                 <div>
                   <div className="mb-3 flex items-center gap-2">
-                    <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
-                    <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Classificação</span>
-                    <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+                    <div className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-amber-400/70 font-bold">Classificação</span>
+                    <div className="h-px flex-1 bg-gradient-to-l from-amber-500/40 to-transparent" />
                   </div>
-                  <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/20 to-slate-950/30 p-4 shadow-lg shadow-amber-500/5">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-white/5">
-                          <th className="pb-2 text-left font-normal text-slate-600">#</th>
-                          <th className="pb-2 text-left font-normal text-slate-600">JOGADOR</th>
-                          <th className="pb-2 w-8 text-center font-normal text-slate-600">PTS</th>
-                          <th className="pb-2 w-8 text-center font-normal text-slate-600">J</th>
-                          <th className="pb-2 w-10 text-center font-normal text-slate-600">SG</th>
+                        <tr className="border-b border-amber-500/20">
+                          <th className="pb-2 text-left font-normal text-slate-500">#</th>
+                          <th className="pb-2 text-left font-normal text-slate-500">JOGADOR</th>
+                          <th className="pb-2 w-8 text-center font-normal text-slate-500">PTS</th>
+                          <th className="pb-2 w-8 text-center font-normal text-slate-500">J</th>
+                          <th className="pb-2 w-10 text-center font-normal text-slate-500">SG</th>
                         </tr>
                       </thead>
                       <tbody>
                         {classificacao.map((r, i) => {
                           const isUser = r.user_id === userId;
+                          const isTop3 = i < 3;
                           return (
-                            <tr key={r.user_id} className={`border-b border-white/5 last:border-0 ${isUser ? "bg-emerald-500/5" : ""}`}>
-                              <td className="py-2 font-bold text-slate-400">{i + 1}º</td>
-                              <td className="py-2">
+                            <tr key={r.user_id} className={`border-b border-amber-500/10 last:border-0 ${isUser ? "bg-amber-500/10" : ""} ${isTop3 ? "" : "opacity-60"}`}>
+                              <td className="py-2.5 font-bold text-slate-400">{i + 1}º</td>
+                              <td className="py-2.5">
                                 <span className="font-mono font-bold text-white">{r.abreviacao ?? "MTI"}</span>
                                 <span className="ml-1.5 text-slate-500">
                                   {r.nome}
                                   {r.bot && <Bot className="ml-1 inline size-2.5 text-sky-400" />}
                                 </span>
                               </td>
-                              <td className="py-2 text-center font-black text-amber-300">{r.pontos ?? 0}</td>
-                              <td className="py-2 text-center text-slate-400">
+                              <td className="py-2.5 text-center font-black text-amber-300">{r.pontos ?? 0}</td>
+                              <td className="py-2.5 text-center text-slate-400">
                                 {confrontos.filter((c) => c.status === "finalizado" && !c.bye && (c.j1_id === r.user_id || c.j2_id === r.user_id)).length}
                               </td>
-                              <td className="py-2 text-center text-slate-400">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
+                              <td className="py-2.5 text-center text-slate-400">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
                             </tr>
                           );
                         })}
