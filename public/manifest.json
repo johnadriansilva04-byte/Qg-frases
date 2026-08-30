@@ -1,0 +1,23 @@
+{
+  "name": "Cidadela do Pracinha",
+  "short_name": "Cidadela",
+  "description": "Cidadela do Pracinha | Jogos, QI, Estratégia e Comunidade",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "icons": [
+    {
+      "src": "/artes/cidadela-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/artes/cidadela-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

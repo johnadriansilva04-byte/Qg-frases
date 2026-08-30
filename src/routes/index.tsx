@@ -5,9 +5,11 @@ import { Brain, Gamepad2, GraduationCap, ArrowRight } from "lucide-react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
-      { name: "description", content: "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus." },
+      { title: "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade" },
+      { name: "description", content: "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade." },
+      { name: "keywords", content: "jogos, jogos online, QI, teste de QI, estratégia, comunidade, estudo, conhecimento, cidadela do pracinha, pracinha jogos" },
       { property: "og:title", content: "Cidadela do Pracinha" },
+      { property: "og:description", content: "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade." },
       { property: "og:url", content: "https://pracinha.online" },
       { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],

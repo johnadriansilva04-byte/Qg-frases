@@ -17,6 +17,7 @@ import appCss from "../styles.css?url";
 import { CookieBanner } from "../components/CookieBanner";
 import { Sidebar } from "../components/Sidebar";
 import { SponsorNotice } from "../components/SponsorNotice";
+import { PWAInstallPrompt } from "../components/PWAInstallPrompt";
 import { adManager } from "../lib/adManager";
 
 function NotFoundComponent() {
@@ -81,18 +82,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
+      { title: "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade" },
       {
         name: "description",
         content:
-          "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus. Cidadela do Pracinha: inteligência, jogos e comunidade.",
+          "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade.",
+      },
+      {
+        name: "keywords",
+        content: "jogos, jogos online, QI, teste de QI, estratégia, comunidade, estudo, conhecimento, cidadela do pracinha, pracinha jogos",
       },
       { property: "og:type", content: "website" },
-      { property: "og:title", content: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
+      { property: "og:title", content: "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade" },
       {
         property: "og:description",
         content:
-          "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus. Cidadela do Pracinha: inteligência, jogos e comunidade.",
+          "Cidadela do Pracinha | Jogos online, testes de QI, jogos de estratégia, estudo, conhecimento e comunidade.",
       },
       { property: "og:url", content: "https://pracinha.online" },
       { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
@@ -117,6 +122,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap",
       },
       { rel: "icon", href: "/artes/cidadela-favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.json" },
+      { rel: "apple-touch-icon", href: "/artes/cidadela-icon-192.png" },
     ],
   }),
 
@@ -168,6 +175,17 @@ function RootComponent() {
       gtag('config', 'G-64FCC805LH');
     `;
     document.head.appendChild(script2);
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Service Worker registered:', registration);
+        })
+        .catch((error) => {
+          console.log('Service Worker registration failed:', error);
+        });
+    }
   }, []);
 
   return (
@@ -196,6 +214,7 @@ function AuthShell() {
       />
       <CookieBanner />
       <SponsorNotice />
+      <PWAInstallPrompt />
     </>
   );
 }
