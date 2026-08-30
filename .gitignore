@@ -33,3 +33,4 @@ dist-ssr
 *.sln
 *.sw?
 .env
+public/Ch49_nonPBR.fbx
