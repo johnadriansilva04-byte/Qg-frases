@@ -426,6 +426,15 @@ export function OnlineChampionship({
   // lados são bots antes de gravar.
   const resolvendoBots = useRef(false);
   useEffect(() => {
+    console.log('[Bot Sim Debug] useEffect triggered', { 
+      hasCampeonato: !!campeonato, 
+      status: campeonato?.status, 
+      isCriador: campeonato?.criador_id === userId,
+      userId,
+      mesaAtiva,
+      confrontoBot,
+      resolvendoBots: resolvendoBots.current
+    });
     if (!campeonato || campeonato.status !== "em_andamento") return;
     if (campeonato.criador_id !== userId) return;
     if (mesaAtiva || confrontoBot || resolvendoBots.current) return;
