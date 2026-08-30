@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Brain, Gamepad2, GraduationCap, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-/* ═══ Content — 1h per module ═══ */
+/* ═══ Content — ~1h per module ═══ */
 
 const QI = [
   "O Teste de QI avalia raciocínio lógico, memória de trabalho e velocidade de processamento.",
@@ -55,6 +55,86 @@ const CA = [
   "Seu perfil evolui com cada ação: reputação, nível e conquistas.",
   "Novas atividades, profissões e sistemas são adicionados regularmente.",
 ];
+
+/* ═══ Formation waypoints (percentage positions) ═══ */
+
+interface Pt { x: number; y: number }
+interface Fmt { a: Pt; b: Pt; c: Pt }
+const FMT: Fmt[] = [
+  { a: { x: 50, y: 10 }, b: { x: 15, y: 72 }, c: { x: 85, y: 72 } },   // classic triangle
+  { a: { x: 38, y: 8 },  b: { x: 82, y: 55 }, c: { x: 12, y: 65 } },   // clockwise twist
+  { a: { x: 62, y: 6 },  b: { x: 8, y: 50 },  c: { x: 75, y: 78 } },   // wide sweep right
+  { a: { x: 50, y: 5 },  b: { x: 88, y: 60 }, c: { x: 18, y: 78 } },   // mirror
+  { a: { x: 35, y: 12 }, b: { x: 18, y: 78 }, c: { x: 72, y: 62 } },   // asymmetric
+  { a: { x: 65, y: 8 },  b: { x: 80, y: 75 }, c: { x: 12, y: 68 } },   // right cluster
+  { a: { x: 50, y: 10 }, b: { x: 15, y: 72 }, c: { x: 85, y: 72 } },   // back to start
+];
+
+const DURATION = 30_000; // ms per transition
+const MIN_DIST = 18; // minimum % distance between modules
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function easeInOut(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/* ═══ Hook: choreographed movement ═══ */
+
+function useChoreography() {
+  const [pos, setPos] = useState<Fmt>(() => {
+    const first = FMT[0]!;
+    return { a: { ...first.a }, b: { ...first.b }, c: { ...first.c } };
+  });
+  const ref = useRef({ fi: 0, t0: performance.now() });
+
+  useEffect(() => {
+    let raf: number;
+    const loop = (now: number) => {
+      const s = ref.current;
+      const progress = Math.min((now - s.t0) / DURATION, 1);
+      const ease = easeInOut(progress);
+      const from: Fmt = FMT[s.fi]!;
+      const to: Fmt = FMT[(s.fi + 1) % FMT.length]!;
+
+      // Interpolate
+      const a: Pt = { x: from.a.x + (to.a.x - from.a.x) * ease, y: from.a.y + (to.a.y - from.a.y) * ease };
+      const b: Pt = { x: from.b.x + (to.b.x - from.b.x) * ease, y: from.b.y + (to.b.y - from.b.y) * ease };
+      const c: Pt = { x: from.c.x + (to.c.x - from.c.x) * ease, y: from.c.y + (to.c.y - from.c.y) * ease };
+
+      // Push apart if too close
+      const fix = (p1: Pt, p2: Pt) => {
+        const d = dist(p1, p2);
+        if (d < MIN_DIST && d > 0) {
+          const push = (MIN_DIST - d) / 2;
+          const dx = (p2.x - p1.x) / d * push;
+          const dy = (p2.y - p1.y) / d * push;
+          p1.x -= dx; p1.y -= dy;
+          p2.x += dx; p2.y += dy;
+        }
+      };
+      fix(a, b); fix(a, c); fix(b, c);
+
+      setPos({ a, b, c });
+
+      if (progress >= 1) {
+        s.fi = (s.fi + 1) % (FMT.length - 1);
+        s.t0 = now;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return pos;
+}
 
 /* ═══ Particles ═══ */
 
@@ -111,13 +191,14 @@ function Bubble({ facts }: { facts: string[] }) {
 
   return (
     <div className="relative mt-2">
-      {/* connector stem */}
       <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-px h-2.5 bg-gradient-to-b from-white/8 to-transparent" />
       <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/15" />
-
-      <div className="mx-auto max-w-[260px] border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm px-4 py-2 text-center" style={{ borderRadius: "45% 55% 50% 50% / 50% 45% 55% 50%" }}>
+      <div
+        className="mx-auto max-w-[240px] border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm px-3 py-1.5 text-center"
+        style={{ borderRadius: "45% 55% 50% 50% / 50% 45% 55% 50%" }}
+      >
         <p
-          className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed"
+          className="text-[9px] sm:text-[10px] text-slate-400 leading-relaxed"
           style={{ opacity: fade ? 1 : 0, transition: "opacity 500ms ease" }}
         >
           {facts[idx]}
@@ -127,74 +208,90 @@ function Bubble({ facts }: { facts: string[] }) {
   );
 }
 
-/* ═══ Flowing connector with light dot ═══ */
+/* ═══ Dynamic SVG connectors ═══ */
 
-function FlowLine({ direction, color, delay }: { direction: "down" | "left" | "right"; color: string; delay: string }) {
-  if (direction === "down") {
-    return (
-      <div className="relative flex justify-center py-1" style={{ height: 32 }}>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-full bg-gradient-to-b from-white/8 to-white/3" />
-        <span
-          className="absolute left-1/2 -translate-x-1/2 top-0 w-[3px] h-[3px] rounded-full"
-          style={{ background: color, animation: `flowDown 4s ease-in-out ${delay} infinite`, opacity: 0.4 }}
+function Connectors({ pos }: { pos: { a: { x: number; y: number }; b: { x: number; y: number }; c: { x: number; y: number } } }) {
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
+      <defs>
+        <linearGradient id="connPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="rgba(168,85,247,0.18)" />
+          <stop offset="100%" stopColor="rgba(168,85,247,0.04)" />
+        </linearGradient>
+        <linearGradient id="connAmber" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="rgba(245,158,11,0.18)" />
+          <stop offset="100%" stopColor="rgba(245,158,11,0.04)" />
+        </linearGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {/* A → B */}
+      <path
+        d={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.b.x) / 2}% ${(pos.a.y + pos.b.y) / 2 - 4}% ${pos.b.x}% ${pos.b.y}%`}
+        fill="none" stroke="url(#connPurple)" strokeWidth="1"
+      />
+      <circle r="3" fill="rgba(168,85,247,0.4)" filter="url(#glow)">
+        <animateMotion dur="6s" repeatCount="indefinite"
+          path={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.b.x) / 2}% ${(pos.a.y + pos.b.y) / 2 - 4}% ${pos.b.x}% ${pos.b.y}%`}
         />
-      </div>
-    );
-  }
-  return null;
+      </circle>
+      {/* A → C */}
+      <path
+        d={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.c.x) / 2}% ${(pos.a.y + pos.c.y) / 2 - 4}% ${pos.c.x}% ${pos.c.y}%`}
+        fill="none" stroke="url(#connAmber)" strokeWidth="1"
+      />
+      <circle r="3" fill="rgba(245,158,11,0.4)" filter="url(#glow)">
+        <animateMotion dur="7s" repeatCount="indefinite"
+          path={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.c.x) / 2}% ${(pos.a.y + pos.c.y) / 2 - 4}% ${pos.c.x}% ${pos.c.y}%`}
+        />
+      </circle>
+      {/* B → C */}
+      <path
+        d={`M ${pos.b.x}% ${pos.b.y}% Q ${(pos.b.x + pos.c.x) / 2}% ${(pos.b.y + pos.c.y) / 2 - 4}% ${pos.c.x}% ${pos.c.y}%`}
+        fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5"
+      />
+    </svg>
+  );
 }
 
 /* ═══ Organic module ═══ */
 
 function Orb({
-  icon,
-  title,
-  cta,
-  link,
-  glow,
-  borderGlow,
-  iconColor,
-  float,
-  children,
+  icon, title, cta, link, glow, borderGlow, iconColor, children,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  cta: string;
-  link: string;
-  glow: string;
-  borderGlow: string;
-  iconColor: string;
-  float: string;
-  children?: React.ReactNode;
+  icon: React.ReactNode; title: string; cta: string; link: string;
+  glow: string; borderGlow: string; iconColor: string; children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center" style={{ animation: float }}>
+    <div className="flex flex-col items-center">
       <Link
         to={link}
-        className="group relative block border border-white/[0.08] bg-white/[0.04] backdrop-blur-md px-6 py-5 sm:px-8 sm:py-6 text-center transition-all duration-700 hover:border-white/[0.15] active:scale-[0.97]"
+        className="group relative block border border-white/[0.08] bg-white/[0.04] backdrop-blur-md px-5 py-4 sm:px-7 sm:py-5 text-center transition-all duration-700 hover:border-white/[0.15] active:scale-[0.97]"
         style={{
           boxShadow: `0 0 40px ${glow}`,
           borderRadius: "48% 52% 45% 55% / 55% 48% 52% 45%",
-          transform: "rotate(-1deg) scale(1)",
         }}
       >
-        {/* breathing glow behind */}
         <div
           className="absolute -inset-1.5 opacity-40 blur-xl pointer-events-none"
           style={{ background: borderGlow, borderRadius: "48% 52% 45% 55% / 55% 48% 52% 45%", animation: "glowBreathe 6s ease-in-out infinite" }}
         />
-
         <div className="relative z-10">
-          <div className="flex justify-center mb-2.5">
+          <div className="flex justify-center mb-2">
             <div
-              className="flex size-12 sm:size-14 items-center justify-center border border-white/[0.08] bg-white/[0.05] transition-transform duration-700 group-hover:scale-110"
+              className="flex size-11 sm:size-13 items-center justify-center border border-white/[0.08] bg-white/[0.05] transition-transform duration-700 group-hover:scale-110"
               style={{ color: iconColor, borderRadius: "50% 50% 42% 58% / 58% 50% 50% 42%" }}
             >
               {icon}
             </div>
           </div>
-          <h2 className="font-display text-base sm:text-lg font-black text-white/90 whitespace-nowrap">{title}</h2>
-          <div className="mt-2.5 flex items-center justify-center gap-1 text-[11px] font-bold transition-colors duration-300" style={{ color: iconColor }}>
+          <h2 className="font-display text-sm sm:text-base font-black text-white/90 whitespace-nowrap">{title}</h2>
+          <div className="mt-2 flex items-center justify-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors duration-300" style={{ color: iconColor }}>
             <span>{cta}</span>
             <ArrowRight className="size-3 transition-transform duration-300 group-hover:translate-x-1" />
           </div>
@@ -208,107 +305,101 @@ function Orb({
 /* ═══ Main ═══ */
 
 function Index() {
+  const pos = useChoreography();
+
   return (
-    <div className="relative min-h-screen bg-[#0a0e1a] text-white overflow-hidden select-none">
+    <div className="relative h-screen bg-[#0a0e1a] text-white overflow-hidden select-none">
       {/* ═══ LIVING BACKGROUND ═══ */}
       <div className="absolute inset-0">
-        {/* Gradient orbs — breathing */}
         <div className="absolute top-[-5%] left-[20%] w-[500px] h-[500px] rounded-full bg-indigo-700/10 blur-[160px] animate-[glowBreathe_8s_ease-in-out_infinite]" />
         <div className="absolute bottom-[10%] left-[-5%] w-[450px] h-[450px] rounded-full bg-purple-700/8 blur-[140px] animate-[glowBreathe_10s_ease-in-out_2s_infinite]" />
         <div className="absolute bottom-[10%] right-[-5%] w-[450px] h-[450px] rounded-full bg-amber-700/6 blur-[140px] animate-[glowBreathe_9s_ease-in-out_1s_infinite]" />
         <div className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[700px] h-[350px] rounded-full bg-cyan-700/4 blur-[130px] animate-[glowBreathe_12s_ease-in-out_4s_infinite]" />
       </div>
 
-      {/* Grid */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black_15%,transparent_65%)]" />
 
       <Particles />
 
-      {/* ═══ COMPOSITION ═══ */}        <div className="relative z-10 w-full min-h-screen flex flex-col items-center justify-center px-4 py-8">
-        <div className="relative w-full max-w-5xl" style={{ minHeight: "70vh" }}>
+      {/* ═══ CONNECTORS (track modules dynamically) ═══ */}
+      <div className="absolute inset-0" style={{ zIndex: 5 }}>
+        <Connectors pos={pos} />
+      </div>
 
-          {/* ─── TOP: Teste de QI ─── */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20">
-            <Orb
-              icon={<Brain className="size-6 sm:size-7" />}
-              title="Teste de QI"
-              cta="Começar teste"
-              link="/teste-de-qi"
-              glow="rgba(99,102,241,0.08)"
-              borderGlow="linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.15))"
-              iconColor="#818cf8"
-              float="floatA 6s ease-in-out infinite"
-            >
-              <Bubble facts={QI} />
-            </Orb>
-          </div>
+      {/* ═══ COMPOSITION ═══ */}
+      <div className="relative z-10 w-full h-full">
 
-          {/* ─── FLOW DOWN ─── */}
-          <div className="absolute top-[200px] sm:top-[220px] left-1/2 -translate-x-1/2 z-10">
-            <FlowLine direction="down" color="rgba(168,85,247,0.5)" delay="0s" />
-          </div>
+        {/* CIDADELA DO PRACINHA — fixed center */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none text-center" style={{ animation: "glowBreathe 7s ease-in-out infinite" }}>
+          <h1 className="font-display text-base sm:text-lg font-black tracking-tight text-white/25">
+            CIDADELA DO PRACINHA
+          </h1>
+          <p className="text-[7px] sm:text-[8px] text-white/10 tracking-[0.3em] uppercase mt-0.5">
+            Inteligência · Jogos · Campus
+          </p>
+        </div>
 
-          {/* ─── CENTER: Cidadela do Pracinha ─── */}
-          <div className="absolute top-[230px] sm:top-[255px] left-1/2 -translate-x-1/2 z-20">
-            <div className="text-center" style={{ animation: "floatB 7s ease-in-out 1s infinite" }}>
-              <h1 className="font-display text-lg sm:text-xl font-black tracking-tight text-white/80">
-                CIDADELA DO PRACINHA
-              </h1>
-              <p className="text-[9px] sm:text-[10px] text-slate-500 tracking-[0.25em] uppercase mt-0.5">Inteligência · Jogos · Campus</p>
-            </div>
-          </div>
+        {/* MODULE A: Teste de QI */}
+        <div
+          className="absolute z-20 transition-none"
+          style={{
+            left: `${pos.a.x}%`, top: `${pos.a.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <Orb
+            icon={<Brain className="size-5 sm:size-6" />}
+            title="Teste de QI"
+            cta="Começar teste"
+            link="/teste-de-qi"
+            glow="rgba(99,102,241,0.08)"
+            borderGlow="linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.15))"
+            iconColor="#818cf8"
+          >
+            <Bubble facts={QI} />
+          </Orb>
+        </div>
 
-          {/* ─── FLOW DOWN-LEFT ─── */}
-          <div className="absolute top-[300px] sm:top-[310px] left-[10%] z-10 hidden sm:block">
-            <svg width="120" height="50" viewBox="0 0 120 50" fill="none" className="overflow-visible">
-              <path d="M 60 0 C 40 20, 20 30, 0 50" stroke="rgba(168,85,247,0.1)" strokeWidth="1" />
-              <circle r="2" fill="rgba(168,85,247,0.25)" style={{ animation: "flowLeft 5s ease-in-out infinite" }}>
-                <animateMotion dur="5s" repeatCount="indefinite" path="M 60 0 C 40 20, 20 30, 0 50" />
-              </circle>
-            </svg>
-          </div>
+        {/* MODULE B: Cidadela dos Clássicos */}
+        <div
+          className="absolute z-20 transition-none"
+          style={{
+            left: `${pos.b.x}%`, top: `${pos.b.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <Orb
+            icon={<Gamepad2 className="size-4 sm:size-5" />}
+            title="Cidadela dos Clássicos"
+            cta="Explorar"
+            link="/cidadela"
+            glow="rgba(168,85,247,0.06)"
+            borderGlow="linear-gradient(135deg, rgba(168,85,247,0.25), rgba(236,72,153,0.1))"
+            iconColor="#c084fc"
+          >
+            <Bubble facts={CL} />
+          </Orb>
+        </div>
 
-          {/* ─── FLOW DOWN-RIGHT ─── */}
-          <div className="absolute top-[300px] sm:top-[310px] right-[10%] z-10 hidden sm:block">
-            <svg width="120" height="50" viewBox="0 0 120 50" fill="none" className="overflow-visible">
-              <path d="M 60 0 C 80 20, 100 30, 120 50" stroke="rgba(245,158,11,0.1)" strokeWidth="1" />
-              <circle r="2" fill="rgba(245,158,11,0.25)" style={{ animation: "flowRight 5s ease-in-out 0.5s infinite" }}>
-                <animateMotion dur="5s" repeatCount="indefinite" path="M 60 0 C 80 20, 100 30, 120 50" />
-              </circle>
-            </svg>
-          </div>
-
-          {/* ─── BOTTOM-LEFT: Cidadela dos Clássicos ─── */}
-          <div className="absolute bottom-[20px] sm:bottom-[30px] left-[-2%] sm:left-[2%] z-20">
-            <Orb
-              icon={<Gamepad2 className="size-5 sm:size-6" />}
-              title="Cidadela dos Clássicos"
-              cta="Explorar"
-              link="/cidadela"
-              glow="rgba(168,85,247,0.06)"
-              borderGlow="linear-gradient(135deg, rgba(168,85,247,0.25), rgba(236,72,153,0.1))"
-              iconColor="#c084fc"
-              float="floatC 7s ease-in-out 0.5s infinite"
-            >
-              <Bubble facts={CL} />
-            </Orb>
-          </div>
-
-          {/* ─── BOTTOM-RIGHT: Campus Universitário ─── */}
-          <div className="absolute bottom-[20px] sm:bottom-[30px] right-[-2%] sm:right-[2%] z-20">
-            <Orb
-              icon={<GraduationCap className="size-5 sm:size-6" />}
-              title="Campus Universitário"
-              cta="Entrar"
-              link="/campus"
-              glow="rgba(245,158,11,0.06)"
-              borderGlow="linear-gradient(135deg, rgba(245,158,11,0.25), rgba(16,185,129,0.1))"
-              iconColor="#fbbf24"
-              float="floatD 8s ease-in-out 1s infinite"
-            >
-              <Bubble facts={CA} />
-            </Orb>
-          </div>
+        {/* MODULE C: Campus Universitário */}
+        <div
+          className="absolute z-20 transition-none"
+          style={{
+            left: `${pos.c.x}%`, top: `${pos.c.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <Orb
+            icon={<GraduationCap className="size-4 sm:size-5" />}
+            title="Campus Universitário"
+            cta="Entrar"
+            link="/campus"
+            glow="rgba(245,158,11,0.06)"
+            borderGlow="linear-gradient(135deg, rgba(245,158,11,0.25), rgba(16,185,129,0.1))"
+            iconColor="#fbbf24"
+          >
+            <Bubble facts={CA} />
+          </Orb>
         </div>
       </div>
 
@@ -318,35 +409,11 @@ function Index() {
           0%, 100% { opacity: 0.5; transform: scale(1); }
           50% { opacity: 1; transform: scale(1.06); }
         }
-        @keyframes floatA {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
-        }
-        @keyframes floatB {
-          0%, 100% { transform: scale(1); opacity: 0.8; }
-          50% { transform: scale(1.03); opacity: 1; }
-        }
-        @keyframes floatC {
-          0%, 100% { transform: translate(0, 0); }
-          33% { transform: translate(3px, -5px); }
-          66% { transform: translate(-2px, 3px); }
-        }
-        @keyframes floatD {
-          0%, 100% { transform: translate(0, 0); }
-          33% { transform: translate(-3px, 4px); }
-          66% { transform: translate(2px, -6px); }
-        }
         @keyframes pFloat {
           0%, 100% { transform: translateY(0) translateX(0); }
           25% { transform: translateY(-15px) translateX(4px); }
           50% { transform: translateY(-8px) translateX(-2px); }
           75% { transform: translateY(-20px) translateX(1px); }
-        }
-        @keyframes flowDown {
-          0% { top: 0; opacity: 0; }
-          20% { opacity: 0.5; }
-          80% { opacity: 0.5; }
-          100% { top: 100%; opacity: 0; }
         }
       `}</style>
     </div>
