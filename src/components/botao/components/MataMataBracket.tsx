@@ -56,19 +56,19 @@ export function MataMataBracket({ confrontos, participantes, userId, totalRodada
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Crown className="size-4 text-amber-400" />
-        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Chaveamento Eliminatório</p>
+        <Crown className="size-4 text-emerald-400" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Chaveamento Eliminatório</p>
       </div>
 
       {/* Bracket horizontal scroll */}
-      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="overflow-x-auto rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/30 to-slate-950/20 p-4 shadow-lg shadow-emerald-500/10">
         <div className="flex gap-6" style={{ minWidth: `${rounds.length * 200}px` }}>
           {rounds.map((round, ri) => (
             <div key={round.rodada} className="flex flex-col gap-4" style={{ minWidth: 180 }}>
               {/* Label da rodada */}
               <div className="flex items-center gap-2 mb-2">
-                <Zap className="size-3 text-amber-400/60" />
-                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400/60">{round.nome}</p>
+                <Zap className="size-3 text-emerald-400/60" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/60">{round.nome}</p>
               </div>
 
               {/* Confrontos */}
@@ -84,14 +84,14 @@ export function MataMataBracket({ confrontos, participantes, userId, totalRodada
                   return (
                     <div key={ci} className={`rounded-xl border p-3 transition ${
                       userInMatch
-                        ? "border-amber-400/50 bg-amber-400/10 shadow-lg shadow-amber-400/10"
-                        : "border-white/10 bg-white/5"
+                        ? "border-emerald-400/60 bg-emerald-400/15 shadow-lg shadow-emerald-400/15"
+                        : "border-emerald-500/20 bg-emerald-950/30"
                     }`}>
                       {/* J1 */}
                       <div className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition ${
-                        j1Won ? "bg-emerald-500/15" : ""
+                        j1Won ? "bg-emerald-500/20" : ""
                       }`}>
-                        <span className={`text-sm font-bold ${isUser(c.j1_id) ? "text-amber-300" : "text-white"} ${j1Won ? "text-emerald-300" : ""}`}>
+                        <span className={`text-sm font-bold ${isUser(c.j1_id) ? "text-emerald-300" : "text-white"} ${j1Won ? "text-emerald-300" : ""}`}>
                           {j1}
                         </span>
                         {finished && !c.bye && (
@@ -103,13 +103,13 @@ export function MataMataBracket({ confrontos, participantes, userId, totalRodada
                       </div>
 
                       {/* Divider */}
-                      <div className="my-1 h-px bg-white/10" />
+                      <div className="my-1 h-px bg-emerald-500/20" />
 
                       {/* J2 */}
                       <div className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition ${
-                        j2Won ? "bg-emerald-500/15" : ""
+                        j2Won ? "bg-emerald-500/20" : ""
                       }`}>
-                        <span className={`text-sm font-bold ${isUser(c.j2_id) ? "text-amber-300" : "text-white"} ${j2Won ? "text-emerald-300" : ""}`}>
+                        <span className={`text-sm font-bold ${isUser(c.j2_id) ? "text-emerald-300" : "text-white"} ${j2Won ? "text-emerald-300" : ""}`}>
                           {j2}
                         </span>
                         {finished && !c.bye && (

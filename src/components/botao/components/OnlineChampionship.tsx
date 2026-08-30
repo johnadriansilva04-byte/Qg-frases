@@ -281,10 +281,25 @@ export function OnlineChampionship({
     window.setTimeout(() => setToastLink(null), 6000);
   }, [campeonato]);
 
-  // Encontrar confronto pendente do usuário na rodada atual
+  // Encontrar confronto pendente do usuário
   const meuConfrontoPendente = useMemo<ConfrontoCampeonato | null>(() => {
     if (!campeonato || campeonato.status !== "em_andamento") return null;
     const lista = (campeonato.confrontos as ConfrontoCampeonato[]) ?? [];
+    
+    // Para formato "grupos", busca o próximo confronto pendente do usuário na fase de grupos
+    if (campeonato.formato === "grupos" && campeonato.rodada_atual < 10000) {
+      return (
+        lista.find(
+          (c) =>
+            c.rodada < 10000 &&
+            !c.bye &&
+            (c.j1_id === userId || c.j2_id === userId) &&
+            c.status === "pendente",
+        ) ?? null
+      );
+    }
+    
+    // Para outros formatos ou fase eliminatória, busca na rodada atual
     return (
       lista.find(
         (c) =>
@@ -714,11 +729,21 @@ function SalaCampeonato({
   const formatoLabel = (camp.formato === "grupos" || camp.formato === "mata-mata") ? "Fase de Grupos + Elim." : "Pontos Corridos";
 
   return (
-    <main className="relative mx-auto w-full max-w-4xl px-4 py-6">
-      {/* Ambient glow */}
+    <main className={`relative mx-auto w-full max-w-4xl px-4 py-6 ${camp.formato === "grupos" ? "min-h-screen bg-gradient-to-br from-emerald-950 via-slate-950 to-green-950" : ""}`}>
+      {/* Ambient glow - enhanced for sports arena feel */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-16 left-1/3 h-[300px] w-[300px] rounded-full bg-amber-500/4 blur-[100px]" />
-        <div className="absolute bottom-0 right-1/4 h-[250px] w-[250px] rounded-full bg-emerald-500/3 blur-[80px]" />
+        {camp.formato === "grupos" ? (
+          <>
+            <div className="absolute -top-20 left-1/4 h-[400px] w-[400px] rounded-full bg-emerald-500/8 blur-[120px]" />
+            <div className="absolute top-1/3 right-1/4 h-[300px] w-[300px] rounded-full bg-lime-500/6 blur-[100px]" />
+            <div className="absolute bottom-0 left-1/3 h-[350px] w-[350px] rounded-full bg-green-500/5 blur-[110px]" />
+          </>
+        ) : (
+          <>
+            <div className="absolute -top-16 left-1/3 h-[300px] w-[300px] rounded-full bg-amber-500/4 blur-[100px]" />
+            <div className="absolute bottom-0 right-1/4 h-[250px] w-[250px] rounded-full bg-emerald-500/3 blur-[80px]" />
+          </>
+        )}
       </div>
 
       <div className="relative z-10">
@@ -870,20 +895,20 @@ function SalaCampeonato({
           <div className="space-y-5">
             {/* VS Card / Próxima partida */}
             {meuConfrontoPendente ? (
-              <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-slate-950/60 to-cyan-950/30 p-5">
+              <div className={`relative overflow-hidden rounded-2xl border p-5 ${camp.formato === "grupos" ? "border-emerald-500/40 bg-gradient-to-r from-emerald-950/60 via-green-950/50 to-emerald-950/40 shadow-lg shadow-emerald-500/20" : "border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-slate-950/60 to-cyan-950/30"}`}>
                 <div className="pointer-events-none absolute inset-0 opacity-[0.03]"
                   style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 11px)" }}
                 />
                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-center sm:text-left">
-                    <p className="text-[9px] uppercase tracking-[0.3em] text-emerald-400/80 font-bold">
-                      {meuConfrontoPendente.rodada === totalRodadas && confrontos.length > 0 ? "🏆 FINAL" : "Sua Próxima Partida"}
+                    <p className={`text-[9px] uppercase tracking-[0.3em] font-bold ${camp.formato === "grupos" ? "text-emerald-300/90" : "text-emerald-400/80"}`}>
+                      {meuConfrontoPendente.rodada === totalRodadas && confrontos.length > 0 ? "🏆 FINAL" : camp.formato === "grupos" && meuConfrontoPendente.grupo ? `Grupo ${meuConfrontoPendente.grupo}` : "Sua Próxima Partida"}
                     </p>
                     <p className="mt-1 font-display text-lg font-black text-white">
                       {abrevDoParticipante(camp, meuConfrontoPendente.j1_id!)} <span className="text-white/30">×</span> {abrevDoParticipante(camp, meuConfrontoPendente.j2_id!)}
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      Rodada {meuConfrontoPendente.rodada}
+                      {camp.formato === "grupos" && meuConfrontoPendente.grupo ? `Rodada ${meuConfrontoPendente.rodada % 100}` : `Rodada ${meuConfrontoPendente.rodada}`}
                       {meuConfrontoPendente.rodada === totalRodadas && confrontos.filter((c) => c.rodada === meuConfrontoPendente!.rodada && !c.bye).length <= 2 && (
                         <span className="text-amber-300"> · FINAL</span>
                       )}
@@ -892,7 +917,7 @@ function SalaCampeonato({
                       )}
                     </p>
                   </div>
-                  <button onClick={onJogar} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/30 transition hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.97]" data-testid="jogar-confronto">
+                  <button onClick={onJogar} className={`flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg transition active:scale-[0.97] ${camp.formato === "grupos" ? "bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-400 hover:to-lime-400 shadow-emerald-500/30" : "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/30"}`} data-testid="jogar-confronto">
                     <Zap className="size-4" /> Entrar em Campo
                   </button>
                 </div>
@@ -903,53 +928,55 @@ function SalaCampeonato({
               </div>
             )}
 
-            <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-              {/* Classification Table */}
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
-                  <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Classificação</span>
-                  <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+            <div className={`grid gap-5 ${camp.formato === "grupos" ? "lg:grid-cols-1" : "lg:grid-cols-[1fr_1fr]"}`}>
+              {/* Classification Table - ONLY for pontos-corridos and mata-mata formats */}
+              {camp.formato !== "grupos" && (
+                <div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500/50 font-bold">Classificação</span>
+                    <div className="h-px flex-1 bg-gradient-to-l from-amber-500/30 to-transparent" />
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="pb-2 text-left font-normal text-slate-600">#</th>
+                          <th className="pb-2 text-left font-normal text-slate-600">JOGADOR</th>
+                          <th className="pb-2 w-8 text-center font-normal text-slate-600">PTS</th>
+                          <th className="pb-2 w-8 text-center font-normal text-slate-600">J</th>
+                          <th className="pb-2 w-10 text-center font-normal text-slate-600">SG</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classificacao.map((r, i) => {
+                          const isUser = r.user_id === userId;
+                          return (
+                            <tr key={r.user_id} className={`border-b border-white/5 last:border-0 ${isUser ? "bg-emerald-500/5" : ""}`}>
+                              <td className="py-2 font-bold text-slate-400">{i + 1}º</td>
+                              <td className="py-2">
+                                <span className="font-mono font-bold text-white">{r.abreviacao ?? "MTI"}</span>
+                                <span className="ml-1.5 text-slate-500">
+                                  {r.nome}
+                                  {r.bot && <Bot className="ml-1 inline size-2.5 text-sky-400" />}
+                                </span>
+                              </td>
+                              <td className="py-2 text-center font-black text-amber-300">{r.pontos ?? 0}</td>
+                              <td className="py-2 text-center text-slate-400">
+                                {confrontos.filter((c) => c.status === "finalizado" && !c.bye && (c.j1_id === r.user_id || c.j2_id === r.user_id)).length}
+                              </td>
+                              <td className="py-2 text-center text-slate-400">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-white/5">
-                        <th className="pb-2 text-left font-normal text-slate-600">#</th>
-                        <th className="pb-2 text-left font-normal text-slate-600">JOGADOR</th>
-                        <th className="pb-2 w-8 text-center font-normal text-slate-600">PTS</th>
-                        <th className="pb-2 w-8 text-center font-normal text-slate-600">J</th>
-                        <th className="pb-2 w-10 text-center font-normal text-slate-600">SG</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {classificacao.map((r, i) => {
-                        const isUser = r.user_id === userId;
-                        return (
-                          <tr key={r.user_id} className={`border-b border-white/5 last:border-0 ${isUser ? "bg-emerald-500/5" : ""}`}>
-                            <td className="py-2 font-bold text-slate-400">{i + 1}º</td>
-                            <td className="py-2">
-                              <span className="font-mono font-bold text-white">{r.abreviacao ?? "MTI"}</span>
-                              <span className="ml-1.5 text-slate-500">
-                                {r.nome}
-                                {r.bot && <Bot className="ml-1 inline size-2.5 text-sky-400" />}
-                              </span>
-                            </td>
-                            <td className="py-2 text-center font-black text-amber-300">{r.pontos ?? 0}</td>
-                            <td className="py-2 text-center text-slate-400">
-                              {confrontos.filter((c) => c.status === "finalizado" && !c.bye && (c.j1_id === r.user_id || c.j2_id === r.user_id)).length}
-                            </td>
-                            <td className="py-2 text-center text-slate-400">{(r.gols_pro ?? 0) - (r.gols_contra ?? 0)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              )}
 
-              {/* Bracket / Confrontos */}
-              <div>
+              {/* Bracket / Confrontos / Grupos */}
+              <div className={camp.formato === "grupos" ? "lg:col-span-1" : ""}>
                 <div className="mb-3 flex items-center gap-2">
                   <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/30 to-transparent" />
                   <span className="text-[9px] uppercase tracking-[0.3em] text-cyan-500/50 font-bold">
@@ -964,32 +991,34 @@ function SalaCampeonato({
                       {camp.grupos && (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
-                            <div className="h-px flex-1 bg-gradient-to-r from-purple-500/30 to-transparent" />
-                            <span className="text-[9px] uppercase tracking-[0.3em] text-purple-500/50 font-bold">Fase de Grupos</span>
-                            <div className="h-px flex-1 bg-gradient-to-l from-purple-500/30 to-transparent" />
+                            <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/40 to-transparent" />
+                            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-400/70 font-bold">Fase de Grupos</span>
+                            <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/40 to-transparent" />
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {camp.grupos.map((grupo) => (
-                              <div key={grupo.nome} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                                <p className="mb-2 text-[10px] uppercase tracking-widest text-purple-400/60 font-bold">Grupo {grupo.nome}</p>
+                              <div key={grupo.nome} className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-slate-950/30 p-3 shadow-lg shadow-emerald-500/10">
+                                <p className="mb-2 text-[10px] uppercase tracking-widest text-emerald-300/80 font-bold">Grupo {grupo.nome}</p>
                                 <table className="w-full text-[10px]">
                                   <thead>
-                                    <tr className="border-b border-white/5">
-                                      <th className="pb-1 text-left font-normal text-slate-600">#</th>
-                                      <th className="pb-1 text-left font-normal text-slate-600">TIME</th>
-                                      <th className="pb-1 w-6 text-center font-normal text-slate-600">PTS</th>
-                                      <th className="pb-1 w-6 text-center font-normal text-slate-600">SG</th>
+                                    <tr className="border-b border-emerald-500/20">
+                                      <th className="pb-1 text-left font-normal text-slate-500">#</th>
+                                      <th className="pb-1 text-left font-normal text-slate-500">TIME</th>
+                                      <th className="pb-1 w-6 text-center font-normal text-slate-500">PTS</th>
+                                      <th className="pb-1 w-6 text-center font-normal text-slate-500">J</th>
+                                      <th className="pb-1 w-6 text-center font-normal text-slate-500">SG</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {[...grupo.tabela].sort((a, b) => b.pontos - a.pontos || (b.gols_pro - b.gols_contra) - (a.gols_pro - a.gols_contra)).map((row, i) => (
-                                      <tr key={row.user_id} className={`border-b border-white/5 last:border-0 ${row.user_id === userId ? "bg-purple-500/5" : ""} ${i < 2 ? "" : "opacity-50"}`}>
-                                        <td className="py-1 font-bold text-slate-400">{i + 1}</td>
-                                        <td className="py-1">
+                                      <tr key={row.user_id} className={`border-b border-emerald-500/10 last:border-0 ${row.user_id === userId ? "bg-emerald-500/10" : ""} ${i < 2 ? "" : "opacity-50"}`}>
+                                        <td className="py-1.5 font-bold text-slate-400">{i + 1}</td>
+                                        <td className="py-1.5">
                                           <span className="font-mono font-bold text-white">{abrevDoParticipante(camp, row.user_id)}</span>
                                         </td>
-                                        <td className="py-1 text-center font-black text-purple-300">{row.pontos}</td>
-                                        <td className="py-1 text-center text-slate-400">{(row.gols_pro ?? 0) - (row.gols_contra ?? 0)}</td>
+                                        <td className="py-1.5 text-center font-black text-emerald-300">{row.pontos}</td>
+                                        <td className="py-1.5 text-center text-slate-400">{row.jogos ?? 0}</td>
+                                        <td className="py-1.5 text-center text-slate-400">{(row.gols_pro ?? 0) - (row.gols_contra ?? 0)}</td>
                                       </tr>
                                     ))}
                                   </tbody>
