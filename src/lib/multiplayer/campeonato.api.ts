@@ -27,7 +27,7 @@ export type BotCampeonato = {
   power: number;
 };
 
-/** Formato do campeonato: 'pontos' (todos vs todos), 'mata-mata' (eliminação direta) ou 'grupos' (fase de grupos + eliminatórias). */
+/** Formato do campeonato. 'pontos' = round-robin, 'grupos' = fase de grupos + eliminatórias. 'mata-mata' é aceito do banco mas tratado como 'grupos' na UI. */
 export type FormatoCampeonato = "pontos" | "mata-mata" | "grupos";
 
 export type ConfrontoCampeonato = {
@@ -50,7 +50,7 @@ export type CampeonatoOnline = {
   criador_id: string;
   status: "aguardando" | "em_andamento" | "finalizado" | "cancelado";
   max_jogadores: number;
-  /** Formato: 'pontos' (default antigo) ou 'mata-mata'. */
+  /** Formato: 'pontos' (round-robin) ou 'grupos' (fase de grupos + eliminatórias). */
   formato?: FormatoCampeonato;
   fase: number;
   participantes: ParticipanteCampeonato[];

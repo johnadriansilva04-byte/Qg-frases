@@ -556,7 +556,7 @@ export function OnlineChampionship({
       status: c.status === "aguardando" ? "aguardando" : c.status === "em_andamento" ? "em_andamento" : "finalizado",
       playerCount: numPart,
       maxPlayers: c.max_jogadores,
-      meta: `${c.formato === "mata-mata" ? "Mata-Mata" : c.formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos"}${(c.premio_sov ?? 0) > 0 ? ` · ${c.premio_sov} SOV` : ""}`,
+      meta: `${(c.formato === "grupos" || c.formato === "mata-mata") ? "Fase de Grupos + Elim." : "Pontos Corridos"}${(c.premio_sov ?? 0) > 0 ? ` · ${c.premio_sov} SOV` : ""}`,
     };
   });
 
@@ -575,7 +575,7 @@ export function OnlineChampionship({
       <div>
         <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Formato</p>
         <div className="grid grid-cols-3 gap-1.5">
-          {([["pontos", "Pontos Corridos", "Todos vs todos"], ["mata-mata", "Mata-Mata", "Eliminatório direto"], ["grupos", "Grupos + Elim.", "Grupos → 2 avançam → chave"]] as const).map(([id, label, desc]) => (
+          {([["pontos", "Pontos Corridos", "Todos vs todos"], ["grupos", "Fase de Grupos + Elim.", "Grupos → classificação → eliminatórias → final"]] as const).map(([id, label, desc]) => (
             <button key={id} onClick={() => setFormato(id)} className={`rounded-lg border p-3 text-left transition ${formato === id ? "border-emerald-400/60 bg-emerald-400/10" : "border-white/10 hover:border-white/20"}`}>
               <p className="text-xs font-bold text-white">{label}</p>
               <p className="text-[10px] text-white/40">{desc}</p>
@@ -604,7 +604,7 @@ export function OnlineChampionship({
   return (
     <OnlineLobbyLayout
       title="CAMPEONATO ONLINE"
-      subtitle={`${formato === "mata-mata" ? "Mata-Mata" : formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos"}`}
+      subtitle={`${formato === "grupos" ? "Fase de Grupos + Elim." : "Pontos Corridos"}`}
       icon={<span className="text-sm">🏆</span>}
       onBack={onBack}
       accent="amber"
@@ -668,7 +668,24 @@ function SalaCampeonato({
     [participantes],
   );
 
-  const souCamp = camp.vencedor_id === userId;
+  /** Campeão real: se o torneio é mata-mata/grupos, o vencedor é quem ganhou a final. */
+  const realChampionId = useMemo(() => {
+    if (camp.status !== "finalizado") return camp.vencedor_id ?? null;
+    const isKnockout = camp.formato === "grupos" || camp.formato === "mata-mata";
+    if (!isKnockout) return camp.vencedor_id ?? null;
+    // Encontrar o confronto da final (maior rodada com status finalizado)
+    const maxRod = Math.max(...confrontos.filter((c) => c.status === "finalizado").map((c) => c.rodada), 0);
+    const finalConfronto = confrontos
+      .filter((c) => c.rodada === maxRod && c.status === "finalizado" && !c.bye)
+      .sort((a, b) => (b.pl_j1 ?? 0) + (b.pl_j2 ?? 0) - ((a.pl_j1 ?? 0) + (a.pl_j2 ?? 0)))[0];
+    if (!finalConfronto) return camp.vencedor_id ?? null;
+    const g1 = finalConfronto.pl_j1 ?? 0;
+    const g2 = finalConfronto.pl_j2 ?? 0;
+    if (g1 > g2) return finalConfronto.j1_id ?? null;
+    if (g2 > g1) return finalConfronto.j2_id ?? null;
+    return camp.vencedor_id ?? null;
+  }, [camp.status, camp.formato, camp.vencedor_id, confrontos]);
+  const souCamp = realChampionId === userId;
   const totalRodadas = useMemo(() => {
     if (camp.formato === "grupos") {
       // Para grupos, totalRodadas é o maior rodada >= 10000 (fase eliminatória)
@@ -694,7 +711,7 @@ function SalaCampeonato({
           ? "Finalizado"
           : "Cancelado";
 
-  const formatoLabel = camp.formato === "mata-mata" ? "Mata-Mata" : camp.formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos";
+  const formatoLabel = (camp.formato === "grupos" || camp.formato === "mata-mata") ? "Fase de Grupos + Elim." : "Pontos Corridos";
 
   return (
     <main className="relative mx-auto w-full max-w-4xl px-4 py-6">
@@ -718,7 +735,7 @@ function SalaCampeonato({
                   <span className="font-mono">{camp.codigo}</span>
                   <span className="text-slate-700">·</span>
                   <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
-                    camp.formato === "mata-mata" ? "bg-amber-500/15 text-amber-300" : camp.formato === "grupos" ? "bg-purple-500/15 text-purple-300" : "bg-sky-500/15 text-sky-300"
+                    (camp.formato === "grupos" || camp.formato === "mata-mata") ? "bg-purple-500/15 text-purple-300" : "bg-sky-500/15 text-sky-300"
                   }`}>{formatoLabel}</span>
                   <span className="text-slate-700">·</span>
                   <span>{statusLabel}</span>
@@ -936,19 +953,12 @@ function SalaCampeonato({
                 <div className="mb-3 flex items-center gap-2">
                   <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/30 to-transparent" />
                   <span className="text-[9px] uppercase tracking-[0.3em] text-cyan-500/50 font-bold">
-                    {camp.formato === "mata-mata" ? "Chaveamento" : camp.formato === "grupos" ? "Fase Eliminatória" : "Confrontos"}
+                    {(camp.formato === "grupos" || camp.formato === "mata-mata") ? "Fase Eliminatória" : "Confrontos"}
                   </span>
                   <div className="h-px flex-1 bg-gradient-to-l from-cyan-500/30 to-transparent" />
                 </div>
                 <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
-                  {camp.formato === "mata-mata" ? (
-                    <MataMataBracket
-                      confrontos={confrontos}
-                      participantes={participantes}
-                      userId={userId}
-                      totalRodadas={totalRodadas}
-                    />
-                  ) : camp.formato === "grupos" ? (
+                  {(camp.formato === "grupos" || camp.formato === "mata-mata") ? (
                     <div className="space-y-4">
                       {/* Classificação por grupos */}
                       {camp.grupos && (
@@ -1051,7 +1061,7 @@ function SalaCampeonato({
                 </div>
                 <p className="text-[10px] uppercase tracking-[0.4em] text-amber-400/80 font-bold">🏆 CAMPEÃO!</p>
                 <h2 className="mt-2 font-display text-3xl font-black text-white">
-                  {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
+                  {nomeDoParticipante(camp, realChampionId ?? camp.vencedor_id ?? "")}
                 </h2>
                 <p className="mt-3 text-center text-sm text-emerald-300/80">
                   Parabéns! Você venceu o torneio!
@@ -1084,7 +1094,7 @@ function SalaCampeonato({
                 <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/5 px-6 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-amber-400/60 font-bold">🏆 CAMPEÃO</p>
                   <p className="mt-1 font-display text-xl font-black text-amber-300">
-                    {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
+                    {nomeDoParticipante(camp, realChampionId ?? camp.vencedor_id ?? "")}
                   </p>
                 </div>
                 <div className="mt-8 flex gap-3">

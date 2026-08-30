@@ -50,7 +50,7 @@ export function CampeonatoHub({
           </Field>
           <Field label="Formato">
             <div className="grid grid-cols-3 gap-2">
-              {([["pontos", "Pontos Corridos", "Todos vs todos"], ["mata-mata", "Mata-Mata", "Eliminatório"], ["grupos", "Grupos + Elim.", "Grupos → 2 avançam → chave"]] as const).map(([id, label, desc]) => (
+              {([["pontos", "Pontos Corridos", "Todos vs todos"], ["grupos", "Fase de Grupos + Elim.", "Grupos → classificação → eliminatórias → final"]] as const).map(([id, label, desc]) => (
                 <button key={id} onClick={() => setFormato(id)} className={`rounded-xl border p-3 text-left transition ${formato === id ? "border-emerald-400/60 bg-emerald-400/10" : "border-white/10 hover:border-white/20"}`}>
                   <p className="text-sm font-bold text-white">{label}</p>
                   <p className="text-[11px] text-white/40">{desc}</p>
@@ -138,8 +138,7 @@ export function CampeonatoHub({
                   <p className="truncate font-display text-base text-white">{c.nome}</p>
                   <p className="text-[11px] text-white/40">
                     <span className="font-mono">{c.codigo}</span> · {numPart}/{c.max_jogadores} jogadores · {vagas} vagas
-                    {c.formato === "mata-mata" && <span className="ml-1 text-amber-300"> · Mata-Mata</span>}
-                    {c.formato === "grupos" && <span className="ml-1 text-amber-300"> · Grupos + Elim.</span>}
+                    {(c.formato === "grupos" || c.formato === "mata-mata") && <span className="ml-1 text-purple-300"> · Fase de Grupos + Elim.</span>}
                   </p>
                 </div>
                 <div className="text-right">
