@@ -225,7 +225,7 @@ function Bubble({ facts }: { facts: string[] }) {
 
 function Connectors({ pos }: { pos: Fmt }) {
   return (
-    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ zIndex: 5 }}>
       <defs>
         <linearGradient id="connPurple" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="rgba(168,85,247,0.15)" />
@@ -240,15 +240,15 @@ function Connectors({ pos }: { pos: Fmt }) {
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
       </defs>
-      <path d={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.b.x) / 2}% ${(pos.a.y + pos.b.y) / 2 - 3}% ${pos.b.x}% ${pos.b.y}%`} fill="none" stroke="url(#connPurple)" strokeWidth="0.8" />
-      <circle r="2.5" fill="rgba(168,85,247,0.35)" filter="url(#glow)">
-        <animateMotion dur="6s" repeatCount="indefinite" path={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.b.x) / 2}% ${(pos.a.y + pos.b.y) / 2 - 3}% ${pos.b.x}% ${pos.b.y}%`} />
+      <path d={`M ${pos.a.x} ${pos.a.y} Q ${(pos.a.x + pos.b.x) / 2} ${(pos.a.y + pos.b.y) / 2 - 3} ${pos.b.x} ${pos.b.y}`} fill="none" stroke="url(#connPurple)" strokeWidth="0.3" />
+      <circle r="0.8" fill="rgba(168,85,247,0.35)" filter="url(#glow)">
+        <animateMotion dur="6s" repeatCount="indefinite" path={`M ${pos.a.x} ${pos.a.y} Q ${(pos.a.x + pos.b.x) / 2} ${(pos.a.y + pos.b.y) / 2 - 3} ${pos.b.x} ${pos.b.y}`} />
       </circle>
-      <path d={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.c.x) / 2}% ${(pos.a.y + pos.c.y) / 2 - 3}% ${pos.c.x}% ${pos.c.y}%`} fill="none" stroke="url(#connAmber)" strokeWidth="0.8" />
-      <circle r="2.5" fill="rgba(245,158,11,0.35)" filter="url(#glow)">
-        <animateMotion dur="7s" repeatCount="indefinite" path={`M ${pos.a.x}% ${pos.a.y}% Q ${(pos.a.x + pos.c.x) / 2}% ${(pos.a.y + pos.c.y) / 2 - 3}% ${pos.c.x}% ${pos.c.y}%`} />
+      <path d={`M ${pos.a.x} ${pos.a.y} Q ${(pos.a.x + pos.c.x) / 2} ${(pos.a.y + pos.c.y) / 2 - 3} ${pos.c.x} ${pos.c.y}`} fill="none" stroke="url(#connAmber)" strokeWidth="0.3" />
+      <circle r="0.8" fill="rgba(245,158,11,0.35)" filter="url(#glow)">
+        <animateMotion dur="7s" repeatCount="indefinite" path={`M ${pos.a.x} ${pos.a.y} Q ${(pos.a.x + pos.c.x) / 2} ${(pos.a.y + pos.c.y) / 2 - 3} ${pos.c.x} ${pos.c.y}`} />
       </circle>
-      <path d={`M ${pos.b.x}% ${pos.b.y}% Q ${(pos.b.x + pos.c.x) / 2}% ${(pos.b.y + pos.c.y) / 2 - 3}% ${pos.c.x}% ${pos.c.y}%`} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="0.5" />
+      <path d={`M ${pos.b.x} ${pos.b.y} Q ${(pos.b.x + pos.c.x) / 2} ${(pos.b.y + pos.c.y) / 2 - 3} ${pos.c.x} ${pos.c.y}`} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="0.2" />
     </svg>
   );
 }
