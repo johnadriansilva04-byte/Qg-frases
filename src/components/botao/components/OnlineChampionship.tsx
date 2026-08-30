@@ -668,7 +668,7 @@ function SalaCampeonato({
       
       const p1 = participanteDo(camp, c.j1_id);
       const p2 = participanteDo(camp, c.j2_id);
-      const isBotMatch = Boolean(p1?.bot && p2?.bot);
+      const isBotMatch = Boolean(p1?.bot === true && p2?.bot === true);
       console.log('[Bot Sim Debug]', { 
         rodada: c.rodada, 
         j1: c.j1_id, 
