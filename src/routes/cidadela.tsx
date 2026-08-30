@@ -6,6 +6,8 @@ import { TrilhaLoadingScreen } from "@/components/trilha/TrilhaLoadingScreen";
 import { TrilhaOnlineLobby } from "@/components/trilha/TrilhaOnlineLobby";
 import { BotaoGame } from "@/components/botao/BotaoGame";
 import { ConviteMesaScreen } from "@/components/botao/online/ConviteMesaScreen";
+import { CarBrawlGame } from "@/components/carbrawl/CarBrawlGame";
+import { CarBrawlLoadingScreen } from "@/components/carbrawl/CarBrawlLoadingScreen";
 import { OnboardingGate } from "@/components/cidadela/OnboardingGate";
 import { TourContextual, type PassoTour } from "@/components/cidadela/TourContextual";
 import { CidadelaEmblem } from "@/components/CidadelaBranding";
@@ -67,6 +69,7 @@ type Game =
   | "campus"
   | "comercial"
   | "laboratorio"
+  | "carbrawl"
   | null;
 
 const GAMES = [
@@ -90,6 +93,13 @@ const GAMES = [
     description: "Tática clássica",
     icon: Crown,
     status: "em breve",
+  },
+  {
+    id: "carbrawl" as Game,
+    label: "Car Brawl",
+    description: "Sumo de carros",
+    icon: Trophy,
+    status: "disponível",
   },
   {
     id: "dama" as Game,
@@ -121,7 +131,7 @@ function CidadelaCompView() {
   });
   const passosTour: PassoTour[] =
     activeGame === "botao" ? PASSOS_TOUR_FUTEBOL : activeGame === "trilha" ? PASSOS_TOUR_TRILHA : [];
-  const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | null>(null);
+  const [loadingGame, setLoadingGame] = useState<"botao" | "trilha" | "carbrawl" | null>(null);
   const [activeModal, setActiveModal] = useState<"sobre" | "como" | "soberania" | null>(null);
   const [perfilCidadela, setPerfilCidadela] = useState<CidadelaPerfil | null>(null);
   const [mostrarProfissoes, setMostrarProfissoes] = useState(false);
@@ -253,6 +263,10 @@ function CidadelaCompView() {
       setLoadingGame(game);
       return;
     }
+    if (game === "carbrawl") {
+      setLoadingGame(game);
+      return;
+    }
     if (game === "campus" || game === "comercial" || game === "laboratorio") {
       setActiveGame(game);
       return;
@@ -353,6 +367,17 @@ function CidadelaCompView() {
     );
   }
 
+  if (loadingGame === "carbrawl") {
+    return (
+      <CarBrawlLoadingScreen
+        onCompleto={() => {
+          setLoadingGame(null);
+          setActiveGame("carbrawl");
+        }}
+      />
+    );
+  }
+
   if (loadingGame === "botao") {
     return (
       <FootballLoadingScreen
@@ -402,6 +427,10 @@ function CidadelaCompView() {
         onVoltar={() => setActiveGame(null)}
       />
     );
+  }
+
+  if (activeGame === "carbrawl") {
+    return <CarBrawlGame onBack={() => setActiveGame(null)} />;
   }
 
   if (activeGame === "botao") {
