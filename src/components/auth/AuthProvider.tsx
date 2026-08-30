@@ -38,7 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const auth = useBotaoAuth();
   const [tipoModal, setTipoModal] = useState<ModalTipo>(null);
   const continuarSemContaHandlers = useRef(new Set<() => void>());
-  const jaPediuRef = useRef(false);
 
   // Auto-login silencioso: quando o perfil aparece (sessão conhecida), fecha o modal
   useEffect(() => {
@@ -49,11 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const pedirLogin = useCallback((pontoEntrada?: string) => {
     if (auth.perfil) return; // já logado
-    if (jaPediuRef.current) return;
     try {
       if (sessionStorage.getItem(GUARD_KEY)) return;
     } catch { /* SSR */ }
-    jaPediuRef.current = true;
     console.log("[Auth] pedirLogin:", pontoEntrada ?? "global");
     setTipoModal("login");
   }, [auth.perfil]);

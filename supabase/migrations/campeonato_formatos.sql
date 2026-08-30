@@ -694,3 +694,54 @@ BEGIN
 END; $$;
 
 COMMIT;
+
+-- ============================================================================
+-- 7) Fix: criar_campeonato_online agora aceita e persiste o formato
+-- ============================================================================
+DROP FUNCTION IF EXISTS public.criar_campeonato_online(TEXT, INTEGER, NUMERIC);
+
+CREATE OR REPLACE FUNCTION public.criar_campeonato_online(
+  p_nome TEXT DEFAULT 'Campeonato Online',
+  p_max INTEGER DEFAULT 4,
+  p_premio_sov NUMERIC DEFAULT 0,
+  p_formato TEXT DEFAULT 'pontos'
+)
+RETURNS public.botao_campeonatos_online
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid   UUID := auth.uid();
+  v_row   public.botao_campeonatos_online;
+  v_part  JSONB;
+  v_codigo TEXT;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'nao autenticado'; END IF;
+  IF p_max NOT BETWEEN 2 AND 32 THEN RAISE EXCEPTION 'max_jogadores precisa estar entre 2 e 32'; END IF;
+  IF public._saldo_sov(v_uid) < 50 THEN
+    RAISE EXCEPTION 'Voce precisa de pelo menos 50 SOV para criar um campeonato online';
+  END IF;
+  IF p_formato NOT IN ('pontos', 'mata-mata', 'grupos') THEN
+    p_formato := 'pontos';
+  END IF;
+
+  v_codigo := 'CAMP-' || to_char(now(), 'YYMMDDHH24MISSMS') || '-'
+              || substring(encode(gen_random_uuid()::text::bytea, 'hex'), 1, 6);
+
+  v_part := jsonb_build_array(jsonb_build_object(
+    'user_id', v_uid,
+    'nome', COALESCE((SELECT nome FROM public.botao_usuarios WHERE user_id = v_uid), 'Jogador'),
+    'time_id', COALESCE((SELECT time_personalizado FROM public.botao_usuarios WHERE user_id = v_uid), 'Meu Time'),
+    'abreviacao', COALESCE((SELECT abreviacao_time FROM public.botao_usuarios WHERE user_id = v_uid), 'MTI'),
+    'pontos', 0,
+    'gols_pro', 0,
+    'gols_contra', 0
+  ));
+
+  INSERT INTO public.botao_campeonatos_online
+    (codigo, nome, criador_id, max_jogadores, participantes, premio_sov, formato)
+  VALUES (v_codigo, p_nome, v_uid, p_max, v_part, GREATEST(0, COALESCE(p_premio_sov, 0)), p_formato)
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END; $$;
+
+COMMIT;

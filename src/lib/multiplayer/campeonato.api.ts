@@ -93,28 +93,30 @@ export async function criarCampeonato(
     p_nome: nome,
     p_max: maxJogadores,
     p_premio_sov: premioSov,
+    p_formato: formato,
   });
   if (error) {
     // 42883 = função não existe (migration não aplicada)
-    // PGRST202 = assinatura da RPC não confere
+    // PGRST202 = assinatura da RPC não confere (ex: p_formato não existe ainda)
     if (error.code === "PGRST202" || error.code === "42883") {
-      if (maxJogadores > 8) {
-        throw new Error(
-          "Salas com mais de 8 jogadores precisam da migration campeonato_online_v2 aplicada no banco.",
-        );
-      }
+      // Fallback: tenta sem p_formato (migration antiga)
       const legacy = await supabase.rpc("criar_campeonato_online", {
         p_nome: nome,
         p_max: maxJogadores,
+        p_premio_sov: premioSov,
       });
       if (legacy.error) throw legacy.error;
-      return legacy.data as CampeonatoOnline;
+      const camp = legacy.data as CampeonatoOnline;        // Formato não foi persistido no server — salva via UPDATE
+        if (formato !== "pontos") {
+          await supabase.from("botao_campeonatos_online" as never).update({ formato } as never).eq("id", camp.id);
+          camp.formato = formato;
+        }
+      return camp;
     }
     // 400 = validação server-side (ex: SOV insuficiente, sala cheia)
     throw new Error(error.message || "Erro ao criar campeonato. Verifique se o banco de dados está configurado.");
   }
   const camp = data as CampeonatoOnline;
-  camp.formato = formato;
   return camp;
 }
 

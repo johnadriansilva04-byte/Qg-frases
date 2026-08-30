@@ -556,7 +556,7 @@ export function OnlineChampionship({
       status: c.status === "aguardando" ? "aguardando" : c.status === "em_andamento" ? "em_andamento" : "finalizado",
       playerCount: numPart,
       maxPlayers: c.max_jogadores,
-      meta: `${c.formato === "mata-mata" ? "Mata-Mata" : "Pontos Corridos"}${(c.premio_sov ?? 0) > 0 ? ` · ${c.premio_sov} SOV` : ""}`,
+      meta: `${c.formato === "mata-mata" ? "Mata-Mata" : c.formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos"}${(c.premio_sov ?? 0) > 0 ? ` · ${c.premio_sov} SOV` : ""}`,
     };
   });
 
@@ -575,7 +575,7 @@ export function OnlineChampionship({
       <div>
         <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Formato</p>
         <div className="grid grid-cols-3 gap-1.5">
-          {([["pontos", "Pontos Corridos", "Todos vs todos"], ["mata-mata", "Mata-Mata", "Grupos + Eliminatório"]] as const).map(([id, label, desc]) => (
+          {([["pontos", "Pontos Corridos", "Todos vs todos"], ["mata-mata", "Mata-Mata", "Eliminatório direto"], ["grupos", "Grupos + Elim.", "Grupos → 2 avançam → chave"]] as const).map(([id, label, desc]) => (
             <button key={id} onClick={() => setFormato(id)} className={`rounded-lg border p-3 text-left transition ${formato === id ? "border-emerald-400/60 bg-emerald-400/10" : "border-white/10 hover:border-white/20"}`}>
               <p className="text-xs font-bold text-white">{label}</p>
               <p className="text-[10px] text-white/40">{desc}</p>
@@ -604,7 +604,7 @@ export function OnlineChampionship({
   return (
     <OnlineLobbyLayout
       title="CAMPEONATO ONLINE"
-      subtitle={`${formato === "mata-mata" ? "Mata-Mata + Grupos" : "Pontos Corridos"}`}
+      subtitle={`${formato === "mata-mata" ? "Mata-Mata" : formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos"}`}
       icon={<span className="text-sm">🏆</span>}
       onBack={onBack}
       accent="amber"
@@ -694,7 +694,7 @@ function SalaCampeonato({
           ? "Finalizado"
           : "Cancelado";
 
-  const formatoLabel = camp.formato === "mata-mata" ? "Mata-Mata" : "Pontos Corridos";
+  const formatoLabel = camp.formato === "mata-mata" ? "Mata-Mata" : camp.formato === "grupos" ? "Grupos + Elim." : "Pontos Corridos";
 
   return (
     <main className="relative mx-auto w-full max-w-4xl px-4 py-6">
