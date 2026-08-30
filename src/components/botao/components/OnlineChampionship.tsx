@@ -50,7 +50,6 @@ import { MesaOnlineMatch, type ResultadoMesa } from "./MesaOnlineMatch";
 import { MatchView } from "@/components/botao/components/MatchView";
 import { TEAMS } from "@/components/botao/data/teams";
 import type { MatchResult } from "@/components/botao/types";
-import { obterSaldoSov } from "@/lib/financial/sovApi";
 import { loadProgressFromSupabase, saveProgressToSupabase } from "@/components/botao/storage";
 import { useAdManager } from "@/lib/adManager";
 import { OnlineLobbyLayout, type LobbyRoom, nomeAmigavel } from "@/components/online/OnlineLobbyLayout";
@@ -200,26 +199,11 @@ export function OnlineChampionship({
     })();
   }, [codigoInicial, perfil]);
 
-  /** Regra dos 50 SOV: valida antes de chamar a RPC (mensagem clara); a RPC
-   *  continua sendo a autoridade final. */
-  const validarSaldoMinimo = useCallback(async (): Promise<boolean> => {
-    if (!userId) return false;
-    const saldo = await obterSaldoSov(userId);
-    if (saldo !== null && saldo < SOV_MINIMO_CAMPEONATO) {
-      setErro(
-        `Você precisa de pelo menos ${SOV_MINIMO_CAMPEONATO} SOV para o Campeonato Online (saldo atual: ${saldo} SOV).`,
-      );
-      return false;
-    }
-    return true;
-  }, [userId]);
-
   const handleCriar = useCallback(async () => {
     if (!perfil) {
       setErro("Faça login para criar um campeonato.");
       return;
     }
-    if (!(await validarSaldoMinimo())) return;
     setCriando(true);
     setErro(null);
     try {
@@ -230,8 +214,7 @@ export function OnlineChampionship({
       setErro((e as Error)?.message ?? "Erro ao criar campeonato.");
     } finally {
       setCriando(false);
-    }
-  }, [perfil, nomeSala, maxJogadores, premioSov, recarregarAbertos, validarSaldoMinimo]);
+    }    }, [perfil, nomeSala, maxJogadores, premioSov, recarregarAbertos]);
 
   const handleEntrar = useCallback(
     async (codigoAlvo?: string) => {
@@ -244,7 +227,6 @@ export function OnlineChampionship({
         setErro("Informe o código da sala.");
         return;
       }
-      if (!(await validarSaldoMinimo())) return;
       setErro(null);
       try {
         await entrarCampeonato(alvo);
@@ -252,9 +234,7 @@ export function OnlineChampionship({
         setCodigoEntrar("");
       } catch (e: unknown) {
         setErro((e as Error)?.message ?? "Erro ao entrar no campeonato.");
-      }
-    },
-    [perfil, codigoEntrar, validarSaldoMinimo],
+      }    }, [perfil, codigoEntrar],
   );
 
   const handleIniciar = useCallback(async () => {
@@ -606,17 +586,7 @@ export function OnlineChampionship({
           ))}
         </div>
       </div>
-      <div>
-        <p className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-1.5">Prêmio (SOV)</p>
-        <input
-          type="number"
-          min={0}
-          value={premioSov}
-          onChange={(e) => setPremioSov(Math.max(0, Number(e.target.value) || 0))}
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white focus:border-amber-400/50 focus:outline-none"
-        />
-      </div>
-      <p className="text-[9px] text-white/20">Mínimo {SOV_MINIMO_CAMPEONATO} SOV para criar/entrar.</p>
+
       <button onClick={handleCriar} disabled={criando || !perfil} className="w-full rounded-lg bg-emerald-500 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-400 disabled:opacity-50">
         {criando ? "Criando..." : "+ Criar Campeonato"}
       </button>
@@ -627,7 +597,7 @@ export function OnlineChampionship({
   return (
     <OnlineLobbyLayout
       title="CAMPEONATO ONLINE"
-      subtitle={`${SOV_MINIMO_CAMPEONATO} SOV mínimo · ${formato === "mata-mata" ? "Mata-Mata + Grupos" : "Pontos Corridos"}`}
+      subtitle={`${formato === "mata-mata" ? "Mata-Mata + Grupos" : "Pontos Corridos"}`}
       icon={<span className="text-sm">🏆</span>}
       onBack={onBack}
       accent="amber"
