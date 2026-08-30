@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 /**
@@ -9,6 +9,7 @@ export function Character3D() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const rafRef = useRef<number>(0);
+  const [status, setStatus] = useState("init");
 
   useEffect(() => {
     const el = containerRef.current;
@@ -58,14 +59,25 @@ export function Character3D() {
     let disposed = false;
     let mixer: THREE.AnimationMixer | null = null;
 
+    console.log("[Character3D] Montando cena...", { w, h });
+
     async function loadModel() {
+      console.log("[Character3D] Iniciando loadModel...");
       try {
+        console.log("[Character3D] Importando FBXLoader...");
+        setStatus("loading-fbx");
         const { FBXLoader } = await import("three/examples/jsm/loaders/FBXLoader.js");
-        if (disposed) return;
+        console.log("[Character3D] FBXLoader importado OK");
+        if (disposed) { console.log("[Character3D] Componente desmontado, abortando"); return; }
 
         const loader = new FBXLoader();
+        setStatus("downloading");
+        console.log("[Character3D] Carregando /Ch49_nonPBR.fbx...");
         const group = await loader.loadAsync("/Ch49_nonPBR.fbx");
+        console.log("[Character3D] FBX carregado OK", { children: group.children.length, anims: group.animations?.length ?? 0 });
+        setStatus("processing");
         if (disposed) {
+          console.log("[Character3D] Componente desmontado após load, descartando modelo");
           group.traverse((o) => {
             if (o instanceof THREE.Mesh) {
               o.geometry?.dispose();
@@ -89,10 +101,17 @@ export function Character3D() {
         const minY = box.min.y * 0.008;
         group.position.y = -minY;
 
+        console.log("[Character3D] Posição calculada:", {
+          centerX: center.x, centerY: center.y, centerZ: center.z,
+          minY, boxMin: [box.min.x, box.min.y, box.min.z],
+          boxMax: [box.max.x, box.max.y, box.max.z],
+        });
+
         // Face camera
         group.rotation.y = Math.PI;
 
         scene.add(group);
+        console.log("[Character3D] Modelo adicionado à cena");
 
         // Set up animation mixer if model has animations
         if (group.animations && group.animations.length > 0) {
@@ -103,27 +122,33 @@ export function Character3D() {
           if (idleClip) {
             const action = mixer.clipAction(idleClip);
             action.play();
+            console.log("[Character3D] Animação idle reproduzida");
           }
         }
 
-        console.log(
-          `[Character3D] Modelo carregado: ${group.children.length} children, ` +
-          `${group.animations?.length ?? 0} animações`
-        );
+        setStatus("ready");
+        console.log("[Character3D] ✓ Modelo pronto na cena");
       } catch (err) {
-        console.error("[Character3D] Erro ao carregar modelo:", err);
+        setStatus(`error: ${err instanceof Error ? err.message : String(err)}`);
+        console.error("[Character3D] ✗ ERRO ao carregar modelo:", err);
+        console.error("[Character3D] Stack:", err instanceof Error ? err.stack : String(err));
       }
     }
 
     loadModel();
 
+    console.log("[Character3D] Iniciando render loop");
     // Animation loop
     const clock = new THREE.Clock();
+    let frameCount = 0;
     function animate() {
       rafRef.current = requestAnimationFrame(animate);
       const dt = clock.getDelta();
       if (mixer) mixer.update(dt);
       renderer.render(scene, camera);
+      frameCount++;
+      if (frameCount === 1) console.log("[Character3D] Primeiro frame renderizado");
+      if (frameCount % 300 === 0) console.log(`[Character3D] Renderizando... ${frameCount} frames`);
     }
     rafRef.current = requestAnimationFrame(animate);
 
@@ -157,10 +182,18 @@ export function Character3D() {
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-full pointer-events-none"
-      style={{ minHeight: 200 }}
-    />
+    <div className="relative w-full h-full pointer-events-none" style={{ minHeight: 200 }}>
+      <div ref={containerRef} className="w-full h-full" />
+      {status.startsWith("error") && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="text-[8px] text-red-400/60 text-center px-2">{status}</p>
+        </div>
+      )}
+      {status !== "ready" && !status.startsWith("error") && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="size-4 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+        </div>
+      )}
+    </div>
   );
 }
