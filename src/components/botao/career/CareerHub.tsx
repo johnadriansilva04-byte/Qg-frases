@@ -106,7 +106,7 @@ export function CareerHub({
   const top5 = sortedTable.slice(0, 5);
 
   return (
-    <div className="relative w-full max-w-6xl mx-auto px-3 pb-6 min-h-screen">
+    <div className="relative w-full max-w-6xl mx-auto px-3 sm:px-4 pb-6 min-h-screen">
       {/* ═══ STADIUM ATMOSPHERE ═══ */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
         {/* Pitch green glow */}
@@ -129,9 +129,9 @@ export function CareerHub({
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-[300px] h-[150px] rounded-full border border-white/[0.02]" />
       </div>
 
-      <div className="relative z-10 space-y-2.5">
+      <div className="relative z-10 space-y-2 sm:space-y-2.5">
         {/* ═══════ TOP ROW: Profile + News ═══════ */}
-        <div className="grid gap-2.5 lg:grid-cols-[1fr_1.5fr]">
+        <div className="grid gap-2 sm:gap-2.5 lg:grid-cols-[1fr_1.5fr]">
           {/* Coach Profile Card */}
           {coach && (
             <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-slate-900/80 to-slate-950/60 backdrop-blur-sm overflow-hidden">
@@ -199,12 +199,12 @@ export function CareerHub({
         </div>
 
         {/* ═══════ CENTER ROW: Modules + Play + Standings ═══════ */}
-        <div className="grid gap-2.5 lg:grid-cols-[1fr_1.1fr] items-start">
+        <div className="grid gap-2.5 lg:grid-cols-[1fr_1.1fr] lg:gap-5 items-start">
           {/* Left: 2x2 Module Grid */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
             <MiniModule icon={<Calendar className="size-4" />} title="Calendário" sub={`${rodadaAtual} jogos`} accent="sky" onClick={onOpenCalendario} />
             <MiniModule icon={<Trophy className="size-4" />} title="Classificação" sub={userPos > 0 ? `${userPos}º lugar` : "Ver tabela"} accent="amber" badge={userPos > 0 ? `${userPos}º` : undefined} onClick={onOpenClassificacao} />
-            <MiniModule icon={<Coins className="size-4" />} title="Economia" sub="Bolsa & Mercado" accent="emerald" onClick={onOpenEconomia} />
+            <MiniModule icon={<Coins className="size-4" />} title="Economia" sub="Ações & Clubes" accent="emerald" onClick={onOpenEconomia} />
             <MiniModule icon={<ArrowLeftRight className="size-4" />} title="Transferências" sub={ofertasPendentes > 0 ? `${ofertasPendentes} ofertas` : "Negociações"} accent="fuchsia" badge={ofertasPendentes > 0 ? String(ofertasPendentes) : undefined} onClick={onOpenTransferencias} />
           </div>
 

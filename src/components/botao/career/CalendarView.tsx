@@ -79,13 +79,13 @@ export function CalendarView({ tour, userTeam, copaBrasil }: CalendarViewProps) 
 
   return (
     <div className="panel">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-2.5 sm:mb-3 flex items-center gap-2">
         <Calendar className="size-4 text-emerald-400" />
-        <h3 className="font-display text-sm font-bold tracking-wide">Calendário da Temporada</h3>
+        <h3 className="font-display text-xs sm:text-sm font-bold tracking-wide">Calendário da Temporada</h3>
       </div>
 
       {/* Filtro de competição (Unificado | Brasileirão | Copa do Brasil) */}
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-3 sm:mb-4 grid grid-cols-3 gap-1.5 sm:gap-2">
         <CompFilter
           active={competicao === "unificado"}
           onClick={() => setCompeticao("unificado")}

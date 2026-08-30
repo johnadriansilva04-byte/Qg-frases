@@ -80,7 +80,7 @@ export function ClassificacaoScreen({
   const semTabela = tabela.length === 0;
 
   return (
-    <div className="relative w-full max-w-5xl mx-auto px-4 py-6">
+    <div className="relative w-full max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-6">
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-16 left-1/4 h-[300px] w-[300px] rounded-full bg-amber-500/4 blur-[100px]" />
@@ -89,7 +89,7 @@ export function ClassificacaoScreen({
 
       <div className="relative z-10">
         {/* Header */}
-        <div className="mb-5 flex items-center gap-3">
+        <div className="mb-3 sm:mb-5 flex items-center gap-3">
           <button
             onClick={onBack}
             className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition hover:bg-white/10"
@@ -102,16 +102,16 @@ export function ClassificacaoScreen({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
           {/* Menu de categorias */}
-          <nav className="space-y-1">
+          <nav className="flex gap-1.5 overflow-x-auto pb-1 md:flex-col md:gap-1 md:overflow-visible md:pb-0">
             {CATEGORIAS.map((c) => {
               const isActive = categoria === c.id;
               return (
                 <button
                   key={c.id}
                   onClick={() => setCategoria(c.id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all duration-200 ${
+                  className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-left text-[11px] sm:text-xs font-bold transition-all duration-200 md:w-full md:whitespace-normal ${
                     isActive
                       ? `bg-${c.color}-500/15 text-${c.color}-400 border border-${c.color}-500/20`
                       : "text-slate-500 hover:bg-white/5 hover:text-white border border-transparent"
