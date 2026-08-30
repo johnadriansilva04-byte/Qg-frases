@@ -194,16 +194,18 @@ export function CareerHub({
 
           {/* News Portal */}
           {career && (
-            <div className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-3 overflow-hidden">
-              <div className="flex items-center gap-2 mb-2">
-                <Newspaper className="size-3 text-slate-500" />
-                <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Portal de Notícias</span>
+            <div className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-2 overflow-hidden">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Newspaper className="size-2.5 text-slate-500" />
+                <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-bold">Notícias</span>
               </div>
-              <NewsPortal
-                headlines={career.headlines}
-                userTeam={userTeam}
-                coachNome={career.coach.apelido || career.coach.nome}
-              />
+              <div className="max-h-[140px] overflow-y-auto">
+                <NewsPortal
+                  headlines={career.headlines}
+                  userTeam={userTeam}
+                  coachNome={career.coach.apelido || career.coach.nome}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -250,7 +252,7 @@ export function CareerHub({
             <button
               data-testid="entrar-em-campo"
               onClick={() => setMostrarModalModo(true)}
-              className="group relative w-full overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-600 via-emerald-500 to-cyan-500 p-4 text-left transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] active:scale-[0.98]"
+              className="group relative w-full overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-600 via-emerald-500 to-cyan-500 p-3 text-left transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] active:scale-[0.98]"
             >
               {/* Diagonal lines pattern */}
               <div className="pointer-events-none absolute inset-0 opacity-10"
@@ -281,15 +283,10 @@ export function CareerHub({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2.5 transition group-hover:bg-white/20">
-                  <Zap className="size-5 text-white" />
-                  <div>
-                    <p className="text-sm font-black text-white uppercase tracking-wider">JOGAR</p>
-                    <p className="text-[8px] text-emerald-100/50 uppercase tracking-widest">
-                      {userPos > 0 ? `${userPos}º na tabela` : ""}
-                    </p>
-                  </div>
-                  <ArrowRight className="size-4 text-white transition-transform group-hover:translate-x-1" />
+                <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-2 transition group-hover:bg-white/20">
+                  <Zap className="size-4 text-white" />
+                  <p className="text-xs font-black text-white uppercase tracking-wider">JOGAR</p>
+                  <ArrowRight className="size-3.5 text-white transition-transform group-hover:translate-x-1" />
                 </div>
               </div>
 
