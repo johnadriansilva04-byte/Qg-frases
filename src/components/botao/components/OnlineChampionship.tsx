@@ -516,6 +516,7 @@ export function OnlineChampionship({
         userId={userId}
         meuTime={meuTime}
         stageLabel={`Campeonato · Rodada ${confrontoAtivo?.rodada ?? campeonato.rodada_atual}`}
+        isChampionship
         onSair={() => {
           setMesaAtiva(null);
           setConfrontoAtivo(null);
@@ -846,12 +847,17 @@ function SalaCampeonato({
                 />
                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-center sm:text-left">
-                    <p className="text-[9px] uppercase tracking-[0.3em] text-emerald-400/80 font-bold">Sua Próxima Partida</p>
+                    <p className="text-[9px] uppercase tracking-[0.3em] text-emerald-400/80 font-bold">
+                      {meuConfrontoPendente.rodada === totalRodadas && confrontos.length > 0 ? "🏆 FINAL" : "Sua Próxima Partida"}
+                    </p>
                     <p className="mt-1 font-display text-lg font-black text-white">
                       {abrevDoParticipante(camp, meuConfrontoPendente.j1_id!)} <span className="text-white/30">×</span> {abrevDoParticipante(camp, meuConfrontoPendente.j2_id!)}
                     </p>
                     <p className="text-[10px] text-slate-500">
                       Rodada {meuConfrontoPendente.rodada}
+                      {meuConfrontoPendente.rodada === totalRodadas && confrontos.filter((c) => c.rodada === meuConfrontoPendente!.rodada && !c.bye).length <= 2 && (
+                        <span className="text-amber-300"> · FINAL</span>
+                      )}
                       {participanteDo(camp, meuConfrontoPendente.j1_id === userId ? meuConfrontoPendente.j2_id : meuConfrontoPendente.j1_id)?.bot && (
                         <span className="text-sky-300"> · Bot</span>
                       )}
@@ -969,27 +975,60 @@ function SalaCampeonato({
         {/* ═══ STATUS: Finalizado (Pódio) ═══ */}
         {camp.status === "finalizado" && (
           <div className="flex flex-col items-center py-8">
-            {/* Triumphant crown */}
-            <div className="relative mb-4">
-              <div className="absolute inset-0 rounded-full bg-amber-400/20 blur-2xl" />
-              <div className="relative flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-400/20 to-amber-600/10 border border-amber-400/30">
-                <Crown className="size-10 text-amber-400" />
-              </div>
-            </div>
-            <p className="text-[10px] uppercase tracking-[0.4em] text-amber-400/60 font-bold">Campeão</p>
-            <h2 className="mt-1 font-display text-3xl font-black text-white">
-              {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
-            </h2>
-            <p className="mt-2 text-sm text-slate-400">
-              {souCamp
-                ? `Parabéns! Você levou o título! +50 SOV${(camp.premio_sov ?? 0) > 0 ? ` + ${camp.premio_sov} SOV de prêmio` : ""}.`
-                : "Parabéns ao campeão!"}
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button onClick={onBack} className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-bold text-slate-400 transition hover:border-white/20 hover:text-white">
-                Voltar às Salas
-              </button>
-            </div>
+            {/* VENCEDOR: Campeão */}
+            {souCamp && (
+              <>
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 rounded-full bg-amber-400/20 blur-2xl animate-pulse" />
+                  <div className="relative flex size-24 items-center justify-center rounded-full bg-gradient-to-br from-amber-400/30 to-amber-600/15 border-2 border-amber-400/50 shadow-lg shadow-amber-500/20">
+                    <Crown className="size-12 text-amber-400" />
+                  </div>
+                </div>
+                <p className="text-[10px] uppercase tracking-[0.4em] text-amber-400/80 font-bold">🏆 CAMPEÃO!</p>
+                <h2 className="mt-2 font-display text-3xl font-black text-white">
+                  {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
+                </h2>
+                <p className="mt-3 text-center text-sm text-emerald-300/80">
+                  Parabéns! Você venceu o torneio!
+                </p>
+                <div className="mt-4 flex flex-col items-center gap-1">
+                  {(camp.premio_sov ?? 0) > 0 && (
+                    <p className="text-xs text-amber-300/80">🏆 +{camp.premio_sov} SOV de prêmio</p>
+                  )}
+                  <p className="text-xs text-slate-500">+50 SOV por título conquistado</p>
+                </div>
+                <div className="mt-8 flex gap-3">
+                  <button onClick={onBack} className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-slate-950 transition hover:from-amber-400 hover:to-amber-300 active:scale-[0.97]">
+                    Voltar às Salas
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* PERDEDOR: Fim do Torneio */}
+            {!souCamp && (
+              <>
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 rounded-full bg-slate-500/10 blur-2xl" />
+                  <div className="relative flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-slate-600/20 to-slate-800/10 border border-slate-500/30">
+                    <Crown className="size-10 text-slate-500/60" />
+                  </div>
+                </div>
+                <p className="text-[10px] uppercase tracking-[0.4em] text-slate-500/60 font-bold">FIM DO TORNEIO</p>
+                <p className="mt-2 text-sm text-slate-400">Você perdeu a final.</p>
+                <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/5 px-6 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-amber-400/60 font-bold">🏆 CAMPEÃO</p>
+                  <p className="mt-1 font-display text-xl font-black text-amber-300">
+                    {nomeDoParticipante(camp, camp.vencedor_id ?? "")}
+                  </p>
+                </div>
+                <div className="mt-8 flex gap-3">
+                  <button onClick={onBack} className="rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-bold text-slate-400 transition hover:border-white/20 hover:text-white">
+                    Voltar às Salas
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

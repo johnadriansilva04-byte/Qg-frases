@@ -49,6 +49,8 @@ type Props = {
   onFinalizada?: (r: ResultadoMesa) => void;
   /** Rótulo exibido no MatchView (ex.: "Amistoso Online" / "Campeonato · Rodada 2"). */
   stageLabel?: string;
+  /** Se true, desabilita a lógica de Melhor de 3 (cada partida é única — usado em Campeonato). */
+  isChampionship?: boolean;
 };
 
 /** Total de jogadas da partida (28 = 14 por jogador). */
@@ -64,6 +66,7 @@ export function MesaOnlineMatch({
   onSair,
   onFinalizada,
   stageLabel = "Partida Online",
+  isChampionship = false,
 }: Props) {
   const souJogador1 = mesa.jogador_1_id === userId;
 
@@ -79,6 +82,8 @@ export function MesaOnlineMatch({
   const [partidaIniciada, setPartidaIniciada] = useState(mesa.status === "em_andamento");
   const [finalizado, setFinalizado] = useState(mesa.status === "finalizado");
   // Série melhor de 3 (rastreada localmente, derivada do fim autoritativo de cada jogo)
+  // NO TORNEIO (isChampionship), a série é sempre 0×0 e o jogo é sempre 1 —
+  // cada partida é single-match, sem repetição.
   const [serieJ1, setSerieJ1] = useState(0);
   const [serieJ2, setSerieJ2] = useState(0);
   const [jogoAtual, setJogoAtual] = useState(1);
@@ -225,8 +230,9 @@ export function MesaOnlineMatch({
   }, [mesa.mesa_id, userId]);
 
   // Detecta fim de um jogo da série e decide próximo passo (melhor de 3).
+  // NO TORNEIO: pula completamente — cada partida é single-match.
   useEffect(() => {
-    if (!finalizado) return;
+    if (!finalizado || isChampionship) return;
     const golsJ1 = placar[0] ?? 0;
     const golsJ2 = placar[1] ?? 0;
     // Vencedor do jogo atual (determinado autoritativamente pelo placar).
@@ -239,7 +245,7 @@ export function MesaOnlineMatch({
     });
     setSerieJ2((prev) => prev + (jogoVencidoPorJ2 ? 1 : 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalizado]);
+  }, [finalizado, isChampionship]);
 
   // Reabre a mesa se o status mudar de finalizado → em_andamento (reconexão/restart)
   useEffect(() => {
@@ -462,7 +468,26 @@ export function MesaOnlineMatch({
     setJogoAtual((j) => j + 1);
   };
 
-  const serieDecidida = serieJ1 >= VITORIAS_SERIE || serieJ2 >= VITORIAS_SERIE;
+  // NO TORNEIO: o jogo acabou = resultado final, sem melhor de 3.
+  // Chama onFinalizada imediatamente quando a partida termina.
+  useEffect(() => {
+    if (!finalizado || !isChampionship) return;
+    const golsJ1 = placar[0] ?? 0;
+    const golsJ2 = placar[1] ?? 0;
+    let vencedorId: string | null = null;
+    if (golsJ1 > golsJ2) vencedorId = mesa.jogador_1_id;
+    else if (golsJ2 > golsJ1) vencedorId = mesa.jogador_2_id;
+    onFinalizadaRef.current?.({
+      vencedorId,
+      golsJ1,
+      golsJ2,
+      empate: vencedorId === null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalizado, isChampionship]);
+
+  // AMISTOSO: melhor de 3 — série decidida → notifica e sai.
+  const serieDecidida = !isChampionship && (serieJ1 >= VITORIAS_SERIE || serieJ2 >= VITORIAS_SERIE);
   const serieVencedorId =
     serieJ1 >= VITORIAS_SERIE
       ? mesa.jogador_1_id
@@ -470,9 +495,8 @@ export function MesaOnlineMatch({
         ? mesa.jogador_2_id
         : null;
 
-  // Quando a série é decidida, notifica e sai.
   useEffect(() => {
-    if (!serieDecidida || !finalizado) return;
+    if (!serieDecidida || !finalizado || isChampionship) return;
     onFinalizadaRef.current?.({
       vencedorId: serieVencedorId,
       golsJ1: serieJ1,
@@ -533,8 +557,9 @@ export function MesaOnlineMatch({
     );
   }
 
-  // Fim de um jogo da série (mas a série ainda não acabou) → botão próximo jogo.
-  if (finalizado && !serieDecidida) {
+  // AMISTOSO: Fim de um jogo da série (mas a série ainda não acabou) → botão próximo jogo.
+  // NO TORNEIO: nunca mostra esta tela — cada partida é única.
+  if (finalizado && !serieDecidida && !isChampionship) {
     const serieMeu = souJogador1 ? serieJ1 : serieJ2;
     const serieOp = souJogador1 ? serieJ2 : serieJ1;
     return (
@@ -598,7 +623,7 @@ export function MesaOnlineMatch({
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             {meuTurno ? "Seu turno" : "Turno do oponente"} · Oponente:{" "}
-            {oponenteOnline ? "Online" : "Offline"} · Série {serieJ1} x {serieJ2} · Jogadas:{" "}
+            {oponenteOnline ? "Online" : "Offline"}{!isChampionship ? ` · Série ${serieJ1} x ${serieJ2}` : ""} · Jogadas:{" "}
             {turnsLeft}/{TOTAL_JOGADAS}
           </p>
         </div>
