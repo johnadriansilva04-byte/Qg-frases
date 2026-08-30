@@ -234,15 +234,17 @@ export function CarBrawlGame({ onBack }: Props) {
   // ═══════════════════════════════════════════
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
     let lastTime = performance.now();
 
     const loop = (now: number) => {
       gameLoopRef.current = requestAnimationFrame(loop);
       const dt = Math.min((now - lastTime) / 16.667, 3);
       lastTime = now;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
       const st = screenRef.current;
       const cfg = cfgRef.current;
