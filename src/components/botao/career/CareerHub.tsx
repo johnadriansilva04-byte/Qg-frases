@@ -129,39 +129,31 @@ export function CareerHub({
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-[300px] h-[150px] rounded-full border border-white/[0.02]" />
       </div>
 
-      <div className="relative z-10 space-y-3">
+      <div className="relative z-10 space-y-2.5">
         {/* ═══════ TOP ROW: Profile + News ═══════ */}
-        <div className="grid gap-3 lg:grid-cols-[1fr_1.3fr]">
+        <div className="grid gap-2.5 lg:grid-cols-[1fr_1.5fr]">
           {/* Coach Profile Card */}
           {coach && (
             <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-slate-900/80 to-slate-950/60 backdrop-blur-sm overflow-hidden">
-              {/* Team color strip */}
-              <div className="h-1" style={{ background: `linear-gradient(90deg, ${userTeam.primary}, ${userTeam.secondary})` }} />
-
-              <div className="p-3">
-                <div className="flex items-center gap-3">
-                  {/* Avatar */}
+              <div className="h-0.5" style={{ background: `linear-gradient(90deg, ${userTeam.primary}, ${userTeam.secondary})` }} />
+              <div className="p-2.5">
+                <div className="flex items-center gap-2.5">
                   <div className="relative shrink-0">
-                    <div className="flex size-12 items-center justify-center rounded-xl border border-white/10"
+                    <div className="flex size-10 items-center justify-center rounded-lg border border-white/10"
                       style={{ background: userTeam.primary }}>
-                      <span className="flex size-9 items-center justify-center rounded-lg"
+                      <span className="flex size-7 items-center justify-center rounded-md"
                         style={{ background: userTeam.secondary }}>
-                        <span className="text-lg">{nivel?.atual.icon ?? "⭐"}</span>
+                        <span className="text-base">{nivel?.atual.icon ?? "⭐"}</span>
                       </span>
                     </div>
-                    {/* Season badge */}
-                    <div className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-black text-slate-950 border border-slate-900">
+                    <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[7px] font-black text-slate-950 border border-slate-900">
                       T{temporada}
                     </div>
                   </div>
-
-                  {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="text-[8px] uppercase tracking-[0.3em] text-emerald-500/50 font-bold">Treinador</p>
-                    <h2 className="font-display text-sm font-black text-white truncate">
-                      {coach.apelido || coach.nome}
-                    </h2>
-                    <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
+                    <p className="text-[7px] uppercase tracking-[0.3em] text-emerald-500/50 font-bold">Treinador</p>
+                    <h2 className="font-display text-xs font-black text-white truncate">{coach.apelido || coach.nome}</h2>
+                    <div className="flex items-center gap-1 text-[8px] text-slate-500">
                       <span className="font-bold text-white/60">{userTeam.name}</span>
                       <span className="text-slate-700">·</span>
                       <span className="text-cyan-400/70">{DIVISAO_SHORT[divisao]}</span>
@@ -170,36 +162,32 @@ export function CareerHub({
                     </div>
                   </div>
                 </div>
-
-                {/* Stats row */}
-                <div className="grid grid-cols-4 gap-1.5 mt-3">
-                  <StatPill icon={<Heart className="size-3" />} label="Moral" value={`${moral}%`} color={moralColor} />
-                  <StatPill icon={<Crown className="size-3" />} label="SOV" value={String(coach.sov)} color="text-amber-300" />
-                  <StatPill icon={<Coins className="size-3" />} label="Caixa" value={String(caixa)} color={caixa >= 0 ? "text-emerald-300" : "text-rose-300"} />
-                  <StatPill icon={<TrendingUp className="size-3" />} label="Pos." value={userPos > 0 ? `${userPos}º` : "—"} color="text-cyan-300" />
+                <div className="grid grid-cols-4 gap-1 mt-2">
+                  <StatPill icon={<Heart className="size-2.5" />} label="Moral" value={`${moral}%`} color={moralColor} />
+                  <StatPill icon={<Crown className="size-2.5" />} label="SOV" value={String(coach.sov)} color="text-amber-300" />
+                  <StatPill icon={<Coins className="size-2.5" />} label="Caixa" value={String(caixa)} color={caixa >= 0 ? "text-emerald-300" : "text-rose-300"} />
+                  <StatPill icon={<TrendingUp className="size-2.5" />} label="Pos." value={userPos > 0 ? `${userPos}º` : "—"} color="text-cyan-300" />
                 </div>
-
-                {/* Season progress */}
-                <div className="mt-2.5 flex items-center gap-2">
-                  <span className="text-[8px] uppercase tracking-widest text-slate-600 shrink-0">Rodada</span>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-[7px] uppercase tracking-widest text-slate-600 shrink-0">Rodada</span>
                   <div className="flex-1 h-1 rounded-full bg-slate-800 overflow-hidden">
                     <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-700"
                       style={{ width: `${seasonProgress}%` }} />
                   </div>
-                  <span className="text-[9px] font-bold text-slate-500 shrink-0">{rodadaAtual}/{totalRodadas}</span>
+                  <span className="text-[8px] font-bold text-slate-500 shrink-0">{rodadaAtual}/{totalRodadas}</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* News Portal */}
+          {/* News Portal — thin strip */}
           {career && (
             <div className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-2 overflow-hidden">
               <div className="flex items-center gap-1.5 mb-1">
                 <Newspaper className="size-2.5 text-slate-500" />
                 <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-bold">Notícias</span>
               </div>
-              <div className="max-h-[140px] overflow-y-auto">
+              <div className="max-h-[100px] overflow-y-auto">
                 <NewsPortal
                   headlines={career.headlines}
                   userTeam={userTeam}
@@ -210,126 +198,121 @@ export function CareerHub({
           )}
         </div>
 
-        {/* ═══════ CENTER ROW: Modules + Play ═══════ */}
-        <div className="grid gap-3 lg:grid-cols-[1fr_1.1fr] items-start">
+        {/* ═══════ CENTER ROW: Modules + Play + Standings ═══════ */}
+        <div className="grid gap-2.5 lg:grid-cols-[1fr_1.1fr] items-start">
           {/* Left: 2x2 Module Grid */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <MiniModule
-              icon={<Calendar className="size-4" />}
-              title="Calendário"
-              sub={`${rodadaAtual} jogos`}
-              accent="sky"
-              onClick={onOpenCalendario}
-            />
-            <MiniModule
-              icon={<Trophy className="size-4" />}
-              title="Classificação"
-              sub={userPos > 0 ? `${userPos}º lugar` : "Ver tabela"}
-              accent="amber"
-              badge={userPos > 0 ? `${userPos}º` : undefined}
-              onClick={onOpenClassificacao}
-            />
-            <MiniModule
-              icon={<Coins className="size-4" />}
-              title="Economia"
-              sub="Bolsa & Mercado"
-              accent="emerald"
-              onClick={onOpenEconomia}
-            />
-            <MiniModule
-              icon={<ArrowLeftRight className="size-4" />}
-              title="Transferências"
-              sub={ofertasPendentes > 0 ? `${ofertasPendentes} ofertas` : "Negociações"}
-              accent="fuchsia"
-              badge={ofertasPendentes > 0 ? String(ofertasPendentes) : undefined}
-              onClick={onOpenTransferencias}
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <MiniModule icon={<Calendar className="size-4" />} title="Calendário" sub={`${rodadaAtual} jogos`} accent="sky" onClick={onOpenCalendario} />
+            <MiniModule icon={<Trophy className="size-4" />} title="Classificação" sub={userPos > 0 ? `${userPos}º lugar` : "Ver tabela"} accent="amber" badge={userPos > 0 ? `${userPos}º` : undefined} onClick={onOpenClassificacao} />
+            <MiniModule icon={<Coins className="size-4" />} title="Economia" sub="Bolsa & Mercado" accent="emerald" onClick={onOpenEconomia} />
+            <MiniModule icon={<ArrowLeftRight className="size-4" />} title="Transferências" sub={ofertasPendentes > 0 ? `${ofertasPendentes} ofertas` : "Negociações"} accent="fuchsia" badge={ofertasPendentes > 0 ? String(ofertasPendentes) : undefined} onClick={onOpenTransferencias} />
           </div>
 
-          {/* Right: Play CTA + Top 5 */}
-          <div className="space-y-3">
-            {/* ENTRAR EM CAMPO — Dominant CTA */}
+          {/* Right: Play CTA + Full Standings */}
+          <div className="space-y-2.5">
+            {/* ENTRAR EM CAMPO */}
             <button
               data-testid="entrar-em-campo"
               onClick={() => setMostrarModalModo(true)}
               className="group relative w-full overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-600 via-emerald-500 to-cyan-500 p-3 text-left transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] active:scale-[0.98]"
             >
-              {/* Diagonal lines pattern */}
-              <div className="pointer-events-none absolute inset-0 opacity-10"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.3) 8px, rgba(255,255,255,0.3) 9px)`,
-                }}
-              />
-
+              <div className="pointer-events-none absolute inset-0 opacity-10" style={{ backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.3) 8px, rgba(255,255,255,0.3) 9px)` }} />
               <div className="relative z-10 flex items-center justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] uppercase tracking-[0.3em] text-emerald-100/60 font-bold mb-1">
+                  <p className="text-[8px] uppercase tracking-[0.3em] text-emerald-100/60 font-bold mb-0.5">
                     {tour.phase === "fim" ? "Campanha Encerrada" : (proximoJogo?.tipo ?? "Aguardando")}
                   </p>
                   {tour.phase === "fim" ? (
-                    <p className="font-display text-xl font-black text-white">🏆 Campeão!</p>
+                    <p className="font-display text-lg font-black text-white">🏆 Campeão!</p>
                   ) : userFixture ? (
-                    <div className="flex items-center gap-3">
-                      <div className="text-center">
-                        <TeamBadge team={resolveTeam(userFixture.homeId, userTeam)} size="sm" />
-                      </div>
-                      <span className="font-display text-lg font-black text-white/40">×</span>
-                      <div className="text-center">
-                        <TeamBadge team={resolveTeam(userFixture.awayId, userTeam)} size="sm" />
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <TeamBadge team={resolveTeam(userFixture.homeId, userTeam)} size="sm" />
+                      <span className="font-display text-base font-black text-white/40">×</span>
+                      <TeamBadge team={resolveTeam(userFixture.awayId, userTeam)} size="sm" />
                     </div>
                   ) : (
-                    <p className="text-xs text-emerald-100/50">Aguardando fechamento...</p>
+                    <p className="text-[11px] text-emerald-100/50">Aguardando fechamento...</p>
                   )}
                 </div>
-
                 <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-2 transition group-hover:bg-white/20">
                   <Zap className="size-4 text-white" />
                   <p className="text-xs font-black text-white uppercase tracking-wider">JOGAR</p>
                   <ArrowRight className="size-3.5 text-white transition-transform group-hover:translate-x-1" />
                 </div>
               </div>
-
               {userFixture && (
-                <div className="relative z-10 mt-2 flex items-center gap-3 text-[9px] text-emerald-100/40">
+                <div className="relative z-10 mt-1.5 flex items-center gap-2 text-[8px] text-emerald-100/40">
                   <span>{userFixture.stage}</span>
                   <span>·</span>
-                  <span>{custoManutencao} SOV manutenção</span>
+                  <span>{custoManutencao} SOV</span>
                 </div>
               )}
             </button>
 
-            {/* Quick Standings — Top 5 */}
-            <div className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <Shield className="size-3 text-amber-400/60" />
-                  <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Classificação</span>
-                </div>
-                <button onClick={onOpenClassificacao} className="text-[9px] text-slate-600 hover:text-white/40 transition">
-                  Ver tabela <ChevronRight className="inline size-2.5" />
-                </button>
+            {/* Classification — Complete Table */}
+            <div className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-2.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Shield className="size-3 text-amber-400/60" />
+                <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-bold">Classificação</span>
               </div>
 
-              <div className="space-y-0.5">
-                {top5.length > 0 ? top5.map((row, i) => (
-                  <div key={row.teamId} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[10px] transition ${
-                    row.teamId === userTeam.id ? "bg-emerald-500/10 border border-emerald-500/20" : "hover:bg-white/[0.02]"
-                  }`}>
-                    <span className={`w-4 text-center font-black ${
-                      i === 0 ? "text-amber-400" : i === 1 ? "text-slate-400" : i === 2 ? "text-amber-600" : "text-slate-600"
-                    }`}>
-                      {i + 1}º
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <TeamBadge team={getTeam(row.teamId)} size="sm" />
-                    </div>
-                    <span className="font-black text-white/70 tabular-nums">{row.p}</span>
+              {top5.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[9px]">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="w-5 pb-1 text-left font-normal text-slate-600">#</th>
+                          <th className="pb-1 text-left font-normal text-slate-600">TIME</th>
+                          <th className="w-5 pb-1 text-center font-normal text-slate-600">P</th>
+                          <th className="w-4 pb-1 text-center font-normal text-slate-600">J</th>
+                          <th className="w-4 pb-1 text-center font-normal text-slate-600">V</th>
+                          <th className="w-4 pb-1 text-center font-normal text-slate-600">E</th>
+                          <th className="w-4 pb-1 text-center font-normal text-slate-600">D</th>
+                          <th className="w-5 pb-1 text-center font-normal text-slate-600">GP</th>
+                          <th className="w-5 pb-1 text-center font-normal text-slate-600">GC</th>
+                          <th className="w-5 pb-1 text-center font-normal text-slate-600">SG</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {top5.map((row, i) => {
+                          const position = i + 1;
+                          const isUser = row.teamId === userTeam.id;
+                          const zone = position <= 4 ? "libertadores" : position <= 6 ? "copa-brasil" : "";
+                          const zoneBorder = zone === "libertadores" ? "border-l-2 border-l-sky-500" : zone === "copa-brasil" ? "border-l-2 border-l-emerald-500" : "";
+                          const sg = row.gp - row.gc;
+                          return (
+                            <tr key={row.teamId} className={`border-b border-white/[0.03] last:border-0 ${isUser ? "bg-emerald-500/5" : ""} ${zoneBorder}`}>
+                              <td className="py-1 font-bold text-slate-500 text-center">{position}</td>
+                              <td className="py-1 font-bold text-white/80"><TeamBadge team={getTeam(row.teamId)} size="sm" /></td>
+                              <td className="py-1 text-center font-black text-amber-300">{row.p}</td>
+                              <td className="py-1 text-center text-slate-500">{row.j}</td>
+                              <td className="py-1 text-center text-emerald-400">{row.v}</td>
+                              <td className="py-1 text-center text-slate-500">{row.e}</td>
+                              <td className="py-1 text-center text-rose-400/70">{row.d}</td>
+                              <td className="py-1 text-center text-slate-500">{row.gp}</td>
+                              <td className="py-1 text-center text-slate-500">{row.gc}</td>
+                              <td className={`py-1 text-center font-bold ${sg > 0 ? "text-emerald-400" : sg < 0 ? "text-rose-400" : "text-slate-500"}`}>{sg > 0 ? `+${sg}` : sg}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                )) : (
-                  <p className="text-[10px] text-slate-600 text-center py-2">Sem dados</p>
-                )}
-              </div>
+                  {/* Legend + Ver tabela */}
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[7px] text-slate-600">
+                      <span className="flex items-center gap-0.5"><span className="inline-block size-1.5 rounded-full bg-sky-500" /> Libertadores</span>
+                      <span className="flex items-center gap-0.5"><span className="inline-block size-1.5 rounded-full bg-emerald-500" /> Copa</span>
+                    </div>
+                    <button onClick={onOpenClassificacao} className="flex items-center gap-0.5 text-[9px] font-bold text-slate-500 hover:text-white/50 transition">
+                      Ver tabela completa <ChevronRight className="size-3" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-[10px] text-slate-600 text-center py-2">Sem dados</p>
+              )}
             </div>
           </div>
         </div>
