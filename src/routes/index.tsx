@@ -347,7 +347,7 @@ function Index() {
       </div>
 
       {/* ═══ 3D CHARACTER ═══ */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[8] pointer-events-none w-[200px] h-[280px] sm:w-[300px] sm:h-[400px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[30%] z-[8] pointer-events-none w-[200px] h-[300px] sm:w-[280px] sm:h-[400px]">
         <Character3D />
       </div>
 
