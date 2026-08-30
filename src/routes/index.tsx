@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Brain, Gamepad2, GraduationCap, ArrowRight } from "lucide-react";
+import { Character3D } from "@/components/Character3D";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -328,6 +329,11 @@ function Index() {
 
       {/* ═══ COMPOSITION ═══ */}
       <div className="relative z-10 w-full h-full">
+
+        {/* 3D CHARACTER — static, centered, behind modules */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[8] pointer-events-none w-[280px] h-[380px] sm:w-[340px] sm:h-[440px]">
+          <Character3D />
+        </div>
 
         {/* CIDADELA DO PRACINHA — fixed center */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none text-center" style={{ animation: "glowBreathe 7s ease-in-out infinite" }}>
