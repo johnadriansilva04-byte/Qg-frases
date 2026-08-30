@@ -426,13 +426,13 @@ export function CarBrawlGame({ onBack }: Props) {
   // ── MENU ──
   if (screen === "menu") {
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <button onClick={onBack} className="text-xs font-bold text-white/50 hover:text-white/80">← Voltar</button>
           <h1 className="text-lg font-display font-black">🏎️ <span className="text-red-400">Car</span> <span className="text-amber-400">Brawl</span></h1>
           <div className="w-12" />
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6">
+        <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center gap-4 p-6">
           <div className="text-center mb-4">
             <p className="text-xs text-white/40">Sumo com carros — empurre para fora da arena!</p>
           </div>
@@ -460,8 +460,8 @@ export function CarBrawlGame({ onBack }: Props) {
     ];
 
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-white/10">
           <button onClick={() => setScreen("menu")} className="text-xs font-bold text-white/50">← Voltar</button>
           <h2 className="text-sm font-display font-black">Monte seu Carrinho</h2>
           <div className="w-12" />
@@ -512,8 +512,8 @@ export function CarBrawlGame({ onBack }: Props) {
   if (screen === "arena_select") {
     const arenaKeys = Object.keys(ARENAS) as ArenaType[];
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-white/10">
           <button onClick={() => setScreen("build")} className="text-xs font-bold text-white/50">← Voltar</button>
           <h2 className="text-sm font-display font-black">Escolha a Arena</h2>
           <div className="w-12" />
@@ -583,8 +583,8 @@ export function CarBrawlGame({ onBack }: Props) {
   // ── CAREER MAP ──
   if (screen === "career_map") {
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-white/10">
           <button onClick={() => setScreen("menu")} className="text-xs font-bold text-white/50">← Voltar</button>
           <h2 className="text-sm font-display font-black">Carreira</h2>
           <span className="text-xs text-amber-400">⭐ {career.totalStars}</span>
@@ -627,8 +627,8 @@ export function CarBrawlGame({ onBack }: Props) {
   if (screen === "online_lobby") {
     const arenaKeys = Object.keys(ARENAS) as ArenaType[];
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-white/10">
           <button onClick={() => setScreen("menu")} className="text-xs font-bold text-white/50">← Voltar</button>
           <h2 className="text-sm font-display font-black">🌐 Online</h2>
           <div className="w-12" />
@@ -671,8 +671,8 @@ export function CarBrawlGame({ onBack }: Props) {
     // Championship hasn't started yet — show setup
     if (champBracket.rounds.length === 0) {
       return (
-        <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+        <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
+          <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-white/10">
             <button onClick={() => setScreen("menu")} className="text-xs font-bold text-white/50">← Voltar</button>
             <h2 className="text-sm font-display font-black">🏆 Campeonato</h2>
             <div className="w-12" />
@@ -704,8 +704,8 @@ export function CarBrawlGame({ onBack }: Props) {
     }
     // Championship bracket view
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-white/10">
           <button onClick={() => { setChampBracket({ rounds: [], currentRound: 0, currentMatch: 0, champion: null }); setScreen("menu"); }} className="text-xs font-bold text-white/50">← Sair</button>
           <h2 className="text-sm font-display font-black">🏆 Campeonato — {ARENAS[selectedArena]?.icon} {ARENAS[selectedArena]?.label}</h2>
           <div className="w-12" />
@@ -765,7 +765,7 @@ export function CarBrawlGame({ onBack }: Props) {
   // ── RESULT ──
   if (screen === "result" && result) {
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white items-center justify-center p-6">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white items-center justify-center p-6">
         <div className="text-center">
           <h2 className={`text-3xl font-display font-black mb-2 ${result.survived ? "text-amber-400" : "text-red-400"}`}>
             {result.survived ? "🏆 VITÓRIA!" : `#${result.position}`}
@@ -853,9 +853,9 @@ export function CarBrawlGame({ onBack }: Props) {
   const player = vehiclesRef.current.find((v) => v.isPlayer);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#0a0e1a] text-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
+      <div className="flex shrink-0 items-center justify-between px-3 py-2 border-b border-white/10">
         <button onClick={() => setScreen("menu")} className="text-[10px] font-bold text-white/50">✕ Sair</button>
         <div className="flex gap-3 text-[10px]">
           {vehicles.filter((v) => v.alive).map((v) => (

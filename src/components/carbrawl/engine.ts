@@ -241,33 +241,46 @@ export function physicsStep(
         const relDot = relVx * nx + relVy * ny;
 
         if (relDot > 0) {
-          // Impulse — push force influenced by potencia + mass
-          const pushA = a.physics.pushForce * (a.nitro ? 1.5 : 1.0);
-          const pushB = b.physics.pushForce * (b.nitro ? 1.5 : 1.0);
-          const impulse = relDot * (pushA + pushB) * 0.5 * cfg.pushForce;
+          // The car that is moving INTO the other is the attacker;
+          // Potencia decides how violently the target is launched, and the
+          // target's mass resists that launch.  The attacker keeps the speed
+          // it carried into the hit, so a strong car trades solidly while
+          // still pushing hard.
 
-          // Mass affects how much you push vs get pushed
-          const aImpulse = impulse * (b.physics.mass / totalMass);
-          const bImpulse = impulse * (a.physics.mass / totalMass);
+          const attacker = relDot > 0 ? a : b;
+          const pushed = attacker === a ? b : a;
+          const direction = attacker === a ? 1 : -1;
+          const attackerBrake = attacker.physics.pushForce * (attacker.nitro ? 1.5 : 1.0);
 
-          a.vel.x -= nx * aImpulse;
-          a.vel.y -= ny * aImpulse;
-          b.vel.x += nx * bImpulse;
-          b.vel.y += ny * bImpulse;
+          // Knockback: proportional to the attacker's Potencia and the closing
+          // speed, resisted by the target's mass (Peso).
+          const impulse = relDot * attackerBrake * cfg.pushForce;
+          const impulseOnPushed = impulse / (1 + pushed.physics.mass);
 
-          // Track killer (last hitter gets credit for elimination)
-          if (Math.hypot(a.vel.x, a.vel.y) > 3) {
-            killer[b.id] = a.id;
-          }
-          if (Math.hypot(b.vel.x, b.vel.y) > 3) {
-            killer[a.id] = b.id;
+          pushed.vel.x += direction * nx * impulseOnPushed;
+ pushed.vel.y += direction * ny * impulseOnPushed;
+
+          // The attacker only takes a small reaction nudge — scaled down by
+          // its own Resistencia (impactResist) so well-built cars barely recoil.
+
+          const resistFactor = attacker.physics.impactResist;
+
+          const reactionFactor = 0.04 + 0.10 * (1 - resistFactor);
+
+          attacker.vel.x += -direction * nx * impulse * reactionFactor;
+
+          attacker.vel.y += -direction * ny * impulse * reactionFactor;
+
+          // Track killer — only the car that DID the pushing gets the credit,
+          // never a car that merely got hit.
+
+          if (Math.hypot(pushed.vel.x, pushed.vel.y) >  3) {
+
+            killer[pushed.id] = attacker.id;
+
           }
         }
-      }
-    }
-  }
-
-  // 3. Arena boundary
+// 3. Arena boundary
   for (const v of alive) {
     const d = dist(v.pos, { x: arena.cx, y: arena.cy });
 
