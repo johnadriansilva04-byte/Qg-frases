@@ -115,7 +115,7 @@ function Bubble({ facts }: { facts: string[] }) {
       <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-px h-2.5 bg-gradient-to-b from-white/8 to-transparent" />
       <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/15" />
 
-      <div className="mx-auto max-w-[260px] rounded-full border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm px-4 py-2 text-center">
+      <div className="mx-auto max-w-[260px] border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm px-4 py-2 text-center" style={{ borderRadius: "45% 55% 50% 50% / 50% 45% 55% 50%" }}>
         <p
           className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed"
           style={{ opacity: fade ? 1 : 0, transition: "opacity 500ms ease" }}
@@ -171,20 +171,24 @@ function Orb({
     <div className="flex flex-col items-center" style={{ animation: float }}>
       <Link
         to={link}
-        className="group relative block rounded-[2rem] border border-white/[0.08] bg-white/[0.04] backdrop-blur-md px-6 py-5 sm:px-8 sm:py-6 text-center transition-all duration-700 hover:border-white/[0.15] active:scale-[0.97]"
-        style={{ boxShadow: `0 0 40px ${glow}` }}
+        className="group relative block border border-white/[0.08] bg-white/[0.04] backdrop-blur-md px-6 py-5 sm:px-8 sm:py-6 text-center transition-all duration-700 hover:border-white/[0.15] active:scale-[0.97]"
+        style={{
+          boxShadow: `0 0 40px ${glow}`,
+          borderRadius: "48% 52% 45% 55% / 55% 48% 52% 45%",
+          transform: "rotate(-1deg) scale(1)",
+        }}
       >
         {/* breathing glow behind */}
         <div
-          className="absolute -inset-1 rounded-[2.2rem] opacity-40 blur-xl pointer-events-none"
-          style={{ background: borderGlow, animation: "glowBreathe 6s ease-in-out infinite" }}
+          className="absolute -inset-1.5 opacity-40 blur-xl pointer-events-none"
+          style={{ background: borderGlow, borderRadius: "48% 52% 45% 55% / 55% 48% 52% 45%", animation: "glowBreathe 6s ease-in-out infinite" }}
         />
 
         <div className="relative z-10">
           <div className="flex justify-center mb-2.5">
             <div
-              className="flex size-12 sm:size-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.05] transition-transform duration-700 group-hover:scale-110"
-              style={{ color: iconColor }}
+              className="flex size-12 sm:size-14 items-center justify-center border border-white/[0.08] bg-white/[0.05] transition-transform duration-700 group-hover:scale-110"
+              style={{ color: iconColor, borderRadius: "50% 50% 42% 58% / 58% 50% 50% 42%" }}
             >
               {icon}
             </div>
@@ -220,9 +224,8 @@ function Index() {
 
       <Particles />
 
-      {/* ═══ COMPOSITION ═══ */}
-      <div className="relative z-10 w-full min-h-screen flex flex-col items-center justify-center px-4 py-8">
-        <div className="relative w-full max-w-4xl" style={{ minHeight: "70vh" }}>
+      {/* ═══ COMPOSITION ═══ */}        <div className="relative z-10 w-full min-h-screen flex flex-col items-center justify-center px-4 py-8">
+        <div className="relative w-full max-w-5xl" style={{ minHeight: "70vh" }}>
 
           {/* ─── TOP: Teste de QI ─── */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20">
@@ -256,7 +259,7 @@ function Index() {
           </div>
 
           {/* ─── FLOW DOWN-LEFT ─── */}
-          <div className="absolute top-[300px] sm:top-[310px] left-[18%] z-10 hidden sm:block">
+          <div className="absolute top-[300px] sm:top-[310px] left-[10%] z-10 hidden sm:block">
             <svg width="120" height="50" viewBox="0 0 120 50" fill="none" className="overflow-visible">
               <path d="M 60 0 C 40 20, 20 30, 0 50" stroke="rgba(168,85,247,0.1)" strokeWidth="1" />
               <circle r="2" fill="rgba(168,85,247,0.25)" style={{ animation: "flowLeft 5s ease-in-out infinite" }}>
@@ -266,7 +269,7 @@ function Index() {
           </div>
 
           {/* ─── FLOW DOWN-RIGHT ─── */}
-          <div className="absolute top-[300px] sm:top-[310px] right-[18%] z-10 hidden sm:block">
+          <div className="absolute top-[300px] sm:top-[310px] right-[10%] z-10 hidden sm:block">
             <svg width="120" height="50" viewBox="0 0 120 50" fill="none" className="overflow-visible">
               <path d="M 60 0 C 80 20, 100 30, 120 50" stroke="rgba(245,158,11,0.1)" strokeWidth="1" />
               <circle r="2" fill="rgba(245,158,11,0.25)" style={{ animation: "flowRight 5s ease-in-out 0.5s infinite" }}>
@@ -276,7 +279,7 @@ function Index() {
           </div>
 
           {/* ─── BOTTOM-LEFT: Cidadela dos Clássicos ─── */}
-          <div className="absolute bottom-[40px] sm:bottom-[60px] left-[2%] sm:left-[5%] z-20">
+          <div className="absolute bottom-[20px] sm:bottom-[30px] left-[-2%] sm:left-[2%] z-20">
             <Orb
               icon={<Gamepad2 className="size-5 sm:size-6" />}
               title="Cidadela dos Clássicos"
@@ -292,7 +295,7 @@ function Index() {
           </div>
 
           {/* ─── BOTTOM-RIGHT: Campus Universitário ─── */}
-          <div className="absolute bottom-[40px] sm:bottom-[60px] right-[2%] sm:right-[5%] z-20">
+          <div className="absolute bottom-[20px] sm:bottom-[30px] right-[-2%] sm:right-[2%] z-20">
             <Orb
               icon={<GraduationCap className="size-5 sm:size-6" />}
               title="Campus Universitário"
