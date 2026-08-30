@@ -280,6 +280,9 @@ export function physicsStep(
 
           }
         }
+      }
+    }
+  }
 // 3. Arena boundary
   for (const v of alive) {
     const d = dist(v.pos, { x: arena.cx, y: arena.cy });
