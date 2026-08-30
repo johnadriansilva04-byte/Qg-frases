@@ -90,12 +90,27 @@ export function createVehicle(
 
 // ─── Spawn vehicles in arena ───
 
+function randomBotStats(): VehicleStats {
+  const total = 120;
+  const base = Math.floor(total / 6);
+  const s: VehicleStats = { peso: base, potencia: base, aderencia: base, velocidade: base, resistencia: base, estabilidade: base };
+  // Give each bot a specialty + weakness
+  const keys: (keyof VehicleStats)[] = ["peso", "potencia", "aderencia", "velocidade", "resistencia", "estabilidade"];
+  // Boost one stat
+  const boost = keys[Math.floor(Math.random() * keys.length)]!;
+  s[boost] = Math.min(60, s[boost] + 15 + Math.floor(Math.random() * 10));
+  // Weaken another
+  const weak = keys.filter((k) => k !== boost)[Math.floor(Math.random() * (keys.length - 1))!]!;
+  s[weak] = Math.max(5, s[weak] - 10 - Math.floor(Math.random() * 10));
+  return s;
+}
+
 export function spawnVehicles(
   arena: Arena,
   count: number,
   names: string[],
   colors: { color: string; accent: string }[],
-  stats: VehicleStats,
+  playerStats: VehicleStats,
   playerIndex: number = 0,
 ): Vehicle[] {
   const vehicles: Vehicle[] = [];
@@ -108,7 +123,9 @@ export function spawnVehicles(
       y: arena.cy + Math.sin(angle) * spawnR,
     };
     const preset = colors[i % colors.length]!;
-    const v = createVehicle(pos, names[i] ?? `Bot ${i + 1}`, preset.color, preset.accent, stats, i === playerIndex);
+    const isPlayer = i === playerIndex;
+    const vStats = isPlayer ? playerStats : randomBotStats();
+    const v = createVehicle(pos, names[i] ?? `Bot ${i + 1}`, preset.color, preset.accent, vStats, isPlayer);
     // Face outward
     v.angle = Math.atan2(pos.y - arena.cy, pos.x - arena.cx);
     vehicles.push(v);

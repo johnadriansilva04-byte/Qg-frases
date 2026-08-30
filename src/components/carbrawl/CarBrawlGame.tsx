@@ -109,8 +109,10 @@ export function CarBrawlGame({ onBack }: Props) {
       const h = Math.floor(rect.height);
       if (w <= 0 || h <= 0) return;
       setCanvasSize({ w, h });
-      const r = Math.min(w, h) * 0.44;
+      const r = Math.min(w, h) * 0.38;
       cfgRef.current.arenaRadius = r;
+      cfgRef.current.carWidth = Math.max(12, r * 0.12);
+      cfgRef.current.carLength = Math.max(20, r * 0.2);
       arenaRef.current = { ...arenaRef.current, cx: w / 2, cy: h / 2, radius: r };
     };
     resize();
@@ -480,16 +482,16 @@ export function CarBrawlGame({ onBack }: Props) {
                   <span className="text-xs font-bold text-amber-400">{buildStats[s.key]}</span>
                 </div>
                 <p className="text-[9px] text-white/30 mb-1">{s.desc}</p>
-                <div className="flex gap-1">
-                  <button onClick={() => updateStat(s.key, -5)} className="px-2 py-0.5 rounded bg-white/10 text-[10px] hover:bg-white/20">-5</button>
-                  <button onClick={() => updateStat(s.key, -1)} className="px-2 py-0.5 rounded bg-white/10 text-[10px] hover:bg-white/20">-1</button>
+                <div className="flex gap-1.5 items-center">
+                  <button onClick={() => updateStat(s.key, -5)} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs font-bold hover:bg-white/20 active:scale-95 transition min-w-[40px]">-5</button>
+                  <button onClick={() => updateStat(s.key, -1)} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs font-bold hover:bg-white/20 active:scale-95 transition min-w-[40px]">-1</button>
                   <div className="flex-1 mx-1">
-                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                       <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${(buildStats[s.key] / MAX_SINGLE_STAT) * 100}%` }} />
                     </div>
                   </div>
-                  <button onClick={() => updateStat(s.key, 1)} className="px-2 py-0.5 rounded bg-white/10 text-[10px] hover:bg-white/20">+1</button>
-                  <button onClick={() => updateStat(s.key, 5)} className="px-2 py-0.5 rounded bg-white/10 text-[10px] hover:bg-white/20">+5</button>
+                  <button onClick={() => updateStat(s.key, 1)} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs font-bold hover:bg-white/20 active:scale-95 transition min-w-[40px]">+1</button>
+                  <button onClick={() => updateStat(s.key, 5)} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs font-bold hover:bg-white/20 active:scale-95 transition min-w-[40px]">+5</button>
                 </div>
               </div>
             </div>
