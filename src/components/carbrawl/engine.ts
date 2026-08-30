@@ -259,13 +259,15 @@ export function physicsStep(
       v.alive = false;
       v.eliminated = true;
       eliminated.push(v.id);
-    } else if (d > arena.radius * 0.85) {
-      // Near edge — apply inward nudge based on estabilidade
+    } else if (d > arena.radius * 0.92) {
+      // Near edge — gentle inward nudge (must be possible to push cars off)
       const nx = (arena.cx - v.pos.x) / d;
       const ny = (arena.cy - v.pos.y) / d;
-      const edgeDist = d - arena.radius * 0.85;
-      const grip = v.physics.edgeGrip * (1 + v.physics.mass * 0.3);
-      const pushback = edgeDist * grip * 0.02 * arena.modifier.gravity;
+      const edgeDist = d - arena.radius * 0.92;
+      // Weak grip — only resists slow cars, fast-moving cars break through
+      const speed = Math.hypot(v.vel.x, v.vel.y);
+      const grip = Math.max(0, v.physics.edgeGrip * 0.003 - speed * 0.0005);
+      const pushback = edgeDist * grip * arena.modifier.gravity;
       v.vel.x += nx * pushback;
       v.vel.y += ny * pushback;
     }

@@ -99,22 +99,25 @@ export function CarBrawlGame({ onBack }: Props) {
 
   useEffect(() => { screenRef.current = screen; }, [screen]);
 
-  // ── Resize ──
+  // ── Resize (runs continuously via ResizeObserver) ──
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const resize = () => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
       const w = Math.floor(rect.width);
       const h = Math.floor(rect.height);
+      if (w <= 0 || h <= 0) return;
       setCanvasSize({ w, h });
-      const r = Math.min(w, h) * 0.42;
+      const r = Math.min(w, h) * 0.44;
       cfgRef.current.arenaRadius = r;
       arenaRef.current = { ...arenaRef.current, cx: w / 2, cy: h / 2, radius: r };
     };
     resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
+    const ro = new ResizeObserver(resize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [screen]);
 
   // ── Keyboard ──
   useEffect(() => {
