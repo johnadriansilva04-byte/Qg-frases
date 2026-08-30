@@ -79,14 +79,20 @@ export async function criarCampeonato(
   premioSov = 0,
   formato: FormatoCampeonato = "pontos",
 ): Promise<CampeonatoOnline> {
+  // Verificar se o usuário está autenticado antes de chamar a RPC
+  const { data: session } = await supabase.auth.getSession();
+  if (!session?.session) {
+    throw new Error("Faça login para criar um campeonato.");
+  }
+
   const { data, error } = await supabase.rpc("criar_campeonato_online", {
     p_nome: nome,
     p_max: maxJogadores,
     p_premio_sov: premioSov,
   });
   if (error) {
-    // Produção sem a migration v2 (função antiga de 2 args): degrada para a
-    // assinatura antiga — salas grandes (9+) e regra dos 50 SOV exigem a v2.
+    // 42883 = função não existe (migration não aplicada)
+    // PGRST202 = assinatura da RPC não confere
     if (error.code === "PGRST202" || error.code === "42883") {
       if (maxJogadores > 8) {
         throw new Error(
@@ -100,10 +106,10 @@ export async function criarCampeonato(
       if (legacy.error) throw legacy.error;
       return legacy.data as CampeonatoOnline;
     }
-    throw error;
+    // 400 = validação server-side (ex: SOV insuficiente, sala cheia)
+    throw new Error(error.message || "Erro ao criar campeonato. Verifique se o banco de dados está configurado.");
   }
   const camp = data as CampeonatoOnline;
-  // Formato capturado pela UI (quando a migration persistir, virá do banco).
   camp.formato = formato;
   return camp;
 }

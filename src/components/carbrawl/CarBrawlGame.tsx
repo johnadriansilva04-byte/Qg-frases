@@ -17,7 +17,32 @@ import {
   spawnVehicles, physicsStep, checkGameOver, updateAI, dist,
 } from "./engine";
 
-const BOT_NAMES = ["Turbo", "Nitro", "Blitz", "Drift", "V8", "Rush", "Volt", "Shock", "Storm", "Fury", "Axle", "Bolt", "Clutch", "Drift", "Engine", "Fury"];
+const BOT_NAMES = ["Turbo", "Nitro", "Blitz", "Drift", "V8", "Rush", "Volt", "Shock", "Storm", "Fury", "Axle", "Bolt", "Clutch", "Engine", "Turbo", "Storm"];
+
+// ─── Championship Bracket ───
+interface ChampMatch {
+  p1: string;
+  p2: string;
+  winner: string | null;
+  played: boolean;
+}
+interface ChampBracket {
+  rounds: ChampMatch[][];
+  currentRound: number;
+  currentMatch: number;
+  champion: string | null;
+}
+
+function getNextUnplayedMatch(bracket: ChampBracket): { round: number; match: number } {
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    const round = bracket.rounds[r]!;
+    if (round.some((m) => !m.played)) {
+      const idx = round.findIndex((m) => !m.played);
+      return { round: r, match: idx };
+    }
+  }
+  return { round: -1, match: -1 };
+}
 
 interface Props {
   onBack: () => void;
@@ -33,6 +58,11 @@ export function CarBrawlGame({ onBack }: Props) {
 
   // ── Arena ──
   const [selectedArena, setSelectedArena] = useState<ArenaType>("lava");
+  const [soloDifficulty, setSoloDifficulty] = useState<"facil" | "medio" | "dificil">("medio");
+  const [soloBotCount, setSoloBotCount] = useState(4);
+
+  // ── Championship bracket ──
+  const [champBracket, setChampBracket] = useState<ChampBracket>({ rounds: [], currentRound: 0, currentMatch: 0, champion: null });
 
   // ── Match ──
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -65,6 +95,7 @@ export function CarBrawlGame({ onBack }: Props) {
   const screenRef = useRef<GameScreen>("menu");
   const matchTimeRef = useRef(0);
   const countdownRef = useRef(3);
+  const champMatchRef = useRef<{ round: number; matchIdx: number } | null>(null);
 
   useEffect(() => { screenRef.current = screen; }, [screen]);
 
@@ -161,6 +192,42 @@ export function CarBrawlGame({ onBack }: Props) {
     if (!phase || !phase.unlocked) return;
     startMatch("career", phase.arena, phase.opponents, phase.difficulty);
   }, [career, startMatch]);
+
+  // ═══════════════════════════════════════════
+  //  CHAMPIONSHIP
+  // ═══════════════════════════════════════════
+
+  const startChampionship = useCallback((arenaType: ArenaType) => {
+    const names = ["Você", ...BOT_NAMES.slice(0, 7)];
+    // 8 players → 3 rounds: QF(4 matches), SF(2), F(1)
+    const qf: ChampMatch[] = [
+      { p1: names[0]!, p2: names[7]!, winner: null, played: false },
+      { p1: names[3]!, p2: names[4]!, winner: null, played: false },
+      { p1: names[1]!, p2: names[6]!, winner: null, played: false },
+      { p1: names[2]!, p2: names[5]!, winner: null, played: false },
+    ];
+    const sf: ChampMatch[] = [
+      { p1: "?", p2: "?", winner: null, played: false },
+      { p1: "?", p2: "?", winner: null, played: false },
+    ];
+    const final: ChampMatch[] = [
+      { p1: "?", p2: "?", winner: null, played: false },
+    ];
+    setChampBracket({ rounds: [qf, sf, final], currentRound: 0, currentMatch: 0, champion: null });
+    setSelectedArena(arenaType);
+  }, []);
+
+  const startChampMatch = useCallback((round: number, matchIdx: number) => {
+    const m = champBracket.rounds[round]?.[matchIdx];
+    if (!m || m.played) return;
+    // Player is always index 0 in the match
+    const isPlayerP1 = m.p1 === "Você";
+    const botCount = 1; // 1v1 championship
+    // Start the match — result will be handled in the result screen
+    champMatchRef.current = { round, matchIdx };
+    const difficulty = round >= 2 ? "dificil" : "medio";
+    startMatch("championship", selectedArena, botCount, difficulty);
+  }, [champBracket, selectedArena, startMatch]);
 
   // ═══════════════════════════════════════════
   //  GAME LOOP
@@ -445,16 +512,48 @@ export function CarBrawlGame({ onBack }: Props) {
           <div className="w-12" />
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Solo mode: difficulty & bot count */}
+          {gameMode === "solo" && (
+            <>
+              <div className="flex gap-2">
+                {(["facil", "medio", "dificil"] as const).map((d) => (
+                  <button key={d} onClick={() => setSoloDifficulty(d)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition border ${
+                      soloDifficulty === d
+                        ? d === "facil" ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                        : d === "medio" ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+                        : "bg-red-500/20 border-red-500/50 text-red-400"
+                        : "border-white/10 bg-white/5 text-white/40"
+                    }`}
+                  >
+                    {d === "facil" ? "Fácil" : d === "medio" ? "Médio" : "Difícil"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between bg-white/5 rounded-lg p-3 border border-white/10">
+                <span className="text-xs text-white/60">Oponentes</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setSoloBotCount(Math.max(2, soloBotCount - 1))} className="w-7 h-7 rounded bg-white/10 text-xs font-bold hover:bg-white/20">-</button>
+                  <span className="text-sm font-bold text-amber-400 w-6 text-center">{soloBotCount}</span>
+                  <button onClick={() => setSoloBotCount(Math.min(7, soloBotCount + 1))} className="w-7 h-7 rounded bg-white/10 text-xs font-bold hover:bg-white/20">+</button>
+                </div>
+              </div>
+            </>
+          )}
           {arenaKeys.map((key) => {
             const a = ARENAS[key]!;
             return (
               <button
                 key={key}
-                onClick={() => {
-                  setSelectedArena(key);
-                  const botCount = gameMode === "career" ? 4 : 4;
-                  startMatch(gameMode, key, botCount, "medio");
-                }}
+              onClick={() => {
+                setSelectedArena(key);
+                if (gameMode === "career") {
+                  const phase = career.phases.find((p) => p.id === career.currentPhase);
+                  startMatch("career", key, phase?.opponents ?? 4, phase?.difficulty ?? "medio");
+                } else {
+                  startMatch(gameMode, key, soloBotCount, soloDifficulty);
+                }
+              }}
                 className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-white/10 bg-white/5 hover:border-amber-500/50 hover:bg-amber-500/10 transition text-left"
               >
                 <span className="text-2xl">{a.icon}</span>
@@ -517,43 +616,141 @@ export function CarBrawlGame({ onBack }: Props) {
     );
   }
 
-  // ── ONLINE LOBBY (placeholder) ──
+  // ── ONLINE LOBBY ──
   if (screen === "online_lobby") {
+    const arenaKeys = Object.keys(ARENAS) as ArenaType[];
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white items-center justify-center p-6">
-        <h2 className="text-xl font-display font-black mb-4">🌐 Online</h2>
-        <p className="text-sm text-white/50 text-center mb-6">
-          Crie uma mesa e compartilhe o link com seus amigos!
-        </p>
-        <button
-          onClick={() => {
-            // TODO: create room in Supabase
-            startMatch("online", "lava", 3, "medio");
-          }}
-          className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 font-bold text-sm mb-3"
-        >
-          Criar Mesa
-        </button>
-        <button onClick={() => setScreen("menu")} className="text-xs text-white/40">← Voltar</button>
+      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <button onClick={() => setScreen("menu")} className="text-xs font-bold text-white/50">← Voltar</button>
+          <h2 className="text-sm font-display font-black">🌐 Online</h2>
+          <div className="w-12" />
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <p className="text-xs text-white/40 text-center mb-2">Escolha a arena e comece a batalha!</p>
+          {arenaKeys.map((key) => {
+            const a = ARENAS[key]!;
+            return (
+              <button key={key}
+                onClick={() => {
+                  setSelectedArena(key);
+                  startMatch("online", key, 3, "medio");
+                }}
+                className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-white/10 bg-white/5 hover:border-blue-500/50 hover:bg-blue-500/10 transition text-left"
+              >
+                <span className="text-2xl">{a.icon}</span>
+                <div>
+                  <h3 className="font-bold text-sm">{a.label}</h3>
+                  <p className="text-[10px] text-white/40">
+                    {a.modifier.frictionMult < 0.8 ? "Aderência reduzida" : a.modifier.frictionMult > 1 ? "Aderência aumentada" : "Normal"}
+                    {a.modifier.hasObstacles ? " · Obstáculos" : ""}
+                  </p>
+                </div>
+                <span className="text-white/30 text-xs ml-auto">3 oponentes →</span>
+              </button>
+            );
+          })}
+          <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10 text-center">
+            <p className="text-[10px] text-white/30">Modo online local — jogue contra 3 bots na arena escolhida!</p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // ── CHAMPIONSHIP (placeholder) ──
+  // ── CHAMPIONSHIP BRACKET ──
   if (screen === "championship") {
+    const arenaKeys = Object.keys(ARENAS) as ArenaType[];
+    // Championship hasn't started yet — show setup
+    if (champBracket.rounds.length === 0) {
+      return (
+        <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+            <button onClick={() => setScreen("menu")} className="text-xs font-bold text-white/50">← Voltar</button>
+            <h2 className="text-sm font-display font-black">🏆 Campeonato</h2>
+            <div className="w-12" />
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <p className="text-xs text-white/40 text-center mb-2">Eliminação direta — escolha a arena para o campeonato!</p>
+            {arenaKeys.map((key) => {
+              const a = ARENAS[key]!;
+              return (
+                <button key={key}
+                  onClick={() => {
+                    setSelectedArena(key);
+                    startChampionship(key);
+                  }}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-white/10 bg-white/5 hover:border-amber-500/50 hover:bg-amber-500/10 transition text-left"
+                >
+                  <span className="text-2xl">{a.icon}</span>
+                  <div>
+                    <h3 className="font-bold text-sm">{a.label}</h3>
+                    <p className="text-[10px] text-white/40">8 jogadores · 3 rodadas · Difícil</p>
+                  </div>
+                  <span className="text-white/30 text-xs ml-auto">→</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    // Championship bracket view
     return (
-      <div className="flex flex-col h-full bg-[#0a0e1a] text-white items-center justify-center p-6">
-        <h2 className="text-xl font-display font-black mb-4">🏆 Campeonato</h2>
-        <p className="text-sm text-white/50 text-center mb-6">
-          Eliminação direta — 8 jogadores, 3 rodadas!
-        </p>
-        <button
-          onClick={() => startMatch("championship", "lava", 7, "dificil")}
-          className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-red-500 font-bold text-sm mb-3"
-        >
-          Iniciar Campeonato
-        </button>
-        <button onClick={() => setScreen("menu")} className="text-xs text-white/40">← Voltar</button>
+      <div className="flex flex-col h-full bg-[#0a0e1a] text-white">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <button onClick={() => { setChampBracket({ rounds: [], currentRound: 0, currentMatch: 0, champion: null }); setScreen("menu"); }} className="text-xs font-bold text-white/50">← Sair</button>
+          <h2 className="text-sm font-display font-black">🏆 Campeonato — {ARENAS[selectedArena]?.icon} {ARENAS[selectedArena]?.label}</h2>
+          <div className="w-12" />
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {champBracket.champion ? (
+            <div className="text-center py-8">
+              <span className="text-5xl block mb-4">🏆</span>
+              <h3 className="text-2xl font-display font-black text-amber-400 mb-2">CAMPEÃO!</h3>
+              <p className="text-sm text-white/60 mb-2">{champBracket.champion}</p>
+              <p className="text-xs text-white/30 mb-6">Campeonato finalizado com sucesso!</p>
+              <button onClick={() => { setChampBracket({ rounds: [], currentRound: 0, currentMatch: 0, champion: null }); setScreen("menu"); }} className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-red-500 font-bold text-sm">Voltar ao Menu</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {champBracket.rounds.map((round, ri) => (
+                <div key={ri}>
+                  <h3 className="text-xs font-bold text-white/50 mb-2">
+                    {ri === 0 ? "Oitavas" : ri === 1 ? "Quartas" : ri === 2 ? "Semifinal" : "Final"} ({round.length > 0 ? round[0]?.winner ? "Finalizada" : round[0]?.played ? "Em jogo" : "Aguardando" : "—"})
+                  </h3>
+                  <div className="space-y-1">
+                    {round.map((m, mi) => (
+                      <div key={mi} className={`flex items-center gap-2 p-2 rounded-lg border text-xs ${
+                        m.played ? "border-white/10 bg-white/5" : m.winner ? "border-emerald-500/30 bg-emerald-500/5" : "border-white/5 bg-white/[0.02]"
+                      }`}>
+                        <span className={`flex-1 ${m.winner === m.p1 ? "font-bold text-amber-400" : m.played && m.winner !== m.p1 ? "text-white/30" : "text-white/70"}`}>{m.p1}</span>
+                        <span className="text-white/20">vs</span>
+                        <span className={`flex-1 text-right ${m.winner === m.p2 ? "font-bold text-amber-400" : m.played && m.winner !== m.p2 ? "text-white/30" : "text-white/70"}`}>{m.p2}</span>
+                        {m.played && m.winner && <span className="text-[9px] text-emerald-400">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {/* Next match button */}
+              {(() => {
+                const { round, match } = getNextUnplayedMatch(champBracket);
+                if (round >= 0 && match >= 0) {
+                  const m = champBracket.rounds[round]?.[match];
+                  if (m && !m.played) {
+                    return (
+                      <button onClick={() => startChampMatch(round, match)} className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-red-500 font-bold text-sm">
+                        🏁 {m.p1} vs {m.p2}
+                      </button>
+                    );
+                  }
+                }
+                return null;
+              })()}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -599,6 +796,38 @@ export function CarBrawlGame({ onBack }: Props) {
                     });
                   }
                   setScreen("career_map");
+                } else if (gameMode === "championship" && champMatchRef.current) {
+                  // Advance championship bracket
+                  const { round, matchIdx } = champMatchRef.current;
+                  const winnerName = result.survived ? "Você" : (vehiclesRef.current.find((v) => v.alive)?.name ?? "Bot");
+                  setChampBracket((prev) => {
+                    const rounds = prev.rounds.map((r) => r.map((m) => ({ ...m })));
+                    const match = rounds[round]![matchIdx]!;
+                    match.winner = winnerName;
+                    match.played = true;
+                    // Advance winner to next round
+                    const nextRound = round + 1;
+                    if (nextRound < rounds.length) {
+                      const nextMatchIdx = Math.floor(matchIdx / 2);
+                      const nextMatch = rounds[nextRound]![nextMatchIdx]!;
+                      if (matchIdx % 2 === 0) {
+                        nextMatch.p1 = winnerName;
+                      } else {
+                        nextMatch.p2 = winnerName;
+                      }
+                    }
+                    // Check if championship is complete
+                    const finalRound = rounds[rounds.length - 1]!;
+                    const champion = finalRound[0]?.winner ?? null;
+                    if (champion) {
+                      return { ...prev, rounds, champion };
+                    }
+                    return { ...prev, rounds };
+                  });
+                  champMatchRef.current = null;
+                  setScreen("championship");
+                } else if (gameMode === "online") {
+                  setScreen("online_lobby");
                 } else {
                   setScreen("menu");
                 }

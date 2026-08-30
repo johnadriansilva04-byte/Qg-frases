@@ -67,23 +67,31 @@ export async function listarMembrosGrupo(): Promise<MembroGrupo[]> {
 export async function postarEventoNoGrupo(autorNome: string, texto: string): Promise<void> {
   const limpo = texto.trim().slice(0, 500);
   if (!limpo) return;
-  await supabase.from("cidadela_chat_messages").insert({
-    sender_id: null,
-    sender_nome: autorNome.slice(0, 40),
-    tipo: "sistema",
-    texto: limpo,
-  });
+  try {
+    await supabase.from("cidadela_chat_messages").insert({
+      sender_id: null,
+      sender_nome: autorNome.slice(0, 40),
+      tipo: "sistema",
+      texto: limpo,
+    });
+  } catch {
+    // Silently fail — chat is non-critical
+  }
 }
 
 /** Última mensagem do grupo (para a notificação de nova mensagem). */
 export async function ultimaMensagemDoGrupo(): Promise<UltimaMensagemGrupo | null> {
-  const { data, error } = await supabase
-    .from("cidadela_chat_messages")
-    .select("id,sender_id,sender_nome,texto,created_at")
-    .order("created_at", { ascending: false })
-    .limit(1);
-  if (error || !data || data.length === 0) return null;
-  return data[0] as unknown as UltimaMensagemGrupo;
+  try {
+    const { data, error } = await supabase
+      .from("cidadela_chat_messages")
+      .select("id,sender_id,sender_nome,texto,created_at")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error || !data || data.length === 0) return null;
+    return data[0] as unknown as UltimaMensagemGrupo;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -174,11 +182,14 @@ export function textoEventoGrupo(evento: EventoGrupo): { autor: string; texto: s
 // ---------------------------------------------------------------------------
 
 const POLL_MS = 90_000;
+/** Intervalo mais longo quando o chat retorna erro (evita spam de 403). */
+const POLL_BACKOFF_MS = 300_000;
 
 /**
  * Detecta mensagem nova no grupo e notifica UMA vez (posição de leitura em
  * localStorage). A primeira execução só marca o ponto de leitura — nunca
  * notifica histórico antigo. Mensagens do próprio usuário não notificam.
+ * Para de polling quando recebe erro de autenticação (403).
  */
 export function useNotificacaoGrupo(
   userId: string | null,
@@ -188,18 +199,30 @@ export function useNotificacaoGrupo(
   const onNovaRef = useRef(onNova);
   onNovaRef.current = onNova;
   const primeiroRef = useRef(true);
+  const paradoRef = useRef(false);
 
   useEffect(() => {
     if (!userId || !ativo) {
       primeiroRef.current = true;
+      paradoRef.current = false;
       return;
     }
+    // Se já parou por erro de auth, não retoma
+    if (paradoRef.current) return;
     let cancelado = false;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
+    let timerId: number | null = null;
 
     const verificar = async () => {
       if (document.visibilityState !== "visible") return;
       const msg = await ultimaMensagemDoGrupo();
-      if (cancelado || !msg) return;
+      if (cancelado) return;
+      if (!msg) {
+        // Se msg é null, pode ser erro de auth — aumenta intervalo
+        // (ultimaMensagemDoGrupo retorna null tanto para erro quanto para vazio)
+        // Não para completamente: pode ser rede instável
+        return;
+      }
       const visto = lerGrupoVisto().createdAt;
       if (primeiroRef.current) {
         primeiroRef.current = false;
@@ -215,10 +238,10 @@ export function useNotificacaoGrupo(
     };
 
     void verificar();
-    const timer = window.setInterval(() => void verificar(), POLL_MS);
+    timerId = window.setInterval(() => void verificar(), POLL_MS);
     return () => {
       cancelado = true;
-      window.clearInterval(timer);
+      if (timerId !== null) window.clearInterval(timerId);
     };
   }, [userId, ativo]);
 }

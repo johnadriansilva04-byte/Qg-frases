@@ -234,18 +234,21 @@ export async function resgatarMissao(missaoId: string): Promise<number | null> {
 
 export async function carregarChatCidadela(limit = 60): Promise<MensagemChatCidadela[]> {
   try {
-    // Tenta Supabase primeiro
     const { data, error } = await supabase
       .from("cidadela_chat_messages")
       .select("id,sender_id,sender_nome,tipo,texto,created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    if (!error && data) {
+    if (error) {
+      // 403 = RLS bloqueando (não autenticado ou política ausente) — degrada silenciosamente
+      return [];
+    }
+    if (data) {
       return ((data ?? []) as MensagemChatCidadela[]).reverse();
     }
-  } catch (error) {
-    // Fallback local sem log
+  } catch {
+    // Fallback local silencioso
   }
 
   // Fallback local

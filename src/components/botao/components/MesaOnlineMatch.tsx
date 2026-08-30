@@ -265,14 +265,20 @@ export function MesaOnlineMatch({
       if (golsJ1 > golsJ2) vencedorId = mesa.jogador_1_id;
       else if (golsJ2 > golsJ1) vencedorId = mesa.jogador_2_id;
 
+      // Finalizar mesa no servidor (pode falhar se auth expirou — não bloqueia o resultado)
       try {
         if (mesaRef.current && vencedorId) await mesaRef.current.finalizarPartida(vencedorId);
       } catch (e) {
-        console.error("[MesaOnlineMatch] erro ao finalizar mesa:", e);
+        console.warn("[MesaOnlineMatch] finalizar mesa falhou (auth pode ter expirado):", e);
       }
 
+      // Aplicar soberania e manchetes (pode falhar — não bloqueia o fluxo)
       try {
         await aplicarResultadoRemoto(gf, ga, null, undefined, "online");
+      } catch {
+        // Silencioso — soberania é nice-to-have, não essential
+      }
+      try {
         let manchete: string;
         if (gf > ga)
           manchete = `Vitória online! ${meuNomeCurto} bate ${nomeOponenteCurto} por ${gf} a ${ga}`;
@@ -287,11 +293,11 @@ export function MesaOnlineMatch({
             rodada: 0,
           },
         ]);
-      } catch (e) {
-        console.error("[MesaOnlineMatch] erro ao aplicar soberania online:", e);
+      } catch {
+        // Silencioso — manchetes são nice-to-have
       }
 
-      // Resultado do jogo (não da série) — o efeito de série decide continuação.
+      // SEMPRE notificar o componente pai do resultado (mesmo que RPCs tenham falhado)
       onFinalizadaRef.current?.({ vencedorId, golsJ1, golsJ2, empate: vencedorId === null });
     },
     [
@@ -336,45 +342,66 @@ export function MesaOnlineMatch({
       try {
         if (ehDiscoReal) {
           dispareiRef.current = true;
-          await mesaRef.current.enviarJogada({
-            id_botao: jogadaData!.discId,
-            forca: Math.round(jogadaData!.power * 100),
-            forca_x: jogadaData!.ix,
-            forca_y: jogadaData!.iy,
-            angulo: Math.round(Math.atan2(jogadaData!.iy, jogadaData!.ix) * (180 / Math.PI)),
-            origem: { x: 0, y: 0 },
-          });
+          try {
+            await mesaRef.current.enviarJogada({
+              id_botao: jogadaData!.discId,
+              forca: Math.round(jogadaData!.power * 100),
+              forca_x: jogadaData!.ix,
+              forca_y: jogadaData!.iy,
+              angulo: Math.round(Math.atan2(jogadaData!.iy, jogadaData!.ix) * (180 / Math.PI)),
+              origem: { x: 0, y: 0 },
+            });
+          } catch {
+            // Broadcast pode falhar se realtime desconectou — jogo continua local
+          }
         }
 
         if (dispareiRef.current) {
           if (goals > 0) {
-            // Autoria SEMÂNTICA do gol: o ponto pertence a quem ATACOU o gol
-            // onde a bola entrou (scoringSide vindo do motor), nunca a quem
-            // chutou por último (gol contra credita o adversário).
-            // jogador_1 joga "home" e jogador_2 joga "away" nos DOIS clientes.
             const scoringSide: "home" | "away" =
               jogadaData?.golInfo?.scoringSide ?? (souJogador1 ? "home" : "away");
             const autorDoPonto =
               scoringSide === "home" ? mesa.jogador_1_id : (mesa.jogador_2_id ?? mesa.jogador_1_id);
-            await mesaRef.current.registrarGol(autorDoPonto);
-            await mesaRef.current.enviarGoalScored({
-              jogadorId: autorDoPonto ?? userId,
-              placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
-            });
-            await mesaRef.current.trocarTurno();
+            // Registrar gol no servidor (pode falhar — jogo continua)
+            try {
+              await mesaRef.current.registrarGol(autorDoPonto);
+            } catch {
+              console.warn("[MesaOnlineMatch] registrarGol falhou (auth pode ter expirado)");
+            }
+            try {
+              await mesaRef.current.enviarGoalScored({
+                jogadorId: autorDoPonto ?? userId,
+                placar: { home: placar[0] ?? 0, away: placar[1] ?? 0 },
+              });
+            } catch {
+              // Broadcast pode falhar
+            }
+            try {
+              await mesaRef.current.trocarTurno();
+            } catch {
+              console.warn("[MesaOnlineMatch] trocarTurno falhou");
+            }
             dispareiRef.current = false;
           } else if (posicoesFinais && jogadaData?.discId === "no_goal") {
             const proximoTurno =
               mesa.jogador_1_id === userId
                 ? mesa.jogador_2_id || mesa.jogador_1_id
                 : mesa.jogador_1_id;
-            await mesaRef.current.enviarFimDeTurno({
-              discos: posicoesFinais.discos,
-              bola: posicoesFinais.bola,
-              jogadorId: userId,
-              novoTurnoId: proximoTurno,
-            });
-            await mesaRef.current.trocarTurno();
+            try {
+              await mesaRef.current.enviarFimDeTurno({
+                discos: posicoesFinais.discos,
+                bola: posicoesFinais.bola,
+                jogadorId: userId,
+                novoTurnoId: proximoTurno,
+              });
+            } catch {
+              // Broadcast pode falhar
+            }
+            try {
+              await mesaRef.current.trocarTurno();
+            } catch {
+              console.warn("[MesaOnlineMatch] trocarTurno falhou");
+            }
             dispareiRef.current = false;
           }
         }
@@ -405,9 +432,16 @@ export function MesaOnlineMatch({
     if (!mesaRef.current || !doisJogadoresConectados) return;
     try {
       const { error } = await supabase.rpc("iniciar_partida_mesa", { p_mesa_id: mesa.mesa_id });
-      if (!error) setPartidaIniciada(true);
+      if (!error) {
+        setPartidaIniciada(true);
+      } else {
+        // Se o RPC falhou mas ambos estão conectados, iniciar localmente
+        console.warn("[MesaOnlineMatch] iniciar_partida_mesa falhou, iniciando local:", error.message);
+        setPartidaIniciada(true);
+      }
     } catch {
-      /* ignore */
+      // Fallback: iniciar localmente se o servidor não respondeu
+      setPartidaIniciada(true);
     }
   };
 
@@ -416,16 +450,16 @@ export function MesaOnlineMatch({
     try {
       const { error } = await supabase.rpc("reiniciar_mesa", { p_mesa_id: mesa.mesa_id });
       if (error) {
-        console.error("[MesaOnlineMatch] erro ao reiniciar mesa:", error.message);
-        return;
+        console.warn("[MesaOnlineMatch] reiniciar_mesa falhou, reiniciando local:", error.message);
       }
-      setFinalizado(false);
-      setPlacar([0, 0]);
-      setSeqJogada(0);
-      setJogoAtual((j) => j + 1);
-    } catch (e) {
-      console.error("[MesaOnlineMatch] exceção ao reiniciar mesa:", e);
+    } catch {
+      // Continuar localmente
     }
+    // SEMPRE reiniciar o estado local (mesmo que o RPC tenha falhado)
+    setFinalizado(false);
+    setPlacar([0, 0]);
+    setSeqJogada(0);
+    setJogoAtual((j) => j + 1);
   };
 
   const serieDecidida = serieJ1 >= VITORIAS_SERIE || serieJ2 >= VITORIAS_SERIE;

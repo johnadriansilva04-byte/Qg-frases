@@ -332,7 +332,6 @@ export function OnlineChampionship({
 
   const handleFinalizada = useCallback(
     async (r: ResultadoMesa) => {
-      // Marcar que o usuário jogou o primeiro jogo (habilita anúncios após)
       markFirstGamePlayed();
 
       if (!campeonato || !confrontoAtivo || !mesaAtiva) return;
@@ -342,16 +341,21 @@ export function OnlineChampionship({
         const golsJ1 = j1 === mesaAtiva.jogador_1_id ? r.golsJ1 : r.golsJ2;
         const golsJ2 = j2 === mesaAtiva.jogador_1_id ? r.golsJ1 : r.golsJ2;
         await registrarResultadoCampeonato(campeonato.id, mesaAtiva.mesa_id, golsJ1, golsJ2);
-        // Recarrega perfil (SOV atualizado pelas RPCs)
+      } catch (e: unknown) {
+        // RPC pode falhar se auth expirou — o jogo já terminou, mostrar resultado
+        console.warn("[Championship] registrar resultado falhou:", (e as Error)?.message);
+      }
+      // Recarregar perfil (pode falhar — não bloqueia)
+      try {
         const novoPerfil = await recarregar();
         if (novoPerfil) aplicarPerfil(novoPerfil);
-      } catch (e: unknown) {
-        setErro((e as Error)?.message ?? "Erro ao registrar resultado do confronto.");
-      } finally {
-        setMesaAtiva(null);
-        setConfrontoAtivo(null);
-        queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
+      } catch {
+        // Silencioso
       }
+      // SEMPRE limpar estado e avançar o fluxo
+      setMesaAtiva(null);
+      setConfrontoAtivo(null);
+      queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
     },
     [
       campeonato,
@@ -376,17 +380,19 @@ export function OnlineChampionship({
       const golsJ1 = euSouJ1 ? r.homeGoals : r.awayGoals;
       const golsJ2 = euSouJ1 ? r.awayGoals : r.homeGoals;
       try {
-        // Contra bot: registra direto no confronto (sem mesa realtime — bot não
-        // é usuário real e quebraria a FK).
         await registrarResultadoVsBot(campeonato.id, confronto.rodada, golsJ1, golsJ2);
+      } catch (e: unknown) {
+        console.warn("[Championship] registrar resultado vs bot falhou:", (e as Error)?.message);
+      }
+      try {
         const novoPerfil = await recarregar();
         if (novoPerfil) aplicarPerfil(novoPerfil);
-      } catch (e: unknown) {
-        setErro((e as Error)?.message ?? "Erro ao registrar o confronto.");
-      } finally {
-        setConfrontoBot(null);
-        queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
+      } catch {
+        // Silencioso
       }
+      // SEMPRE limpar estado e avançar
+      setConfrontoBot(null);
+      queryClient.invalidateQueries({ queryKey: ["campeonato", codigo] });
     },
     [
       campeonato,
