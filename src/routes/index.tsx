@@ -1,15 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
-import { Brain, Gamepad2, GraduationCap, ChevronRight, Sparkles, Globe, Star, Zap, ArrowRight, Target, Users } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Brain, Gamepad2, GraduationCap, ArrowRight, Globe, Sparkles, Star, Zap, Users } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
-      {
-        name: "description",
-        content: "Teste seu raciocínio com o Teste de QI, explore jogos estratégicos clássicos e descubra o Campus Universitário.",
-      },
+      { name: "description", content: "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus Universitário." },
       { property: "og:title", content: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
       { property: "og:description", content: "Teste seu raciocínio, jogue e explore o Campus." },
       { property: "og:url", content: "https://pracinha.online" },
@@ -19,246 +16,130 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-/* ═══ Content pools — each module exclusive ═══ */
+/* ═══ Content — 1 hour rotation per module ═══ */
 
-const QI_CONTENT = [
-  "O Teste de QI avalia raciocínio lógico, memória de trabalho e velocidade de processamento — habilidades que impactam decisões do dia a dia.",
-  "A inteligência fluida, avaliada pelo teste, é a capacidade de resolver problemas novos sem depender de conhecimento prévio.",
-  "Cada questão do teste desafia um padrão de raciocínio diferente — identificar relações é mais importante que decorar.",
-  "Valores acima de 130 indicam alto desempenho cognitivo. Acima de 115 são considerados superiores à média.",
-  "Treinar raciocínio lógico regularmente pode melhorar performance em decisões profissionais e resolução de problemas.",
-  "O teste é baseado na Teoria de Cattell-Horn, que distingue inteligência fluida da cristalizada.",
-  "Memória operacional é uma das capacidades mais importantes avaliadas — ela determina quantas informações você consegue manter ativas ao mesmo tempo.",
-  "As questões foram desenvolvidas com base em modelos psicométricos validados, adaptadas para serem acessíveis e educativas.",
-  "Respire fundo, leia cada questão com calma e tente identificar o padrão antes de escolher. A atenção é tão importante quanto a lógica.",
-  "Os primeiros testes de QI surgiram no início do século XX. Hoje são ferramentas universais de avaliação cognitiva usadas no mundo inteiro.",
-  "Raciocínio espacial, uma das dimensões avaliadas, é fundamental para arquitetura, engenharia e navegação.",
-  "A velocidade de processamento reflete o quão rápido o cérebro interpreta e responde a informações — melhora com treino constante.",
+const QI_FACTS = [
+  "O Teste de QI avalia raciocínio lógico, memória de trabalho e velocidade de processamento.",
+  "A inteligência fluida é a capacidade de resolver problemas novos sem depender de conhecimento prévio.",
+  "Cada questão desafia um padrão de raciocínio diferente — identificar relações é mais importante que decorar.",
+  "Valores acima de 130 indicam alto desempenho cognitivo. Acima de 115 são considerados superiores.",
+  "Treinar raciocínio lógico pode melhorar performance em decisões profissionais e resolução de problemas.",
+  "Baseado na Teoria de Cattell-Horn, que distingue inteligência fluida da cristalizada.",
+  "Memória operacional determina quantas informações você consegue manter ativas ao mesmo tempo.",
+  "As questões usam modelos psicométricos validados, adaptados para serem acessíveis e educativas.",
+  "Raciocínio espacial é fundamental para arquitetura, engenharia e navegação.",
+  "Os primeiros testes de QI surgiram no início do século XX e hoje são usados no mundo inteiro.",
 ];
 
-const CLASSICS_CONTENT = [
-  "A Cidadela dos Clássicos reúne jogos estratégicos para partidas rápidas, treinamento tático e competição online.",
-  "No Futebol de Botão, cada jogada depende de posicionamento e timing — física simulada em 2D com partidas intensas.",
-  "A Trilha exige planejamento antecipado: posicione peças, forme moinhos e neutralize adversários antes que façam o mesmo.",
-  "O Xadrez tem mais possibilidades de partidas do que átomos no universo — cada jogo é único e imprevisível.",
-  "Na Dama, capturas em cadeia podem virar uma partida inteira. Atenção e leitura do tabuleiro são essenciais.",
-  "O ranking global recompensa consistência. Suba de posição, desbloqueie dificuldades e conquiste troféus.",
-  "Modo Carreira: gerencie seu clube por múltiplas temporadas. Contrate, venda, treine e dispute títulos.",
-  "No multiplayer, enfrente jogadores reais em mesas abertas e campeonatos com sistema de matchmaking.",
-  "Cada jogo da Cidadela recompensa o planejamento e a leitura do adversário — vitória sem pensamento tático é rara.",
-  "Explore os diferentes modos de jogo: amistoso, campeonato, carreira e desafios online ao vivo.",
+const CLASSICS_FACTS = [
+  "A Cidadela dos Clássicos reúne jogos estratégicos para partidas rápidas e competição online.",
+  "No Futebol de Botão, cada jogada depende de posicionamento e timing com física simulada.",
+  "A Trilha exige planejamento antecipado — posicione peças e neutralize adversários.",
+  "O Xadrez tem mais possibilidades de partidas do que átomos no universo.",
+  "Na Dama, capturas em cadeia podem virar uma partida inteira.",
+  "O ranking global recompensa consistência — suba de posição e conquiste troféus.",
+  "No Modo Carreira, gerencie seu clube por múltiplas temporadas.",
+  "No multiplayer, enfrente jogadores reais em mesas abertas e campeonatos.",
+  "Cada jogo recompensa planejamento e leitura do adversário.",
+  "Explore amistoso, campeonato, carreira e desafios online ao vivo.",
 ];
 
-const CAMPUS_CONTENT = [
-  "O Campus Universitário é uma experiência social e competitiva onde você escolhe uma profissão e evolui dentro do ecossistema.",
-  "Escolha entre Estudante, Empresário, Pesquisador, Bibliotecário ou Técnico — cada profissão tem atividades únicas.",
-  "O sistema de Soberania (SOV) conecta todas as atividades: ganhe com partidas, invista na Bolsa e gerencie seu clube.",
-  "Diariamente, novas atividades surgem no Campus. Complete desafios, ganhe reputação e desbloqueie oportunidades.",
-  "Cada jogador comanda um clube. Evolua sua identidade, negocie transferências e dispute o campeonato.",
-  "Interaja com outros jogadores, participe de eventos globais da Cidadela e construa sua reputação.",
-  "O ranking do Campus mede seu progresso. Quanto mais atividades e vitórias, maior sua posição.",
-  "Eventos globais semanais afetam todos os jogadores. Fique atento para aproveitar oportunidades exclusivas.",
-  "Seu perfil evolui com cada ação. Reputação, nível, tempo ativo e conquistas moldam sua história.",
-  "O Campus está em constante evolução. Novas atividades, profissões e sistemas são adicionados regularmente.",
+const CAMPUS_FACTS = [
+  "O Campus é uma experiência social e competitiva onde você escolhe uma profissão e evolui.",
+  "Escolha entre Estudante, Empresário, Pesquisador, Bibliotecário ou Técnico.",
+  "O sistema de Soberania conecta todas as atividades — ganhe, invista e gerencie.",
+  "Atividades diárias surgem no Campus — complete desafios e ganhe reputação.",
+  "Cada jogador comanda um clube. Evolua, negocie e dispute o campeonato.",
+  "Interaja com outros jogadores e participe de eventos globais da Cidadela.",
+  "O ranking mede seu progresso quanto mais atividades e vitórias.",
+  "Eventos semanais afetam todos os jogadores — fique atento.",
+  "Seu perfil evolui com cada ação: reputação, nível e conquistas.",
+  "Novas atividades, profissões e sistemas são adicionados regularmente.",
 ];
 
-/* ═══ Rotating content bubble — organic extension of its module ═══ */
+/* ═══ Floating Particles ═══ */
 
-function ModuleBubble({
-  content,
+function Particles() {
+  const dots = useMemo(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: 1 + Math.random() * 2,
+      duration: 15 + Math.random() * 20,
+      delay: Math.random() * 10,
+      opacity: 0.05 + Math.random() * 0.1,
+    })),
+    []
+  );
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {dots.map((d) => (
+        <span
+          key={d.id}
+          className="absolute rounded-full bg-white"
+          style={{
+            left: `${d.x}%`,
+            top: `${d.y}%`,
+            width: d.size,
+            height: d.size,
+            opacity: d.opacity,
+            animation: `particleFloat ${d.duration}s ease-in-out ${d.delay}s infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ═══ Organic Module Bubble ═══ */
+
+function Bubble({
+  facts,
   accent,
 }: {
-  content: string[];
+  facts: string[];
   accent: "indigo" | "purple" | "amber";
 }) {
   const [idx, setIdx] = useState(0);
   const [fade, setFade] = useState(true);
 
-  const next = useCallback(() => {
-    setFade(false);
-    setTimeout(() => {
-      setIdx((p) => (p + 1) % content.length);
-      setFade(true);
-    }, 250);
-  }, [content.length]);
-
+  /* ~1 hour rotation */
   useEffect(() => {
-    const t = setInterval(next, 7000);
+    const t = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setIdx((p) => (p + 1) % facts.length);
+        setFade(true);
+      }, 600);
+    }, 3_600_000);
     return () => clearInterval(t);
-  }, [next]);
+  }, [facts.length]);
 
-  const colors = {
-    indigo: {
-      border: "border-indigo-500/10",
-      bg: "bg-indigo-500/[0.03]",
-      glow: "shadow-indigo-500/5",
-      dot: "bg-indigo-400",
-      connector: "from-indigo-500/15",
-    },
-    purple: {
-      border: "border-purple-500/10",
-      bg: "bg-purple-500/[0.03]",
-      glow: "shadow-purple-500/5",
-      dot: "bg-purple-400",
-      connector: "from-purple-500/15",
-    },
-    amber: {
-      border: "border-amber-500/10",
-      bg: "bg-amber-500/[0.03]",
-      glow: "shadow-amber-500/5",
-      dot: "bg-amber-400",
-      connector: "from-amber-500/15",
-    },
-  };
-  const c = colors[accent];
+  const c = accent === "indigo"
+    ? "border-indigo-500/10 bg-indigo-500/[0.04]"
+    : accent === "purple"
+      ? "border-purple-500/10 bg-purple-500/[0.04]"
+      : "border-amber-500/10 bg-amber-500/[0.04]";
+
+  const dotColor = accent === "indigo" ? "bg-indigo-400" : accent === "purple" ? "bg-purple-400" : "bg-amber-400";
 
   return (
-    <div className="relative">
-      {/* Visual connector — thin line from module to bubble */}
-      <div className={`absolute -top-3 left-6 w-px h-3 bg-gradient-to-b ${c.connector} to-transparent`} />
-      {/* Small dot at the connection point */}
-      <div className={`absolute -top-1.5 left-[22px] size-1.5 rounded-full ${c.dot} opacity-40`} />
+    <div className="relative mt-1">
+      {/* Connector line */}
+      <div className="absolute -top-3 left-8 w-px h-3 bg-gradient-to-b from-white/10 to-transparent" />
+      <div className={`absolute -top-1.5 left-[30px] size-1 rounded-full ${dotColor} opacity-30`} />
 
-      {/* The bubble itself — organic extension */}
-      <div className={`${c.bg} ${c.border} border rounded-xl rounded-tl-sm p-3 shadow-lg ${c.glow}`}>
-        <div
-          className="transition-opacity duration-300"
-          style={{ opacity: fade ? 1 : 0 }}
-        >
-          <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed">
-            <span className="text-slate-500 italic mr-1">💡</span>
-            {content[idx]}
-          </p>
+      <div className={`${c} border rounded-xl rounded-tl-sm px-3 py-2.5`}>
+        <p className="text-[11px] text-slate-400 leading-relaxed" style={{ opacity: fade ? 1 : 0, transition: "opacity 600ms" }}>
+          {facts[idx]}
+        </p>
+        <div className="mt-1.5 flex gap-0.5">
+          {facts.map((_, i) => (
+            <span key={i} className={`size-[3px] rounded-full ${i === idx ? dotColor : "bg-slate-700"} transition-colors duration-500`} />
+          ))}
         </div>
-        {/* Progress dots */}
-        <div className="mt-2 flex items-center justify-between">
-          <div className="flex gap-0.5">
-            {content.map((_, i) => (
-              <span
-                key={i}
-                className={`size-0.5 rounded-full transition-all duration-300 ${i === idx ? `${c.dot} opacity-60 scale-125` : "bg-slate-700 opacity-40"}`}
-              />
-            ))}
-          </div>
-          <button onClick={next} className="text-[8px] text-slate-600 hover:text-white/30 transition">
-            próximo →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══ Module Card — unified structure ═══ */
-
-function ModuleCard({
-  icon,
-  title,
-  subtitle,
-  chips,
-  cta,
-  link,
-  accent,
-  content,
-  featured,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  chips: string[];
-  cta: string;
-  link: string;
-  accent: "indigo" | "purple" | "amber";
-  content: string[];
-  featured?: boolean;
-}) {
-  const accents = {
-    indigo: {
-      border: "border-indigo-500/20",
-      hoverBorder: "hover:border-indigo-500/40",
-      shadow: "hover:shadow-[0_0_30px_rgba(99,102,241,0.08)]",
-      iconBg: "from-indigo-500/20 to-purple-500/20",
-      iconBorder: "border-indigo-500/15",
-      iconText: "text-indigo-400",
-      chipBg: "bg-indigo-500/8",
-      chipBorder: "border-indigo-500/10",
-      chipText: "text-indigo-300/60",
-      ctaText: "text-indigo-400",
-      ctaHover: "group-hover:text-indigo-300",
-      gradFrom: "from-indigo-950/40",
-      gradVia: "via-slate-950/60",
-      gradTo: "to-purple-950/30",
-    },
-    purple: {
-      border: "border-purple-500/15",
-      hoverBorder: "hover:border-purple-500/35",
-      shadow: "hover:shadow-[0_0_30px_rgba(168,85,247,0.08)]",
-      iconBg: "bg-purple-500/10",
-      iconBorder: "border-purple-500/15",
-      iconText: "text-purple-400",
-      chipBg: "bg-purple-500/8",
-      chipBorder: "border-purple-500/10",
-      chipText: "text-purple-300/60",
-      ctaText: "text-purple-400",
-      ctaHover: "group-hover:text-purple-300",
-      gradFrom: "from-purple-950/30",
-      gradVia: "via-slate-950/50",
-      gradTo: "to-pink-950/20",
-    },
-    amber: {
-      border: "border-amber-500/15",
-      hoverBorder: "hover:border-amber-500/35",
-      shadow: "hover:shadow-[0_0_30px_rgba(245,158,11,0.08)]",
-      iconBg: "bg-amber-500/10",
-      iconBorder: "border-amber-500/15",
-      iconText: "text-amber-400",
-      chipBg: "bg-amber-500/8",
-      chipBorder: "border-amber-500/10",
-      chipText: "text-amber-300/60",
-      ctaText: "text-amber-400",
-      ctaHover: "group-hover:text-amber-300",
-      gradFrom: "from-amber-950/30",
-      gradVia: "via-slate-950/50",
-      gradTo: "to-emerald-950/20",
-    },
-  };
-  const a = accents[accent];
-
-  return (
-    <div className={`flex flex-col ${featured ? "lg:row-span-2" : ""}`}>
-      <Link
-        to={link}
-        className={`group relative block overflow-hidden rounded-2xl border ${a.border} ${a.hoverBorder} ${a.shadow} bg-gradient-to-br ${a.gradFrom} ${a.gradVia} ${a.gradTo} p-4 sm:p-5 transition-all duration-300 active:scale-[0.98]`}
-      >
-        <div className="relative z-10">
-          <div className="flex items-start gap-3">
-            <div className={`shrink-0 flex ${featured ? "size-14" : "size-11"} items-center justify-center rounded-xl ${a.iconBg} border ${a.iconBorder} transition group-hover:scale-110`}>
-              <div className={a.iconText}>{icon}</div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className={`font-display ${featured ? "text-xl sm:text-2xl" : "text-base sm:text-lg"} font-black text-white group-hover:text-white/90 transition-colors`}>
-                {title}
-              </h2>
-              <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">{subtitle}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-1 mt-2.5">
-            {chips.map((t) => (
-              <span key={t} className={`rounded-md ${a.chipBg} border ${a.chipBorder} px-1.5 py-0.5 text-[9px] ${a.chipText}`}>{t}</span>
-            ))}
-          </div>
-
-          <div className={`mt-3 flex items-center gap-1.5 text-xs font-bold ${a.ctaText} transition ${a.ctaHover}`}>
-            <span>{cta}</span>
-            <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
-          </div>
-        </div>
-      </Link>
-
-      {/* Bubble — organic extension, visually connected */}
-      <div className="mt-0 px-1">
-        <ModuleBubble content={content} accent={accent} />
       </div>
     </div>
   );
@@ -268,85 +149,167 @@ function ModuleCard({
 
 function Index() {
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_75%)]" />
-      <div className="absolute top-0 left-1/3 w-[400px] h-[400px] bg-indigo-500/6 rounded-full blur-[120px]" />
-      <div className="absolute bottom-0 right-1/3 w-[350px] h-[350px] bg-purple-500/5 rounded-full blur-[100px]" />
+    <div className="relative min-h-screen bg-slate-950 text-white overflow-hidden">
+      {/* ═══ LIVING BACKGROUND ═══ */}
+      {/* Gradient orbs — breathing */}
+      <div className="absolute inset-0">
+        <div className="absolute top-[-10%] left-[15%] w-[500px] h-[500px] rounded-full bg-indigo-600/8 blur-[140px] animate-[breathe_8s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[5%] left-[5%] w-[400px] h-[400px] rounded-full bg-purple-600/6 blur-[120px] animate-[breathe_10s_ease-in-out_2s_infinite]" />
+        <div className="absolute bottom-[5%] right-[5%] w-[400px] h-[400px] rounded-full bg-amber-600/5 blur-[120px] animate-[breathe_9s_ease-in-out_1s_infinite]" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-cyan-600/3 blur-[100px] animate-[breathe_12s_ease-in-out_3s_infinite]" />
+      </div>
 
-      <div className="relative z-10 w-full max-w-6xl mx-auto px-4 py-5 sm:py-7 min-h-screen flex flex-col">
-        {/* ═══ HEADER ═══ */}
-        <header className="flex items-center justify-between mb-5 sm:mb-7">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/15">
-              <span className="text-sm">🏰</span>
-            </div>
-            <div>
-              <h1 className="font-display text-base sm:text-lg font-black tracking-tight text-white">CIDADELA DO PRACINHA</h1>
-              <p className="text-[9px] sm:text-[10px] text-slate-500 tracking-wide">Inteligência · Jogos · Campus</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-[9px] text-slate-600">
-            <span className="hidden sm:flex items-center gap-1"><Globe className="size-2.5 text-cyan-500" /> Brasil</span>
-            <span className="hidden sm:flex items-center gap-1"><Sparkles className="size-2.5 text-pink-500" /> Atualizado</span>
-          </div>
+      {/* Grid overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)]" />
+
+      {/* Floating particles */}
+      <Particles />
+
+      {/* ═══ CONTENT ═══ */}
+      <div className="relative z-10 w-full max-w-5xl mx-auto px-4 py-8 sm:py-12 min-h-screen flex flex-col items-center">
+
+        {/* Header — minimal */}
+        <header className="text-center mb-10 sm:mb-14">
+          <h1 className="font-display text-xl sm:text-2xl font-black tracking-tight text-white/90">
+            CIDADELA DO PRACINHA
+          </h1>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-1 tracking-widest uppercase">Inteligência · Jogos · Campus</p>
         </header>
 
-        {/* ═══ THREE MODULES — each with organic bubble ═══ */}
-        <div className="flex-1 grid gap-3 sm:gap-4 lg:grid-cols-3 items-start">
+        {/* ═══ TRIANGULAR COMPOSITION ═══ */}
+        <div className="relative w-full max-w-3xl">
+          {/* ─── TOP: Teste de QI ─── */}
+          <div className="flex justify-center mb-8 sm:mb-12">
+            <div className="w-full max-w-sm animate-[floatA_6s_ease-in-out_infinite]">
+              <Link
+                to="/teste-de-qi"
+                className="group relative block rounded-[1.5rem] border border-indigo-500/20 bg-gradient-to-br from-indigo-950/50 via-slate-900/70 to-purple-950/30 p-5 sm:p-6 text-center transition-all duration-500 hover:border-indigo-400/40 hover:shadow-[0_0_60px_rgba(99,102,241,0.12)] hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {/* Glow ring */}
+                <div className="absolute -inset-px rounded-[1.5rem] bg-gradient-to-b from-indigo-500/20 via-transparent to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
-          {/* DQI — featured, slightly larger */}
-          <ModuleCard
-            icon={<Brain className="size-6" />}
-            title="Teste de QI"
-            subtitle="Capacidades cognitivas · Raciocínio · Memória"
-            chips={["Raciocínio Lógico", "Rapidez Mental", "32 Questões"]}
-            cta="Começar teste"
-            link="/teste-de-qi"
-            accent="indigo"
-            content={QI_CONTENT}
-            featured
-          />
+                <div className="relative z-10">
+                  <div className="flex justify-center mb-3">
+                    <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/15 border border-indigo-500/20 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3">
+                      <Brain className="size-7 text-indigo-400" />
+                    </div>
+                  </div>
+                  <h2 className="font-display text-xl sm:text-2xl font-black text-white">Teste de QI</h2>
+                  <p className="text-xs text-slate-400 mt-1">Capacidades cognitivas · Raciocínio · Memória</p>
+                  <div className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold text-indigo-400 transition group-hover:text-indigo-300">
+                    <span>Começar teste</span>
+                    <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </div>
+              </Link>
+              <Bubble facts={QI_FACTS} accent="indigo" />
+            </div>
+          </div>
 
-          {/* Clássicos */}
-          <ModuleCard
-            icon={<Gamepad2 className="size-5" />}
-            title="Cidadela dos Clássicos"
-            subtitle="Futebol · Trilha · Xadrez · Dama"
-            chips={["⚽ Futebol", "🎯 Trilha", "♟️ Xadrez", "🎲 Dama"]}
-            cta="Explorar jogos"
-            link="/cidadela"
-            accent="purple"
-            content={CLASSICS_CONTENT}
-          />
+          {/* ─── Connection lines from top to bottom modules ─── */}
+          <div className="absolute top-[55%] left-1/2 -translate-x-1/2 w-full pointer-events-none hidden sm:block">
+            {/* Left connector */}
+            <svg className="absolute left-0 top-0 w-1/2 h-24 overflow-visible" viewBox="0 0 400 100" fill="none">
+              <path d="M 200 0 C 200 40, 100 60, 80 100" stroke="rgba(168,85,247,0.12)" strokeWidth="1" />
+              <circle cx="80" cy="100" r="2" fill="rgba(168,85,247,0.2)" />
+            </svg>
+            {/* Right connector */}
+            <svg className="absolute right-0 top-0 w-1/2 h-24 overflow-visible" viewBox="0 0 400 100" fill="none">
+              <path d="M 200 0 C 200 40, 300 60, 320 100" stroke="rgba(245,158,11,0.12)" strokeWidth="1" />
+              <circle cx="320" cy="100" r="2" fill="rgba(245,158,11,0.2)" />
+            </svg>
+          </div>
 
-          {/* Campus */}
-          <ModuleCard
-            icon={<GraduationCap className="size-5" />}
-            title="Campus Universitário"
-            subtitle="Atividades · Profissões · Economia"
-            chips={["📚 Estudante", "💼 Empresário", "🔬 Pesquisador"]}
-            cta="Entrar no Campus"
-            link="/campus"
-            accent="amber"
-            content={CAMPUS_CONTENT}
-          />
+          {/* ─── BOTTOM: Clássicos + Campus ─── */}
+          <div className="grid grid-cols-2 gap-4 sm:gap-6">
+            {/* Clássicos — bottom left */}
+            <div className="animate-[floatB_7s_ease-in-out_0.5s_infinite]">
+              <Link
+                to="/cidadela"
+                className="group relative block rounded-[1.5rem] border border-purple-500/15 bg-gradient-to-br from-purple-950/40 via-slate-900/60 to-pink-950/20 p-4 sm:p-5 text-center transition-all duration-500 hover:border-purple-400/35 hover:shadow-[0_0_50px_rgba(168,85,247,0.1)] hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="absolute -inset-px rounded-[1.5rem] bg-gradient-to-b from-purple-500/15 via-transparent to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                <div className="relative z-10">
+                  <div className="flex justify-center mb-2.5">
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/15 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-2">
+                      <Gamepad2 className="size-5 text-purple-400" />
+                    </div>
+                  </div>
+                  <h3 className="font-display text-base sm:text-lg font-black text-white">Cidadela dos Clássicos</h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Futebol · Trilha · Xadrez · Dama</p>
+                  <div className="mt-3 flex items-center justify-center gap-1 text-xs font-bold text-purple-400 transition group-hover:text-purple-300">
+                    <span>Explorar</span>
+                    <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </Link>
+              <Bubble facts={CLASSICS_FACTS} accent="purple" />
+            </div>
+
+            {/* Campus — bottom right */}
+            <div className="animate-[floatC_8s_ease-in-out_1s_infinite]">
+              <Link
+                to="/campus"
+                className="group relative block rounded-[1.5rem] border border-amber-500/15 bg-gradient-to-br from-amber-950/40 via-slate-900/60 to-emerald-950/20 p-4 sm:p-5 text-center transition-all duration-500 hover:border-amber-400/35 hover:shadow-[0_0_50px_rgba(245,158,11,0.1)] hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="absolute -inset-px rounded-[1.5rem] bg-gradient-to-b from-amber-500/15 via-transparent to-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                <div className="relative z-10">
+                  <div className="flex justify-center mb-2.5">
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/15 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-2">
+                      <GraduationCap className="size-5 text-amber-400" />
+                    </div>
+                  </div>
+                  <h3 className="font-display text-base sm:text-lg font-black text-white">Campus Universitário</h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Atividades · Profissões · Economia</p>
+                  <div className="mt-3 flex items-center justify-center gap-1 text-xs font-bold text-amber-400 transition group-hover:text-amber-300">
+                    <span>Entrar</span>
+                    <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </Link>
+              <Bubble facts={CAMPUS_FACTS} accent="amber" />
+            </div>
+          </div>
         </div>
 
-        {/* ═══ FOOTER ═══ */}
-        <footer className="mt-6 pt-3 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[9px] text-slate-600">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><Star className="size-2.5 text-amber-400" /> +50k usuários</span>
-            <span className="flex items-center gap-1"><Users className="size-2.5 text-emerald-400" /> 5 profissões</span>
-            <span className="flex items-center gap-1"><Zap className="size-2.5 text-purple-400" /> 4 jogos</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/privacidade" className="hover:text-purple-400 transition">Privacidade</Link>
-            <Link to="/termos" className="hover:text-purple-400 transition">Termos</Link>
-            <span>© 2026 Cidadela do Pracinha</span>
-          </div>
+        {/* Footer */}
+        <footer className="mt-auto pt-8 flex items-center gap-4 text-[9px] text-slate-600">
+          <span className="flex items-center gap-1"><Star className="size-2.5 text-amber-400" /> +50k</span>
+          <span className="flex items-center gap-1"><Users className="size-2.5 text-emerald-400" /> 5 profissões</span>
+          <span className="flex items-center gap-1"><Zap className="size-2.5 text-purple-400" /> 4 jogos</span>
+          <span className="mx-1 text-slate-700">·</span>
+          <Link to="/privacidade" className="hover:text-purple-400 transition">Privacidade</Link>
+          <Link to="/termos" className="hover:text-purple-400 transition">Termos</Link>
         </footer>
       </div>
+
+      {/* ═══ ANIMATIONS ═══ */}
+      <style>{`
+        @keyframes breathe {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.08); }
+        }
+        @keyframes floatA {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes floatB {
+          0%, 100% { transform: translateY(0) translateX(0); }
+          33% { transform: translateY(-4px) translateX(2px); }
+          66% { transform: translateY(2px) translateX(-1px); }
+        }
+        @keyframes floatC {
+          0%, 100% { transform: translateY(0) translateX(0); }
+          33% { transform: translateY(3px) translateX(-2px); }
+          66% { transform: translateY(-5px) translateX(1px); }
+        }
+        @keyframes particleFloat {
+          0%, 100% { transform: translateY(0) translateX(0); opacity: var(--start-opacity, 0.08); }
+          25% { transform: translateY(-20px) translateX(5px); }
+          50% { transform: translateY(-10px) translateX(-3px); opacity: calc(var(--start-opacity, 0.08) * 1.5); }
+          75% { transform: translateY(-25px) translateX(2px); }
+        }
+      `}</style>
     </div>
   );
 }
