@@ -642,12 +642,6 @@ function SalaCampeonato({
   
   // Confrontos bot × bot da fase atual: o DONO simula pelo motor
   useEffect(() => {
-    console.log('[Bot Sim Debug] SalaCampeonato useEffect triggered', { 
-      status: camp.status, 
-      isCriador: camp.criador_id === userId,
-      formato: camp.formato,
-      rodadaAtual: camp.rodada_atual
-    });
     if (camp.status !== "em_andamento") return;
     if (camp.criador_id !== userId) return;
     if (resolvendoBots.current) return;
@@ -668,22 +662,9 @@ function SalaCampeonato({
       
       const p1 = participanteDo(camp, c.j1_id);
       const p2 = participanteDo(camp, c.j2_id);
-      const isBotMatch = Boolean(p1?.bot === true && p2?.bot === true);
-      console.log('[Bot Sim Debug]', { 
-        rodada: c.rodada, 
-        j1: c.j1_id, 
-        j2: c.j2_id, 
-        p1Bot: p1?.bot, 
-        p2Bot: p2?.bot, 
-        isBotMatch,
-        isGrupos,
-        isFaseGrupos,
-        rodadaAtual
-      });
-      return isBotMatch;
+      return Boolean(p1?.bot === true && p2?.bot === true);
     });
     
-    console.log('[Bot Sim Debug] Total botxbot matches:', botxbot.length);
     if (botxbot.length === 0) return;
     resolvendoBots.current = true;
     void (async () => {
