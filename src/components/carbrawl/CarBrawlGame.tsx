@@ -109,7 +109,7 @@ export function CarBrawlGame({ onBack }: Props) {
       const h = Math.floor(rect.height);
       if (w <= 0 || h <= 0) return;
       setCanvasSize({ w, h });
-      const r = Math.min(w, h) * 0.38;
+      const r = Math.min(w, h) * 0.42;
       cfgRef.current.arenaRadius = r;
       cfgRef.current.carWidth = Math.max(12, r * 0.12);
       cfgRef.current.carLength = Math.max(20, r * 0.2);
