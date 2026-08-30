@@ -440,6 +440,8 @@ export function OnlineChampionship({
       if (c.bye || c.status !== "pendente") return false;
       
       // Para grupos: filtra pela fase atual (grupos ou eliminatórias)
+      // Na fase de grupos: simula TODOS os confrontos pendentes com rodada < 10000
+      // Na fase eliminatória: simula TODOS os confrontos pendentes com rodada >= 10000
       if (isGrupos) {
         if (isFaseGrupos && c.rodada >= 10000) return false; // Ignora eliminatórias na fase de grupos
         if (!isFaseGrupos && c.rodada < 10000) return false; // Ignora grupos na fase eliminatória
@@ -450,9 +452,22 @@ export function OnlineChampionship({
       
       const p1 = participanteDo(campeonato, c.j1_id);
       const p2 = participanteDo(campeonato, c.j2_id);
-      return Boolean(p1?.bot && p2?.bot);
+      const isBotMatch = Boolean(p1?.bot && p2?.bot);
+      console.log('[Bot Sim Debug]', { 
+        rodada: c.rodada, 
+        j1: c.j1_id, 
+        j2: c.j2_id, 
+        p1Bot: p1?.bot, 
+        p2Bot: p2?.bot, 
+        isBotMatch,
+        isGrupos,
+        isFaseGrupos,
+        rodadaAtual
+      });
+      return isBotMatch;
     });
     
+    console.log('[Bot Sim Debug] Total botxbot matches:', botxbot.length);
     if (botxbot.length === 0) return;
     resolvendoBots.current = true;
     void (async () => {
