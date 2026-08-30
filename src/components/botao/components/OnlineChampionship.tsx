@@ -214,7 +214,7 @@ export function OnlineChampionship({
       setErro((e as Error)?.message ?? "Erro ao criar campeonato.");
     } finally {
       setCriando(false);
-    }    }, [perfil, nomeSala, maxJogadores, premioSov, recarregarAbertos]);
+    }    }, [perfil, nomeSala, maxJogadores, premioSov, formato, recarregarAbertos]);
 
   const handleEntrar = useCallback(
     async (codigoAlvo?: string) => {
