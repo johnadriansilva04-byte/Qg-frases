@@ -90,6 +90,21 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+// On mobile, clamp positions tighter so cards (≈120px wide) never overflow.
+// Desktop keeps wider range for the choreographed animation.
+function useMobileConstraints() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  // Mobile: cards ≈120px wide → half = 60px → 60/375 ≈ 16% margin each side
+  // Plus 4% breathing room → min 18%, max 82%
+  return isMobile ? { min: 18, max: 82 } : { min: 8, max: 92 };
+}
+
 function dist(a: Pt, b: Pt) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -132,6 +147,16 @@ function useChoreography() {
         }
       };
       fix(a, b); fix(a, c); fix(b, c);
+
+      // Clamp to viewport so cards never overflow (tighter on mobile)
+      const mob = window.innerWidth < 640;
+      const marginX = mob ? 18 : 8;
+      const marginY = mob ? 22 : 10;
+      const maxX = 100 - marginX;
+      const maxY = 100 - marginY;
+      a.x = clamp(a.x, marginX, maxX); a.y = clamp(a.y, marginY, maxY);
+      b.x = clamp(b.x, marginX, maxX); b.y = clamp(b.y, marginY, maxY);
+      c.x = clamp(c.x, marginX, maxX); c.y = clamp(c.y, marginY, maxY);
 
       setPos({ a, b, c });
 
@@ -287,7 +312,7 @@ function Orb({
     <div className="flex flex-col items-center">
       <Link
         to={link}
-        className="group relative block border border-white/[0.08] bg-white/[0.04] backdrop-blur-md px-4 py-3 sm:px-6 sm:py-5 text-center transition-all duration-700 hover:border-white/[0.15] active:scale-[0.97]"
+        className="group relative block border border-white/[0.08] bg-white/[0.04] backdrop-blur-md px-3 py-3 sm:px-6 sm:py-5 text-center transition-all duration-700 hover:border-white/[0.15] active:scale-[0.97] overflow-hidden"
         style={{
           boxShadow: `0 0 40px ${glow}`,
           borderRadius: "48% 52% 45% 55% / 55% 48% 52% 45%",
@@ -306,7 +331,7 @@ function Orb({
               {icon}
             </div>
           </div>
-          <h2 className={`${mobile ? "text-sm" : "text-xs sm:text-sm"} font-display font-black text-white/90 whitespace-nowrap`}>{title}</h2>
+          <h2 className={`${mobile ? "text-sm" : "text-xs sm:text-sm"} font-display font-black text-white/90 max-w-[120px] leading-tight`}>{title}</h2>
           <div className="mt-1.5 sm:mt-2 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] font-bold transition-colors duration-300" style={{ color: iconColor }}>
             <span>{cta}</span>
             <ArrowRight className="size-2.5 sm:size-3 transition-transform duration-300 group-hover:translate-x-1" />

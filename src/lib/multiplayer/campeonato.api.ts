@@ -39,6 +39,8 @@ export type ConfrontoCampeonato = {
   pl_j2: number;
   status: "pendente" | "finalizado";
   bye: boolean;
+  /** Grupo ao qual pertence (formato 'grupos' apenas, na fase de grupos). */
+  grupo?: string | null;
 };
 
 export type CampeonatoOnline = {
@@ -55,6 +57,8 @@ export type CampeonatoOnline = {
   confrontos: ConfrontoCampeonato[];
   rodada_atual: number;
   vencedor_id: string | null;
+  /** Grupos da fase de grupos (formato 'grupos' apenas). Cada grupo tem nome, team_ids e tabela. */
+  grupos?: { nome: string; team_ids: string[]; tabela: { user_id: string; pontos: number; gols_pro: number; gols_contra: number; jogos: number }[] }[] | null;
   /** Prêmio do campeão em SOV (informativo — a premiação é registrada no SOV Bank). */
   premio_sov?: number;
   criado_em: string;

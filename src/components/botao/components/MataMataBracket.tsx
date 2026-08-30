@@ -23,14 +23,25 @@ export function MataMataBracket({ confrontos, participantes, userId, totalRodada
       if (!grouped.has(rod)) grouped.set(rod, []);
       grouped.get(rod)!.push(c);
     }
-    // Ordena rodadas: final primeiro (menor número = mais avançado)
+    // Para formatos com rodadas >= 10000 (grupos+elim), normaliza
+    // para numeração sequencial a partir de 1
+    const rodadas = Array.from(grouped.keys()).sort((a, b) => a - b);
+    const isHighNumbering = rodadas.some((r) => r >= 10000);
+    const normalizedMap = new Map<number, number>();
+    if (isHighNumbering) {
+      rodadas.forEach((r, i) => normalizedMap.set(r, i + 1));
+    }
+
     return Array.from(grouped.entries())
       .sort(([a], [b]) => a - b)
-      .map(([rodada, lista]) => ({
-        rodada,
-        nome: rodada === 1 ? "Final" : rodada === 2 ? "Semifinal" : rodada === 3 ? "Quartas" : `Rodada ${rodada}`,
-        confrontos: lista,
-      }));
+      .map(([rodada, lista]) => {
+        const norm = isHighNumbering ? (normalizedMap.get(rodada) ?? rodada) : rodada;
+        return {
+          rodada,
+          nome: norm === 1 ? "Final" : norm === 2 ? "Semifinal" : norm === 3 ? "Quartas" : norm === 4 ? "Oitavas" : `Rodada ${norm}`,
+          confrontos: lista,
+        };
+      });
   }, [confrontos]);
 
   const nomeDo = (uid: string | null) => {

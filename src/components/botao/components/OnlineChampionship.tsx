@@ -669,7 +669,15 @@ function SalaCampeonato({
   );
 
   const souCamp = camp.vencedor_id === userId;
-  const totalRodadas = useMemo(() => confrontos.reduce((m, c) => Math.max(m, c.rodada), 0), [confrontos]);
+  const totalRodadas = useMemo(() => {
+    if (camp.formato === "grupos") {
+      // Para grupos, totalRodadas é o maior rodada >= 10000 (fase eliminatória)
+      const koMax = confrontos.filter((c) => c.rodada >= 10000).reduce((m, c) => Math.max(m, c.rodada), 0);
+      // Se ainda não há eliminatórias, usa a maior rodada da fase de grupos como referência
+      return koMax > 0 ? koMax : confrontos.reduce((m, c) => Math.max(m, c.rodada), 0);
+    }
+    return confrontos.reduce((m, c) => Math.max(m, c.rodada), 0);
+  }, [confrontos, camp.formato]);
   const vagas = camp.max_jogadores - participantes.length;
 
   // ── Shared header ──
@@ -677,7 +685,11 @@ function SalaCampeonato({
     camp.status === "aguardando"
       ? `${participantes.length}/${camp.max_jogadores} jogadores`
       : camp.status === "em_andamento"
-        ? `Rodada ${camp.rodada_atual} de ${totalRodadas}`
+        ? camp.formato === "grupos"
+          ? camp.rodada_atual < 10000
+            ? `Fase de Grupos · Rodada ${camp.rodada_atual}`
+            : `Eliminatórias · Rodada ${camp.rodada_atual}`
+          : `Rodada ${camp.rodada_atual} de ${totalRodadas}`
         : camp.status === "finalizado"
           ? "Finalizado"
           : "Cancelado";
@@ -924,18 +936,71 @@ function SalaCampeonato({
                 <div className="mb-3 flex items-center gap-2">
                   <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/30 to-transparent" />
                   <span className="text-[9px] uppercase tracking-[0.3em] text-cyan-500/50 font-bold">
-                    {camp.formato === "mata-mata" ? "Chaveamento" : "Confrontos"}
+                    {camp.formato === "mata-mata" ? "Chaveamento" : camp.formato === "grupos" ? "Fase Eliminatória" : "Confrontos"}
                   </span>
                   <div className="h-px flex-1 bg-gradient-to-l from-cyan-500/30 to-transparent" />
                 </div>
-                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">                    {(camp.formato === "mata-mata" || camp.formato === "grupos") ? (
+                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  {camp.formato === "mata-mata" ? (
                     <MataMataBracket
                       confrontos={confrontos}
                       participantes={participantes}
                       userId={userId}
                       totalRodadas={totalRodadas}
                     />
+                  ) : camp.formato === "grupos" ? (
+                    <div className="space-y-4">
+                      {/* Classificação por grupos */}
+                      {camp.grupos && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-px flex-1 bg-gradient-to-r from-purple-500/30 to-transparent" />
+                            <span className="text-[9px] uppercase tracking-[0.3em] text-purple-500/50 font-bold">Fase de Grupos</span>
+                            <div className="h-px flex-1 bg-gradient-to-l from-purple-500/30 to-transparent" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {camp.grupos.map((grupo) => (
+                              <div key={grupo.nome} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                <p className="mb-2 text-[10px] uppercase tracking-widest text-purple-400/60 font-bold">Grupo {grupo.nome}</p>
+                                <table className="w-full text-[10px]">
+                                  <thead>
+                                    <tr className="border-b border-white/5">
+                                      <th className="pb-1 text-left font-normal text-slate-600">#</th>
+                                      <th className="pb-1 text-left font-normal text-slate-600">TIME</th>
+                                      <th className="pb-1 w-6 text-center font-normal text-slate-600">PTS</th>
+                                      <th className="pb-1 w-6 text-center font-normal text-slate-600">SG</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {[...grupo.tabela].sort((a, b) => b.pontos - a.pontos || (b.gols_pro - b.gols_contra) - (a.gols_pro - a.gols_contra)).map((row, i) => (
+                                      <tr key={row.user_id} className={`border-b border-white/5 last:border-0 ${row.user_id === userId ? "bg-purple-500/5" : ""} ${i < 2 ? "" : "opacity-50"}`}>
+                                        <td className="py-1 font-bold text-slate-400">{i + 1}</td>
+                                        <td className="py-1">
+                                          <span className="font-mono font-bold text-white">{abrevDoParticipante(camp, row.user_id)}</span>
+                                        </td>
+                                        <td className="py-1 text-center font-black text-purple-300">{row.pontos}</td>
+                                        <td className="py-1 text-center text-slate-400">{(row.gols_pro ?? 0) - (row.gols_contra ?? 0)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Eliminatórias (confrontos com rodada >= 10000) */}
+                      {confrontos.some((c) => c.rodada >= 10000) && (
+                        <MataMataBracket
+                          confrontos={confrontos.filter((c) => c.rodada >= 10000)}
+                          participantes={participantes}
+                          userId={userId}
+                          totalRodadas={Math.max(...confrontos.filter((c) => c.rodada >= 10000).map((c) => c.rodada))}
+                        />
+                      )}
+                    </div>
                   ) : (
+                    /* PONTOS CORRIDOS: lista de confrontos por rodada */
                     <div className="space-y-3">
                       {Array.from({ length: totalRodadas }, (_, i) => i + 1).map((rod) => {
                         const lista = confrontos.filter((c) => c.rodada === rod);
