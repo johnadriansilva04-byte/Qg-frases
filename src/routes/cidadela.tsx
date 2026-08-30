@@ -51,7 +51,7 @@ export const Route = createFileRoute("/cidadela")({
           "Conheça nossa cidadela de jogos clássicos. Trilha, dado, forca, jogo da velha e muito mais.",
       },
       { property: "og:url", content: "https://pracinha.online/cidadela" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Cidadela,

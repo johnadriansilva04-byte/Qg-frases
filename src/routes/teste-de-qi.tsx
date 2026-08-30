@@ -18,7 +18,7 @@ export const Route = createFileRoute("/teste-de-qi")({
         content: "Treine o raciocínio com exercícios explicados e simule uma avaliação não verbal completa.",
       },
       { property: "og:url", content: "https://pracinha.online/teste-de-qi" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: TesteDeQI,

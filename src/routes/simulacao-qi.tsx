@@ -16,7 +16,7 @@ export const Route = createFileRoute("/simulacao-qi")({
         content: "Avaliação experimental de raciocínio — inspirada no estilo de avaliações não verbais.",
       },
       { property: "og:url", content: "https://pracinha.online/simulacao-qi" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: SimulacaoQI,

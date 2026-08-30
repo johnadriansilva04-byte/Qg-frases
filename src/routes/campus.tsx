@@ -21,7 +21,7 @@ export const Route = createFileRoute("/campus")({
         content: "Biblioteca, Laboratórios, Setor Comercial e Desenvolvimento do Brio.",
       },
       { property: "og:url", content: "https://pracinha.online/campus" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Campus,

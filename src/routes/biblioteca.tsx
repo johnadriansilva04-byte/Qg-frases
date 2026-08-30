@@ -40,7 +40,7 @@ export const Route = createFileRoute("/biblioteca")({
         content: "Indicações de livros selecionados para quem gosta de ler.",
       },
       { property: "og:url", content: "https://pracinha.online/biblioteca" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(livrosQuery),

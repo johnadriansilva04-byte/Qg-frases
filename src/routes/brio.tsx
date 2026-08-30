@@ -15,7 +15,7 @@ export const Route = createFileRoute("/brio")({
         content: "Biblioteca, Cartório e Ferramentas de Texto em um só lugar.",
       },
       { property: "og:url", content: "https://pracinha.online/brio" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Brio,

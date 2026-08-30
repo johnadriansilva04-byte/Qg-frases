@@ -21,7 +21,7 @@ export const Route = createFileRoute("/gerador")({
         content: "Frases prontas e correção de texto em um só lugar.",
       },
       { property: "og:url", content: "https://pracinha.online/gerador" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Gerador,

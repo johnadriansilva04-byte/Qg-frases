@@ -9,7 +9,7 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus." },
       { property: "og:title", content: "Cidadela do Pracinha" },
       { property: "og:url", content: "https://pracinha.online" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Index,

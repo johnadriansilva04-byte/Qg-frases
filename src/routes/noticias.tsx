@@ -32,7 +32,7 @@ export const Route = createFileRoute("/noticias")({
         content: "Notícias em tempo real do Brasil e do mundo.",
       },
       { property: "og:url", content: "https://pracinha.online/noticias" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Noticias,

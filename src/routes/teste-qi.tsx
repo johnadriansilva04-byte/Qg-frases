@@ -16,7 +16,7 @@ export const Route = createFileRoute("/teste-qi")({
         content: "Desafios de raciocínio lógico com explicações pedagógicas e recompensas em SOV.",
       },
       { property: "og:url", content: "https://pracinha.online/teste-qi" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: TesteQI,

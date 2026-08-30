@@ -95,7 +95,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique.",
       },
       { property: "og:url", content: "https://pracinha.online" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
       {
@@ -115,7 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/artes/cidadela-favicon.ico", type: "image/x-icon" },
     ],
   }),
 

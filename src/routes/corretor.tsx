@@ -16,7 +16,7 @@ export const Route = createFileRoute("/corretor")({
         content: "Ferramenta de correção de texto. Edite e melhore suas frases antes de usar.",
       },
       { property: "og:url", content: "https://pracinha.online/corretor" },
-      { property: "og:image", content: "https://pracinha.online/og-image.png" },
+      { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
   }),
   component: Corretor,
