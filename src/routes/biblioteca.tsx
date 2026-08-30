@@ -28,13 +28,13 @@ export const Route = createFileRoute("/biblioteca")({
   },
   head: () => ({
     meta: [
-      { title: "Biblioteca de Livros | QG Frases" },
+      { title: "Biblioteca de Livros | Cidadela do Pracinha" },
       {
         name: "description",
         content:
           "Nossa biblioteca de indicações de livros: motivação, fé, relacionamentos e finanças. Escolha o seu próximo livro.",
       },
-      { property: "og:title", content: "Biblioteca de Livros | QG Frases" },
+      { property: "og:title", content: "Biblioteca de Livros | Cidadela do Pracinha" },
       {
         property: "og:description",
         content: "Indicações de livros selecionados para quem gosta de ler.",

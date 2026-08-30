@@ -81,28 +81,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { title: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
       {
         name: "description",
         content:
-          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique. Milhões de frases prontas.",
+          "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus. Cidadela do Pracinha: inteligência, jogos e comunidade.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { property: "og:title", content: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
       {
         property: "og:description",
         content:
-          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique.",
+          "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus. Cidadela do Pracinha: inteligência, jogos e comunidade.",
       },
       { property: "og:url", content: "https://pracinha.online" },
       { property: "og:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "QG Frases | Frases de Motivação, Status e Legendas" },
+      { name: "twitter:title", content: "Cidadela do Pracinha | Teste de QI, Jogos e Campus" },
       {
         name: "twitter:description",
         content:
-          "Gerador de frases: legendas para Reels, versículos, cantadas, indiretas e motivação para copiar em um clique.",
+          "Teste seu raciocínio, explore jogos estratégicos e descubra o Campus. Cidadela do Pracinha: inteligência, jogos e comunidade.",
       },
+      { name: "twitter:image", content: "https://pracinha.online/artes/cidadela-icon-og.jpeg" },
     ],
     links: [
       {

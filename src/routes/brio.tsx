@@ -4,12 +4,12 @@ import { AdSlot } from "@/components/AdSlot";
 export const Route = createFileRoute("/brio")({
   head: () => ({
     meta: [
-      { title: "Desenvolvimento do Brio | QG Frases" },
+      { title: "Desenvolvimento do Brio | Cidadela do Pracinha" },
       {
         name: "description",
         content: "Biblioteca, Cartório e Ferramentas de Texto em um só lugar.",
       },
-      { property: "og:title", content: "Desenvolvimento do Brio | QG Frases" },
+      { property: "og:title", content: "Desenvolvimento do Brio | Cidadela do Pracinha" },
       {
         property: "og:description",
         content: "Biblioteca, Cartório e Ferramentas de Texto em um só lugar.",

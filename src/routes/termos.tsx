@@ -3,15 +3,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/termos")({
   head: () => ({
     meta: [
-      { title: "Termos de Uso | QG Frases" },
+      { title: "Termos de Uso | Cidadela do Pracinha" },
       {
         name: "description",
-        content: "Termos de uso do QG Frases. Conheça as regras e condições para usar nosso gerador de frases.",
+        content: "Termos de uso da Cidadela do Pracinha. Conheça as regras e condições para usar nossa plataforma.",
       },
-      { property: "og:title", content: "Termos de Uso | QG Frases" },
+      { property: "og:title", content: "Termos de Uso | Cidadela do Pracinha" },
       {
         property: "og:description",
-        content: "Termos de uso do QG Frases. Conheça as regras e condições para usar nosso gerador de frases.",
+        content: "Termos de uso da Cidadela do Pracinha. Conheça as regras e condições para usar nossa plataforma.",
       },
     ],
   }),

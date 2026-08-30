@@ -5,12 +5,12 @@ import { AdSlot } from "@/components/AdSlot";
 export const Route = createFileRoute("/corretor")({
   head: () => ({
     meta: [
-      { title: "Corretor de Texto | QG Frases" },
+      { title: "Corretor de Texto | Cidadela do Pracinha" },
       {
         name: "description",
         content: "Ferramenta de correção de texto. Edite e melhore suas frases antes de usar.",
       },
-      { property: "og:title", content: "Corretor de Texto | QG Frases" },
+      { property: "og:title", content: "Corretor de Texto | Cidadela do Pracinha" },
       {
         property: "og:description",
         content: "Ferramenta de correção de texto. Edite e melhore suas frases antes de usar.",

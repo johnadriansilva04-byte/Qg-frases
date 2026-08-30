@@ -3,15 +3,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/privacidade")({
   head: () => ({
     meta: [
-      { title: "Política de Privacidade | QG Frases" },
+      { title: "Política de Privacidade | Cidadela do Pracinha" },
       {
         name: "description",
-        content: "Política de privacidade do QG Frases. Saiba como coletamos, usamos e protegemos seus dados.",
+        content: "Política de privacidade da Cidadela do Pracinha. Saiba como coletamos, usamos e protegemos seus dados.",
       },
-      { property: "og:title", content: "Política de Privacidade | QG Frases" },
+      { property: "og:title", content: "Política de Privacidade | Cidadela do Pracinha" },
       {
         property: "og:description",
-        content: "Política de privacidade do QG Frases. Saiba como coletamos, usamos e protegemos seus dados.",
+        content: "Política de privacidade da Cidadela do Pracinha. Saiba como coletamos, usamos e protegemos seus dados.",
       },
     ],
   }),

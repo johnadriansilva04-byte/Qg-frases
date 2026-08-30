@@ -38,13 +38,13 @@ import { BackButton } from "@/components/BackButton";
 export const Route = createFileRoute("/cidadela")({
   head: () => ({
     meta: [
-      { title: "Cidadela de Jogos | QG Frases" },
+      { title: "Cidadela de Jogos | Cidadela do Pracinha" },
       {
         name: "description",
         content:
           "Conheça nossa cidadela de jogos clássicos. Trilha, dado, forca, jogo da velha e muito mais.",
       },
-      { property: "og:title", content: "Cidadela de Jogos | QG Frases" },
+      { property: "og:title", content: "Cidadela de Jogos | Cidadela do Pracinha" },
       {
         property: "og:description",
         content:

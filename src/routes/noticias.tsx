@@ -21,12 +21,12 @@ const RSS_FEEDS = [
 export const Route = createFileRoute("/noticias")({
   head: () => ({
     meta: [
-      { title: "Notícias | QG Frases" },
+      { title: "Notícias | Cidadela do Pracinha" },
       {
         name: "description",
         content: "Notícias em tempo real do Brasil e do mundo.",
       },
-      { property: "og:title", content: "Notícias | QG Frases" },
+      { property: "og:title", content: "Notícias | Cidadela do Pracinha" },
       {
         property: "og:description",
         content: "Notícias em tempo real do Brasil e do mundo.",
