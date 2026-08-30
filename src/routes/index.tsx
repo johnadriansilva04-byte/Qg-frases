@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Brain, Gamepad2, GraduationCap, ArrowRight } from "lucide-react";
-import { Character3D } from "@/components/Character3D";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -344,11 +343,6 @@ function Index() {
       {/* ═══ CONNECTORS ═══ */}
       <div className="absolute inset-0" style={{ zIndex: 5 }}>
         <Connectors pos={pos} />
-      </div>
-
-      {/* ═══ 3D CHARACTER ═══ */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[30%] z-[8] pointer-events-none w-[200px] h-[300px] sm:w-[280px] sm:h-[400px]">
-        <Character3D />
       </div>
 
       {/* ═══ COMPOSITION ═══ */}
