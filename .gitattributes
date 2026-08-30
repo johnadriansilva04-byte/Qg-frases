@@ -1,1 +1,2 @@
 *.fbx filter=lfs diff=lfs merge=lfs -text
+public/Ch49_nonPBR.fbx !filter !diff !merge
