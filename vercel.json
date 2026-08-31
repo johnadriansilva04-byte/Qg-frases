@@ -1,0 +1,16 @@
+{
+  "routes": [
+    {
+      "src": "/manifest.json",
+      "headers": {
+        "Access-Control-Allow-Origin": "*"
+      }
+    },
+    {
+      "src": "/sw.js",
+      "headers": {
+        "Service-Worker-Allowed": "/"
+      }
+    }
+  ]
+}
