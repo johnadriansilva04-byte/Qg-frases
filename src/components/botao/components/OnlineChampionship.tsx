@@ -1104,6 +1104,42 @@ function SalaCampeonato({
                           </div>
                         </div>
                       )}
+                      {/* Jogos da fase de grupos */}
+                      {confrontos.some((c) => c.rodada < 10000) && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-px flex-1 bg-gradient-to-r from-purple-500/40 to-transparent" />
+                            <span className="text-[9px] uppercase tracking-[0.3em] text-purple-400/70 font-bold">Jogos da Fase de Grupos</span>
+                            <div className="h-px flex-1 bg-gradient-to-l from-purple-500/40 to-transparent" />
+                          </div>
+                          <div className="space-y-2">
+                            {Array.from({ length: 3 }, (_, i) => i + 1).map((rodadaInterna) => (
+                              <div key={rodadaInterna}>
+                                <p className="mb-1 text-[10px] uppercase tracking-widest text-slate-600">Rodada {rodadaInterna}</p>
+                                <ul className="space-y-1">
+                                  {confrontos.filter((c) => c.rodada >= 100 && c.rodada < 10000 && (c.rodada % 100) === rodadaInterna).map((c, idx) => {
+                                    const envolvido = c.j1_id === userId || c.j2_id === userId;
+                                    if (c.j1_id && c.j2_id && c.j1_id === c.j2_id) return null;
+                                    return (
+                                      <li key={idx} className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-xs ${envolvido ? "bg-emerald-500/5 text-white" : "text-slate-400"}`}>
+                                        <span>
+                                          <span className="font-mono font-bold">{abrevDoParticipante(camp, c.j1_id ?? "")}</span>
+                                          <span className="mx-1 text-slate-600">×</span>
+                                          <span className="font-mono font-bold">{abrevDoParticipante(camp, c.j2_id ?? "")}</span>
+                                          {c.bye && <span className="ml-1 text-slate-600">(bye)</span>}
+                                        </span>
+                                        <span className="font-mono text-slate-600">
+                                          {c.status === "finalizado" && !c.bye ? `${c.pl_j1} - ${c.pl_j2}` : "—"}
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {/* Eliminatórias (confrontos com rodada >= 10000) */}
                       {confrontos.some((c) => c.rodada >= 10000) && (
                         <MataMataBracket
