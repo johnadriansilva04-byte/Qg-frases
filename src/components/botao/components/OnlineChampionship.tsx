@@ -654,9 +654,17 @@ function SalaCampeonato({
       if (c.bye || c.status !== "pendente") return false;
       
       if (isGrupos) {
-        if (isFaseGrupos && c.rodada >= 10000) return false;
-        if (!isFaseGrupos && c.rodada < 10000) return false;
+        if (isFaseGrupos) {
+          // Fase de grupos: simula apenas a rodada interna atual
+          // rodadaAtual = 1,2,3; confrontos têm rodada = 100*grupo + rodadaInterna
+          const rodadaInterna = c.rodada % 100;
+          if (rodadaInterna !== rodadaAtual) return false;
+        } else {
+          // Fase eliminatória: simula apenas a rodada atual
+          if (c.rodada !== rodadaAtual) return false;
+        }
       } else {
+        // Para pontos-corridos e mata-mata: apenas rodada atual
         if (c.rodada !== rodadaAtual) return false;
       }
       
